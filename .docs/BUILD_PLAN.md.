@@ -1,0 +1,203 @@
+# Build plan: v1 (paste each prompt into Copilot Chat)
+
+**How to use this:**
+1. Put this file at `docs/BUILD_PLAN.md` and `copilot-instructions.md` at `.github/copilot-instructions.md` in your repo.
+2. In Copilot Chat, switch to **Agent mode** so it can create files and run commands.
+3. Do one phase at a time. Paste the prompt, review the changes, run the **Check** steps, then commit before moving on (`git add . && git commit -m "Phase X"`).
+4. If something breaks, paste the full error into Copilot and say: "Fix this without changing the architecture in copilot-instructions.md."
+
+---
+
+## Phase 0: Project setup
+
+**Do these yourself first:**
+- Create a free Supabase project. Copy the Project URL, the anon key and the service role key from Project Settings → API.
+- In the Codespace terminal: `npm i -g supabase` (Supabase CLI).
+
+**Prompt:**
+```
+Read .github/copilot-instructions.md. Set up the project:
+1. Create a Next.js 16 app in the current folder (TypeScript, App Router, Tailwind v4, ESLint, no src dir, import alias @/*).
+2. Install: @supabase/ssr @supabase/supabase-js @puckeditor/core zod.
+3. Create .env.example with every variable listed in copilot-instructions.md, and add .env.local to .gitignore.
+4. Create lib/supabase/server.ts, lib/supabase/client.ts and lib/supabase/admin.ts (admin uses the service role key and starts with import "server-only").
+5. Create .devcontainer/devcontainer.json for Codespaces with Node 22, forwarding port 3000.
+6. Create the folder structure from copilot-instructions.md with placeholder pages so the app runs.
+```
+**Check:** copy `.env.example` to `.env.local` and fill it in. Then `npm run dev` should open on port 3000.
+
+---
+
+## Phase 1: Database and security
+
+**Prompt:**
+```
+Create supabase/migrations/0001_init.sql with exactly this schema, plus RLS on every table:
+
+- agency_settings (single row): id int pk default 1 check (id = 1), name text, logo_url text, primary_color text, support_email text
+- profiles: id uuid pk references auth.users on delete cascade, email text, full_name text, is_super_admin boolean default false, created_at timestamptz default now()
+  + trigger: insert a profile row when a new auth.users row is created
+- accounts (client sub-accounts): id uuid pk default gen_random_uuid(), name text not null, created_at
+- account_members: account_id uuid references accounts on delete cascade, user_id uuid references profiles on delete cascade, role text check (role in ('owner','editor')), primary key (account_id, user_id)
+- sites: id uuid pk, account_id uuid references accounts on delete cascade, name text, subdomain text unique not null, custom_domain text unique, domain_verified boolean default false, theme jsonb default '{}', template_key text, created_at
+- pages: id uuid pk, site_id uuid references sites on delete cascade, slug text not null ('' = home), title text, draft_data jsonb default '{}', published_data jsonb, published_at timestamptz, seo jsonb default '{}', sort_order int default 0, unique (site_id, slug)
+- form_submissions: id uuid pk, site_id uuid references sites on delete cascade, page_path text, form_name text, data jsonb, is_read boolean default false, created_at
+- page_views: id bigint generated always as identity pk, site_id uuid references sites on delete cascade, path text, referrer text, device text, country text, visitor_hash text, created_at timestamptz default now()
+  + index on (site_id, created_at)
+
+Helper functions (security definer, stable, search_path = public):
+- is_super_admin() returns boolean
+- is_account_member(acc uuid) returns boolean
+- is_account_owner(acc uuid) returns boolean
+
+RLS policies:
+- Super admin can do everything on every table.
+- profiles: users can read and update their own row (but never change is_super_admin).
+- accounts / account_members: members can read their own account; owners can manage editors.
+- sites and pages: members of the site's account can select/update; only super admin can insert/delete sites; owners and editors can insert/delete pages.
+- form_submissions and page_views: account owners can read; NO public insert policy (inserts happen server-side with the service role).
+- agency_settings: anyone authenticated can read; only super admin can update.
+
+Then add supabase/seed.sql that inserts the agency_settings row.
+Explain how to apply it with the Supabase CLI (supabase link + supabase db push).
+```
+**Check:** the tables show up in Supabase → Table Editor. Sign up once later, then in the SQL editor run `update profiles set is_super_admin = true where email = 'YOUR EMAIL';`
+
+---
+
+## Phase 2: Login, dashboard and white-label branding
+
+**Prompt:**
+```
+Build auth and the dashboard shell:
+1. /login page: email magic link via Supabase Auth, plus an auth callback route. Branded with agency_settings (name, logo, primary color). No mention of Supabase anywhere in the UI.
+2. Protect /dashboard and /editor: redirect to /login if not signed in.
+3. Dashboard layout with sidebar: Sites, Forms, Analytics, Settings. Super admins also see Clients.
+4. Clients page (super admin only): list accounts, create an account, and invite an owner by email (use supabase.auth.admin.inviteUserByEmail on the server, then add the account_members row).
+5. Sites page: super admin sees all sites grouped by client; clients see only their own sites. Each site card shows name, live URL, Edit button, and Domain status.
+6. Settings page (super admin): edit agency_settings (name, logo upload to Supabase Storage bucket "branding", primary color).
+Use clean, modern Tailwind styling with the agency primary color as a CSS variable.
+```
+**Check:** log in, become super admin, create a test client and invite yourself on a second email.
+
+---
+
+## Phase 3: Multi-tenant routing (serve each client's site)
+
+**Prompt:**
+```
+Implement multi-tenant routing exactly as described in copilot-instructions.md:
+1. proxy.ts: read the host, refresh the Supabase session for app routes, and rewrite tenant hosts to /s/[site]/[[...slug]]. Skip _next, api, and static files.
+2. lib/tenant.ts: getSiteByHost(siteParam) that checks sites.subdomain first, then sites.custom_domain (only if domain_verified). Use the admin client and cache with React cache().
+3. app/s/[site]/[[...slug]]/page.tsx: load the site and the page by slug, return notFound() if missing or unpublished, render published_data with Puck's <Render> and the Puck config, wrap it in the site theme CSS variables, and generate metadata from pages.seo.
+4. Make subdomains work in dev at http://{subdomain}.localhost:3000.
+```
+**Check:** insert a test site with subdomain `demo` and a page with published_data, then open `demo.localhost:3000`. (In Codespaces, test with a `?__host=demo` query override if subdomains don't work on the forwarded URL. Ask Copilot to add that dev-only override.)
+
+---
+
+## Phase 4: Drag-and-drop editor (the Wix part)
+
+**Prompt:**
+```
+Build the visual editor with Puck:
+1. lib/puck/config.tsx registering these blocks (each in components/blocks/, each fully editable through Puck fields, mobile responsive, using theme CSS variables):
+   Hero (heading, subheading, button text/link, background image, layout: centered/split)
+   TextSection, ImageWithText, Services (repeatable cards with icon/title/text), Gallery, Testimonials, Pricing, FAQ (accordion), CallToAction, ContactForm (form name + fields list), Map (address embed), Spacer, Footer (business name, phone, address, social links).
+   Use Puck categories: Layout, Content, Media, Conversion.
+2. Puck root fields for page title and SEO description.
+3. /editor/[pageId]: full-screen Puck editor. Load draft_data. Buttons: Save draft (writes draft_data), Preview (opens the live URL with ?preview=1, which shows draft_data to logged-in members only), Publish (copies draft to published_data and sets published_at).
+4. Theme panel: site colors (primary, secondary, background, text), heading/body fonts from a short Google Fonts list, logo upload. Save to sites.theme.
+5. Pages manager on the site page: add, rename, reorder and delete pages, set the home page.
+6. Image uploads go to a Supabase Storage bucket "site-assets" in a folder per site.
+Check access on the server: only members of the site's account or super admin can open the editor.
+```
+**Check:** log in as the client user, edit a page, publish, and see it live.
+
+---
+
+## Phase 5: Niche templates + "create site" wizard
+
+**Prompt:**
+```
+Add templates:
+1. templates/ folder with 4 templates as TypeScript files: plumber, salon, restaurant, general-business. Each defines a theme plus pages (Home, About, Services, Contact) as Puck data using our blocks.
+2. Use placeholders in template text like {{businessName}}, {{phone}}, {{city}}, {{services}}, {{email}}, {{address}}.
+3. "New site" wizard (super admin): choose client → choose template (cards with preview) → enter business info + subdomain (validate availability and format) → create the site and pages with placeholders replaced, and drafts already published.
+```
+**Check:** create a plumber site in under a minute and open it on its subdomain.
+
+---
+
+## Phase 6: Contact forms
+
+**Prompt:**
+```
+Make the ContactForm block work:
+1. Public POST /api/forms/submit: validate with zod, include a hidden honeypot field and a simple rate limit by IP, resolve the site from the host, insert into form_submissions with the admin client.
+2. The block shows success/error states.
+3. Dashboard Forms page: table of submissions per site, mark as read, view details, export CSV. Unread count badge in the sidebar.
+4. Optional: email the account owner on new submissions using Resend (behind a RESEND_API_KEY env var; skip quietly if not set).
+```
+**Check:** submit the form on a live site and see it in the dashboard.
+
+---
+
+## Phase 7: Analytics
+
+**Prompt:**
+```
+Add simple privacy-friendly analytics:
+1. A tiny client script on tenant pages that sends a beacon to POST /api/analytics on page load (path, referrer). Skip preview mode and logged-in editors.
+2. The API route resolves the site from the host, computes visitor_hash = sha256(ip + user-agent + today's date + secret salt) (store no raw IP), gets device from user-agent and country from Vercel's x-vercel-ip-country header, and inserts into page_views.
+3. Dashboard Analytics page per site: date range picker (7/30/90 days), visits, unique visitors, form submissions, a line chart of visits per day, and top pages, top referrers and device split. Do the aggregation in SQL.
+```
+**Check:** visit a site a few times and see the numbers move.
+
+---
+
+## Phase 8: Custom domains
+
+**Do this yourself first:** in Vercel → Account Settings → Tokens, create a token. Copy your Project ID from Project Settings.
+
+**Prompt:**
+```
+Build custom domain connection with the Vercel REST API in lib/vercel/domains.ts (server only, Bearer VERCEL_API_TOKEN, add ?teamId= if VERCEL_TEAM_ID is set):
+- addDomain(domain): POST https://api.vercel.com/v10/projects/{projectId}/domains
+- getDomain(domain): GET /v9/projects/{projectId}/domains/{domain} (verified + verification records)
+- getDomainConfig(domain): GET /v6/domains/{domain}/config (misconfigured + recommended records)
+- verifyDomain(domain): POST /v9/projects/{projectId}/domains/{domain}/verify
+- removeDomain(domain): DELETE /v9/projects/{projectId}/domains/{domain}
+
+Domain settings page for each site (owners + super admin):
+1. Enter a domain (normalize: lowercase, strip http(s):// and trailing slash; validate with zod). Save to sites.custom_domain, call addDomain, and also add the www version that redirects to the root.
+2. Show a DNS instructions table using the recommended values from Vercel's response (A record for the root domain, CNAME for www, plus any TXT verification record). Copy buttons on each value.
+3. Status badge: Pending / Connected / Needs attention. "Check again" button calls verify + config and updates domain_verified.
+4. Remove domain button.
+5. Show a friendly help note: "DNS changes can take up to 48 hours."
+Never expose the Vercel token to the browser.
+```
+**Check:** connect a real domain you own and wait for "Connected".
+
+---
+
+## Phase 9: Go live on Vercel
+
+**Do these yourself:**
+1. Push the repo to GitHub, then import it in Vercel. Add every env var from `.env.local` (with `ROOT_DOMAIN=yourplatform.com`).
+2. In Vercel → Domains, add `yourplatform.com` and the wildcard `*.yourplatform.com`. Wildcards need Vercel nameservers, so point your domain's nameservers to Vercel.
+3. In Supabase → Authentication → URL Configuration, set the Site URL to `https://yourplatform.com` and add `https://yourplatform.com/**` as a redirect URL.
+
+**Prompt (final review):**
+```
+Do a production readiness review: check every RLS policy against copilot-instructions.md, confirm the service role and Vercel token are never imported into client code, add loading and error states to dashboard pages, add sitemap.xml and robots.txt for tenant sites, and list anything still missing.
+```
+
+---
+
+## Later phases (after v1 works)
+- Stripe billing per client (monthly hosting fee)
+- AI site generation: fill a template's copy from the business info using an AI API
+- CRM / leads pipeline built on form_submissions
+- Funnels, reviews, client reports
+- Version history: keep past published_data snapshots so you can roll back
