@@ -79,3 +79,4 @@ VERCEL_API_TOKEN=                 # server only
 VERCEL_PROJECT_ID=
 VERCEL_TEAM_ID=                   # optional
 ```
+- Changes to sites.subdomain, sites.custom_domain, sites.domain_verified or sites.account_id must be done in server actions with lib/supabase/admin.ts after checking the user's permission. Regular users can only update sites.name and sites.theme.
