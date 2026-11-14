@@ -1,0 +1,81 @@
+# Copilot instructions: white-label website platform
+
+Read this before every task. It describes what we are building and the rules every change must follow.
+
+## What this product is
+A white-label, multi-tenant website platform (similar to Wix or the DashClicks "Sites" app).
+- **The agency** (me, the super admin) builds and manages websites for clients.
+- **Clients** (sub-accounts) log in to a dashboard branded as the agency and edit their own websites with a drag-and-drop editor.
+- Every client site is served from ONE Next.js app. The request's hostname decides which site to render.
+- Clients never see the names of underlying vendors (Supabase, Vercel, Puck). Everything shows the agency brand.
+
+## Stack (do not swap these out)
+- **Next.js 16** (App Router, TypeScript, Server Components, Server Actions). In Next 16 the middleware file is `proxy.ts` (formerly `middleware.ts`).
+- **Tailwind CSS v4**
+- **Supabase**: Postgres, Auth, Storage, Row Level Security. Use `@supabase/ssr` and `@supabase/supabase-js`.
+- **Puck** (`@puckeditor/core`): the drag-and-drop visual editor. Page content is stored as Puck JSON.
+- **Vercel**: hosting, plus the Vercel REST API for custom domains.
+- Package manager: **npm**.
+
+## Folder structure
+```
+app/
+  (marketing)/            agency's own public site on the root domain
+  (auth)/login/           login and magic link
+  (dashboard)/dashboard/  logged-in app: sites, forms, analytics, settings
+  editor/[pageId]/        full-screen Puck editor
+  s/[site]/[[...slug]]/   PUBLIC tenant site renderer (reached only via proxy rewrite)
+  api/                    route handlers (analytics beacon, form submit)
+components/
+  blocks/                 Puck block components (Hero, Services, Gallery...)
+  dashboard/              dashboard UI
+lib/
+  supabase/               server.ts, client.ts, admin.ts (service role, server only)
+  vercel/domains.ts       Vercel domain API wrapper
+  puck/config.tsx         Puck config, registers every block
+  tenant.ts               resolve site from hostname
+supabase/migrations/      SQL migrations (source of truth for the schema)
+templates/                niche template JSON (plumber, salon, restaurant...)
+```
+
+## Roles and access
+- `profiles.is_super_admin = true` means the agency: full access to every account and site.
+- `account_members.role` is `owner` or `editor` for a client account.
+  - owner: edit sites, manage domain, view forms and analytics, invite editors
+  - editor: edit sites only
+- **All access control lives in Postgres RLS.** Never rely only on hiding UI.
+- `lib/supabase/admin.ts` (service role key) may be used ONLY in server code, and only for: the public site renderer, the form-submit endpoint, the analytics beacon, and super-admin actions. Never import it into a client component.
+
+## Multi-tenant routing rules
+- `ROOT_DOMAIN` env var (e.g. `myagency.com`; `localhost:3000` in dev).
+- Host = root domain or `www` → the agency's own app and marketing site.
+- Host = `{subdomain}.ROOT_DOMAIN` → rewrite to `/s/{subdomain}/{path}`.
+- Any other host → treat it as a custom domain and rewrite to `/s/{host}/{path}`.
+- `lib/tenant.ts` resolves `{site}` by checking `sites.subdomain` first, then `sites.custom_domain`.
+- In dev, support `{subdomain}.localhost:3000`.
+
+## Content model
+- Each page stores `draft_data` (what the editor saves) and `published_data` (what the public sees). Publishing copies draft → published.
+- Site-wide theme (colors, fonts, logo) lives in `sites.theme` as JSON and is applied with CSS variables.
+- Blocks must read colors and fonts from CSS variables (`var(--color-primary)` etc.), never hard-coded colors, so the theme works everywhere.
+
+## Coding conventions
+- TypeScript strict. No `any` unless unavoidable, with a comment.
+- Prefer Server Components and Server Actions; use `"use client"` only when needed (editor, interactive UI).
+- Validate all user input with `zod`.
+- Every new table needs a migration in `supabase/migrations/` with RLS enabled and policies written in the same migration.
+- Keep components small. Each Puck block lives in its own file in `components/blocks/`.
+- Never commit secrets. Only `.env.example` goes in git.
+
+## Environment variables
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=        # server only
+ROOT_DOMAIN=localhost:3000
+NEXT_PUBLIC_ROOT_DOMAIN=localhost:3000
+NEXT_PUBLIC_AGENCY_NAME=My Agency
+VERCEL_API_TOKEN=                 # server only
+VERCEL_PROJECT_ID=
+VERCEL_TEAM_ID=                   # optional
+```
