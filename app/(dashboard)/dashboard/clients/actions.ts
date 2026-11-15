@@ -81,7 +81,8 @@ export async function inviteOwner(
 
   const { data: inviteData, error: inviteError } =
     await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${origin}/auth/callback`,
+      // Invited users land on /set-password to choose their password.
+      redirectTo: `${origin}/auth/callback?next=/set-password`,
     });
 
   if (inviteError) {

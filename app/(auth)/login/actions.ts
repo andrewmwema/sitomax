@@ -1,57 +1,69 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getRequestOrigin } from "@/lib/auth";
 
 export type LoginState =
   | { status: "idle" }
-  | { status: "sent"; email: string }
   | { status: "error"; message: string };
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email address."),
+  password: z.string().min(1, "Enter your password."),
   next: z.string().startsWith("/").catch("/dashboard"),
 });
 
 /**
- * Sends a magic sign-in link. Only existing (invited) users can sign in;
- * unknown emails still get a generic success message so the form cannot
- * be used to enumerate accounts.
+ * Signs in with email + password. Accounts are invite-only; there is no
+ * public sign-up. Redirects into the app on success.
  */
-export async function sendMagicLink(
+export async function signInWithPassword(
   _prev: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
+    password: formData.get("password"),
     next: formData.get("next") ?? "/dashboard",
   });
 
   if (!parsed.success) {
-    return { status: "error", message: "Enter a valid email address." };
-  }
-
-  const { email, next } = parsed.data;
-  const origin = await getRequestOrigin();
-  const supabase = await createClient();
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: false,
-      emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
-    },
-  });
-
-  // "Signups not allowed" means the email has no account; report generic
-  // success anyway. Surface every other failure.
-  if (error && !/signup/i.test(error.message)) {
     return {
       status: "error",
-      message: "We could not send the sign-in link. Please try again.",
+      message: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
 
-  return { status: "sent", email };
+  const { email, password, next } = parsed.data;
+  const supabase = await createClient();
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    if (error.code === "invalid_credentials") {
+      return { status: "error", message: "Incorrect email or password." };
+    }
+    if (error.code === "email_not_confirmed") {
+      return {
+        status: "error",
+        message: "Please confirm your email before signing in.",
+      };
+    }
+    if (error.code === "over_request_rate_limit") {
+      return {
+        status: "error",
+        message: "Too many attempts. Please wait a moment and try again.",
+      };
+    }
+    return {
+      status: "error",
+      message: "We could not sign you in. Please try again.",
+    };
+  }
+
+  redirect(next);
 }

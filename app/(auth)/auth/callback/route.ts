@@ -3,7 +3,7 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Auth callback for magic links and invites.
+ * Auth callback for password reset and invite emails.
  * Supports both PKCE (?code=) and token-hash (?token_hash=&type=) links,
  * then redirects into the app.
  */

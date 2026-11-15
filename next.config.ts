@@ -1,9 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["localhost:3000", "*.app.github.dev"],
+    },
+  },
+  // Required for Tailwind v4: compiles CSS through @tailwindcss/turbopack
+  // (there is no PostCSS config in this repo).
   turbopack: {
     rules: {
       "*.css": {
