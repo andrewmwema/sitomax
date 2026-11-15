@@ -1,5 +1,6 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { imageField, richTextField } from "@/lib/puck/fields";
+import { designField, imageField, richTextField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
 import { Eyebrow } from "./ui/eyebrow";
@@ -7,6 +8,7 @@ import { Heading } from "./ui/heading";
 import { RichTextContent } from "./ui/rich-text";
 
 export type ImageWithTextProps = {
+  design?: BlockDesign;
   image: string;
   imageAlt: string;
   eyebrow: string;
@@ -20,6 +22,7 @@ export type ImageWithTextProps = {
 export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
   label: "Image with text",
   fields: {
+    design: designField(),
     image: imageField("Image"),
     imageAlt: { type: "text", label: "Image alt text" },
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
@@ -36,6 +39,7 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
     },
   },
   defaultProps: {
+    design: {},
     image: "",
     imageAlt: "",
     eyebrow: "Why choose us",

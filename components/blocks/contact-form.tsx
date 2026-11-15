@@ -1,10 +1,13 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { designField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { Card } from "./ui/card";
 
 export type ContactFormProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   formName: string;
@@ -28,6 +31,7 @@ const inputStyle = {
 export const ContactForm: ComponentConfig<ContactFormProps> = {
   label: "Contact form",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     formName: { type: "text", label: "Form name", placeholder: "contact" },
@@ -69,6 +73,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "Contact",
     heading: "Send us a message",
     formName: "contact",

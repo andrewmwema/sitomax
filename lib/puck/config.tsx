@@ -1,6 +1,13 @@
-import type { Config } from "@puckeditor/core";
+import type {
+  Config,
+  ComponentConfig,
+  DefaultComponentProps,
+  WithPuckProps,
+} from "@puckeditor/core";
 import { buildThemeStyle, type SiteTheme } from "@/lib/theme/presets";
 import { fontVariables } from "@/lib/theme/fonts";
+import type { BlockDesign } from "@/lib/sections/design";
+import { SectionShell } from "@/components/blocks/ui/SectionShell";
 import { Hero, type HeroProps } from "@/components/blocks/hero";
 import { TextSection, type TextSectionProps } from "@/components/blocks/text-section";
 import { ImageWithText, type ImageWithTextProps } from "@/components/blocks/image-with-text";
@@ -37,6 +44,31 @@ export type RootProps = {
 };
 
 export type PuckConfig = Config<Components, RootProps>;
+
+/**
+ * Wraps a block's render in SectionShell, which applies the shared
+ * "design" controls (settings, background, border, shadow, animation,
+ * spacing) every block exposes via its design field. Centralized here
+ * so EVERY registered block gets the same treatment.
+ *
+ * Puck's ComponentConfig generic uses an exact-type constraint that
+ * cannot be abstracted over a type parameter, hence the local `any`;
+ * every call site below stays fully typed.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function withSectionShell<C extends ComponentConfig<any>>(config: C): C {
+  const BaseRender = config.render;
+  const render = ((
+    props: WithPuckProps<DefaultComponentProps & { design?: BlockDesign }> & {
+      id: string;
+    },
+  ) => (
+    <SectionShell design={props.design} isEditing={props.puck.isEditing}>
+      <BaseRender {...props} />
+    </SectionShell>
+  )) as C["render"];
+  return { ...config, render };
+}
 
 /** The Puck data shape produced by this config (pages.draft/published_data). */
 export type PuckPageData = import("@puckeditor/core").UserGenerics<PuckConfig>["UserData"];
@@ -105,18 +137,18 @@ export const puckConfig: PuckConfig = {
     },
   },
   components: {
-    Hero,
-    TextSection,
-    ImageWithText,
-    Services,
-    Gallery,
-    Testimonials,
-    Pricing,
-    Faq,
-    CallToAction,
-    ContactForm,
-    Map,
-    Spacer,
-    Footer,
+    Hero: withSectionShell(Hero),
+    TextSection: withSectionShell(TextSection),
+    ImageWithText: withSectionShell(ImageWithText),
+    Services: withSectionShell(Services),
+    Gallery: withSectionShell(Gallery),
+    Testimonials: withSectionShell(Testimonials),
+    Pricing: withSectionShell(Pricing),
+    Faq: withSectionShell(Faq),
+    CallToAction: withSectionShell(CallToAction),
+    ContactForm: withSectionShell(ContactForm),
+    Map: withSectionShell(Map),
+    Spacer: withSectionShell(Spacer),
+    Footer: withSectionShell(Footer),
   },
 };

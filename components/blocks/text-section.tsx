@@ -1,11 +1,13 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { richTextField } from "@/lib/puck/fields";
+import { designField, richTextField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { RichTextContent } from "./ui/rich-text";
 
 export type TextSectionProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   text: RichText;
@@ -17,6 +19,7 @@ export type TextSectionProps = {
 export const TextSection: ComponentConfig<TextSectionProps> = {
   label: "Text section",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     text: richTextField("Text"),
@@ -31,6 +34,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "About us",
     heading: "A team you can rely on",
     text: "<p>Tell your visitors who you are, what you do and why they should choose you.</p>",

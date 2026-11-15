@@ -1,10 +1,12 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { imageField } from "@/lib/puck/fields";
+import { designField, imageField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 
 export type GalleryProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   images: { url: string; alt: string }[];
@@ -30,6 +32,7 @@ const MASONRY_PLACEHOLDER_HEIGHTS = ["h-48", "h-64", "h-40", "h-56"];
 export const Gallery: ComponentConfig<GalleryProps> = {
   label: "Gallery",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     images: {
@@ -61,6 +64,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "Our work",
     heading: "Gallery",
     images: [],

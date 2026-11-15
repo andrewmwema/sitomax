@@ -1,5 +1,6 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { richTextField } from "@/lib/puck/fields";
+import { designField, richTextField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
@@ -7,6 +8,7 @@ import { BlockIcon } from "./ui/icon";
 import { RichTextContent } from "./ui/rich-text";
 
 export type FaqProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   items: { question: string; answer: RichText }[];
@@ -16,6 +18,7 @@ export type FaqProps = {
 export const Faq: ComponentConfig<FaqProps> = {
   label: "FAQ",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     items: {
@@ -38,6 +41,7 @@ export const Faq: ComponentConfig<FaqProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "FAQ",
     heading: "Frequently asked questions",
     items: [

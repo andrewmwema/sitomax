@@ -4,23 +4,25 @@ import { Container } from "./container";
 export type SectionBackground = "default" | "soft" | "dark" | "primary";
 
 const BACKGROUNDS: Record<SectionBackground, CSSProperties> = {
+  // --section-bg-override lets SectionShell make the section transparent
+  // when a custom design background (color / image / video) is active.
   default: {
-    backgroundColor: "var(--color-bg)",
+    backgroundColor: "var(--section-bg-override, var(--color-bg))",
     color: "var(--color-text)",
   },
   soft: {
-    backgroundColor: "var(--color-soft-bg)",
+    backgroundColor: "var(--section-bg-override, var(--color-soft-bg))",
     color: "var(--color-text)",
   },
   dark: {
-    backgroundColor: "var(--color-dark-bg)",
+    backgroundColor: "var(--section-bg-override, var(--color-dark-bg))",
     color: "var(--color-bg)",
     // Re-derive tints for light-on-dark content.
     "--color-muted": "color-mix(in srgb, var(--color-bg) 72%, transparent)",
     "--color-border": "color-mix(in srgb, var(--color-bg) 18%, transparent)",
   } as CSSProperties,
   primary: {
-    backgroundColor: "var(--color-primary)",
+    backgroundColor: "var(--section-bg-override, var(--color-primary))",
     color: "var(--color-on-primary)",
     "--color-muted": "color-mix(in srgb, var(--color-on-primary) 78%, transparent)",
     "--color-border": "color-mix(in srgb, var(--color-on-primary) 25%, transparent)",
@@ -49,8 +51,9 @@ export function Section({
     <section
       className={`w-full ${className}`}
       style={{
-        paddingTop: "var(--section-pad)",
-        paddingBottom: "var(--section-pad)",
+        // SectionShell can override the vertical rhythm per device.
+        paddingTop: "var(--section-pad-top, var(--section-pad))",
+        paddingBottom: "var(--section-pad-bottom, var(--section-pad))",
         ...BACKGROUNDS[background],
         ...style,
       }}

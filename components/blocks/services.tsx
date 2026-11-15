@@ -1,5 +1,6 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { iconField, richTextField } from "@/lib/puck/fields";
+import { designField, iconField, richTextField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
@@ -8,6 +9,7 @@ import { IconTile } from "./ui/icon-tile";
 import { RichTextContent } from "./ui/rich-text";
 
 export type ServicesProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   services: { icon: string; title: string; text: RichText }[];
@@ -17,6 +19,7 @@ export type ServicesProps = {
 export const Services: ComponentConfig<ServicesProps> = {
   label: "Services",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     services: {
@@ -44,6 +47,7 @@ export const Services: ComponentConfig<ServicesProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "What we do",
     heading: "Our services",
     services: [

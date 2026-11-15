@@ -1,5 +1,6 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { imageField } from "@/lib/puck/fields";
+import { designField, imageField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
 import { Eyebrow } from "./ui/eyebrow";
@@ -14,6 +15,7 @@ export type HeroProps = {
   buttonLink: string;
   backgroundImage: string;
   variant: "centered" | "split";
+  design?: BlockDesign;
   /** @deprecated legacy prop, replaced by variant. */
   layout?: "centered" | "split";
 };
@@ -35,6 +37,7 @@ export const Hero: ComponentConfig<HeroProps> = {
         { label: "Split", value: "split" },
       ],
     },
+    design: designField(),
   },
   defaultProps: {
     eyebrow: "Trusted local experts",
@@ -44,6 +47,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     buttonLink: "/contact",
     backgroundImage: "",
     variant: "centered",
+    design: {},
   },
   render: ({ eyebrow, heading, subheading, buttonText, buttonLink, backgroundImage, variant, layout }) => {
     if ((variant ?? layout) === "split") {

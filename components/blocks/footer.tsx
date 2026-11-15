@@ -1,9 +1,12 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { designField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
 import { BlockIcon } from "./ui/icon";
 
 export type FooterProps = {
+  design?: BlockDesign;
   businessName: string;
   phone: string;
   address: string;
@@ -26,6 +29,7 @@ const PLATFORM_LABELS: Record<FooterProps["socialLinks"][number]["platform"], st
 export const Footer: ComponentConfig<FooterProps> = {
   label: "Footer",
   fields: {
+    design: designField(),
     businessName: { type: "text", label: "Business name", contentEditable: true },
     phone: { type: "text", label: "Phone" },
     address: { type: "text", label: "Address" },
@@ -53,6 +57,7 @@ export const Footer: ComponentConfig<FooterProps> = {
     },
   },
   defaultProps: {
+    design: {},
     businessName: "Your business",
     phone: "",
     address: "",

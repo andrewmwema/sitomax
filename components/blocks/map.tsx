@@ -1,9 +1,12 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { designField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 
 export type MapProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   address: string;
@@ -13,6 +16,7 @@ export type MapProps = {
 export const Map: ComponentConfig<MapProps> = {
   label: "Map",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     address: { type: "text", label: "Address", placeholder: "123 Main St, Springfield" },
@@ -26,6 +30,7 @@ export const Map: ComponentConfig<MapProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "Location",
     heading: "Find us",
     address: "",

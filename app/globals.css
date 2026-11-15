@@ -106,3 +106,94 @@ body {
   border-inline-start: 3px solid var(--color-secondary, currentColor);
   font-style: italic;
 }
+
+/*
+ * SectionShell (components/blocks/ui/SectionShell.tsx).
+ *
+ * Per-device spacing: the shell sets --shell-{mt,mr,mb,ml,pt,pr,pb,pl}-{d,t,m}
+ * inline (validated numbers only); these rules cascade desktop → tablet
+ * → mobile. Vertical padding overrides flow into the block's Section via
+ * --section-pad-top/--section-pad-bottom (falling back to --section-pad).
+ */
+.section-shell {
+  position: relative;
+  margin-top: var(--shell-mt-d, 0px);
+  margin-right: var(--shell-mr-d, 0px);
+  margin-bottom: var(--shell-mb-d, 0px);
+  margin-left: var(--shell-ml-d, 0px);
+  padding-left: var(--shell-pl-d, 0px);
+  padding-right: var(--shell-pr-d, 0px);
+  --section-pad-top: var(--shell-pt-d, var(--section-pad));
+  --section-pad-bottom: var(--shell-pb-d, var(--section-pad));
+}
+
+@media (max-width: 1023.98px) {
+  .section-shell {
+    margin-top: var(--shell-mt-t, var(--shell-mt-d, 0px));
+    margin-right: var(--shell-mr-t, var(--shell-mr-d, 0px));
+    margin-bottom: var(--shell-mb-t, var(--shell-mb-d, 0px));
+    margin-left: var(--shell-ml-t, var(--shell-ml-d, 0px));
+    padding-left: var(--shell-pl-t, var(--shell-pl-d, 0px));
+    padding-right: var(--shell-pr-t, var(--shell-pr-d, 0px));
+    --section-pad-top: var(--shell-pt-t, var(--shell-pt-d, var(--section-pad)));
+    --section-pad-bottom: var(--shell-pb-t, var(--shell-pb-d, var(--section-pad)));
+  }
+}
+
+@media (max-width: 767.98px) {
+  .section-shell {
+    margin-top: var(--shell-mt-m, var(--shell-mt-t, var(--shell-mt-d, 0px)));
+    margin-right: var(--shell-mr-m, var(--shell-mr-t, var(--shell-mr-d, 0px)));
+    margin-bottom: var(--shell-mb-m, var(--shell-mb-t, var(--shell-mb-d, 0px)));
+    margin-left: var(--shell-ml-m, var(--shell-ml-t, var(--shell-ml-d, 0px)));
+    padding-left: var(--shell-pl-m, var(--shell-pl-t, var(--shell-pl-d, 0px)));
+    padding-right: var(--shell-pr-m, var(--shell-pr-t, var(--shell-pr-d, 0px)));
+    --section-pad-top: var(--shell-pt-m, var(--shell-pt-t, var(--shell-pt-d, var(--section-pad))));
+    --section-pad-bottom: var(--shell-pb-m, var(--shell-pb-t, var(--shell-pb-d, var(--section-pad))));
+  }
+}
+
+/* After the media queries so the centering always wins over margins. */
+.section-shell-contained {
+  max-width: var(--container, 1200px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/*
+ * SectionShell animations: driven by IntersectionObserver adding or
+ * removing .shell-anim-hidden. Everything lives inside the
+ * no-preference media query, so with prefers-reduced-motion (or
+ * without JavaScript) content is simply visible, never animated.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .shell-anim {
+    transition:
+      opacity var(--shell-anim-duration, 600ms) ease var(--shell-anim-delay, 0ms),
+      transform var(--shell-anim-duration, 600ms) ease var(--shell-anim-delay, 0ms);
+  }
+
+  .shell-anim-hidden {
+    opacity: 0;
+  }
+
+  .shell-anim-hidden.shell-anim-fade-up {
+    transform: translateY(28px);
+  }
+
+  .shell-anim-hidden.shell-anim-fade-down {
+    transform: translateY(-28px);
+  }
+
+  .shell-anim-hidden.shell-anim-slide-left {
+    transform: translateX(48px);
+  }
+
+  .shell-anim-hidden.shell-anim-slide-right {
+    transform: translateX(-48px);
+  }
+
+  .shell-anim-hidden.shell-anim-zoom-in {
+    transform: scale(0.92);
+  }
+}

@@ -1,6 +1,9 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { designField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 
 export type SpacerProps = {
+  design?: BlockDesign;
   size: "small" | "medium" | "large" | "extra-large";
   variant: "blank" | "divider";
 };
@@ -15,6 +18,7 @@ const SIZES: Record<SpacerProps["size"], string> = {
 export const Spacer: ComponentConfig<SpacerProps> = {
   label: "Spacer",
   fields: {
+    design: designField(),
     size: {
       type: "select",
       label: "Size",
@@ -34,12 +38,12 @@ export const Spacer: ComponentConfig<SpacerProps> = {
       ],
     },
   },
-  defaultProps: { size: "medium", variant: "blank" },
+  defaultProps: { size: "medium", variant: "blank", design: {} },
   render: ({ size, variant }) => (
     <div
       aria-hidden="true"
       className={`flex w-full items-center ${SIZES[size] ?? SIZES.medium}`}
-      style={{ backgroundColor: "var(--color-bg)" }}
+      style={{ backgroundColor: "var(--section-bg-override, var(--color-bg))" }}
     >
       {(variant ?? "blank") === "divider" ? (
         <div

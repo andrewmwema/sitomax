@@ -1,4 +1,6 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { designField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
@@ -8,6 +10,7 @@ import { Button } from "./ui/button";
 import { BlockIcon } from "./ui/icon";
 
 export type PricingProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   plans: {
@@ -25,6 +28,7 @@ export type PricingProps = {
 export const Pricing: ComponentConfig<PricingProps> = {
   label: "Pricing",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     plans: {
@@ -67,6 +71,7 @@ export const Pricing: ComponentConfig<PricingProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "Pricing",
     heading: "Simple, honest pricing",
     plans: [

@@ -1,10 +1,13 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { designField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { Card } from "./ui/card";
 
 export type TestimonialsProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   testimonials: { quote: string; name: string; role: string }[];
@@ -14,6 +17,7 @@ export type TestimonialsProps = {
 export const Testimonials: ComponentConfig<TestimonialsProps> = {
   label: "Testimonials",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     testimonials: {
@@ -37,6 +41,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "Testimonials",
     heading: "What our customers say",
     testimonials: [

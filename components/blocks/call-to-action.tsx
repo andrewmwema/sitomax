@@ -1,10 +1,13 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { designField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { Button } from "./ui/button";
 
 export type CallToActionProps = {
+  design?: BlockDesign;
   eyebrow: string;
   heading: string;
   text: string;
@@ -16,6 +19,7 @@ export type CallToActionProps = {
 export const CallToAction: ComponentConfig<CallToActionProps> = {
   label: "Call to action",
   fields: {
+    design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     text: { type: "textarea", label: "Text", contentEditable: true },
@@ -32,6 +36,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
     },
   },
   defaultProps: {
+    design: {},
     eyebrow: "Get started",
     heading: "Ready to get started?",
     text: "Contact us today for a free, no-obligation quote.",
