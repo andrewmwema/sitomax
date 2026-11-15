@@ -11,6 +11,7 @@ export type FooterProps = {
     platform: "facebook" | "instagram" | "x" | "linkedin" | "youtube" | "tiktok";
     url: string;
   }[];
+  variant: "columns" | "centered";
 };
 
 const PLATFORM_LABELS: Record<FooterProps["socialLinks"][number]["platform"], string> = {
@@ -42,70 +43,103 @@ export const Footer: ComponentConfig<FooterProps> = {
         url: { type: "text", label: "URL" },
       },
     },
+    variant: {
+      type: "radio",
+      label: "Layout",
+      options: [
+        { label: "Columns", value: "columns" },
+        { label: "Centered", value: "centered" },
+      ],
+    },
   },
   defaultProps: {
     businessName: "Your business",
     phone: "",
     address: "",
     socialLinks: [],
+    variant: "columns",
   },
-  render: ({ businessName, phone, address, socialLinks }) => (
-    <Section
-      background="dark"
-      container={false}
-      style={{ paddingTop: 56, paddingBottom: 56 }}
-    >
-      <footer>
-        <Container className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
-          <div className="flex flex-col gap-2">
-            <p
-              className="text-xl"
-              style={{
-                fontFamily: "var(--font-heading)",
-                fontWeight: "var(--heading-weight)" as React.CSSProperties["fontWeight"],
-                letterSpacing: "-0.5px",
-              }}
+  render: ({ businessName, phone, address, socialLinks, variant }) => {
+    const centered = (variant ?? "columns") === "centered";
+
+    const contact = (
+      <div
+        className={`flex flex-col gap-2 text-sm ${centered ? "items-center" : ""}`}
+        style={{ lineHeight: 1.6 }}
+      >
+        {phone ? (
+          <a
+            href={`tel:${phone.replace(/\s+/g, "")}`}
+            className="inline-flex items-center gap-2 transition hover:opacity-80"
+          >
+            <BlockIcon name="phone" size={15} />
+            {phone}
+          </a>
+        ) : null}
+        {address ? (
+          <p className="inline-flex items-center gap-2" style={{ color: "var(--color-muted)" }}>
+            <BlockIcon name="map-pin" size={15} />
+            {address}
+          </p>
+        ) : null}
+      </div>
+    );
+
+    const social =
+      socialLinks.length > 0 ? (
+        <div className={`flex flex-wrap gap-5 text-sm font-medium ${centered ? "justify-center" : ""}`}>
+          {socialLinks.map((link, i) => (
+            <a
+              key={i}
+              href={link.url || "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="transition hover:opacity-80"
             >
-              {businessName}
-            </p>
-            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-              © {new Date().getFullYear()} {businessName}. All rights reserved.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 text-sm" style={{ lineHeight: 1.6 }}>
-            {phone ? (
-              <a
-                href={`tel:${phone.replace(/\s+/g, "")}`}
-                className="inline-flex items-center gap-2 transition hover:opacity-80"
-              >
-                <BlockIcon name="phone" size={15} />
-                {phone}
-              </a>
-            ) : null}
-            {address ? (
-              <p className="inline-flex items-center gap-2" style={{ color: "var(--color-muted)" }}>
-                <BlockIcon name="map-pin" size={15} />
-                {address}
-              </p>
-            ) : null}
-          </div>
-          {socialLinks.length > 0 ? (
-            <div className="flex flex-wrap gap-5 text-sm font-medium">
-              {socialLinks.map((link, i) => (
-                <a
-                  key={i}
-                  href={link.url || "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="transition hover:opacity-80"
-                >
-                  {PLATFORM_LABELS[link.platform] ?? link.platform}
-                </a>
-              ))}
-            </div>
-          ) : null}
-        </Container>
-      </footer>
-    </Section>
-  ),
+              {PLATFORM_LABELS[link.platform] ?? link.platform}
+            </a>
+          ))}
+        </div>
+      ) : null;
+
+    const brand = (
+      <div className={`flex flex-col gap-2 ${centered ? "items-center text-center" : ""}`}>
+        <p
+          className="text-xl"
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontWeight: "var(--heading-weight)" as React.CSSProperties["fontWeight"],
+            letterSpacing: "-0.5px",
+          }}
+        >
+          {businessName}
+        </p>
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+          © {new Date().getFullYear()} {businessName}. All rights reserved.
+        </p>
+      </div>
+    );
+
+    return (
+      <Section
+        background="dark"
+        container={false}
+        style={{ paddingTop: 56, paddingBottom: 56 }}
+      >
+        <footer>
+          <Container
+            className={
+              centered
+                ? "flex flex-col items-center gap-6 text-center"
+                : "flex flex-col gap-8 md:flex-row md:items-start md:justify-between"
+            }
+          >
+            {brand}
+            {contact}
+            {social}
+          </Container>
+        </footer>
+      </Section>
+    );
+  },
 };

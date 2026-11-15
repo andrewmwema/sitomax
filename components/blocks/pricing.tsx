@@ -19,6 +19,7 @@ export type PricingProps = {
     buttonLink: string;
     highlighted: boolean;
   }[];
+  variant: "cards" | "simple";
 };
 
 export const Pricing: ComponentConfig<PricingProps> = {
@@ -56,6 +57,14 @@ export const Pricing: ComponentConfig<PricingProps> = {
         },
       },
     },
+    variant: {
+      type: "radio",
+      label: "Layout",
+      options: [
+        { label: "Cards", value: "cards" },
+        { label: "Simple columns", value: "simple" },
+      ],
+    },
   },
   defaultProps: {
     eyebrow: "Pricing",
@@ -80,68 +89,97 @@ export const Pricing: ComponentConfig<PricingProps> = {
         highlighted: true,
       },
     ],
+    variant: "cards",
   },
-  render: ({ eyebrow, heading, plans }) => (
-    <Section>
-      <div className="flex flex-col items-center gap-3 text-center">
-        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        <Heading level={2}>{heading}</Heading>
-      </div>
-      <div className="mt-12 grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {plans.map((plan, i) => (
-          <Card
-            key={i}
-            className="gap-5"
-            style={
-              plan.highlighted
-                ? { borderColor: "var(--color-primary)", borderWidth: 2 }
-                : undefined
-            }
+  render: ({ eyebrow, heading, plans, variant }) => {
+    const simple = (variant ?? "cards") === "simple";
+
+    const planBody = (plan: PricingProps["plans"][number]) => (
+      <>
+        <div className="flex items-start justify-between gap-3">
+          <Heading level={3}>{plan.name}</Heading>
+          {plan.highlighted ? <Badge>Most popular</Badge> : null}
+        </div>
+        <p>
+          <span
+            className="text-4xl"
+            style={{
+              fontFamily: "var(--font-heading)",
+              fontWeight: "var(--heading-weight)" as React.CSSProperties["fontWeight"],
+              letterSpacing: "-1px",
+            }}
           >
-            <div className="flex items-start justify-between gap-3">
-              <Heading level={3}>{plan.name}</Heading>
-              {plan.highlighted ? <Badge>Most popular</Badge> : null}
-            </div>
-            <p>
-              <span
-                className="text-4xl"
+            {plan.price}
+          </span>{" "}
+          <span className="text-sm" style={{ color: "var(--color-muted)" }}>
+            {plan.period}
+          </span>
+        </p>
+        <ul className="flex flex-1 flex-col gap-2.5 text-sm" style={{ lineHeight: 1.6 }}>
+          {plan.features
+            .split("\n")
+            .filter(Boolean)
+            .map((feature, j) => (
+              <li key={j} className="flex items-start gap-2.5">
+                <span className="mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }}>
+                  <BlockIcon name="check" size={16} />
+                </span>
+                <span style={{ color: "var(--color-muted)" }}>{feature}</span>
+              </li>
+            ))}
+        </ul>
+        {plan.buttonText ? (
+          <Button
+            href={plan.buttonLink}
+            variant={plan.highlighted ? "primary" : "secondary"}
+            className="w-full"
+          >
+            {plan.buttonText}
+          </Button>
+        ) : null}
+      </>
+    );
+
+    return (
+      <Section>
+        <div className="flex flex-col items-center gap-3 text-center">
+          {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+          <Heading level={2}>{heading}</Heading>
+        </div>
+        {simple ? (
+          <div className="mt-12 grid items-stretch gap-10 md:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-5 pt-6"
                 style={{
-                  fontFamily: "var(--font-heading)",
-                  fontWeight: "var(--heading-weight)" as React.CSSProperties["fontWeight"],
-                  letterSpacing: "-1px",
+                  borderTop: `3px solid ${
+                    plan.highlighted ? "var(--color-primary)" : "var(--color-border)"
+                  }`,
                 }}
               >
-                {plan.price}
-              </span>{" "}
-              <span className="text-sm" style={{ color: "var(--color-muted)" }}>
-                {plan.period}
-              </span>
-            </p>
-            <ul className="flex flex-1 flex-col gap-2.5 text-sm" style={{ lineHeight: 1.6 }}>
-              {plan.features
-                .split("\n")
-                .filter(Boolean)
-                .map((feature, j) => (
-                  <li key={j} className="flex items-start gap-2.5">
-                    <span className="mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }}>
-                      <BlockIcon name="check" size={16} />
-                    </span>
-                    <span style={{ color: "var(--color-muted)" }}>{feature}</span>
-                  </li>
-                ))}
-            </ul>
-            {plan.buttonText ? (
-              <Button
-                href={plan.buttonLink}
-                variant={plan.highlighted ? "primary" : "secondary"}
-                className="w-full"
+                {planBody(plan)}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-12 grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan, i) => (
+              <Card
+                key={i}
+                className="gap-5"
+                style={
+                  plan.highlighted
+                    ? { borderColor: "var(--color-primary)", borderWidth: 2 }
+                    : undefined
+                }
               >
-                {plan.buttonText}
-              </Button>
-            ) : null}
-          </Card>
-        ))}
-      </div>
-    </Section>
-  ),
+                {planBody(plan)}
+              </Card>
+            ))}
+          </div>
+        )}
+      </Section>
+    );
+  },
 };

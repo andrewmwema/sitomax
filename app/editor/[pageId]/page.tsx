@@ -38,15 +38,22 @@ async function EditorLoader({
   params: PageProps<"/editor/[pageId]">["params"];
 }) {
   const { pageId } = await params;
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
-  const { data } = await supabase
-    .from("pages")
-    .select(
-      "id, slug, title, draft_data, site:sites(id, name, subdomain, theme)",
-    )
-    .eq("id", pageId)
-    .maybeSingle();
+  const [{ data }, { data: profile }] = await Promise.all([
+    supabase
+      .from("pages")
+      .select(
+        "id, slug, title, draft_data, site:sites(id, name, subdomain, theme)",
+      )
+      .eq("id", pageId)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("is_super_admin")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
 
   if (!data) {
     // No row = page missing or the user is not a member (RLS).
@@ -69,6 +76,7 @@ async function EditorLoader({
       site={site}
       initialData={data.draft_data as Record<string, unknown>}
       previewUrl={previewUrl}
+      isSuperAdmin={Boolean(profile?.is_super_admin)}
     />
   );
 }

@@ -13,7 +13,9 @@ export type HeroProps = {
   buttonText: string;
   buttonLink: string;
   backgroundImage: string;
-  layout: "centered" | "split";
+  variant: "centered" | "split";
+  /** @deprecated legacy prop, replaced by variant. */
+  layout?: "centered" | "split";
 };
 
 export const Hero: ComponentConfig<HeroProps> = {
@@ -25,7 +27,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     buttonText: { type: "text", label: "Button text", contentEditable: true },
     buttonLink: { type: "text", label: "Button link", placeholder: "/contact" },
     backgroundImage: imageField("Image"),
-    layout: {
+    variant: {
       type: "radio",
       label: "Layout",
       options: [
@@ -41,10 +43,10 @@ export const Hero: ComponentConfig<HeroProps> = {
     buttonText: "Get in touch",
     buttonLink: "/contact",
     backgroundImage: "",
-    layout: "centered",
+    variant: "centered",
   },
-  render: ({ eyebrow, heading, subheading, buttonText, buttonLink, backgroundImage, layout }) => {
-    if (layout === "split") {
+  render: ({ eyebrow, heading, subheading, buttonText, buttonLink, backgroundImage, variant, layout }) => {
+    if ((variant ?? layout) === "split") {
       return (
         <Section container={false}>
           <Container className="grid items-center gap-12 md:grid-cols-2">

@@ -9,7 +9,9 @@ export type TextSectionProps = {
   eyebrow: string;
   heading: string;
   text: RichText;
-  align: "left" | "center";
+  variant: "standard" | "centered" | "two-column";
+  /** @deprecated legacy prop, replaced by variant. */
+  align?: "left" | "center";
 };
 
 export const TextSection: ComponentConfig<TextSectionProps> = {
@@ -18,12 +20,13 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     text: richTextField("Text"),
-    align: {
+    variant: {
       type: "radio",
-      label: "Alignment",
+      label: "Layout",
       options: [
-        { label: "Left", value: "left" },
-        { label: "Center", value: "center" },
+        { label: "Standard", value: "standard" },
+        { label: "Centered", value: "centered" },
+        { label: "Two columns", value: "two-column" },
       ],
     },
   },
@@ -31,19 +34,37 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     eyebrow: "About us",
     heading: "A team you can rely on",
     text: "<p>Tell your visitors who you are, what you do and why they should choose you.</p>",
-    align: "left",
+    variant: "standard",
   },
-  render: ({ eyebrow, heading, text, align }) => (
-    <Section>
-      <div
-        className={`flex max-w-[46rem] flex-col gap-4 ${
-          align === "center" ? "mx-auto items-center text-center" : ""
-        }`}
-      >
-        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        {heading ? <Heading level={2}>{heading}</Heading> : null}
-        <RichTextContent value={text} className="w-full max-w-[65ch]" />
-      </div>
-    </Section>
-  ),
+  render: ({ eyebrow, heading, text, variant, align }) => {
+    const layout = variant ?? (align === "center" ? "centered" : "standard");
+
+    if (layout === "two-column") {
+      return (
+        <Section>
+          <div className="grid gap-10 md:grid-cols-[1fr_1.4fr] md:gap-16">
+            <div className="flex flex-col gap-4">
+              {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+              {heading ? <Heading level={2}>{heading}</Heading> : null}
+            </div>
+            <RichTextContent value={text} className="w-full max-w-[65ch]" />
+          </div>
+        </Section>
+      );
+    }
+
+    return (
+      <Section>
+        <div
+          className={`flex max-w-[46rem] flex-col gap-4 ${
+            layout === "centered" ? "mx-auto items-center text-center" : ""
+          }`}
+        >
+          {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+          {heading ? <Heading level={2}>{heading}</Heading> : null}
+          <RichTextContent value={text} className="w-full max-w-[65ch]" />
+        </div>
+      </Section>
+    );
+  },
 };

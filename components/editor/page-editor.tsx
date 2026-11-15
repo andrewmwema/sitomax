@@ -8,12 +8,30 @@ import {
   useRef,
   useState,
 } from "react";
-import { Puck, useGetPuck, type Data, type Overrides } from "@puckeditor/core";
+import {
+  ActionBar,
+  Puck,
+  useGetPuck,
+  type Data,
+  type Overrides,
+} from "@puckeditor/core";
+import { Bookmark } from "lucide-react";
 import { puckConfig } from "@/lib/puck/config";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { publishPage, savePageDraft } from "@/app/editor/[pageId]/actions";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
 import { ThemePanel } from "@/components/editor/theme-panel";
+import {
+  SectionLibraryContext,
+  SectionLibraryModal,
+  useSectionLibrary,
+  type SectionLibraryUi,
+} from "@/components/editor/section-library";
+import {
+  AddSectionEndBar,
+  OverlayInsertButtons,
+} from "@/components/editor/canvas-insert";
+import { SaveDesignDialog } from "@/components/editor/save-design-dialog";
 
 type EditorUi = {
   pageId: string;
@@ -92,19 +110,58 @@ function HeaderActions() {
   );
 }
 
+/**
+ * Action bar override: replicates Puck's default layout and adds the
+ * super-admin-only "Save as design" action.
+ */
+function EditorActionBar({
+  label,
+  children,
+  parentAction,
+  dragHandle,
+}: {
+  label?: string;
+  children: React.ReactNode;
+  parentAction: React.ReactNode;
+  dragHandle?: React.ReactNode;
+}) {
+  const { isSuperAdmin, openSaveDesign } = useSectionLibrary();
+  return (
+    <ActionBar>
+      <ActionBar.Group>
+        {parentAction}
+        {label ? <ActionBar.Label label={label} /> : null}
+      </ActionBar.Group>
+      <ActionBar.Group>
+        {isSuperAdmin ? (
+          <ActionBar.Action label="Save as design" onClick={openSaveDesign}>
+            <Bookmark size={16} />
+          </ActionBar.Action>
+        ) : null}
+        {children}
+      </ActionBar.Group>
+      {dragHandle ? <ActionBar.Group>{dragHandle}</ActionBar.Group> : null}
+    </ActionBar>
+  );
+}
+
 export function PageEditor({
   page,
   site,
   initialData,
   previewUrl,
+  isSuperAdmin,
 }: {
   page: { id: string; slug: string; title: string | null };
   site: { id: string; name: string | null; subdomain: string; theme: SiteTheme | null };
   initialData: Record<string, unknown>;
   previewUrl: string;
+  isSuperAdmin: boolean;
 }) {
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
   const [themePanelOpen, setThemePanelOpen] = useState(false);
+  const [library, setLibrary] = useState({ open: false, index: 0 });
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
   const editorUi = useMemo<EditorUi>(
     () => ({
@@ -115,8 +172,48 @@ export function PageEditor({
     [page.id, previewUrl],
   );
 
+  const sectionLibraryUi = useMemo<SectionLibraryUi>(
+    () => ({
+      isSuperAdmin,
+      theme,
+      library,
+      openLibrary: (index: number) => setLibrary({ open: true, index }),
+      closeLibrary: () => setLibrary((prev) => ({ ...prev, open: false })),
+      saveDialogOpen,
+      openSaveDesign: () => setSaveDialogOpen(true),
+      closeSaveDesign: () => setSaveDialogOpen(false),
+    }),
+    [isSuperAdmin, theme, library, saveDialogOpen],
+  );
+
+  // Stable overrides (Puck requirement); components read React context.
   const overrides = useMemo<Partial<Overrides>>(
-    () => ({ headerActions: () => <HeaderActions /> }),
+    () => ({
+      headerActions: () => <HeaderActions />,
+      actionBar: (props) => <EditorActionBar {...props} />,
+      componentOverlay: ({ children, hover, isSelected, componentId }) => (
+        <>
+          {children}
+          <OverlayInsertButtons
+            componentId={componentId}
+            visible={hover || isSelected}
+          />
+        </>
+      ),
+      preview: ({ children }) => (
+        <>
+          {children}
+          <AddSectionEndBar />
+        </>
+      ),
+      puck: ({ children }) => (
+        <>
+          {children}
+          <SectionLibraryModal />
+          <SaveDesignDialog />
+        </>
+      ),
+    }),
     [],
   );
 
@@ -137,23 +234,25 @@ export function PageEditor({
   return (
     <EditorSiteContext.Provider value={{ siteId: site.id }}>
       <EditorUiContext.Provider value={editorUi}>
-        <div className="h-screen">
-          <Puck
-            config={puckConfig}
-            data={data}
-            metadata={{ theme }}
-            overrides={overrides}
-            headerTitle={page.title ?? site.name ?? site.subdomain}
-            headerPath={page.slug ? `/${page.slug}` : "/"}
+        <SectionLibraryContext.Provider value={sectionLibraryUi}>
+          <div className="h-screen">
+            <Puck
+              config={puckConfig}
+              data={data}
+              metadata={{ theme }}
+              overrides={overrides}
+              headerTitle={page.title ?? site.name ?? site.subdomain}
+              headerPath={page.slug ? `/${page.slug}` : "/"}
+            />
+          </div>
+          <ThemePanel
+            siteId={site.id}
+            theme={theme}
+            onChange={setTheme}
+            open={themePanelOpen}
+            onClose={() => setThemePanelOpen(false)}
           />
-        </div>
-        <ThemePanel
-          siteId={site.id}
-          theme={theme}
-          onChange={setTheme}
-          open={themePanelOpen}
-          onClose={() => setThemePanelOpen(false)}
-        />
+        </SectionLibraryContext.Provider>
       </EditorUiContext.Provider>
     </EditorSiteContext.Provider>
   );

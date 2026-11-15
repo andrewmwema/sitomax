@@ -32,3 +32,18 @@ export const plusJakartaSans = Plus_Jakarta_Sans({
  * the editor's preview iframe.
  */
 export const fontVariables = `${inter.variable} ${dmSerifDisplay.variable} ${plusJakartaSans.variable}`;
+
+/**
+ * Curated font families clients may pick in the rich text toolbar
+ * (Phase 4c). The sanitizer (lib/richtext.ts) only accepts font-family
+ * values from this list — keep both in sync when adding fonts.
+ */
+export const CURATED_FONTS = [
+  { name: "Inter", cssVariable: "--font-inter" },
+  { name: "DM Serif Display", cssVariable: "--font-dm-serif" },
+  { name: "Plus Jakarta Sans", cssVariable: "--font-jakarta" },
+] as const;
+
+export const CURATED_FONT_NAMES: readonly string[] = CURATED_FONTS.map(
+  (font) => font.name,
+);

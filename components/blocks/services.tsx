@@ -11,6 +11,7 @@ export type ServicesProps = {
   eyebrow: string;
   heading: string;
   services: { icon: string; title: string; text: RichText }[];
+  variant: "grid" | "list";
 };
 
 export const Services: ComponentConfig<ServicesProps> = {
@@ -33,6 +34,14 @@ export const Services: ComponentConfig<ServicesProps> = {
         text: richTextField("Text"),
       },
     },
+    variant: {
+      type: "radio",
+      label: "Layout",
+      options: [
+        { label: "Grid", value: "grid" },
+        { label: "List", value: "list" },
+      ],
+    },
   },
   defaultProps: {
     eyebrow: "What we do",
@@ -42,22 +51,39 @@ export const Services: ComponentConfig<ServicesProps> = {
       { icon: "clock", title: "Service two", text: "<p>Describe this service.</p>" },
       { icon: "shield-check", title: "Service three", text: "<p>Describe this service.</p>" },
     ],
+    variant: "grid",
   },
-  render: ({ eyebrow, heading, services }) => (
+  render: ({ eyebrow, heading, services, variant }) => (
     <Section background="soft">
       <div className="flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <Heading level={2}>{heading}</Heading>
       </div>
-      <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {services.map((service, i) => (
-          <Card key={i}>
-            <IconTile name={service.icon} />
-            <Heading level={3}>{service.title}</Heading>
-            <RichTextContent value={service.text} className="w-full text-sm" />
-          </Card>
-        ))}
-      </div>
+      {(variant ?? "grid") === "list" ? (
+        <div className="mx-auto mt-12 flex max-w-[52rem] flex-col gap-4">
+          {services.map((service, i) => (
+            <Card key={i}>
+              <div className="flex items-start gap-5">
+                <IconTile name={service.icon} />
+                <div className="flex flex-col gap-2">
+                  <Heading level={3}>{service.title}</Heading>
+                  <RichTextContent value={service.text} className="w-full text-sm" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {services.map((service, i) => (
+            <Card key={i}>
+              <IconTile name={service.icon} />
+              <Heading level={3}>{service.title}</Heading>
+              <RichTextContent value={service.text} className="w-full text-sm" />
+            </Card>
+          ))}
+        </div>
+      )}
     </Section>
   ),
 };

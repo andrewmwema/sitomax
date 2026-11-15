@@ -2,6 +2,7 @@ import type { ComponentConfig } from "@puckeditor/core";
 
 export type SpacerProps = {
   size: "small" | "medium" | "large" | "extra-large";
+  variant: "blank" | "divider";
 };
 
 const SIZES: Record<SpacerProps["size"], string> = {
@@ -24,13 +25,31 @@ export const Spacer: ComponentConfig<SpacerProps> = {
         { label: "Extra large", value: "extra-large" },
       ],
     },
+    variant: {
+      type: "radio",
+      label: "Layout",
+      options: [
+        { label: "Blank", value: "blank" },
+        { label: "Divider line", value: "divider" },
+      ],
+    },
   },
-  defaultProps: { size: "medium" },
-  render: ({ size }) => (
+  defaultProps: { size: "medium", variant: "blank" },
+  render: ({ size, variant }) => (
     <div
       aria-hidden="true"
-      className={`w-full ${SIZES[size] ?? SIZES.medium}`}
+      className={`flex w-full items-center ${SIZES[size] ?? SIZES.medium}`}
       style={{ backgroundColor: "var(--color-bg)" }}
-    />
+    >
+      {(variant ?? "blank") === "divider" ? (
+        <div
+          className="mx-auto w-full"
+          style={{
+            maxWidth: "var(--container)",
+            borderTop: "1px solid var(--color-border)",
+          }}
+        />
+      ) : null}
+    </div>
   ),
 };
