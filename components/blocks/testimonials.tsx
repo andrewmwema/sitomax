@@ -1,6 +1,11 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { Card } from "./ui/card";
 
 export type TestimonialsProps = {
+  eyebrow: string;
   heading: string;
   testimonials: { quote: string; name: string; role: string }[];
 };
@@ -8,6 +13,7 @@ export type TestimonialsProps = {
 export const Testimonials: ComponentConfig<TestimonialsProps> = {
   label: "Testimonials",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     testimonials: {
       type: "array",
@@ -22,47 +28,44 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
     },
   },
   defaultProps: {
+    eyebrow: "Testimonials",
     heading: "What our customers say",
     testimonials: [
       { quote: "They did a fantastic job from start to finish.", name: "Alex P.", role: "Homeowner" },
       { quote: "Fast, friendly and professional. Highly recommended.", name: "Sam R.", role: "Local business" },
     ],
   },
-  render: ({ heading, testimonials }) => (
-    <section
-      className="w-full"
-      style={{
-        background: "color-mix(in srgb, var(--color-primary) 6%, var(--color-background))",
-      }}
-    >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6 md:py-16">
-        <h2
-          className="text-center text-3xl font-bold"
-          style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-        >
-          {heading}
-        </h2>
-        <div className="grid gap-6 md:grid-cols-2">
-          {testimonials.map((t, i) => (
-            <figure
-              key={i}
-              className="flex flex-col gap-4 rounded-2xl p-6 shadow-sm"
-              style={{ backgroundColor: "var(--color-background)" }}
-            >
-              <blockquote
-                className="text-base leading-relaxed italic opacity-90"
-                style={{ color: "var(--color-text)" }}
-              >
-                “{t.quote}”
-              </blockquote>
-              <figcaption className="text-sm" style={{ color: "var(--color-text)" }}>
-                <span className="font-semibold">{t.name}</span>
-                {t.role ? <span className="opacity-70"> · {t.role}</span> : null}
-              </figcaption>
-            </figure>
-          ))}
-        </div>
+  render: ({ eyebrow, heading, testimonials }) => (
+    <Section background="soft">
+      <div className="flex flex-col items-center gap-3 text-center">
+        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+        <Heading level={2}>{heading}</Heading>
       </div>
-    </section>
+      <div className="mt-12 grid gap-6 md:grid-cols-2">
+        {testimonials.map((t, i) => (
+          <Card key={i} className="gap-4">
+            <span
+              aria-hidden="true"
+              className="text-5xl leading-none"
+              style={{ color: "var(--color-secondary)", fontFamily: "var(--font-heading)" }}
+            >
+              &ldquo;
+            </span>
+            <blockquote
+              className="max-w-[65ch] text-base"
+              style={{ color: "var(--color-text)", lineHeight: 1.6 }}
+            >
+              {t.quote}
+            </blockquote>
+            <figcaption className="text-sm">
+              <span className="font-semibold">{t.name}</span>
+              {t.role ? (
+                <span style={{ color: "var(--color-muted)" }}> · {t.role}</span>
+              ) : null}
+            </figcaption>
+          </Card>
+        ))}
+      </div>
+    </Section>
   ),
 };

@@ -1,9 +1,6 @@
 import type { Config } from "@puckeditor/core";
-import {
-  googleFontsUrl,
-  themeToCssVars,
-  type SiteTheme,
-} from "@/lib/puck/theme";
+import { buildThemeStyle, type SiteTheme } from "@/lib/theme/presets";
+import { fontVariables } from "@/lib/theme/fonts";
 import { Hero, type HeroProps } from "@/components/blocks/hero";
 import { TextSection, type TextSectionProps } from "@/components/blocks/text-section";
 import { ImageWithText, type ImageWithTextProps } from "@/components/blocks/image-with-text";
@@ -93,16 +90,15 @@ export const puckConfig: PuckConfig = {
       const theme = (puck.metadata?.theme ?? {}) as SiteTheme;
       return (
         <div
+          className={`${fontVariables} flex min-h-screen flex-col antialiased`}
           style={{
-            ...themeToCssVars(theme),
-            backgroundColor: "var(--color-background)",
+            ...buildThemeStyle(theme),
+            backgroundColor: "var(--color-bg)",
             color: "var(--color-text)",
             fontFamily: "var(--font-body)",
+            lineHeight: 1.6,
           }}
-          className="flex min-h-screen flex-col"
         >
-          {/* React hoists stylesheet links to <head>, also inside the editor iframe. */}
-          <link rel="stylesheet" href={googleFontsUrl(theme)} />
           {children}
         </div>
       );

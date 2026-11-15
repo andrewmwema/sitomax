@@ -1,6 +1,14 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { Card } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { BlockIcon } from "./ui/icon";
 
 export type PricingProps = {
+  eyebrow: string;
   heading: string;
   plans: {
     name: string;
@@ -16,6 +24,7 @@ export type PricingProps = {
 export const Pricing: ComponentConfig<PricingProps> = {
   label: "Pricing",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     plans: {
       type: "array",
@@ -35,7 +44,7 @@ export const Pricing: ComponentConfig<PricingProps> = {
         price: { type: "text", label: "Price" },
         period: { type: "text", label: "Period", placeholder: "per month" },
         features: { type: "textarea", label: "Features (one per line)" },
-        buttonText: { type: "text", label: "Button text" },
+        buttonText: { type: "text", label: "Button text", contentEditable: true },
         buttonLink: { type: "text", label: "Button link" },
         highlighted: {
           type: "radio",
@@ -49,7 +58,8 @@ export const Pricing: ComponentConfig<PricingProps> = {
     },
   },
   defaultProps: {
-    heading: "Pricing",
+    eyebrow: "Pricing",
+    heading: "Simple, honest pricing",
     plans: [
       {
         name: "Basic",
@@ -71,73 +81,67 @@ export const Pricing: ComponentConfig<PricingProps> = {
       },
     ],
   },
-  render: ({ heading, plans }) => (
-    <section className="w-full" style={{ backgroundColor: "var(--color-background)" }}>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6 md:py-16">
-        <h2
-          className="text-center text-3xl font-bold"
-          style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-        >
-          {heading}
-        </h2>
-        <div className="grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {plans.map((plan, i) => (
-            <div
-              key={i}
-              className={`flex flex-col gap-5 rounded-2xl border p-6 ${
-                plan.highlighted ? "shadow-lg" : "shadow-sm"
-              }`}
-              style={{
-                borderColor: plan.highlighted
-                  ? "var(--color-primary)"
-                  : "color-mix(in srgb, var(--color-text) 12%, transparent)",
-              }}
-            >
-              <div>
-                <h3
-                  className="text-lg font-semibold"
-                  style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-                >
-                  {plan.name}
-                </h3>
-                <p className="mt-2" style={{ color: "var(--color-text)" }}>
-                  <span className="text-4xl font-bold">{plan.price}</span>{" "}
-                  <span className="text-sm opacity-70">{plan.period}</span>
-                </p>
-              </div>
-              <ul className="flex flex-1 flex-col gap-2 text-sm" style={{ color: "var(--color-text)" }}>
-                {plan.features
-                  .split("\n")
-                  .filter(Boolean)
-                  .map((feature, j) => (
-                    <li key={j} className="flex items-start gap-2 opacity-85">
-                      <span style={{ color: "var(--color-primary)" }}>✓</span>
-                      {feature}
-                    </li>
-                  ))}
-              </ul>
-              {plan.buttonText ? (
-                <a
-                  href={plan.buttonLink || "#"}
-                  className={`rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition hover:opacity-90 ${
-                    plan.highlighted ? "text-white" : ""
-                  }`}
-                  style={
-                    plan.highlighted
-                      ? { backgroundColor: "var(--color-primary)" }
-                      : {
-                          border: "1px solid var(--color-primary)",
-                          color: "var(--color-primary)",
-                        }
-                  }
-                >
-                  {plan.buttonText}
-                </a>
-              ) : null}
-            </div>
-          ))}
-        </div>
+  render: ({ eyebrow, heading, plans }) => (
+    <Section>
+      <div className="flex flex-col items-center gap-3 text-center">
+        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+        <Heading level={2}>{heading}</Heading>
       </div>
-    </section>
+      <div className="mt-12 grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {plans.map((plan, i) => (
+          <Card
+            key={i}
+            className="gap-5"
+            style={
+              plan.highlighted
+                ? { borderColor: "var(--color-primary)", borderWidth: 2 }
+                : undefined
+            }
+          >
+            <div className="flex items-start justify-between gap-3">
+              <Heading level={3}>{plan.name}</Heading>
+              {plan.highlighted ? <Badge>Most popular</Badge> : null}
+            </div>
+            <p>
+              <span
+                className="text-4xl"
+                style={{
+                  fontFamily: "var(--font-heading)",
+                  fontWeight: "var(--heading-weight)" as React.CSSProperties["fontWeight"],
+                  letterSpacing: "-1px",
+                }}
+              >
+                {plan.price}
+              </span>{" "}
+              <span className="text-sm" style={{ color: "var(--color-muted)" }}>
+                {plan.period}
+              </span>
+            </p>
+            <ul className="flex flex-1 flex-col gap-2.5 text-sm" style={{ lineHeight: 1.6 }}>
+              {plan.features
+                .split("\n")
+                .filter(Boolean)
+                .map((feature, j) => (
+                  <li key={j} className="flex items-start gap-2.5">
+                    <span className="mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }}>
+                      <BlockIcon name="check" size={16} />
+                    </span>
+                    <span style={{ color: "var(--color-muted)" }}>{feature}</span>
+                  </li>
+                ))}
+            </ul>
+            {plan.buttonText ? (
+              <Button
+                href={plan.buttonLink}
+                variant={plan.highlighted ? "primary" : "secondary"}
+                className="w-full"
+              >
+                {plan.buttonText}
+              </Button>
+            ) : null}
+          </Card>
+        ))}
+      </div>
+    </Section>
   ),
 };

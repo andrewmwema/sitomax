@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Render } from "@puckeditor/core/rsc";
 import { puckConfig, type PuckPageData } from "@/lib/puck/config";
-import type { SiteTheme } from "@/lib/puck/theme";
+import type { SiteTheme } from "@/lib/theme/presets";
 import { createClient } from "@/lib/supabase/server";
 import {
   getSiteByHost,
@@ -109,6 +109,10 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
         config={puckConfig}
         data={{ content: [], root: {}, ...data } as unknown as PuckPageData}
         metadata={{ theme }}
+        // Disable Puck's default richtext transform (it injects the raw
+        // HTML unsanitized); pass the string through so blocks render it
+        // via <RichTextContent>, which sanitizes with DOMPurify.
+        fieldTransforms={{ richtext: ({ value }) => value }}
       />
     </>
   );

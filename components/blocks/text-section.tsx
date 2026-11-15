@@ -1,16 +1,23 @@
-import type { ComponentConfig } from "@puckeditor/core";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
+import { richTextField } from "@/lib/puck/fields";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { RichTextContent } from "./ui/rich-text";
 
 export type TextSectionProps = {
+  eyebrow: string;
   heading: string;
-  text: string;
+  text: RichText;
   align: "left" | "center";
 };
 
 export const TextSection: ComponentConfig<TextSectionProps> = {
   label: "Text section",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
-    text: { type: "textarea", label: "Text", contentEditable: true },
+    text: richTextField("Text"),
     align: {
       type: "radio",
       label: "Alignment",
@@ -21,32 +28,22 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     },
   },
   defaultProps: {
-    heading: "About us",
-    text: "Tell your visitors who you are, what you do and why they should choose you.",
+    eyebrow: "About us",
+    heading: "A team you can rely on",
+    text: "<p>Tell your visitors who you are, what you do and why they should choose you.</p>",
     align: "left",
   },
-  render: ({ heading, text, align }) => (
-    <section className="w-full" style={{ backgroundColor: "var(--color-background)" }}>
+  render: ({ eyebrow, heading, text, align }) => (
+    <Section>
       <div
-        className={`mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-12 sm:px-6 md:py-16 ${
-          align === "center" ? "items-center text-center" : ""
+        className={`flex max-w-[46rem] flex-col gap-4 ${
+          align === "center" ? "mx-auto items-center text-center" : ""
         }`}
       >
-        {heading ? (
-          <h2
-            className="text-3xl font-bold"
-            style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-          >
-            {heading}
-          </h2>
-        ) : null}
-        <p
-          className="text-base leading-relaxed whitespace-pre-line opacity-80"
-          style={{ color: "var(--color-text)" }}
-        >
-          {text}
-        </p>
+        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+        {heading ? <Heading level={2}>{heading}</Heading> : null}
+        <RichTextContent value={text} className="w-full max-w-[65ch]" />
       </div>
-    </section>
+    </Section>
   ),
 };

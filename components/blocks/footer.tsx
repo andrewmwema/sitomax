@@ -1,10 +1,16 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { Section } from "./ui/section";
+import { Container } from "./ui/container";
+import { BlockIcon } from "./ui/icon";
 
 export type FooterProps = {
   businessName: string;
   phone: string;
   address: string;
-  socialLinks: { platform: "facebook" | "instagram" | "x" | "linkedin" | "youtube" | "tiktok"; url: string }[];
+  socialLinks: {
+    platform: "facebook" | "instagram" | "x" | "linkedin" | "youtube" | "tiktok";
+    url: string;
+  }[];
 };
 
 const PLATFORM_LABELS: Record<FooterProps["socialLinks"][number]["platform"], string> = {
@@ -19,7 +25,7 @@ const PLATFORM_LABELS: Record<FooterProps["socialLinks"][number]["platform"], st
 export const Footer: ComponentConfig<FooterProps> = {
   label: "Footer",
   fields: {
-    businessName: { type: "text", label: "Business name" },
+    businessName: { type: "text", label: "Business name", contentEditable: true },
     phone: { type: "text", label: "Phone" },
     address: { type: "text", label: "Address" },
     socialLinks: {
@@ -44,48 +50,62 @@ export const Footer: ComponentConfig<FooterProps> = {
     socialLinks: [],
   },
   render: ({ businessName, phone, address, socialLinks }) => (
-    <footer
-      className="w-full"
-      style={{
-        background: "color-mix(in srgb, var(--color-text) 94%, var(--color-background))",
-      }}
+    <Section
+      background="dark"
+      container={false}
+      style={{ paddingTop: 56, paddingBottom: 56 }}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-start md:justify-between">
-        <div className="flex flex-col gap-2">
-          <p
-            className="text-lg font-semibold"
-            style={{ color: "var(--color-background)", fontFamily: "var(--font-heading)" }}
-          >
-            {businessName}
-          </p>
-          <p className="text-sm opacity-70" style={{ color: "var(--color-background)" }}>
-            © {new Date().getFullYear()} {businessName}. All rights reserved.
-          </p>
-        </div>
-        <div
-          className="flex flex-col gap-1.5 text-sm opacity-85"
-          style={{ color: "var(--color-background)" }}
-        >
-          {phone ? <a href={`tel:${phone.replace(/\s+/g, "")}`}>{phone}</a> : null}
-          {address ? <p>{address}</p> : null}
-        </div>
-        {socialLinks.length > 0 ? (
-          <div className="flex flex-wrap gap-4 text-sm font-medium">
-            {socialLinks.map((link, i) => (
-              <a
-                key={i}
-                href={link.url || "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="transition hover:opacity-80"
-                style={{ color: "var(--color-background)" }}
-              >
-                {PLATFORM_LABELS[link.platform] ?? link.platform}
-              </a>
-            ))}
+      <footer>
+        <Container className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-2">
+            <p
+              className="text-xl"
+              style={{
+                fontFamily: "var(--font-heading)",
+                fontWeight: "var(--heading-weight)" as React.CSSProperties["fontWeight"],
+                letterSpacing: "-0.5px",
+              }}
+            >
+              {businessName}
+            </p>
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+              © {new Date().getFullYear()} {businessName}. All rights reserved.
+            </p>
           </div>
-        ) : null}
-      </div>
-    </footer>
+          <div className="flex flex-col gap-2 text-sm" style={{ lineHeight: 1.6 }}>
+            {phone ? (
+              <a
+                href={`tel:${phone.replace(/\s+/g, "")}`}
+                className="inline-flex items-center gap-2 transition hover:opacity-80"
+              >
+                <BlockIcon name="phone" size={15} />
+                {phone}
+              </a>
+            ) : null}
+            {address ? (
+              <p className="inline-flex items-center gap-2" style={{ color: "var(--color-muted)" }}>
+                <BlockIcon name="map-pin" size={15} />
+                {address}
+              </p>
+            ) : null}
+          </div>
+          {socialLinks.length > 0 ? (
+            <div className="flex flex-wrap gap-5 text-sm font-medium">
+              {socialLinks.map((link, i) => (
+                <a
+                  key={i}
+                  href={link.url || "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="transition hover:opacity-80"
+                >
+                  {PLATFORM_LABELS[link.platform] ?? link.platform}
+                </a>
+              ))}
+            </div>
+          ) : null}
+        </Container>
+      </footer>
+    </Section>
   ),
 };

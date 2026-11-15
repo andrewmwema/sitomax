@@ -1,51 +1,56 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
 
 export type MapProps = {
-  address: string;
+  eyebrow: string;
   heading: string;
+  address: string;
 };
 
 export const Map: ComponentConfig<MapProps> = {
   label: "Map",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     address: { type: "text", label: "Address", placeholder: "123 Main St, Springfield" },
   },
   defaultProps: {
+    eyebrow: "Location",
     heading: "Find us",
     address: "",
   },
-  render: ({ heading, address }) => (
-    <section className="w-full" style={{ backgroundColor: "var(--color-background)" }}>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 md:py-16">
-        {heading ? (
-          <h2
-            className="text-center text-3xl font-bold"
-            style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-          >
-            {heading}
-          </h2>
-        ) : null}
+  render: ({ eyebrow, heading, address }) => (
+    <Section>
+      <div className="flex flex-col items-center gap-3 text-center">
+        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+        {heading ? <Heading level={2}>{heading}</Heading> : null}
+      </div>
+      <div className="mt-10">
         {address ? (
           <iframe
             title={`Map of ${address}`}
             src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
-            className="h-80 w-full rounded-2xl border-0"
+            className="h-80 w-full border-0"
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
+            style={{ borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)" }}
           />
         ) : (
           <div
-            className="flex h-80 w-full items-center justify-center rounded-2xl text-sm opacity-60"
+            className="flex h-80 w-full items-center justify-center text-sm"
             style={{
-              background: "color-mix(in srgb, var(--color-text) 8%, var(--color-background))",
-              color: "var(--color-text)",
+              backgroundColor: "var(--color-soft-bg)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-lg)",
+              color: "var(--color-muted)",
             }}
           >
             Enter an address to show the map
           </div>
         )}
       </div>
-    </section>
+    </Section>
   ),
 };

@@ -1,11 +1,17 @@
-import type { ComponentConfig } from "@puckeditor/core";
-import { imageField } from "@/lib/puck/fields";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
+import { imageField, richTextField } from "@/lib/puck/fields";
+import { Section } from "./ui/section";
+import { Container } from "./ui/container";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { RichTextContent } from "./ui/rich-text";
 
 export type ImageWithTextProps = {
   image: string;
   imageAlt: string;
+  eyebrow: string;
   heading: string;
-  text: string;
+  text: RichText;
   imageSide: "left" | "right";
 };
 
@@ -14,8 +20,9 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
   fields: {
     image: imageField("Image"),
     imageAlt: { type: "text", label: "Image alt text" },
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
-    text: { type: "textarea", label: "Text", contentEditable: true },
+    text: richTextField("Text"),
     imageSide: {
       type: "radio",
       label: "Image side",
@@ -28,46 +35,40 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
   defaultProps: {
     image: "",
     imageAlt: "",
-    heading: "Why choose us",
-    text: "Share what makes your business different.",
+    eyebrow: "Why choose us",
+    heading: "Experience that shows",
+    text: "<p>Share what makes your business different.</p>",
     imageSide: "left",
   },
-  render: ({ image, imageAlt, heading, text, imageSide }) => (
-    <section className="w-full" style={{ backgroundColor: "var(--color-background)" }}>
-      <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 md:py-16">
+  render: ({ image, imageAlt, eyebrow, heading, text, imageSide }) => (
+    <Section container={false}>
+      <Container className="grid items-center gap-12 md:grid-cols-2">
         <div className={imageSide === "right" ? "md:order-2" : ""}>
           {image ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={image}
               alt={imageAlt}
-              className="h-64 w-full rounded-2xl object-cover shadow-md sm:h-80"
+              className="h-72 w-full object-cover sm:h-80"
+              style={{ borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)" }}
             />
           ) : (
             <div
-              className="h-64 w-full rounded-2xl sm:h-80"
+              className="h-72 w-full sm:h-80"
               style={{
-                background:
-                  "linear-gradient(135deg, var(--color-secondary), var(--color-primary))",
+                backgroundColor: "var(--color-soft-bg)",
+                borderRadius: "var(--radius-lg)",
+                border: "1px solid var(--color-border)",
               }}
             />
           )}
         </div>
         <div className="flex flex-col gap-4">
-          <h2
-            className="text-3xl font-bold"
-            style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-          >
-            {heading}
-          </h2>
-          <p
-            className="text-base leading-relaxed whitespace-pre-line opacity-80"
-            style={{ color: "var(--color-text)" }}
-          >
-            {text}
-          </p>
+          {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+          <Heading level={2}>{heading}</Heading>
+          <RichTextContent value={text} className="w-full max-w-[65ch]" />
         </div>
-      </div>
-    </section>
+      </Container>
+    </Section>
   ),
 };

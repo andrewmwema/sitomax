@@ -10,7 +10,7 @@ import {
 } from "react";
 import { Puck, useGetPuck, type Data, type Overrides } from "@puckeditor/core";
 import { puckConfig } from "@/lib/puck/config";
-import type { SiteTheme } from "@/lib/puck/theme";
+import type { SiteTheme } from "@/lib/theme/presets";
 import { publishPage, savePageDraft } from "@/app/editor/[pageId]/actions";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
 import { ThemePanel } from "@/components/editor/theme-panel";

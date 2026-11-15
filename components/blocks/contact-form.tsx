@@ -1,6 +1,11 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { Card } from "./ui/card";
 
 export type ContactFormProps = {
+  eyebrow: string;
   heading: string;
   formName: string;
   submitText: string;
@@ -11,12 +16,21 @@ export type ContactFormProps = {
   }[];
 };
 
+const inputStyle = {
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-sm)",
+  backgroundColor: "var(--color-bg)",
+  color: "var(--color-text)",
+  lineHeight: 1.6,
+} as const;
+
 export const ContactForm: ComponentConfig<ContactFormProps> = {
   label: "Contact form",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     formName: { type: "text", label: "Form name", placeholder: "contact" },
-    submitText: { type: "text", label: "Submit button text" },
+    submitText: { type: "text", label: "Submit button text", contentEditable: true },
     formFields: {
       type: "array",
       label: "Fields",
@@ -46,7 +60,8 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     },
   },
   defaultProps: {
-    heading: "Contact us",
+    eyebrow: "Contact",
+    heading: "Send us a message",
     formName: "contact",
     submitText: "Send message",
     formFields: [
@@ -55,25 +70,16 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
       { label: "Message", fieldType: "textarea", required: true },
     ],
   },
-  render: ({ heading, formName, submitText, formFields }) => {
-    const inputClasses =
-      "w-full rounded-lg border px-3.5 py-2.5 text-sm outline-none focus:ring-2";
-
-    return (
-      <section className="w-full" style={{ backgroundColor: "var(--color-background)" }}>
-        <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-12 sm:px-6 md:py-16">
-          <h2
-            className="text-center text-3xl font-bold"
-            style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-          >
-            {heading}
-          </h2>
+  render: ({ eyebrow, heading, formName, submitText, formFields }) => (
+    <Section background="soft">
+      <div className="mx-auto flex w-full max-w-xl flex-col gap-10">
+        <div className="flex flex-col items-center gap-3 text-center">
+          {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+          <Heading level={2}>{heading}</Heading>
+        </div>
+        <Card className="gap-0 p-6 sm:p-8">
           {/* Submission handling is wired to /api/forms/submit. */}
-          <form
-            method="post"
-            action="/api/forms/submit"
-            className="flex flex-col gap-4"
-          >
+          <form method="post" action="/api/forms/submit" className="flex flex-col gap-4">
             <input type="hidden" name="_form_name" value={formName} />
             {/* Honeypot field for spam bots: humans never see or fill it. */}
             <input
@@ -87,27 +93,16 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
             {formFields.map((field, i) => {
               const id = `field-${i}`;
               return (
-                <label
-                  key={i}
-                  htmlFor={id}
-                  className="flex flex-col gap-1.5 text-sm font-medium"
-                  style={{ color: "var(--color-text)" }}
-                >
+                <label key={i} htmlFor={id} className="flex flex-col gap-1.5 text-sm font-medium">
                   {field.label}
-                  {field.required ? (
-                    <span className="sr-only">(required)</span>
-                  ) : null}
                   {field.fieldType === "textarea" ? (
                     <textarea
                       id={id}
                       name={field.label}
                       required={field.required}
                       rows={4}
-                      className={inputClasses}
-                      style={{
-                        borderColor: "color-mix(in srgb, var(--color-text) 20%, transparent)",
-                        color: "var(--color-text)",
-                      }}
+                      className="w-full px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
+                      style={inputStyle}
                     />
                   ) : (
                     <input
@@ -115,11 +110,8 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
                       name={field.label}
                       type={field.fieldType}
                       required={field.required}
-                      className={inputClasses}
-                      style={{
-                        borderColor: "color-mix(in srgb, var(--color-text) 20%, transparent)",
-                        color: "var(--color-text)",
-                      }}
+                      className="min-h-12 w-full px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
+                      style={inputStyle}
                     />
                   )}
                 </label>
@@ -127,14 +119,19 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
             })}
             <button
               type="submit"
-              className="rounded-lg px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-              style={{ backgroundColor: "var(--color-primary)" }}
+              className="min-h-12 px-5 py-3 text-sm font-semibold transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{
+                backgroundColor: "var(--color-primary)",
+                color: "var(--color-on-primary)",
+                borderRadius: "var(--radius-sm)",
+                outlineColor: "var(--color-secondary)",
+              }}
             >
               {submitText}
             </button>
           </form>
-        </div>
-      </section>
-    );
-  },
+        </Card>
+      </div>
+    </Section>
+  ),
 };

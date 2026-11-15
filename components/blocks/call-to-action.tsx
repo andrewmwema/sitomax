@@ -1,6 +1,11 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { Button } from "./ui/button";
 
 export type CallToActionProps = {
+  eyebrow: string;
   heading: string;
   text: string;
   buttonText: string;
@@ -10,37 +15,29 @@ export type CallToActionProps = {
 export const CallToAction: ComponentConfig<CallToActionProps> = {
   label: "Call to action",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     text: { type: "textarea", label: "Text", contentEditable: true },
-    buttonText: { type: "text", label: "Button text" },
+    buttonText: { type: "text", label: "Button text", contentEditable: true },
     buttonLink: { type: "text", label: "Button link" },
   },
   defaultProps: {
+    eyebrow: "Get started",
     heading: "Ready to get started?",
     text: "Contact us today for a free, no-obligation quote.",
     buttonText: "Contact us",
     buttonLink: "/contact",
   },
-  render: ({ heading, text, buttonText, buttonLink }) => (
-    <section className="w-full" style={{ backgroundColor: "var(--color-primary)" }}>
-      <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-5 px-4 py-14 text-center sm:px-6 md:py-20">
-        <h2
-          className="text-3xl font-bold text-white"
-          style={{ fontFamily: "var(--font-heading)" }}
-        >
-          {heading}
-        </h2>
-        <p className="max-w-xl text-white/85">{text}</p>
-        {buttonText ? (
-          <a
-            href={buttonLink || "#"}
-            className="rounded-lg bg-white px-6 py-3 text-base font-semibold shadow-md transition hover:opacity-90"
-            style={{ color: "var(--color-primary)" }}
-          >
-            {buttonText}
-          </a>
-        ) : null}
+  render: ({ eyebrow, heading, text, buttonText, buttonLink }) => (
+    <Section background="dark">
+      <div className="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center">
+        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+        <Heading level={2}>{heading}</Heading>
+        <p className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
+          {text}
+        </p>
+        {buttonText ? <Button href={buttonLink}>{buttonText}</Button> : null}
       </div>
-    </section>
+    </Section>
   ),
 };

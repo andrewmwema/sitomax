@@ -30,7 +30,7 @@ export const Spacer: ComponentConfig<SpacerProps> = {
     <div
       aria-hidden="true"
       className={`w-full ${SIZES[size] ?? SIZES.medium}`}
-      style={{ backgroundColor: "var(--color-background)" }}
+      style={{ backgroundColor: "var(--color-bg)" }}
     />
   ),
 };

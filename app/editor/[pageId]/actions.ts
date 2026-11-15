@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/form-state";
-import { GOOGLE_FONTS } from "@/lib/puck/theme";
+import { sanitizePuckData } from "@/lib/richtext";
 
 /**
  * Editor Server Actions. All queries run with the user-scoped client, so
@@ -60,13 +60,17 @@ async function updatePage(
   const seo = { ...(page.seo as Record<string, unknown>) };
   if (root.description !== undefined) seo.description = root.description;
 
+  // Rich text props are client-authored HTML: sanitize before storing so
+  // malicious markup never reaches site visitors or other editors.
+  const cleanData = sanitizePuckData(parsedData.data);
+
   const update: Record<string, unknown> = {
-    draft_data: parsedData.data,
+    draft_data: cleanData,
     title: root.title || page.title,
     seo,
   };
   if (publish) {
-    update.published_data = parsedData.data;
+    update.published_data = cleanData;
     update.published_at = new Date().toISOString();
   }
 
@@ -89,25 +93,19 @@ export async function publishPage(pageId: string, data: unknown): Promise<Action
   return updatePage(pageId, data, true);
 }
 
-const fontNames = GOOGLE_FONTS.map((f) => f.name) as [string, ...string[]];
 const colorSchema = z
   .string()
   .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
   .optional();
 
 const themeSchema = z.object({
+  style: z.enum(["classic", "modern"]).optional(),
   colors: z
     .object({
       primary: colorSchema,
       secondary: colorSchema,
       background: colorSchema,
       text: colorSchema,
-    })
-    .optional(),
-  fonts: z
-    .object({
-      heading: z.enum(fontNames).optional(),
-      body: z.enum(fontNames).optional(),
     })
     .optional(),
   logoUrl: z.union([z.url(), z.literal("")]).optional(),

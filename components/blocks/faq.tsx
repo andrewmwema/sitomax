@@ -1,70 +1,79 @@
-import type { ComponentConfig } from "@puckeditor/core";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
+import { richTextField } from "@/lib/puck/fields";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { BlockIcon } from "./ui/icon";
+import { RichTextContent } from "./ui/rich-text";
 
 export type FaqProps = {
+  eyebrow: string;
   heading: string;
-  items: { question: string; answer: string }[];
+  items: { question: string; answer: RichText }[];
 };
 
 export const Faq: ComponentConfig<FaqProps> = {
   label: "FAQ",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     items: {
       type: "array",
       label: "Questions",
       getItemSummary: (item) => item.question || "Question",
-      defaultItemProps: { question: "New question?", answer: "The answer." },
+      defaultItemProps: { question: "New question?", answer: "<p>The answer.</p>" },
       arrayFields: {
-        question: { type: "text", label: "Question" },
-        answer: { type: "textarea", label: "Answer" },
+        question: { type: "text", label: "Question", contentEditable: true },
+        answer: richTextField("Answer"),
       },
     },
   },
   defaultProps: {
+    eyebrow: "FAQ",
     heading: "Frequently asked questions",
     items: [
-      { question: "How quickly can you start?", answer: "Usually within a few days." },
-      { question: "Do you offer free quotes?", answer: "Yes, every quote is free and without obligation." },
+      { question: "How quickly can you start?", answer: "<p>Usually within a few days.</p>" },
+      {
+        question: "Do you offer free quotes?",
+        answer: "<p>Yes, every quote is free and without obligation.</p>",
+      },
     ],
   },
-  render: ({ heading, items }) => (
-    <section className="w-full" style={{ backgroundColor: "var(--color-background)" }}>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-12 sm:px-6 md:py-16">
-        <h2
-          className="text-center text-3xl font-bold"
-          style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-        >
-          {heading}
-        </h2>
+  render: ({ eyebrow, heading, items }) => (
+    <Section>
+      <div className="mx-auto flex max-w-[46rem] flex-col gap-10">
+        <div className="flex flex-col items-center gap-3 text-center">
+          {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+          <Heading level={2}>{heading}</Heading>
+        </div>
         <div className="flex flex-col gap-3">
           {items.map((item, i) => (
             <details
               key={i}
-              className="group rounded-xl border px-5 py-4"
-              style={{ borderColor: "color-mix(in srgb, var(--color-text) 12%, transparent)" }}
+              className="group px-5 py-4"
+              style={{
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-lg)",
+                backgroundColor: "var(--color-bg)",
+              }}
             >
               <summary
                 className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold [&::-webkit-details-marker]:hidden"
-                style={{ color: "var(--color-text)" }}
+                style={{ fontFamily: "var(--font-body)" }}
               >
                 {item.question}
                 <span
-                  className="transition-transform group-open:rotate-45"
+                  className="shrink-0 transition-transform group-open:rotate-45"
                   style={{ color: "var(--color-primary)" }}
                 >
-                  +
+                  <BlockIcon name="plus" size={18} />
                 </span>
               </summary>
-              <p
-                className="mt-3 text-sm leading-relaxed whitespace-pre-line opacity-80"
-                style={{ color: "var(--color-text)" }}
-              >
-                {item.answer}
-              </p>
+              <RichTextContent value={item.answer} className="mt-3 w-full max-w-[65ch] text-sm" />
             </details>
           ))}
         </div>
       </div>
-    </section>
+    </Section>
   ),
 };

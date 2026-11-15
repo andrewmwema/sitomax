@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { PageEditor } from "@/components/editor/page-editor";
-import type { SiteTheme } from "@/lib/puck/theme";
+import type { SiteTheme } from "@/lib/theme/presets";
 
 /**
  * Full-screen visual editor for a page.

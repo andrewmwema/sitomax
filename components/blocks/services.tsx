@@ -1,64 +1,63 @@
-import type { ComponentConfig } from "@puckeditor/core";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
+import { iconField, richTextField } from "@/lib/puck/fields";
+import { Section } from "./ui/section";
+import { Eyebrow } from "./ui/eyebrow";
+import { Heading } from "./ui/heading";
+import { Card } from "./ui/card";
+import { IconTile } from "./ui/icon-tile";
+import { RichTextContent } from "./ui/rich-text";
 
 export type ServicesProps = {
+  eyebrow: string;
   heading: string;
-  services: { icon: string; title: string; text: string }[];
+  services: { icon: string; title: string; text: RichText }[];
 };
 
 export const Services: ComponentConfig<ServicesProps> = {
   label: "Services",
   fields: {
+    eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
     services: {
       type: "array",
       label: "Services",
       getItemSummary: (item) => item.title || "Service",
-      defaultItemProps: { icon: "⭐", title: "New service", text: "Describe this service." },
+      defaultItemProps: {
+        icon: "star",
+        title: "New service",
+        text: "<p>Describe this service.</p>",
+      },
       arrayFields: {
-        icon: { type: "text", label: "Icon (emoji)" },
-        title: { type: "text", label: "Title" },
-        text: { type: "textarea", label: "Text" },
+        icon: iconField("Icon"),
+        title: { type: "text", label: "Title", contentEditable: true },
+        text: richTextField("Text"),
       },
     },
   },
   defaultProps: {
+    eyebrow: "What we do",
     heading: "Our services",
     services: [
-      { icon: "🔧", title: "Service one", text: "Describe this service." },
-      { icon: "⚡", title: "Service two", text: "Describe this service." },
-      { icon: "✅", title: "Service three", text: "Describe this service." },
+      { icon: "wrench", title: "Service one", text: "<p>Describe this service.</p>" },
+      { icon: "clock", title: "Service two", text: "<p>Describe this service.</p>" },
+      { icon: "shield-check", title: "Service three", text: "<p>Describe this service.</p>" },
     ],
   },
-  render: ({ heading, services }) => (
-    <section className="w-full" style={{ backgroundColor: "var(--color-background)" }}>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6 md:py-16">
-        <h2
-          className="text-center text-3xl font-bold"
-          style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-        >
-          {heading}
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((service, i) => (
-            <div
-              key={i}
-              className="flex flex-col gap-3 rounded-2xl border p-6 shadow-sm"
-              style={{ borderColor: "color-mix(in srgb, var(--color-text) 12%, transparent)" }}
-            >
-              <span className="text-3xl">{service.icon}</span>
-              <h3
-                className="text-lg font-semibold"
-                style={{ color: "var(--color-text)", fontFamily: "var(--font-heading)" }}
-              >
-                {service.title}
-              </h3>
-              <p className="text-sm leading-relaxed opacity-80" style={{ color: "var(--color-text)" }}>
-                {service.text}
-              </p>
-            </div>
-          ))}
-        </div>
+  render: ({ eyebrow, heading, services }) => (
+    <Section background="soft">
+      <div className="flex flex-col items-center gap-3 text-center">
+        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+        <Heading level={2}>{heading}</Heading>
       </div>
-    </section>
+      <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {services.map((service, i) => (
+          <Card key={i}>
+            <IconTile name={service.icon} />
+            <Heading level={3}>{service.title}</Heading>
+            <RichTextContent value={service.text} className="w-full text-sm" />
+          </Card>
+        ))}
+      </div>
+    </Section>
   ),
 };
