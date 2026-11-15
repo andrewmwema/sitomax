@@ -116,7 +116,7 @@ Check access on the server: only members of the site's account or super admin ca
 
 ---
 
-## Phase 4b: Upscale blocks + rich text (run these 4 prompts in order)
+## Phase 4b: Upscale blocks, rich text and section designs (run prompts A–F in order)
 
 **Before you start:** take screenshots of each section of the reference designs (hero, services, about, reviews, pricing, contact, footer) from the design canvas, in both styles: "Classic" (navy and brass) and "Modern" (bright and rounded). Attach the matching screenshots to each prompt in Copilot Chat. Commit after each prompt.
 
@@ -146,35 +146,102 @@ Add Word-style text editing using Puck's built-in rich text field (@puckeditor/c
 5. Migrate existing plain-text values so nothing breaks (treat a plain string as a paragraph).
 ```
 
-**Prompt C: rebuild the blocks with Classic + Modern variants**
+**Prompt C: section shell + "Row design" panel (applies to every block)**
 ```
-Rebuild every block in components/blocks/ to match the attached reference screenshots, using only the shared primitives from components/blocks/ui/. Every block reads sites.theme.style and renders the Classic or Modern look automatically, plus these per-block options:
-- Hero: layouts "split image", "centered", "full-width photo"; eyebrow, heading, rich subheading, 2 buttons, trust row (3 short check-mark items), optional floating card (e.g. "On-site in 60 min"), optional badge pill.
-- Trust bar: 3–5 short credential items (rating, years, warranty, license).
-- Services: 2 or 3 columns, card style "bordered grid" or "icon tiles", IconPicker icon, title, rich description, optional link.
-- Image with text: image left/right, eyebrow, heading, rich text, optional numbered list (01, 02, 03).
-- Testimonials: cards with star rating, quote, name, location. Show a hint in the editor: "Use real customer reviews only."
-- Pricing: 2–4 plans, highlight one ("Most popular"), checklist items, button.
-- Process / How it works: 3–4 numbered steps.
-- FAQ: accordion using <details>, rich text answers.
-- Service areas: pill list.
-- Call to action: banner with heading, text, 2 buttons; backgrounds dark / primary / soft.
-- Contact form: name, phone, email, service dropdown, message; Classic = white card on dark section, Modern = card on soft section.
-- Gallery, Map, Logo strip, Footer (3 columns: business info, links, contact + hours).
-Requirements for every block: responsive at 375px / 768px / 1280px, image fields use next/image with object-fit cover and required alt text, buttons and links have hover and keyboard focus states, text contrast at least 4.5:1, every field has a sensible professional default so a newly dropped block already looks finished.
+Create components/blocks/ui/SectionShell.tsx and wrap EVERY block in it, so every section has the same design controls in the right-hand panel, grouped in 4 tabs (use Puck custom fields and an object field named "design"):
+
+1. Settings: full-bleed toggle (edge-to-edge vs 1200px container), anchor ID (for menu links like #pricing), hide on desktop / tablet / mobile toggles.
+2. Style:
+   - Background tabs: Color (theme swatches + custom picker + "none"), Image (one image, or several images as an auto-rotating background slider; overlay color + opacity 0–80% so text stays readable; focal point), Video (upload MP4/WebM up to 50MB to Supabase Storage bucket "site-assets", OR a YouTube/Vimeo URL; muted, looped, plays inline, with a poster image and an overlay).
+   - Border: width 0–8px slider + color; corner radius.
+   - Shadow: toggle + presets (soft / medium / strong).
+   - Text color: auto (picks light or dark text based on the background for 4.5:1 contrast) / light / dark.
+3. Animation: trigger (none / on entrance / on scroll), animation (fade, fade up, fade down, slide left, slide right, zoom in), duration, delay. Use IntersectionObserver + CSS, no heavy libraries. Respect prefers-reduced-motion (no animation). Never animate inside the editor canvas while editing.
+4. Spacing: a visual box control like a margin/padding diagram (outer box = margin, inner box = padding, 4 sides each, values in px with a slider), with a device switcher: desktop, tablet, mobile. Defaults come from --section-pad. Include "Clear all padding".
+
+SECURITY: only accept video URLs from youtube.com, youtu.be and vimeo.com and render them as privacy-friendly embeds (youtube-nocookie.com); validate uploads by MIME type and size on the server; never allow raw CSS or HTML input.
 ```
 
-**Prompt D: polish pass**
+**Prompt D: section design library (multiple polished designs per block)**
 ```
-Do a visual polish pass on all blocks:
-1. Section background control on every block (default / soft / dark / primary) so pages alternate backgrounds.
-2. Consistent vertical rhythm: use --section-pad everywhere, no hard-coded margins.
-3. Add subtle hover effects on cards (lift 2px + shadow in Modern, border color change in Classic).
-4. Check mobile: nav collapses to a menu button, buttons go full width under 480px, no horizontal scroll.
-5. Make the editor's block list show a small preview thumbnail for each block.
-6. Update the 4 templates in templates/ to use the new blocks and variants, then list anything that still looks unfinished.
+Build a section design library like professional site builders:
+
+1. lib/sections/catalog.ts: a catalog of "designs". Each design = { id, blockType, category, name, thumbnail, props (complete preset props including the design object from SectionShell), styles: ["classic","modern"] }. Categories: Hero, Features/Services, About, Stats, Process, Testimonials, Pricing, Team, Gallery, Logos, FAQ, Call to action, Contact, Footer.
+2. "Add section" button between every section on the canvas (and at the end of the page). Clicking opens a modal: "What type of section?" → Blank (block with minimal defaults) or Designed (a gallery of designs filtered by category with thumbnails; click to insert at that position). Also keep drag-and-drop from the Elements list.
+3. Every block gets a "variant" field (layout) so a design can switch layout without losing content. Changing variant keeps the text and images.
+4. Supabase migration 0005_section_designs.sql: table section_designs (id uuid pk, name, category, block_type, props jsonb, thumbnail_url, created_by uuid, is_global boolean default true, created_at). RLS: any authenticated user can select; only super admin can insert/update/delete. (I apply migrations by hand in the SQL Editor; just create the file.)
+5. Super admin only: "Save as design" action on any section in the editor; it saves the section's props + a screenshot thumbnail (html-to-image) to section_designs, so I can create new designs visually and offer them to all clients. The Designed gallery shows catalog designs + saved designs.
+6. Thumbnails: generate them by rendering each design at 1280px wide and scaling down, cached.
 ```
-**Check:** create a new page, drop in each block, and switch the Style between Classic and Modern. Every block should look finished without editing. Bold, italic and bullets should work in body text.
+
+**Prompt E: build the designs (run in batches, attach reference screenshots each time)**
+```
+Using the catalog from Prompt D, the SectionShell and the shared ui primitives, create polished designs, each with professional default copy for a generic local business and placeholder images. Every design must work in both Classic and Modern style, be responsive at 375/768/1280px, and look finished the moment it is inserted. Original layouts only (inspired by the attached references, not copies).
+
+Batch 1: Hero ×6 (split image, centered with badge, full-width photo with overlay, video background, hero with lead form, hero with stats row)
+Batch 2: Features/Services ×6 (icon grid 3-col, bordered grid, image cards, alternating image rows, list with icons, tabs) + Stats ×3
+Batch 3: Pricing ×4 (3 cards with highlighted plan, monthly/yearly toggle, comparison table, single plan with checklist) + FAQ ×3 (accordion, two-column, with contact sidebar)
+Batch 4: Testimonials ×4 (cards, single large quote, carousel, rating summary + cards) + Logos ×2 + Team ×3
+Batch 5: Call to action ×4 (dark band, primary band, image background, split with form) + Contact ×3 + Footer ×3 + About ×3 + Process ×3 + Gallery ×3
+After each batch, list the designs created.
+```
+
+**Prompt F: polish pass**
+```
+Do a visual polish pass on all designs:
+1. Consistent vertical rhythm using --section-pad; no hard-coded margins.
+2. Card hover effects (lift 2px + shadow in Modern, border color change in Classic).
+3. Mobile: nav collapses to a menu button, buttons full width under 480px, no horizontal scroll anywhere.
+4. Editor: the Elements list shows a thumbnail per block; the Designed gallery has a search box.
+5. Update the 4 templates in templates/ to use the new designs, then list anything that still looks unfinished.
+```
+**Check:** click "Add section" → Designed → insert a Pricing design, then change its background to an image, add a fade-up animation, and change the mobile padding. Switch the site Style between Classic and Modern. Every design should look finished without editing; bold, italic and bullets should work in body text.
+
+---
+
+## Phase 4c: Pro editor experience (sleeker than the competition)
+
+Run after Phase 4b. Attach your DashClicks editor screenshots as references, and tell Copilot to make ours cleaner, not a copy.
+
+**Prompt A: flexible layouts (columns + elements inside sections)**
+```
+Read .github/copilot-instructions.md. Add a flexible layout system using Puck slot fields, alongside the designed blocks:
+1. Layout hierarchy: Section → Row (1–4 columns with ratio presets: 1/1, 1/2+1/2, 1/3+2/3, 2/3+1/3, 1/3×3, 1/4×4; stack on mobile with option to reverse order) → Elements.
+2. Elements: Heading, Text (rich text), Button, Image, Icon, Icon list, Video (YouTube/Vimeo/upload), Divider, Spacer, Social icons, Map, Form, Countdown, Badge, Stat number, Embed (super admin only; see security below).
+3. Sections, rows, columns and elements all get the SectionShell-style design controls appropriate to their level (Style / Animation / Spacing; columns also get vertical alignment).
+4. "Blank" section = an empty Section with one Row. Designed sections stay as before; add a "Convert to custom layout" action that turns a designed section into Section/Row/Element blocks so it can be freely rearranged.
+5. Guardrails so clients can't make sites look broken: spacing values snap to a scale (0, 4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 128), font sizes come from the type scale (with "custom" allowed), fonts limited to a curated list of ~25 good Google Fonts, and colors default to the theme palette.
+```
+
+**Prompt B: section library panel**
+```
+Replace the "Add section" modal with a docked section library panel (left side, slides in over the block list):
+1. Category list on the left: Hero, Services, About, Text & Image, Text blocks, Stats, Logos, Team, Testimonials, Pricing, FAQ, Call to action, Contact, Gallery, Portfolio, Video, Tabs, Promotion, Social, Events, Restaurant menu, Coming soon, Full page, Footer, Blank. Show the number of designs next to each category.
+2. Tabs: "Designed" (catalog + saved designs) and "Saved" (sections I saved with "Save as design"; super admin can mark them global).
+3. Thumbnails rendered LIVE in the current site's theme (its colors, fonts and Classic/Modern style), not generic screenshots, so clients see how each design will look on their own site. Render them in a sandboxed iframe at 1280px and scale down; lazy-load as the user scrolls.
+4. Hover a thumbnail → a ghost preview of the section appears in the canvas at the insertion point; click to insert, Esc to cancel. A zoom icon opens a large preview.
+5. Search box and a grid/list toggle.
+6. Insertion point: a slim "+" button appears between sections on hover; the panel inserts there.
+```
+
+**Prompt C: text toolbar, context menu and selection**
+```
+Polish editing interactions:
+1. Floating rich text toolbar (appears above selected text, never covers it): bold, italic, underline, strikethrough, text color (theme swatches + picker), highlight, clear formatting, style dropdown (Paragraph, Heading 1–4, Small, Quote), font family (curated list), font size (scale + custom), link (with "open in new tab" and page picker), alignment, line height, bulleted and numbered lists, indent, undo/redo. Keyboard shortcuts: Ctrl/Cmd+B, I, U, K.
+2. Right-click context menu (and a "⋯" button on the selection outline) for any section, row, column or element: Edit content, Edit design, Add element below, Duplicate, Copy / Paste (works across pages and sites of the same account), Move up / down, Align left / center / right, Animation, Hide on (desktop / tablet / mobile), Set as anchor (with copy link), Select parent (Section › Row › Column › Element breadcrumb), Save as design (super admin), Delete (with undo toast).
+3. Breadcrumb bar at the bottom of the canvas showing the current selection path; click any level to select it.
+4. Inspector: one docked panel on the right with tabs (Content / Style / Animation / Spacing) instead of floating dialogs that cover the page.
+5. Device switcher (desktop / tablet / mobile) where style and spacing changes can be set per device; show a small device icon next to any value that differs on mobile.
+6. Command palette (Ctrl/Cmd+K): "Add pricing section", "Go to About page", "Change theme color", "Publish".
+7. Autosave drafts every 10 seconds with a "Saved" indicator; version history (keep the last 20 published versions with restore).
+SECURITY: "Embed" and any custom HTML/CSS are super admin only, rendered inside a sandboxed iframe (sandbox="allow-scripts" without allow-same-origin), never injected into the page directly. Clients never get raw HTML/CSS editing.
+```
+
+**Prompt D: more designs for the new categories (attach references)**
+```
+Add designs to the catalog for the new categories, same quality rules as Phase 4b Prompt E: Text blocks ×3, Tabs ×2, Portfolio ×3, Video ×3, Promotion ×3, Social ×2, Events ×2, Restaurant menu ×3, Coming soon ×4 (with countdown and email signup), Full page ×4 (complete one-page layouts combining existing designs).
+```
+**Check:** insert a section from the library and watch the thumbnail match your site's colors. Right-click a heading, change its color and font, set it as an anchor, and hide it on mobile. Use Ctrl+K to add a pricing section. Undo everything.
 
 ---
 
@@ -278,6 +345,35 @@ Never expose the Vercel token to the browser.
 ```
 **Check:** connect a real domain you own and wait for "Connected".
 
+**Prompt B: smart guided setup (free, makes DNS easy for non-technical clients)**
+```
+Upgrade the domain settings page into a guided "Connect your domain" wizard:
+1. Provider detection (server only): use Node's dns module (dns.promises.resolveNs) to look up the domain's nameservers and map them to a provider in lib/domains/providers.ts: GoDaddy, Namecheap, Cloudflare, Squarespace Domains (formerly Google Domains), Wix, Bluehost, HostGator, Hostinger, IONOS, Network Solutions, Porkbun, Amazon Route 53, Vercel, plus "Other". Each provider entry has: name, logo, a link to its DNS management page, and 4–6 plain-English steps for adding an A record and a CNAME (e.g. "Log in to GoDaddy → My Products → next to your domain click DNS → Add New Record").
+2. Wizard steps: (1) Enter domain → (2) "We detected your domain is managed by GoDaddy" (with a "Not right? Choose your provider" dropdown) → (3) provider-specific steps with the exact records to add and copy buttons on each value, and an "Open GoDaddy DNS settings" button → (4) "Waiting for your domain…" with a live status check.
+3. Conflict check: look up existing A and CNAME records for the root and www (dns.promises.resolve4 / resolveCname). If old records point elsewhere (e.g. an old Wix or GoDaddy site), show a clear warning: "Delete this old record: A @ 23.x.x.x".
+4. Automatic checking: while the wizard is open, check every 30 seconds (verify + config). Also add a Vercel cron job (vercel.json) that runs every 15 minutes, checks all sites where custom_domain is set and domain_verified is false, updates them, and emails the account owner "Your domain is live" when connected (Resend, if RESEND_API_KEY is set). Stop checking domains that have been pending for over 14 days and mark them "Needs attention".
+5. Short help video slot per provider (optional URL field) and a "Send these instructions to my web person" button that emails the steps and records to any email address.
+6. Rate-limit DNS lookups (max 20 per minute per user) and validate domains with zod before any lookup.
+```
+
+**Prompt C: "We'll do it for you" request**
+```
+Add a "Have us connect it for you" option in the domain wizard:
+1. The client clicks it and sees provider-specific instructions for giving us SAFE delegated access (never their password): GoDaddy "Delegate Access", Namecheap "Share Access", Cloudflare "Invite member" with DNS-only permission, Squarespace "Add a domain manager", and for others "Add us as a user". Show our agency support email from agency_settings as the address to invite.
+2. Table domain_requests (migration 0007; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
+3. Super admin dashboard: "Domain requests" list with status updates; the client sees the status on their domain page and gets an email when it is done.
+4. Never store registrar passwords or ask for them anywhere in the UI. Show a note: "We will never ask for your password."
+```
+
+**Later (when you have about 10+ paying clients): one-click automatic setup with Entri**
+```
+Integrate Entri Connect (entri.com) for one-click DNS setup:
+1. Add ENTRI_APPLICATION_ID and ENTRI_SECRET env vars. Create a server route that issues a short-lived Entri JWT for the logged-in user.
+2. In the domain wizard, call Entri's checkDomain first; if automatic setup is supported, show a "Connect automatically" button that opens the Entri modal with the DNS records from Vercel (A for root, CNAME for www); otherwise fall back to the guided steps from Prompt B.
+3. Listen for Entri's completion event and webhook, then run verify + config and update domain_verified.
+4. Keep the guided setup and "We'll do it for you" options as fallbacks.
+```
+
 ---
 
 ## Phase 9: Go live on Vercel
@@ -294,9 +390,57 @@ Do a production readiness review: check every RLS policy against copilot-instruc
 
 ---
 
+## Phase 10: AI website builder (Claude)
+
+You can run this any time after Phase 5. It doesn't depend on domains or going live.
+
+**Do this yourself first:**
+1. Create an account at platform.claude.com, add billing, and set a **monthly spend limit** (e.g. $50) so costs can never surprise you.
+2. Create an API key and add it to `.env.local` (and later to Vercel) as `ANTHROPIC_API_KEY=`. Never paste it anywhere else.
+3. Optional, for photos: create a free Unsplash developer account and add `UNSPLASH_ACCESS_KEY=`.
+
+**Prompt A: AI foundation, limits and credits**
+```
+Read .github/copilot-instructions.md. Add the AI foundation:
+1. Install @anthropic-ai/sdk. Create lib/ai/client.ts (import "server-only"; reads ANTHROPIC_API_KEY; never imported by client components).
+   Models (constants in lib/ai/models.ts so they are easy to change): "claude-sonnet-5-5" for site generation and large rewrites, "claude-haiku-5-5" for small edits.
+2. Migration supabase/migrations/0006_ai_usage.sql (I run it by hand in the SQL Editor):
+   - ai_usage: id, account_id, user_id, site_id, action ('generate_site' | 'edit_section' | 'rewrite_text'), model, input_tokens, output_tokens, cache_read_tokens, cost_usd numeric, created_at. RLS: account owners can read their own rows; super admin reads all; inserts only server-side with the admin client.
+   - ai_limits: account_id pk, monthly_site_generations int default 1, monthly_edits int default 50, extra_credits int default 0. RLS: owners read their own; only super admin can update.
+3. lib/ai/usage.ts: checkLimit(accountId, action) before every AI call and recordUsage(...) after, computing cost_usd from token counts (prices in a config object). Super admin has no limits.
+4. Rate limit: max 10 AI requests per minute per user.
+5. Dashboard: an "AI usage" card per client (used / limit this month), and for super admin a page with total AI cost per client per month.
+```
+
+**Prompt B: "Build my site with AI" generator**
+```
+Build the AI site generator using the section design catalog (lib/sections/catalog.ts) and the block schemas:
+1. Wizard (dashboard → New site → "Build with AI", and also available to account owners for their own site): business name, type, city/area, services (tags), what makes them different, style preference (Classic / Modern / let AI choose), colors (optional), phone, email, address, and a free-text "Describe your business" box.
+2. Server action generateSite, 2 steps with Claude tool use (strict JSON schemas, never free-form HTML):
+   Step 1, plan (Sonnet): returns { style, theme colors, fonts, pages: [{ slug, title, sections: [{ designId, purpose }] }], seo: {...} }. designId must be one of the catalog design IDs (pass the catalog's IDs, names and descriptions in the system prompt).
+   Step 2, fill each page in parallel (Sonnet): for each section returns props that match that block's schema exactly. Give the model each block's field schema as the tool input_schema.
+   Use prompt caching for the long, unchanging system prompt (block schemas + catalog + writing rules).
+3. Writing rules in the system prompt: professional, specific and confident copy for a local business; no invented facts. Never invent reviews, ratings, license numbers, years in business or awards; use clearly marked placeholders like [Add a real customer review] instead. Write SEO titles under 60 characters and descriptions under 160.
+4. Validate every AI response with zod against the block schemas; retry once with the validation errors if invalid; sanitize all rich text with the same DOMPurify rules as Phase 4b. If it still fails, fall back to the design's default props for that section.
+5. Images: for each image field, search Unsplash with a query the AI provides (e.g. "plumber kitchen sink"), store the photo URL plus photographer credit (required by Unsplash), and set alt text. If no key is set, use placeholders.
+6. Save everything as drafts (draft_data), never publish automatically. Stream progress to the UI with steps: "Planning your site…", "Designing Home…", "Writing Services…", "Finding photos…", then open the editor.
+7. Record usage and enforce limits from Prompt A.
+```
+
+**Prompt C: AI assistant inside the editor**
+```
+Add an "AI" button to the editor:
+1. Section actions (on the selected section): "Rewrite" (tone: professional / friendly / luxurious / shorter / longer), "Improve for SEO", and a free-text box ("Make this more upscale", "Add two more FAQs about water heaters"). Send only that section's props + its block schema + site business info; the model returns new props via tool use (Haiku for short rewrites, Sonnet for bigger changes). Show a preview with Accept / Try again / Cancel before applying.
+2. Page action: "Add a section with AI" ("Add a pricing section with 3 plans") → the model picks a designId from the catalog and fills it; insert at the chosen position.
+3. Inline text: when text is selected in a rich text field, show "Rewrite with AI" in the toolbar.
+4. Everything goes through the same validation, sanitizing, limits and usage recording. Undo works for AI changes like any other edit.
+```
+**Check:** generate a site for a test business and check that it uses your designs, has no invented reviews or ratings, and opens as a draft. Then use "Rewrite → luxurious" on a hero, and check the AI usage card shows the cost.
+
+---
+
 ## Later phases (after v1 works)
-- Stripe billing per client (monthly hosting fee)
-- AI site generation: fill a template's copy from the business info using an AI API
+- Stripe billing per client (monthly hosting fee, AI credit packs)
 - CRM / leads pipeline built on form_submissions
 - Funnels, reviews, client reports
 - Version history: keep past published_data snapshots so you can roll back
