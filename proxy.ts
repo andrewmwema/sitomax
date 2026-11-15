@@ -7,7 +7,8 @@ import { updateSession } from "@/lib/supabase/proxy";
  *
  * - Tenant hosts ({subdomain}.ROOT_DOMAIN or a custom domain) are rewritten
  *   to the public renderer at /s/{site}/{path}. API routes (form submit,
- *   analytics beacon) stay un-rewritten so public sites can call them.
+ *   analytics beacon) are excluded by the matcher so public sites can call
+ *   them un-rewritten.
  * - The agency's own host refreshes the auth session and gates
  *   /dashboard and /editor behind login.
  */
@@ -17,9 +18,6 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (tenantKey) {
-    if (pathname.startsWith("/api")) {
-      return NextResponse.next();
-    }
     const url = request.nextUrl.clone();
     url.pathname = `/s/${tenantKey}${pathname === "/" ? "" : pathname}`;
     return NextResponse.rewrite(url);
@@ -30,7 +28,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and static assets.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$).*)",
+    // Skip API routes, Next.js internals and static assets.
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$).*)",
   ],
 };
