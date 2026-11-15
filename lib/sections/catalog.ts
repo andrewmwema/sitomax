@@ -10,6 +10,7 @@ import type { CallToActionProps } from "@/components/blocks/call-to-action";
 import type { ContactFormProps } from "@/components/blocks/contact-form";
 import type { MapProps } from "@/components/blocks/map";
 import type { FooterProps } from "@/components/blocks/footer";
+import type { AnimationType, BlockDesign } from "@/lib/sections/design";
 
 /**
  * Section design library: curated, ready-to-insert presets for every
@@ -90,6 +91,37 @@ function design<T extends keyof BlockPropsMap>(entry: {
 }
 
 /**
+ * Complete SectionShell "design" object for catalog presets: theme-driven
+ * background (none = the block's own Section background, which adapts to
+ * every palette), default spacing from --section-pad, and a subtle
+ * entrance animation. Anchor IDs give menu links like #pricing out of
+ * the box and stay editable per section.
+ */
+function shellDesign(
+  options: { anchorId?: string; animation?: AnimationType | "none" } = {},
+): BlockDesign {
+  const { anchorId, animation = "fade-up" } = options;
+  return {
+    settings: {
+      fullBleed: true,
+      ...(anchorId ? { anchorId } : null),
+      hideOnDesktop: false,
+      hideOnTablet: false,
+      hideOnMobile: false,
+    },
+    background: { type: "none" },
+    border: { width: 0, radius: 0 },
+    shadow: "none",
+    textColor: "auto",
+    animation:
+      animation === "none"
+        ? { trigger: "none", type: "fade", duration: 600, delay: 0 }
+        : { trigger: "entrance", type: animation, duration: 600, delay: 0 },
+    spacing: { desktop: {}, tablet: {}, mobile: {} },
+  };
+}
+
+/**
  * Built-in catalog. Categories without designs yet (Stats, Process,
  * Team, Logos) are filled by the Phase 4b design batches as new blocks
  * and presets are added — the gallery handles empty categories.
@@ -110,6 +142,7 @@ export const sectionCatalog: SectionDesign[] = [
       buttonLink: "/contact",
       backgroundImage: "",
       variant: "split",
+      design: shellDesign({ animation: "fade" }),
     },
   }),
   design({
@@ -126,6 +159,7 @@ export const sectionCatalog: SectionDesign[] = [
       buttonLink: "/contact",
       backgroundImage: "",
       variant: "centered",
+      design: shellDesign({ animation: "fade" }),
     },
   }),
 
@@ -156,6 +190,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "grid",
+      design: shellDesign({ anchorId: "services" }),
     },
   }),
   design({
@@ -184,6 +219,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "list",
+      design: shellDesign({ anchorId: "services" }),
     },
   }),
 
@@ -200,6 +236,7 @@ export const sectionCatalog: SectionDesign[] = [
       heading: "A local team that cares",
       text: "<p>We started with one van and a simple promise: do great work and treat every customer like a neighbour. Today our team serves the whole area — same promise, same care.</p>",
       variant: "image-right",
+      design: shellDesign({ anchorId: "about" }),
     },
   }),
   design({
@@ -212,6 +249,7 @@ export const sectionCatalog: SectionDesign[] = [
       heading: "Built on word of mouth",
       text: "<p>Most of our customers come from recommendations. We believe that says more than any ad could — quality work speaks for itself.</p>",
       variant: "centered",
+      design: shellDesign({ anchorId: "about", animation: "fade" }),
     },
   }),
   design({
@@ -224,6 +262,7 @@ export const sectionCatalog: SectionDesign[] = [
       heading: "More than 20 years of experience",
       text: "<p>Our certified team has handled every kind of project, from quick fixes to complete renovations.</p><p>We keep you informed at every step, stick to the schedule, and never charge for anything we haven't agreed up front.</p>",
       variant: "two-column",
+      design: shellDesign({ anchorId: "about" }),
     },
   }),
 
@@ -249,6 +288,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "cards",
+      design: shellDesign({ anchorId: "reviews" }),
     },
   }),
   design({
@@ -267,6 +307,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "quotes",
+      design: shellDesign({ anchorId: "reviews", animation: "fade" }),
     },
   }),
 
@@ -309,6 +350,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "cards",
+      design: shellDesign({ anchorId: "pricing" }),
     },
   }),
   design({
@@ -340,6 +382,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "simple",
+      design: shellDesign({ anchorId: "pricing" }),
     },
   }),
 
@@ -362,6 +405,7 @@ export const sectionCatalog: SectionDesign[] = [
       ],
       columns: "3",
       variant: "grid",
+      design: shellDesign({ anchorId: "gallery" }),
     },
   }),
   design({
@@ -381,6 +425,7 @@ export const sectionCatalog: SectionDesign[] = [
       ],
       columns: "3",
       variant: "masonry",
+      design: shellDesign({ anchorId: "gallery", animation: "fade" }),
     },
   }),
 
@@ -408,6 +453,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "accordion",
+      design: shellDesign({ anchorId: "faq" }),
     },
   }),
   design({
@@ -437,6 +483,7 @@ export const sectionCatalog: SectionDesign[] = [
         },
       ],
       variant: "two-column",
+      design: shellDesign({ anchorId: "faq" }),
     },
   }),
 
@@ -453,6 +500,7 @@ export const sectionCatalog: SectionDesign[] = [
       buttonText: "Contact us",
       buttonLink: "/contact",
       variant: "dark",
+      design: shellDesign({ animation: "fade" }),
     },
   }),
   design({
@@ -467,6 +515,7 @@ export const sectionCatalog: SectionDesign[] = [
       buttonText: "Check availability",
       buttonLink: "/contact",
       variant: "primary",
+      design: shellDesign({ animation: "zoom-in" }),
     },
   }),
   design({
@@ -481,6 +530,7 @@ export const sectionCatalog: SectionDesign[] = [
       buttonText: "Get in touch",
       buttonLink: "/contact",
       variant: "split",
+      design: shellDesign(),
     },
   }),
 
@@ -501,6 +551,7 @@ export const sectionCatalog: SectionDesign[] = [
         { label: "Message", fieldType: "textarea", required: true },
       ],
       variant: "centered",
+      design: shellDesign({ anchorId: "contact" }),
     },
   }),
   design({
@@ -520,6 +571,7 @@ export const sectionCatalog: SectionDesign[] = [
         { label: "What do you need?", fieldType: "textarea", required: true },
       ],
       variant: "split",
+      design: shellDesign({ anchorId: "contact" }),
     },
   }),
   design({
@@ -532,6 +584,7 @@ export const sectionCatalog: SectionDesign[] = [
       heading: "Come and see us",
       address: "",
       variant: "split",
+      design: shellDesign({ anchorId: "contact", animation: "fade" }),
     },
   }),
 
@@ -550,6 +603,7 @@ export const sectionCatalog: SectionDesign[] = [
         { platform: "instagram", url: "" },
       ],
       variant: "columns",
+      design: shellDesign({ animation: "none" }),
     },
   }),
   design({
@@ -563,6 +617,7 @@ export const sectionCatalog: SectionDesign[] = [
       address: "123 Main St, Springfield",
       socialLinks: [],
       variant: "centered",
+      design: shellDesign({ animation: "none" }),
     },
   }),
 ];

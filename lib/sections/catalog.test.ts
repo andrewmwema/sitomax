@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { puckConfig } from "@/lib/puck/config";
+import { normalizeDesign, type BlockDesign } from "@/lib/sections/design";
 import { SECTION_CATEGORIES, sectionCatalog } from "./catalog";
 
 describe("section catalog", () => {
@@ -13,6 +14,21 @@ describe("section catalog", () => {
       expect(puckConfig.components).toHaveProperty(design.blockType);
       expect(SECTION_CATEGORIES).toContain(design.category);
       expect(design.styles.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("every preset ships a complete SectionShell design object", () => {
+    for (const design of sectionCatalog) {
+      const shell = design.props.design as BlockDesign | undefined;
+      expect(shell, `${design.id} is missing props.design`).toBeDefined();
+      expect(shell).toMatchObject({
+        settings: { fullBleed: true },
+        background: { type: expect.any(String) },
+        animation: { trigger: expect.any(String) },
+        spacing: expect.any(Object),
+      });
+      // And it must survive strict normalization without losing shape.
+      expect(() => normalizeDesign(shell)).not.toThrow();
     }
   });
 
