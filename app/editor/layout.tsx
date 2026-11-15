@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import "@puckeditor/core/puck.css";
 
 /**
  * Auth gate for the full-screen editor. Dynamic auth access lives inside

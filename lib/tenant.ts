@@ -71,6 +71,7 @@ export type TenantPage = {
   site_id: string;
   slug: string;
   title: string | null;
+  draft_data: Record<string, unknown> | null;
   published_data: Record<string, unknown> | null;
   published_at: string | null;
   seo: Record<string, unknown>;
@@ -117,7 +118,7 @@ export const getSitePage = cache(
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("pages")
-      .select("id, site_id, slug, title, published_data, published_at, seo")
+      .select("id, site_id, slug, title, draft_data, published_data, published_at, seo")
       .eq("site_id", siteId)
       .eq("slug", slug)
       .maybeSingle();

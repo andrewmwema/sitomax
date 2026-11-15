@@ -1,9 +1,10 @@
-import type { CSSProperties } from "react";
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Render } from "@puckeditor/core/rsc";
-import type { Data } from "@puckeditor/core";
-import { puckConfig } from "@/lib/puck/config";
+import { puckConfig, type PuckPageData } from "@/lib/puck/config";
+import type { SiteTheme } from "@/lib/puck/theme";
+import { createClient } from "@/lib/supabase/server";
 import {
   getSiteByHost,
   getSitePage,
@@ -16,61 +17,67 @@ import {
  *   {subdomain}.ROOT_DOMAIN/{path}  ->  /s/{subdomain}/{path}
  *   {custom-domain}/{path}          ->  /s/{custom-domain}/{path}
  *
- * Renders pages.published_data with Puck, wrapped in the site theme as
- * CSS variables so blocks can use var(--color-primary) etc.
+ * Renders pages.published_data with Puck. The site theme is passed as
+ * Puck metadata and applied as CSS variables by the config's root.
+ *
+ * ?preview=1 renders draft_data instead, but only for signed-in members
+ * of the site's account (verified through RLS with the user's session).
  */
 
-type Params = PageProps<"/s/[site]/[[...slug]]">["params"];
-
-type SiteTheme = {
-  colors?: {
-    primary?: string;
-    secondary?: string;
-    background?: string;
-    text?: string;
-  };
-  fonts?: {
-    heading?: string;
-    body?: string;
-  };
-};
+type Props = PageProps<"/s/[site]/[[...slug]]">;
 
 type PageSeo = {
   title?: string;
   description?: string;
 };
 
-/** Loads the site + published page for the request, or null for a 404. */
-async function loadPublishedPage(
-  params: Params,
-): Promise<{ site: TenantSite; page: TenantPage } | null> {
-  const { site: siteParam, slug } = await params;
+/**
+ * True when the current visitor may see drafts of this page: RLS only
+ * returns the row to members of the site's account or the super admin.
+ */
+const canPreviewPage = cache(async (pageId: string): Promise<boolean> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("pages")
+    .select("id")
+    .eq("id", pageId)
+    .maybeSingle();
+  return Boolean(data);
+});
+
+async function loadPage(
+  params: Props["params"],
+  searchParams: Props["searchParams"],
+): Promise<{
+  site: TenantSite;
+  page: TenantPage;
+  data: Record<string, unknown>;
+  isPreview: boolean;
+} | null> {
+  const [{ site: siteParam, slug }, { preview }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
+
   const site = await getSiteByHost(siteParam);
   if (!site) return null;
 
   const page = await getSitePage(site.id, slug?.join("/") ?? "");
-  if (!page?.published_data) return null;
+  if (!page) return null;
 
-  return { site, page };
-}
+  const isPreview =
+    preview === "1" && page.draft_data != null && (await canPreviewPage(page.id));
+  const data = isPreview ? page.draft_data : page.published_data;
+  if (!data) return null;
 
-function themeToCssVars(theme: SiteTheme): CSSProperties {
-  return {
-    "--color-primary": theme.colors?.primary ?? "#4f46e5",
-    "--color-secondary": theme.colors?.secondary ?? "#0ea5e9",
-    "--color-background": theme.colors?.background ?? "#ffffff",
-    "--color-text": theme.colors?.text ?? "#18181b",
-    "--font-heading": theme.fonts?.heading ?? "inherit",
-    "--font-body": theme.fonts?.body ?? "inherit",
-  } as CSSProperties;
+  return { site, page, data, isPreview };
 }
 
 export async function generateMetadata({
   params,
-}: {
-  params: Params;
-}): Promise<Metadata> {
-  const loaded = await loadPublishedPage(params);
+  searchParams,
+}: Props): Promise<Metadata> {
+  const loaded = await loadPage(params, searchParams);
   if (!loaded) return {};
 
   const { site, page } = loaded;
@@ -80,31 +87,29 @@ export async function generateMetadata({
   return {
     title,
     description: seo.description || undefined,
+    ...(loaded.isPreview ? { robots: { index: false } } : {}),
   };
 }
 
-export default async function TenantSitePage({ params }: { params: Params }) {
-  const loaded = await loadPublishedPage(params);
+export default async function TenantSitePage({ params, searchParams }: Props) {
+  const loaded = await loadPage(params, searchParams);
   if (!loaded) notFound();
 
-  const { site, page } = loaded;
-  const data = page.published_data as Partial<Data>;
+  const { site, data, isPreview } = loaded;
   const theme = (site.theme ?? {}) as SiteTheme;
 
   return (
-    <div
-      style={{
-        ...themeToCssVars(theme),
-        backgroundColor: "var(--color-background)",
-        color: "var(--color-text)",
-        fontFamily: "var(--font-body)",
-      }}
-      className="flex min-h-screen flex-1 flex-col"
-    >
+    <>
+      {isPreview ? (
+        <div className="fixed right-4 bottom-4 z-50 rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-lg">
+          Preview — showing unpublished draft
+        </div>
+      ) : null}
       <Render
         config={puckConfig}
-        data={{ content: [], root: {}, ...data } as Data}
+        data={{ content: [], root: {}, ...data } as unknown as PuckPageData}
+        metadata={{ theme }}
       />
-    </div>
+    </>
   );
 }

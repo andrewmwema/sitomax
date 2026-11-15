@@ -72,6 +72,12 @@ export function SiteCard({ site }: { site: SiteCardSite }) {
             No pages yet
           </span>
         )}
+        <Link
+          href={`/dashboard/sites/${site.id}`}
+          className="rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+        >
+          Pages
+        </Link>
         <a
           href={url}
           target="_blank"

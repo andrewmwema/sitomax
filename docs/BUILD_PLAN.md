@@ -116,6 +116,68 @@ Check access on the server: only members of the site's account or super admin ca
 
 ---
 
+## Phase 4b: Upscale blocks + rich text (run these 4 prompts in order)
+
+**Before you start:** take screenshots of each section of the reference designs (hero, services, about, reviews, pricing, contact, footer) from the design canvas, in both styles: "Classic" (navy and brass) and "Modern" (bright and rounded). Attach the matching screenshots to each prompt in Copilot Chat. Commit after each prompt.
+
+**Prompt A: design foundation**
+```
+Read .github/copilot-instructions.md. Create a shared design foundation for all Puck blocks so every site looks professional:
+
+1. lib/theme/presets.ts: two style presets stored in sites.theme.style:
+   - "classic": serif display headings (DM Serif Display) + Inter body, 4–6px corner radius, navy/brass style, small uppercase eyebrow labels with letter-spacing.
+   - "modern": Plus Jakarta Sans 700/800 headings + Inter body, 16–24px radius, soft shadows, pill badges.
+   Each preset sets CSS variables: --font-heading, --font-body, --radius-sm, --radius-lg, --shadow-card, --section-pad (96–112px desktop, 64px mobile), --container (1200px).
+   Colors stay from the theme: --color-primary, --color-secondary, --color-bg, --color-text, plus computed --color-muted, --color-soft-bg, --color-border, --color-on-primary (white or dark, whichever passes WCAG 4.5:1 contrast).
+2. Load fonts with next/font/google (no layout shift).
+3. components/blocks/ui/: shared primitives every block must use: Container, Section (background: "default" | "soft" | "dark" | "primary"), Eyebrow, Heading (h1/h2/h3 with fluid clamp() sizes), Button (primary / secondary / ghost, min-height 48px, hover + focus-visible styles), Card, Badge, IconTile.
+4. Icons: install lucide-react. Create an IconPicker custom Puck field (searchable list of ~60 relevant icons: wrench, droplet, flame, scissors, utensils, home, shield-check, clock, star, phone, etc.). Remove all emoji icons from blocks.
+5. Theme panel: add a "Style" switch (Classic / Modern), and a color picker that shows preset palettes (Navy & brass, Ocean blue, Forest green, Charcoal & gold, Plum).
+Typography rules: max ~65 characters per line for body text, line-height 1.6, headings letter-spacing -0.5px to -1.5px, generous spacing between sections. No gradient backgrounds, no emoji.
+```
+
+**Prompt B: rich text and inline editing**
+```
+Add Word-style text editing using Puck's built-in rich text field (@puckeditor/core 0.24 supports field type "richtext", powered by TipTap):
+1. Change every multi-line body text field (Text section, Image with text, FAQ answers, Services descriptions, About text) from "textarea" to { type: "richtext", contentEditable: true } so users can edit directly on the page and in the sidebar, with bold, italic, underline, links, bulleted and numbered lists, headings H2–H4, and text alignment.
+2. Set contentEditable: true on short "text" fields (headings, button labels) so clients can click and type on the canvas.
+3. Style rich text output in a shared .rich-text class: paragraph spacing, list bullets/numbers, link color from --color-primary, headings using --font-heading.
+4. SECURITY: rich text is stored as HTML in draft_data / published_data. Sanitize it with isomorphic-dompurify both when saving (server action) and when rendering on the public site. Allow only: p, br, strong, em, u, a (href, target, rel), ul, ol, li, h2, h3, h4, blockquote. Force rel="noopener noreferrer" on links and block javascript: URLs. This prevents a client from injecting scripts that would run for site visitors or for the super admin opening their editor.
+5. Migrate existing plain-text values so nothing breaks (treat a plain string as a paragraph).
+```
+
+**Prompt C: rebuild the blocks with Classic + Modern variants**
+```
+Rebuild every block in components/blocks/ to match the attached reference screenshots, using only the shared primitives from components/blocks/ui/. Every block reads sites.theme.style and renders the Classic or Modern look automatically, plus these per-block options:
+- Hero: layouts "split image", "centered", "full-width photo"; eyebrow, heading, rich subheading, 2 buttons, trust row (3 short check-mark items), optional floating card (e.g. "On-site in 60 min"), optional badge pill.
+- Trust bar: 3–5 short credential items (rating, years, warranty, license).
+- Services: 2 or 3 columns, card style "bordered grid" or "icon tiles", IconPicker icon, title, rich description, optional link.
+- Image with text: image left/right, eyebrow, heading, rich text, optional numbered list (01, 02, 03).
+- Testimonials: cards with star rating, quote, name, location. Show a hint in the editor: "Use real customer reviews only."
+- Pricing: 2–4 plans, highlight one ("Most popular"), checklist items, button.
+- Process / How it works: 3–4 numbered steps.
+- FAQ: accordion using <details>, rich text answers.
+- Service areas: pill list.
+- Call to action: banner with heading, text, 2 buttons; backgrounds dark / primary / soft.
+- Contact form: name, phone, email, service dropdown, message; Classic = white card on dark section, Modern = card on soft section.
+- Gallery, Map, Logo strip, Footer (3 columns: business info, links, contact + hours).
+Requirements for every block: responsive at 375px / 768px / 1280px, image fields use next/image with object-fit cover and required alt text, buttons and links have hover and keyboard focus states, text contrast at least 4.5:1, every field has a sensible professional default so a newly dropped block already looks finished.
+```
+
+**Prompt D: polish pass**
+```
+Do a visual polish pass on all blocks:
+1. Section background control on every block (default / soft / dark / primary) so pages alternate backgrounds.
+2. Consistent vertical rhythm: use --section-pad everywhere, no hard-coded margins.
+3. Add subtle hover effects on cards (lift 2px + shadow in Modern, border color change in Classic).
+4. Check mobile: nav collapses to a menu button, buttons go full width under 480px, no horizontal scroll.
+5. Make the editor's block list show a small preview thumbnail for each block.
+6. Update the 4 templates in templates/ to use the new blocks and variants, then list anything that still looks unfinished.
+```
+**Check:** create a new page, drop in each block, and switch the Style between Classic and Modern. Every block should look finished without editing. Bold, italic and bullets should work in body text.
+
+---
+
 ## Phase 5: Niche templates + "create site" wizard
 
 **Prompt:**

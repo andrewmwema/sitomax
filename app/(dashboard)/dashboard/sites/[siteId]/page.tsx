@@ -1,0 +1,98 @@
+import { Suspense } from "react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth";
+import { getSiteUrl } from "@/lib/tenant";
+import { PagesManager, type ManagedPage } from "@/components/dashboard/pages-manager";
+
+/**
+ * Site detail page: live URL and the pages manager (add, rename, reorder,
+ * delete pages, set the home page). RLS restricts it to members of the
+ * site's account and the super admin.
+ */
+export default function SitePage({
+  params,
+}: PageProps<"/dashboard/sites/[siteId]">) {
+  return (
+    <Suspense fallback={<SiteSkeleton />}>
+      <SiteDetail params={params} />
+    </Suspense>
+  );
+}
+
+function SiteSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="h-16 animate-pulse rounded-2xl bg-zinc-200" />
+      <div className="h-64 animate-pulse rounded-2xl bg-zinc-200" />
+    </div>
+  );
+}
+
+async function SiteDetail({
+  params,
+}: {
+  params: PageProps<"/dashboard/sites/[siteId]">["params"];
+}) {
+  const { siteId } = await params;
+  const { supabase } = await requireUser();
+
+  const { data: site } = await supabase
+    .from("sites")
+    .select(
+      "id, name, subdomain, custom_domain, domain_verified, pages(id, slug, title, sort_order, published_at)",
+    )
+    .eq("id", siteId)
+    .maybeSingle();
+
+  if (!site) {
+    notFound();
+  }
+
+  const url = getSiteUrl(site);
+  const pages = ([...(site.pages ?? [])] as ManagedPage[]).sort(
+    (a, b) =>
+      (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id.localeCompare(b.id),
+  );
+
+  return (
+    <section className="flex flex-col gap-8">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-zinc-500">
+            <Link href="/dashboard" className="hover:underline">
+              Sites
+            </Link>{" "}
+            /
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {site.name ?? site.subdomain}
+          </h1>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm text-primary hover:underline"
+          >
+            {url.replace(/^https?:\/\//, "")}
+          </a>
+        </div>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+        >
+          View live
+        </a>
+      </header>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold tracking-wide text-zinc-500 uppercase">
+          Pages
+        </h2>
+        <PagesManager siteId={site.id} pages={pages} />
+      </div>
+    </section>
+  );
+}
