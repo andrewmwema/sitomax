@@ -186,6 +186,27 @@ Batch 5: Call to action ×4 (dark band, primary band, image background, split wi
 After each batch, list the designs created.
 ```
 
+Batch 2 catalog designs:
+- Features/Services: Icon grid (three columns), Bordered service grid, Image service cards, Alternating image rows, Heading with icon list, Service explorer tabs.
+- Stats: Editorial numbers row, Milestone metric cards, Photo & numbers.
+
+All nine support Classic/Modern themes and the shared SectionShell controls.
+Services layouts share the same editable content and photos when switching variants.
+Tabs support arrow keys, Home and End. Stats use bracketed example values that
+the existing publish warning flags until replaced with verified business facts.
+
+Batch 3 catalog designs:
+- Pricing: Three cards with a highlighted plan, Monthly/yearly plans, Plan comparison table, Single plan with checklist.
+- FAQ: Accordion, Two-column answers, FAQ with contact sidebar.
+
+The billing toggle uses explicitly entered yearly prices, not an inferred discount.
+If a plan has no yearly price, it asks visitors to enquire. Comparison rows come
+from matching feature names across plans and become plan-by-plan checklists on
+mobile. The legacy simple pricing layout remains supported for saved pages.
+FAQ layouts preserve the same questions and rich-text answers; accordion designs
+can start with the first answer open. Prices and business-specific facts remain
+bracketed examples for the editor's existing publish warning.
+
 **Prompt F: polish pass**
 ```
 Do a visual polish pass on all designs:

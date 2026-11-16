@@ -14,6 +14,7 @@ import { useSectionLibrary } from "@/components/editor/section-library";
 const DEFAULT_CATEGORY: Record<string, SectionCategory> = {
   Hero: "Hero",
   Services: "Features/Services",
+  Stats: "Stats",
   TextSection: "Text",
   ImageWithText: "About",
   Testimonials: "Testimonials",

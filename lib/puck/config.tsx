@@ -12,6 +12,7 @@ import { Hero, type HeroProps } from "@/components/blocks/hero";
 import { TextSection, type TextSectionProps } from "@/components/blocks/text-section";
 import { ImageWithText, type ImageWithTextProps } from "@/components/blocks/image-with-text";
 import { Services, type ServicesProps } from "@/components/blocks/services";
+import { Stats, type StatsProps } from "@/components/blocks/stats";
 import { Gallery, type GalleryProps } from "@/components/blocks/gallery";
 import { Testimonials, type TestimonialsProps } from "@/components/blocks/testimonials";
 import { Pricing, type PricingProps } from "@/components/blocks/pricing";
@@ -27,6 +28,7 @@ type Components = {
   TextSection: TextSectionProps;
   ImageWithText: ImageWithTextProps;
   Services: ServicesProps;
+  Stats: StatsProps;
   Gallery: GalleryProps;
   Testimonials: TestimonialsProps;
   Pricing: PricingProps;
@@ -91,6 +93,7 @@ export const puckConfig: PuckConfig = {
         "TextSection",
         "ImageWithText",
         "Services",
+        "Stats",
         "Testimonials",
         "Pricing",
         "Faq",
@@ -142,6 +145,7 @@ export const puckConfig: PuckConfig = {
     TextSection: withSectionShell(TextSection),
     ImageWithText: withSectionShell(ImageWithText),
     Services: withSectionShell(Services),
+    Stats: withSectionShell(Stats),
     Gallery: withSectionShell(Gallery),
     Testimonials: withSectionShell(Testimonials),
     Pricing: withSectionShell(Pricing),
