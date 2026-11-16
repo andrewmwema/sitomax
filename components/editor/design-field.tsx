@@ -1,6 +1,7 @@
 "use client";
 
 import { useContext, useState, type ReactNode } from "react";
+import { Smartphone } from "lucide-react";
 import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import {
   videoEmbedUrl,
@@ -13,6 +14,7 @@ import { SPACING_SCALE, snapSpacing } from "@/lib/layout/spacing";
 import { SectionLibraryContext } from "@/components/editor/section-library";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { VideoUploadField } from "@/components/editor/video-upload-field";
+import { InteractionContext } from "./interaction-context";
 
 /**
  * Editor UI for the "design" object every block carries (SectionShell).
@@ -35,15 +37,18 @@ export function DesignField({
   onChange,
   readOnly,
   level = "section",
+  panelTab,
 }: {
   value: BlockDesign | undefined;
   onChange: (value: BlockDesign) => void;
   readOnly?: boolean;
   level?: DesignLevel;
+  panelTab?: TabId;
 }) {
   const tabs = level === "section" ? TABS : TABS.filter((entry) => entry.id !== "settings");
   const [tab, setTab] = useState<TabId>(tabs[0].id);
   const design = value ?? {};
+  const activeTab = panelTab ?? tab;
 
   const patch = (next: Partial<BlockDesign>) => {
     if (!readOnly) onChange({ ...design, ...next });
@@ -51,7 +56,7 @@ export function DesignField({
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50/60 p-2">
-      <div
+      {!panelTab ? <div
         className="grid gap-1 rounded-md bg-zinc-100 p-1"
         style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
       >
@@ -69,18 +74,18 @@ export function DesignField({
             {entry.label}
           </button>
         ))}
-      </div>
+      </div> : null}
       <div className="flex flex-col gap-3 px-1 pb-1">
-        {tab === "settings" ? (
+        {activeTab === "settings" ? (
           <SettingsTab design={design} patch={patch} />
         ) : null}
-        {tab === "style" ? (
+        {activeTab === "style" ? (
           <StyleTab design={design} patch={patch} level={level} />
         ) : null}
-        {tab === "animation" ? (
+        {activeTab === "animation" ? (
           <AnimationTab design={design} patch={patch} />
         ) : null}
-        {tab === "spacing" ? <SpacingTab design={design} patch={patch} /> : null}
+        {activeTab === "spacing" ? <SpacingTab design={design} patch={patch} /> : null}
       </div>
     </div>
   );
@@ -593,9 +598,16 @@ function AnimationTab({ design, patch }: TabProps) {
 const SPACING_SIDES = ["Top", "Right", "Bottom", "Left"] as const;
 
 function SpacingTab({ design, patch }: TabProps) {
-  const [device, setDevice] = useState<DeviceId>("desktop");
+  const context = useContext(InteractionContext);
+  const [localDevice, setLocalDevice] = useState<DeviceId>("desktop");
+  const device = context?.device ?? localDevice;
+  const setDevice = context?.setDevice ?? setLocalDevice;
   const spacing = design.spacing ?? {};
   const box = spacing[device] ?? {};
+  const mobileOverrides = (kind: "margin" | "padding") => SPACING_SIDES.map((side) => {
+    const key = `${kind}${side}` as keyof SpacingBox;
+    return spacing.mobile?.[key] !== undefined && spacing.mobile[key] !== spacing.desktop?.[key];
+  });
 
   const patchBox = (next: Partial<SpacingBox>) =>
     patch({ spacing: { ...spacing, [device]: { ...box, ...next } } });
@@ -616,7 +628,7 @@ function SpacingTab({ design, patch }: TabProps) {
 
   return (
     <>
-      <SegmentedRow
+      {!context ? <SegmentedRow
         label="Device"
         value={device}
         options={[
@@ -625,7 +637,7 @@ function SpacingTab({ design, patch }: TabProps) {
           { value: "mobile", label: "Mobile" },
         ]}
         onChange={setDevice}
-      />
+      /> : null}
 
       {/* Margin box (outer) wrapping the padding box (inner). */}
       <div className="rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/60 p-1.5">
@@ -633,6 +645,7 @@ function SpacingTab({ design, patch }: TabProps) {
           Margin
         </p>
         <SpacingSides
+          mobileOverrides={mobileOverrides("margin")}
           values={SPACING_SIDES.map(
             (side) => box[`margin${side}` as keyof SpacingBox],
           )}
@@ -645,6 +658,7 @@ function SpacingTab({ design, patch }: TabProps) {
               Padding
             </p>
             <SpacingSides
+              mobileOverrides={mobileOverrides("padding")}
               values={SPACING_SIDES.map(
                 (side) => box[`padding${side}` as keyof SpacingBox],
               )}
@@ -678,15 +692,18 @@ function SpacingTab({ design, patch }: TabProps) {
 /** Top / left+right / bottom numeric inputs around a child box. */
 function SpacingSides({
   values,
+  mobileOverrides,
   onChange,
   children,
 }: {
   values: (number | undefined)[];
+  mobileOverrides: boolean[];
   onChange: (sideIndex: number, value: number | undefined) => void;
   children: ReactNode;
 }) {
   // Guardrail: spacing is picked from the scale, never typed freely.
   const input = (sideIndex: number) => (
+    <span className="inline-flex items-center gap-0.5">
     <select
       // Older values off the scale display (and render) snapped.
       value={values[sideIndex] === undefined ? "" : snapSpacing(values[sideIndex])}
@@ -704,6 +721,8 @@ function SpacingSides({
         </option>
       ))}
     </select>
+    {mobileOverrides[sideIndex] ? <Smartphone size={10} aria-label="Mobile override" /> : null}
+    </span>
   );
 
   return (

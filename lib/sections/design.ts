@@ -30,6 +30,12 @@ export type SpacingBox = {
 };
 
 export type BlockDesign = {
+  appearance?: Partial<Record<DeviceId, {
+    backgroundColor?: string;
+    textColor?: string;
+    borderRadius?: number;
+    align?: "left" | "center" | "right";
+  }>>;
   settings?: {
     /** true (default) = background edge-to-edge; false = 1200px box. */
     fullBleed?: boolean;

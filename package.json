@@ -10,6 +10,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@tiptap/core": "^3.34.0",
+    "@tiptap/extensions": "^3.34.0",
+    "@tiptap/react": "^3.34.0",
     "@puckeditor/core": "^0.24.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.0",

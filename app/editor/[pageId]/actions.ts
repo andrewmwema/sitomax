@@ -52,12 +52,16 @@ async function updatePage(
 
   const { supabase, user } = await requireUser();
 
-  const { data: page } = await supabase
+  const { data: page, error: loadError } = await supabase
     .from("pages")
     .select("id, title, seo, draft_data, published_data")
     .eq("id", parsedId.data)
     .maybeSingle();
 
+  if (loadError) {
+    console.error("Unable to load page for saving", loadError);
+    return { status: "error", message: "Could not load the page. Please try again." };
+  }
   if (!page) {
     return { status: "error", message: "You do not have access to this page." };
   }
@@ -104,8 +108,9 @@ async function updatePage(
     update.published_at = new Date().toISOString();
   }
 
-  const { error } = await supabase.from("pages").update(update).eq("id", parsedId.data);
-  if (error) {
+  const { data: updated, error } = await supabase.from("pages").update(update).eq("id", parsedId.data).select("id");
+  if (error || !updated?.length) {
+    console.error("Unable to save page", error);
     return { status: "error", message: "Could not save the page. Please try again." };
   }
 
@@ -123,6 +128,30 @@ export async function publishPage(pageId: string, data: unknown): Promise<Action
   return updatePage(pageId, data, true);
 }
 
+export async function listPageVersions(pageId: string): Promise<{ id: string; published_at: string }[]> {
+  const id = z.uuid().parse(pageId);
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase.from("page_versions").select("id, published_at")
+    .eq("page_id", id).order("published_at", { ascending: false }).order("id", { ascending: false }).limit(20);
+  if (error) throw new Error("Could not load published versions.", { cause: error });
+  return data ?? [];
+}
+
+export async function restorePageVersion(pageId: string, versionId: string) {
+  const parsed = z.object({ pageId: z.uuid(), versionId: z.uuid() }).safeParse({ pageId, versionId });
+  if (!parsed.success) return { status: "error" as const, message: "Invalid page version." };
+  const { supabase } = await requireUser();
+  const { data: version, error } = await supabase.from("page_versions").select("data")
+    .eq("page_id", parsed.data.pageId).eq("id", parsed.data.versionId).maybeSingle();
+  if (error || !version) {
+    console.error("Unable to load page version", error);
+    return { status: "error" as const, message: "This version is unavailable." };
+  }
+  const result = await updatePage(pageId, version.data, false);
+  return result.status === "success"
+    ? { status: "success" as const, message: "Version restored to draft. Publish to make it live.", data: version.data }
+    : result;
+}
 /**
  * Saves the site-wide theme to sites.theme. RLS lets account members
  * update only name and theme on their own sites.

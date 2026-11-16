@@ -59,7 +59,7 @@ export function textStyle({
     ...typeSizeStyle(size, sizeFallback),
     ...(fontFallback ? { fontFamily: fontFamilyCss(font, fontFallback) } : null),
     color: colorCss(color, colorFallback),
-    textAlign: align === undefined ? undefined : safeAlign(align),
+    textAlign: align === undefined ? undefined : `var(--shell-align, ${safeAlign(align)})` as CSSProperties["textAlign"],
   };
 }
 

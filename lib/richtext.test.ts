@@ -6,6 +6,12 @@ import {
 } from "./richtext";
 
 describe("sanitizeRichText", () => {
+  it("preserves toolbar heading and bounded indentation but drops arbitrary layout styles", () => {
+    expect(sanitizeRichText('<h1 style="margin-left: 32px; position: fixed">Title</h1>'))
+      .toBe('<h1 style="margin-left: 32px">Title</h1>');
+    expect(sanitizeRichText('<p style="margin-left: 999px">Text</p>')).toBe("<p>Text</p>");
+    expect(sanitizeRichText('<p style="margin-left: -16px">Text</p>')).toBe("<p>Text</p>");
+  });
   it("removes <script> tags and their content", () => {
     const html = '<p>hello</p><script>alert("xss")</script>';
     expect(sanitizeRichText(html)).toBe("<p>hello</p>");

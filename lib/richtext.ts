@@ -25,6 +25,7 @@ const ALLOWED_TAGS = [
   "ol",
   "li",
   "h2",
+  "h1",
   "h3",
   "h4",
   "blockquote",
@@ -93,6 +94,7 @@ const STYLE_VALIDATORS: Record<string, (value: string) => string | null> = {
   "font-size": normalizeFontSize,
   "text-align": normalizeTextAlign,
   "line-height": normalizeLineHeight,
+  "margin-left": (value) => /^(?:0|16|32|48|64|80|96|112|128)px$/.test(value) ? value : null,
 };
 
 function sanitizeStyleAttribute(style: string): string | null {

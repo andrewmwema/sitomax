@@ -354,6 +354,15 @@ Polish editing interactions:
 SECURITY: "Embed" and any custom HTML/CSS are super admin only, rendered inside a sandboxed iframe (sandbox="allow-scripts" without allow-same-origin), never injected into the page directly. Clients never get raw HTML/CSS editing.
 ```
 
+Editor interactions use the docked inspector and a 10-second draft autosave.
+Published history is separate from drafts: restore changes the draft only.
+Run `supabase/migrations/0009_page_versions.sql` in the SQL editor before using
+history; it seeds existing publications, enforces RLS, and retains 20 versions.
+Responsive spacing and the appearance controls (background, text color, radius,
+alignment) support device overrides; the other design controls remain shared.
+Saving designs is currently limited to top-level sections, and column
+duplicate, move, and delete actions are disabled to preserve row presets.
+
 **Prompt D: more designs for the new categories (attach references)**
 ```
 Add designs to the catalog for the new categories, same quality rules as Phase 4b Prompt E: Text blocks ×3, Tabs ×2, Portfolio ×3, Video ×3, Promotion ×3, Social ×2, Events ×2, Restaurant menu ×3, Coming soon ×4 (with countdown and email signup), Full page ×4 (complete one-page layouts combining existing designs).
@@ -477,7 +486,7 @@ Upgrade the domain settings page into a guided "Connect your domain" wizard:
 ```
 Add a "Have us connect it for you" option in the domain wizard:
 1. The client clicks it and sees provider-specific instructions for giving us SAFE delegated access (never their password): GoDaddy "Delegate Access", Namecheap "Share Access", Cloudflare "Invite member" with DNS-only permission, Squarespace "Add a domain manager", and for others "Add us as a user". Show our agency support email from agency_settings as the address to invite.
-2. Table domain_requests (migration 0009; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
+2. Table domain_requests (migration 0010; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
 3. Super admin dashboard: "Domain requests" list with status updates; the client sees the status on their domain page and gets an email when it is done.
 4. Never store registrar passwords or ask for them anywhere in the UI. Show a note: "We will never ask for your password."
 ```

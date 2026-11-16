@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   normalizeDesign,
+  safeHexColor,
   type BlockDesign,
   type DesignLevel,
   type NormalizedBackground,
@@ -132,12 +133,12 @@ export function SectionShell({
 
   const style: CSSProperties = {
     ...spacingVars(normalized),
-    ...(hasBackground ? { "--section-bg-override": "transparent" } : null),
+    ...(hasBackground ? { "--section-bg-override": "transparent", "--shell-design-bg": "transparent" } : null),
     ...(textScheme ? TEXT_SCHEMES[textScheme] : null),
     ...(border
       ? {
           border: border.width > 0 ? `${border.width}px solid ${border.color}` : undefined,
-          borderRadius: border.radius > 0 ? border.radius : undefined,
+          borderRadius: `var(--shell-radius, ${border.radius}px)`,
           overflow: border.radius > 0 ? "hidden" : undefined,
         }
       : null),
@@ -149,9 +150,29 @@ export function SectionShell({
         }
       : null),
   } as CSSProperties;
+  for (const [device, suffix] of Object.entries({ desktop: "d", tablet: "t", mobile: "m" }) as [keyof NonNullable<BlockDesign["appearance"]>, string][]) {
+    const appearance = design?.appearance?.[device];
+    if (!appearance) continue;
+    const vars = style as Record<string, string | number | undefined>;
+    const bg = safeHexColor(appearance.backgroundColor);
+    const color = safeHexColor(appearance.textColor);
+    if (bg) vars[`--appearance-bg-${suffix}`] = bg;
+    if (color) {
+      vars[`--appearance-text-${suffix}`] = color;
+      vars[`--appearance-muted-${suffix}`] = `color-mix(in srgb, ${color} 75%, transparent)`;
+    }
+    if (typeof appearance.borderRadius === "number" && Number.isFinite(appearance.borderRadius)) {
+      vars[`--appearance-radius-${suffix}`] = `${Math.max(0, Math.min(48, appearance.borderRadius))}px`;
+    }
+    if (appearance.align && ["left", "center", "right"].includes(appearance.align)) {
+      vars[`--appearance-align-${suffix}`] = appearance.align;
+      vars[`--appearance-justify-${suffix}`] = { left: "flex-start", center: "center", right: "flex-end" }[appearance.align];
+    }
+  }
 
   // Backgrounds/overlays need clipping even without a radius.
   if (hasBackground && style.overflow === undefined) style.overflow = "hidden";
+  if (design?.appearance && Object.values(design.appearance).some((value) => value?.borderRadius)) style.overflow = "hidden";
 
   const nested = level !== "section";
   const classes = [
@@ -170,10 +191,11 @@ export function SectionShell({
     .join(" ");
 
   return (
-    <div ref={setRef} id={anchorId ?? undefined} className={classes} style={style}>
+    <div ref={setRef} id={anchorId ?? undefined} className={`${classes} shell-responsive`} style={style}>
       {hasBackground ? (
         <SectionBackground background={background} isEditing={isEditing} />
       ) : null}
+      <div aria-hidden="true" className="shell-responsive-background" />
       <div className="relative shell-body">{children}</div>
     </div>
   );

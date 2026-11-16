@@ -324,6 +324,79 @@ body {
   animation: library-slide-in 180ms ease-out;
 }
 
+.shell-responsive {
+  --appearance-bg-d: initial;
+  --appearance-bg-t: initial;
+  --appearance-bg-m: initial;
+  --appearance-text-d: initial;
+  --appearance-text-t: initial;
+  --appearance-text-m: initial;
+  --appearance-muted-d: initial;
+  --appearance-muted-t: initial;
+  --appearance-muted-m: initial;
+  --appearance-radius-d: initial;
+  --appearance-radius-t: initial;
+  --appearance-radius-m: initial;
+  --appearance-align-d: initial;
+  --appearance-align-t: initial;
+  --appearance-align-m: initial;
+  --appearance-justify-d: initial;
+  --appearance-justify-t: initial;
+  --appearance-justify-m: initial;
+  --shell-design-bg: initial;
+  --appearance-original-text: var(--color-text);
+  --appearance-original-muted: var(--color-muted);
+  --shell-radius: var(--appearance-radius-d);
+  position: relative;
+  border-radius: var(--shell-radius);
+}
+.shell-responsive-background {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: var(--appearance-bg-d);
+  pointer-events: none;
+}
+.shell-responsive > .shell-body {
+  --section-bg-override: var(--appearance-bg-d, var(--shell-design-bg));
+  --color-text: var(--appearance-text-d, var(--appearance-original-text));
+  --color-muted: var(--appearance-muted-d, var(--appearance-original-muted));
+  --shell-text-override: var(--appearance-text-d);
+  --shell-muted-override: var(--appearance-muted-d);
+  --shell-align: var(--appearance-align-d);
+  --shell-justify: var(--appearance-justify-d);
+  color: var(--color-text);
+  text-align: var(--appearance-align-d);
+}
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .shell-responsive { --shell-radius: var(--appearance-radius-t, var(--appearance-radius-d)); }
+  .shell-responsive-background { background-color: var(--appearance-bg-t, var(--appearance-bg-d)); }
+  .shell-responsive > .shell-body {
+    --section-bg-override: var(--appearance-bg-t, var(--appearance-bg-d, var(--shell-design-bg)));
+    --color-text: var(--appearance-text-t, var(--appearance-text-d, var(--appearance-original-text)));
+    --color-muted: var(--appearance-muted-t, var(--appearance-muted-d, var(--appearance-original-muted)));
+    --shell-text-override: var(--appearance-text-t, var(--appearance-text-d));
+    --shell-muted-override: var(--appearance-muted-t, var(--appearance-muted-d));
+    --shell-align: var(--appearance-align-t, var(--appearance-align-d));
+    --shell-justify: var(--appearance-justify-t, var(--appearance-justify-d));
+    text-align: var(--appearance-align-t, var(--appearance-align-d));
+  }
+}
+@media (max-width: 767.98px) {
+  .shell-responsive { --shell-radius: var(--appearance-radius-m, var(--appearance-radius-d)); }
+  .shell-responsive-background { background-color: var(--appearance-bg-m, var(--appearance-bg-d)); }
+  .shell-responsive > .shell-body {
+    --section-bg-override: var(--appearance-bg-m, var(--appearance-bg-d, var(--shell-design-bg)));
+    --color-text: var(--appearance-text-m, var(--appearance-text-d, var(--appearance-original-text)));
+    --color-muted: var(--appearance-muted-m, var(--appearance-muted-d, var(--appearance-original-muted)));
+    --shell-text-override: var(--appearance-text-m, var(--appearance-text-d));
+    --shell-muted-override: var(--appearance-muted-m, var(--appearance-muted-d));
+    --shell-align: var(--appearance-align-m, var(--appearance-align-d));
+    --shell-justify: var(--appearance-justify-m, var(--appearance-justify-d));
+    text-align: var(--appearance-align-m, var(--appearance-align-d));
+  }
+}
+
 @keyframes library-slide-in {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }

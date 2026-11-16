@@ -3,6 +3,8 @@ import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { IconPickerField } from "@/components/editor/icon-picker-field";
 import { DesignField } from "@/components/editor/design-field";
+import { RichTextToolbar } from "@/components/editor/rich-text-toolbar";
+import { editorTextExtensions } from "./richtext-extensions";
 
 /**
  * Reusable image field for blocks. The field UI only ever renders inside
@@ -31,7 +33,7 @@ export function iconField(label: string): CustomField<string> {
 
 /**
  * Word-style body text field: editable directly on the canvas and in the
- * sidebar, with bold/italic/underline, links, lists, H2–H4 and alignment.
+ * sidebar, with formatting, links, lists, headings and alignment.
  * Values are HTML — always render them through <RichTextContent>, which
  * sanitizes (see lib/richtext.ts).
  */
@@ -41,14 +43,16 @@ export function richTextField(label: string): RichtextField {
     label,
     contentEditable: true,
     options: {
-      heading: { levels: [2, 3, 4] },
+      heading: { levels: [1, 2, 3, 4] },
       textAlign: { types: ["heading", "paragraph"] },
       // Keep the toolbar focused on safe, supported marks.
       code: false,
       codeBlock: false,
-      strike: false,
       horizontalRule: false,
     },
+    tiptap: { extensions: editorTextExtensions },
+    renderMenu: (props) => <RichTextToolbar {...props} />,
+    renderInlineMenu: (props) => <RichTextToolbar {...props} floating />,
   };
 }
 

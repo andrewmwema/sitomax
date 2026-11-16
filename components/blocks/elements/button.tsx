@@ -78,7 +78,7 @@ export const ButtonElement: ComponentConfig<ButtonElementProps> = {
   render: ({ label, href, newTab, variant, size, align, puck }) => {
     const full = align === "full";
     return (
-      <div className="flex" style={{ justifyContent: JUSTIFY[safeAlign(align)] }}>
+      <div className="flex" style={{ justifyContent: `var(--shell-justify, ${JUSTIFY[safeAlign(align)]})` }}>
         <Button
           href={safeHref(href)}
           newTab={newTab === true}

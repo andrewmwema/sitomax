@@ -5,7 +5,6 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -25,7 +24,6 @@ import {
   findUnreplacedPlaceholders,
   type PlaceholderHit,
 } from "@/lib/sections/placeholders";
-import { publishPage, savePageDraft } from "@/app/editor/[pageId]/actions";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
 import { ThemePanel } from "@/components/editor/theme-panel";
 import {
@@ -41,8 +39,14 @@ import {
 } from "@/components/editor/canvas-insert";
 import { SaveDesignDialog } from "@/components/editor/save-design-dialog";
 import { BlockThumbnail } from "@/components/editor/block-thumbnail";
-import type { SectionDesign } from "@/lib/sections/catalog";
+import type { SectionCategory, SectionDesign } from "@/lib/sections/catalog";
 import { SectionGhost } from "@/components/editor/section-ghost";
+import { InteractionContext, type InteractionUi, type EditorPageLink, type InspectorTab } from "./interaction-context";
+import type { DeviceId } from "@/lib/sections/design";
+import { EditorInspector } from "./editor-inspector";
+import { EditorInteractions, SelectionMenuButton } from "./editor-interactions";
+import { useDraftPersistence } from "./use-draft-persistence";
+import { EditorCommands, VersionHistory } from "./editor-commands";
 
 type EditorUi = {
   pageId: string;
@@ -72,24 +76,10 @@ const BLOCK_LABELS = Object.fromEntries(
 function HeaderActions() {
   const getPuck = useGetPuck();
   const { pageId, previewUrl, openThemePanel } = useEditorUi();
-  const [busy, setBusy] = useState<"save" | "publish" | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const persistence = useDraftPersistence(pageId);
+  const { busy } = persistence;
   const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
-  const messageTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const run = useCallback(
-    async (kind: "save" | "publish") => {
-      setBusy(kind);
-      const { appState } = getPuck();
-      const action = kind === "save" ? savePageDraft : publishPage;
-      const result = await action(pageId, appState.data);
-      setBusy(null);
-      setMessage(result.status === "idle" ? null : result.message);
-      if (messageTimeout.current) clearTimeout(messageTimeout.current);
-      messageTimeout.current = setTimeout(() => setMessage(null), 4000);
-    },
-    [getPuck, pageId],
-  );
+  const run = persistence.save;
 
   // Publishing first checks for leftover [placeholder] text in designs.
   const requestPublish = useCallback(() => {
@@ -117,8 +107,12 @@ function HeaderActions() {
     "rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:opacity-50";
 
   return (
-    <div data-editor-header-actions className="flex items-center gap-2">
-      {message ? <span className="text-xs text-zinc-500">{message}</span> : null}
+    <div data-editor-header-actions className="flex flex-wrap items-center justify-end gap-2">
+      <span role={persistence.error ? "alert" : "status"} className={`max-w-64 text-xs ${persistence.error ? "text-red-600" : "text-zinc-500"}`}>
+        {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
+      </span>
+      <EditorCommands persistence={persistence} onPublish={requestPublish} onTheme={openThemePanel} />
+      <VersionHistory persistence={persistence} />
       <button
         type="button"
         onClick={openThemePanel}
@@ -226,7 +220,7 @@ function EditorActionBar({
   parentAction: React.ReactNode;
   dragHandle?: React.ReactNode;
 }) {
-  const { openSaveDesign } = useSectionLibrary();
+  const { openSaveDesign, isSuperAdmin } = useSectionLibrary();
   const getPuck = useGetPuck();
   const zone = usePuckStore((s) => s.appState.ui.itemSelector?.zone);
   const selectedType = usePuckStore((s) => s.selectedItem?.type);
@@ -271,11 +265,12 @@ function EditorActionBar({
             <LayoutGrid size={16} />
           </ActionBar.Action>
         ) : null}
-        {topLevel ? (
+        {isSuperAdmin && topLevel ? (
           <ActionBar.Action label="Save as design" onClick={openSaveDesign}>
             <Bookmark size={16} />
           </ActionBar.Action>
         ) : null}
+        <SelectionMenuButton />
         {children}
       </ActionBar.Group>
       {dragHandle ? <ActionBar.Group>{dragHandle}</ActionBar.Group> : null}
@@ -299,22 +294,33 @@ export function PageEditor({
   initialData,
   previewUrl,
   isSuperAdmin,
+  userId,
+  sitePages,
 }: {
   page: { id: string; slug: string; title: string | null };
-  site: { id: string; name: string | null; subdomain: string; theme: SiteTheme | null };
+  site: { id: string; account_id: string; name: string | null; subdomain: string; theme: SiteTheme | null };
   initialData: Record<string, unknown>;
   previewUrl: string;
   isSuperAdmin: boolean;
+  userId: string;
+  sitePages: EditorPageLink[];
 }) {
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
   const [themePanelOpen, setThemePanelOpen] = useState(false);
-  const [library, setLibrary] = useState({ open: false, index: 0 });
+  const [library, setLibrary] = useState<SectionLibraryUi["library"]>({ open: false, index: 0 });
   const [preview, setPreview] = useState<SectionDesign | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const openLibrary = useCallback((index: number) => {
+  const openLibrary = useCallback((index: number, category?: SectionCategory) => {
     setPreview(null);
-    setLibrary({ open: true, index });
+    setLibrary({ open: true, index, category });
   }, []);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("content");
+  const [device, setDevice] = useState<DeviceId>("desktop");
+  const [menu, setMenu] = useState<InteractionUi["menu"]>(null);
+  const interactionUi = useMemo<InteractionUi>(() => ({
+    pageId: page.id, accountId: site.account_id, userId, pages: sitePages,
+    tab: inspectorTab, setTab: setInspectorTab, device, setDevice, menu, setMenu,
+  }), [page.id, site.account_id, userId, sitePages, inspectorTab, device, menu]);
   const closeLibrary = useCallback(() => {
     setPreview(null);
     setLibrary((previous) => ({ ...previous, open: false }));
@@ -351,6 +357,7 @@ export function PageEditor({
       headerActions: () => <HeaderActions />,
       actionBar: (props) => <EditorActionBar {...props} />,
       drawerItem: (props) => <EditorDrawerItem {...props} />,
+      fields: (props) => <EditorInspector {...props} />,
       preview: ({ children }) => (
         <>
           {children}
@@ -364,6 +371,7 @@ export function PageEditor({
           {children}
           <SectionLibraryPanel />
           <SaveDesignDialog />
+          <EditorInteractions />
         </>
       ),
     }),
@@ -390,7 +398,8 @@ export function PageEditor({
     <EditorSiteContext.Provider value={{ siteId: site.id }}>
       <EditorUiContext.Provider value={editorUi}>
         <SectionLibraryContext.Provider value={sectionLibraryUi}>
-          <div className="h-screen">
+          <InteractionContext.Provider value={interactionUi}>
+          <div className="h-screen pb-9">
             <Puck
               config={config}
               data={data}
@@ -400,6 +409,7 @@ export function PageEditor({
               headerPath={page.slug ? `/${page.slug}` : "/"}
             />
           </div>
+          </InteractionContext.Provider>
           <ThemePanel
             siteId={site.id}
             theme={theme}

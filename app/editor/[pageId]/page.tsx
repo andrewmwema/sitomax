@@ -27,6 +27,7 @@ export default function EditorPage({ params }: PageProps<"/editor/[pageId]">) {
 
 type EditorSite = {
   id: string;
+  account_id: string;
   name: string | null;
   subdomain: string;
   theme: SiteTheme | null;
@@ -44,7 +45,7 @@ async function EditorLoader({
     supabase
       .from("pages")
       .select(
-        "id, slug, title, draft_data, site:sites(id, name, subdomain, theme)",
+        "id, slug, title, draft_data, site:sites(id, account_id, name, subdomain, theme)",
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -62,6 +63,9 @@ async function EditorLoader({
 
   // supabase-js types to-one joins as arrays without generated DB types.
   const site = data.site as unknown as EditorSite;
+  const { data: sitePages, error: pagesError } = await supabase.from("pages")
+    .select("id, slug, title").eq("site_id", site.id).order("sort_order");
+  if (pagesError) throw new Error("Unable to load site pages", { cause: pagesError });
 
   // Preview always uses the subdomain URL: auth cookies are scoped to the
   // root domain, so they are sent to subdomains but never custom domains.
@@ -77,6 +81,8 @@ async function EditorLoader({
       initialData={data.draft_data as Record<string, unknown>}
       previewUrl={previewUrl}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
+      userId={user.id}
+      sitePages={sitePages ?? []}
     />
   );
 }

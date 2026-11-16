@@ -20,8 +20,8 @@ export const ROOT_ZONE = "root:default-zone";
 export type SectionLibraryUi = {
   isSuperAdmin: boolean;
   theme: SiteTheme;
-  library: { open: boolean; index: number };
-  openLibrary: (index: number) => void;
+  library: { open: boolean; index: number; category?: SectionCategory };
+  openLibrary: (index: number, category?: SectionCategory) => void;
   closeLibrary: () => void;
   preview: SectionDesign | null;
   setPreview: (design: SectionDesign | null) => void;
@@ -48,7 +48,7 @@ function LibraryContent() {
   const getPuck = useGetPuck();
   const panelRef = useRef<HTMLElement>(null);
   const [tab, setTab] = useState<"designed" | "saved">("designed");
-  const [category, setCategory] = useState<SectionCategory>("Hero");
+  const [category, setCategory] = useState<SectionCategory>(library.category ?? "Hero");
   const [savedDesigns, setSavedDesigns] = useState<SectionDesign[] | null>(null);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");

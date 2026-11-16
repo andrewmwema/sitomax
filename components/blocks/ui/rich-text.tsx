@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { RichText } from "@puckeditor/core";
 import { renderableRichText } from "@/lib/richtext";
+import { CURATED_FONT_NAMES, googleFontsUrl } from "@/lib/theme/fonts";
 
 /**
  * Renders a rich text field value.
@@ -23,12 +24,21 @@ export function RichTextContent({
   if (value == null) return null;
 
   if (typeof value === "string") {
+    const clean = renderableRichText(value);
+    const families = new Set(
+      [...clean.matchAll(/font-family:\s*(?:&quot;([^&]*)&quot;|([^;"&]+))/g)]
+        .map((match) => (match[1] ?? match[2]).trim()),
+    );
+    const fonts = CURATED_FONT_NAMES.filter((font) => families.has(font));
     return (
+      <>
+      {fonts.length ? <link rel="stylesheet" href={googleFontsUrl(fonts)} /> : null}
       <div
         className={`rich-text ${className}`}
         style={style}
-        dangerouslySetInnerHTML={{ __html: renderableRichText(value) }}
+        dangerouslySetInnerHTML={{ __html: clean }}
       />
+      </>
     );
   }
 

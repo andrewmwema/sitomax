@@ -16,9 +16,9 @@ const BACKGROUNDS: Record<SectionBackground, CSSProperties> = {
   },
   dark: {
     backgroundColor: "var(--section-bg-override, var(--color-dark-bg))",
-    color: "var(--color-bg)",
+    color: "var(--shell-text-override, var(--color-bg))",
     // Re-derive tints for light-on-dark content.
-    "--color-muted": "color-mix(in srgb, var(--color-bg) 72%, transparent)",
+    "--color-muted": "var(--shell-muted-override, color-mix(in srgb, var(--color-bg) 72%, transparent))",
     "--color-border": "color-mix(in srgb, var(--color-bg) 18%, transparent)",
     // Buttons on dark: accent primary (white if low contrast), white outline.
     "--btn-bg": "var(--color-cta-dark)",
@@ -27,8 +27,8 @@ const BACKGROUNDS: Record<SectionBackground, CSSProperties> = {
   } as CSSProperties,
   primary: {
     backgroundColor: "var(--section-bg-override, var(--color-primary))",
-    color: "var(--color-on-primary)",
-    "--color-muted": "color-mix(in srgb, var(--color-on-primary) 78%, transparent)",
+    color: "var(--shell-text-override, var(--color-on-primary))",
+    "--color-muted": "var(--shell-muted-override, color-mix(in srgb, var(--color-on-primary) 78%, transparent))",
     "--color-border": "color-mix(in srgb, var(--color-on-primary) 25%, transparent)",
     "--btn-bg": "var(--color-cta-primary)",
     "--btn-fg": "var(--color-on-cta-primary)",
