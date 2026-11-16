@@ -1,21 +1,20 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizePuckData } from "@/lib/richtext";
 import { puckConfig } from "@/lib/puck/config";
 import {
   SECTION_CATEGORIES,
+  sectionCategory,
   type SectionDesign,
 } from "@/lib/sections/catalog";
 import type { ActionState } from "@/lib/form-state";
 
 /**
  * Server Actions for the section design library (section_designs table).
- * Reading is open to any signed-in user (RLS enforces it too); writing
- * is super admin only, checked here before using the admin client.
+ * RLS limits reads and writes to the creator's private designs or the
+ * shared library. Only the agency may change global visibility.
  */
 
 type DesignRow = {
@@ -25,16 +24,17 @@ type DesignRow = {
   block_type: string;
   props: Record<string, unknown>;
   thumbnail_url: string | null;
+  is_global: boolean;
+  created_by: string | null;
 };
 
 /** Saved designs from the database, mapped to the catalog shape. */
 export async function listSavedDesigns(): Promise<SectionDesign[]> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const { data, error } = await supabase
     .from("section_designs")
-    .select("id, name, category, block_type, props, thumbnail_url")
-    .eq("is_global", true)
+    .select("id, name, category, block_type, props, thumbnail_url, is_global, created_by")
     .order("created_at", { ascending: false });
 
   if (error) throw new Error("Unable to load saved section designs", { cause: error });
@@ -43,49 +43,43 @@ export async function listSavedDesigns(): Promise<SectionDesign[]> {
     .filter(
       (row) =>
         row.block_type in puckConfig.components &&
-        (SECTION_CATEGORIES as readonly string[]).includes(row.category),
+        sectionCategory(row.category) !== null,
     )
     .map((row) => ({
       id: `saved-${row.id}`,
       blockType: row.block_type,
-      category: row.category as SectionDesign["category"],
+      category: sectionCategory(row.category)!,
       name: row.name,
       thumbnail: row.thumbnail_url,
       props: row.props ?? {},
       styles: ["classic", "modern"],
+      saved: { id: row.id, isGlobal: row.is_global, isOwner: row.created_by === user.id },
     }));
 }
-
-const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 
 const saveDesignSchema = z.object({
   name: z.string().trim().min(1).max(80),
   category: z.enum(SECTION_CATEGORIES),
   blockType: z.string().min(1).max(60),
   props: z.record(z.string(), z.unknown()),
-  /** PNG thumbnail as a data URL, captured client-side (≤ ~1.5MB). */
-  thumbnail: z
-    .string()
-    .startsWith(PNG_DATA_URL_PREFIX)
-    .max(2_000_000)
-    .optional(),
+  isGlobal: z.boolean().default(false),
 });
 
 async function isSuperAdmin(
   supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
   userId: string,
 ): Promise<boolean> {
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("is_super_admin")
     .eq("id", userId)
     .maybeSingle();
+  if (error) throw new Error("Unable to check agency permissions", { cause: error });
   return Boolean(profile?.is_super_admin);
 }
 
 /**
- * "Save as design" (super admin only): stores a section's props and its
- * screenshot thumbnail so the design shows up in everyone's gallery.
+ * Save a private section design, or share globally with agency permission.
  */
 export async function saveSectionDesign(input: unknown): Promise<ActionState> {
   const parsed = saveDesignSchema.safeParse(input);
@@ -94,11 +88,11 @@ export async function saveSectionDesign(input: unknown): Promise<ActionState> {
   }
 
   const { supabase, user } = await requireUser();
-  if (!(await isSuperAdmin(supabase, user.id))) {
-    return { status: "error", message: "Only the agency can save designs." };
+  if (parsed.data.isGlobal && !(await isSuperAdmin(supabase, user.id))) {
+    return { status: "error", message: "Only the agency can share designs globally." };
   }
 
-  const { name, category, blockType, props, thumbnail } = parsed.data;
+  const { name, category, blockType, props, isGlobal } = parsed.data;
 
   if (!(blockType in puckConfig.components)) {
     return { status: "error", message: "Unknown section type." };
@@ -113,36 +107,35 @@ export async function saveSectionDesign(input: unknown): Promise<ActionState> {
   const cleanProps: Record<string, unknown> = { ...sanitized.content[0].props };
   delete cleanProps.id; // Puck instance id — never part of a design.
 
-  const admin = createAdminClient();
-
-  let thumbnailUrl: string | null = null;
-  if (thumbnail) {
-    const bytes = Buffer.from(
-      thumbnail.slice(PNG_DATA_URL_PREFIX.length),
-      "base64",
-    );
-    const path = `section-designs/${randomUUID()}.png`;
-    const { error: uploadError } = await admin.storage
-      .from("site-assets")
-      .upload(path, bytes, { contentType: "image/png", cacheControl: "31536000" });
-    if (!uploadError) {
-      thumbnailUrl = admin.storage.from("site-assets").getPublicUrl(path).data
-        .publicUrl;
-    }
-  }
-
-  const { error } = await admin.from("section_designs").insert({
+  const { error } = await supabase.from("section_designs").insert({
     name,
     category,
     block_type: blockType,
     props: cleanProps,
-    thumbnail_url: thumbnailUrl,
     created_by: user.id,
-    is_global: true,
+    is_global: isGlobal,
   });
 
   if (error) {
+    console.error("Unable to save section design", error);
     return { status: "error", message: "Could not save the design." };
   }
+
   return { status: "success", message: `Design "${name}" saved.` };
+}
+
+export async function setDesignGlobal(input: unknown): Promise<ActionState> {
+  const parsed = z.object({ id: z.uuid(), isGlobal: z.boolean() }).safeParse(input);
+  if (!parsed.success) return { status: "error", message: "Invalid design data." };
+  const { supabase, user } = await requireUser();
+  if (!(await isSuperAdmin(supabase, user.id))) {
+    return { status: "error", message: "Only the agency can share designs globally." };
+  }
+  const { data, error } = await supabase.from("section_designs")
+    .update({ is_global: parsed.data.isGlobal }).eq("id", parsed.data.id).select("id").single();
+  if (error || !data) {
+    console.error("Unable to update design visibility", error);
+    return { status: "error", message: "Could not update design visibility." };
+  }
+  return { status: "success", message: "Design visibility updated." };
 }

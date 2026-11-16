@@ -220,6 +220,155 @@ body {
   }
 }
 
+/*
+ * Custom layout system (Section → Row → Column → Element) nests shells.
+ * Custom properties inherit, so every shell first resets the spacing
+ * variables; its own inline values (set by SectionShell) still win.
+ */
+.section-shell {
+  --shell-mt-d: initial; --shell-mr-d: initial; --shell-mb-d: initial; --shell-ml-d: initial;
+  --shell-pt-d: initial; --shell-pr-d: initial; --shell-pb-d: initial; --shell-pl-d: initial;
+  --shell-mt-t: initial; --shell-mr-t: initial; --shell-mb-t: initial; --shell-ml-t: initial;
+  --shell-pt-t: initial; --shell-pr-t: initial; --shell-pb-t: initial; --shell-pl-t: initial;
+  --shell-mt-m: initial; --shell-mr-m: initial; --shell-mb-m: initial; --shell-ml-m: initial;
+  --shell-pt-m: initial; --shell-pr-m: initial; --shell-pb-m: initial; --shell-pl-m: initial;
+}
+
+/* Rows, columns and elements apply vertical padding themselves. */
+.layout-shell {
+  min-width: 0;
+  padding-top: var(--section-pad-top, 0px);
+  padding-bottom: var(--section-pad-bottom, 0px);
+}
+
+.layout-section-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rows-gap, 48px);
+}
+
+/* Rows stack on mobile, 4-column rows go 2×2 on tablet. */
+.layout-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--row-gap, 32px);
+}
+
+@media (min-width: 768px) {
+  .layout-row {
+    grid-template-columns: var(--row-cols, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .layout-row-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767.98px) {
+  .layout-row-reverse {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+}
+
+/* Columns fill the row height so vertical alignment works. */
+.layout-shell-column,
+.layout-shell-column > .shell-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.layout-shell-column > .shell-body,
+.layout-column {
+  flex: 1 1 auto;
+}
+
+.layout-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--column-gap, 16px);
+  min-height: 1px;
+}
+
+/* Column "Card style": the same theme surface as designed sections' cards. */
+.layout-card {
+  padding: 24px;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--card-border, var(--color-border));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow, var(--shadow-card));
+}
+
+.layout-card-highlight {
+  border: 2px solid var(--color-primary);
+}
+
+.section-library-panel {
+  position: fixed;
+  z-index: 90;
+  top: var(--library-top, 72px);
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100vw);
+  background: white;
+  color: #18181b;
+  border-right: 1px solid #e4e4e7;
+  box-shadow: 12px 0 32px rgb(0 0 0 / 8%);
+  outline: none;
+  animation: library-slide-in 180ms ease-out;
+}
+
+@keyframes library-slide-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-library-panel { animation: none; }
+}
+
+@media (min-width: 640px) {
+  .layout-card {
+    padding: 28px;
+  }
+}
+
+/* Text elements fill their column (no 65ch cap) and take a chosen color. */
+.rich-text.layout-text {
+  max-width: none;
+}
+
+.rich-text.layout-text p,
+.rich-text.layout-text li {
+  color: var(--layout-text-color, var(--color-muted, inherit));
+}
+
+.layout-spacer {
+  height: var(--spacer-height-mobile, 24px);
+}
+
+@media (min-width: 768px) {
+  .layout-spacer {
+    height: var(--spacer-height, 48px);
+  }
+}
+
+/* Spacers are invisible on the site; show their extent while editing. */
+.layout-spacer-editing {
+  min-height: 8px;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--color-primary) 10%, transparent) 6px 12px
+  );
+}
+
 /* After the media queries so the centering always wins over margins. */
 .section-shell-contained {
   max-width: var(--container, 1200px);

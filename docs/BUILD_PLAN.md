@@ -293,6 +293,23 @@ Read .github/copilot-instructions.md. Add a flexible layout system using Puck sl
 5. Guardrails so clients can't make sites look broken: spacing values snap to a scale (0, 4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 128), font sizes come from the type scale (with "custom" allowed), fonts limited to a curated list of ~25 good Google Fonts, and colors default to the theme palette.
 ```
 
+Implemented. Layout blocks live in `components/blocks/layout/` (Section, Row, and the
+internal Column, which is created by Row and can't be dragged or deleted on its own;
+columns have a theme-aware "Card style" of None, Card or Highlighted).
+Each element has its own file in `components/blocks/elements/`. All of them are
+inline Puck blocks, so the editor and the public site render the same DOM. The
+guardrails live in `lib/layout/` (spacing scale, type scale with a clamped custom
+size, 25 curated Google Fonts, and theme colors with a validated hex fallback).
+"Blank" in the section library offers the six row presets. "Convert to custom
+layout" in the action bar converts every designed section except Navigation and
+Spacer. Embed is hidden and locked for clients in the editor, checked again in
+`updatePage`, and enforced in Postgres by migration
+`0007_layout_embeds.sql` (run it by hand). Clients may keep, move or delete
+embeds the agency placed, but can't add or change embed code. That also means a
+client can't insert a saved design that contains an embed unless the same code is
+already on the page. Embed code renders only in an iframe with
+`sandbox="allow-scripts"` (never `allow-same-origin`).
+
 **Prompt B: section library panel**
 ```
 Replace the "Add section" modal with a docked section library panel (left side, slides in over the block list):
@@ -303,6 +320,26 @@ Replace the "Add section" modal with a docked section library panel (left side, 
 5. Search box and a grid/list toggle.
 6. Insertion point: a slim "+" button appears between sections on hover; the panel inserts there.
 ```
+
+Implemented in `components/editor/section-library.tsx`. The non-modal dock slides
+over the block list, with category counts, Designed/Saved tabs, search and
+grid/list views. Empty categories remain visible for future catalog additions;
+legacy Services, Text and Process categories remain readable. Text & Image also
+shows the existing About image/text designs.
+
+Every thumbnail renders live at 1280px in the current theme and style, including
+saved designs with legacy screenshots. Iframes are lazy-mounted near the scroll
+viewport and sandboxed without scripts; zoom shows the full-height design.
+`section-ghost.tsx` inserts an inert preview into the canvas DOM at the chosen
+boundary without touching page data or history. Escape cancels from either the
+panel or canvas; within zoom it closes only the large preview. A committed insert
+creates one undo entry and re-keys nested layout slots to avoid duplicate IDs.
+
+All signed-in users can save private designs; Saved shows the current user's
+designs. Only the agency can share/unshare globally. Run
+`supabase/migrations/0008_saved_design_visibility.sql` by hand to enable the
+creator/global RLS policies (existing shared designs stay global). Design saves
+now store content only; screenshot capture/upload is no longer needed.
 
 **Prompt C: text toolbar, context menu and selection**
 ```
@@ -440,7 +477,7 @@ Upgrade the domain settings page into a guided "Connect your domain" wizard:
 ```
 Add a "Have us connect it for you" option in the domain wizard:
 1. The client clicks it and sees provider-specific instructions for giving us SAFE delegated access (never their password): GoDaddy "Delegate Access", Namecheap "Share Access", Cloudflare "Invite member" with DNS-only permission, Squarespace "Add a domain manager", and for others "Add us as a user". Show our agency support email from agency_settings as the address to invite.
-2. Table domain_requests (migration 0007; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
+2. Table domain_requests (migration 0009; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
 3. Super admin dashboard: "Domain requests" list with status updates; the client sees the status on their domain page and gets an email when it is done.
 4. Never store registrar passwords or ask for them anywhere in the UI. Show a note: "We will never ask for your password."
 ```

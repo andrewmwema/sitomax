@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -10,6 +11,7 @@ import {
 import {
   normalizeDesign,
   type BlockDesign,
+  type DesignLevel,
   type NormalizedBackground,
   type NormalizedDesign,
 } from "@/lib/sections/design";
@@ -61,10 +63,16 @@ const SLIDER_INTERVAL_MS = 6000;
 export function SectionShell({
   design,
   isEditing = false,
+  level = "section",
+  dragRef,
   children,
 }: {
   design?: BlockDesign;
   isEditing?: boolean;
+  /** Rows, columns and elements of the custom layout system nest shells. */
+  level?: DesignLevel;
+  /** Puck's drag handle ref for `inline` components (layout system). */
+  dragRef?: ((element: Element | null) => void) | null;
   children: ReactNode;
 }) {
   const normalized = normalizeDesign(design);
@@ -83,6 +91,13 @@ export function SectionShell({
   const animated = animation !== null && !isEditing;
 
   const ref = useRef<HTMLDivElement>(null);
+  const setRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      ref.current = element;
+      dragRef?.(element);
+    },
+    [dragRef],
+  );
   // false = visible. Set only by the IntersectionObserver so content is
   // always visible without JavaScript and in the editor.
   const [animHidden, setAnimHidden] = useState(false);
@@ -138,9 +153,11 @@ export function SectionShell({
   // Backgrounds/overlays need clipping even without a radius.
   if (hasBackground && style.overflow === undefined) style.overflow = "hidden";
 
+  const nested = level !== "section";
   const classes = [
     "section-shell",
-    fullBleed ? "" : "section-shell-contained",
+    nested ? `layout-shell layout-shell-${level}` : "",
+    fullBleed || nested ? "" : "section-shell-contained",
     // In the editor, "hidden" sections stay visible but dimmed so they
     // can still be selected and edited.
     hide.mobile ? (isEditing ? "max-md:opacity-40" : "max-md:hidden") : "",
@@ -153,11 +170,11 @@ export function SectionShell({
     .join(" ");
 
   return (
-    <div ref={ref} id={anchorId ?? undefined} className={classes} style={style}>
+    <div ref={setRef} id={anchorId ?? undefined} className={classes} style={style}>
       {hasBackground ? (
         <SectionBackground background={background} isEditing={isEditing} />
       ) : null}
-      <div className="relative">{children}</div>
+      <div className="relative shell-body">{children}</div>
     </div>
   );
 }

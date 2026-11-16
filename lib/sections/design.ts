@@ -1,4 +1,5 @@
 import { contrastRatio } from "@/lib/theme/presets";
+import { snapSpacing } from "@/lib/layout/spacing";
 
 /**
  * The "design" object every block carries (SectionShell controls).
@@ -9,6 +10,13 @@ import { contrastRatio } from "@/lib/theme/presets";
  */
 
 export type DeviceId = "desktop" | "tablet" | "mobile";
+
+/**
+ * Where a design object lives. Designed blocks and layout Sections get
+ * every control; rows, columns and elements get Style / Animation /
+ * Spacing (no section settings, and no video backgrounds).
+ */
+export type DesignLevel = "section" | "row" | "column" | "element";
 
 export type SpacingBox = {
   marginTop?: number;
@@ -122,13 +130,14 @@ export function safeUploadedVideoUrl(value: unknown): string | null {
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{6,20}$/;
 const VIMEO_ID = /^\d{6,12}$/;
 
+type ParsedVideo = { provider: "youtube" | "vimeo"; videoId: string };
+
 /**
- * SECURITY: converts a user-pasted video URL into a privacy-friendly
- * embed URL. Only youtube.com / youtu.be / vimeo.com are accepted —
- * YouTube renders via youtube-nocookie.com, Vimeo with dnt=1. Anything
- * else (javascript:, data:, other hosts) returns null.
+ * SECURITY: parses a user-pasted video URL. Only youtube.com / youtu.be /
+ * vimeo.com (and their embed hosts) with well-formed ids are accepted;
+ * anything else (javascript:, data:, other hosts) returns null.
  */
-export function videoEmbedUrl(raw: unknown): string | null {
+function parseVideoUrl(raw: unknown): ParsedVideo | null {
   if (typeof raw !== "string" || raw.length > 500) return null;
   let url: URL;
   try {
@@ -165,9 +174,21 @@ export function videoEmbedUrl(raw: unknown): string | null {
   }
 
   if (!provider || !videoId) return null;
+  if (provider === "youtube" && !YOUTUBE_ID.test(videoId)) return null;
+  if (provider === "vimeo" && !VIMEO_ID.test(videoId)) return null;
+  return { provider, videoId };
+}
+
+/**
+ * Background-video embed URL (autoplay, muted, looping, no controls).
+ * YouTube renders via youtube-nocookie.com, Vimeo with dnt=1.
+ */
+export function videoEmbedUrl(raw: unknown): string | null {
+  const video = parseVideoUrl(raw);
+  if (!video) return null;
+  const { provider, videoId } = video;
 
   if (provider === "youtube") {
-    if (!YOUTUBE_ID.test(videoId)) return null;
     const params = new URLSearchParams({
       autoplay: "1",
       mute: "1",
@@ -181,7 +202,6 @@ export function videoEmbedUrl(raw: unknown): string | null {
     return `https://www.youtube-nocookie.com/embed/${videoId}?${params}`;
   }
 
-  if (!VIMEO_ID.test(videoId)) return null;
   const params = new URLSearchParams({
     background: "1",
     autoplay: "1",
@@ -189,6 +209,32 @@ export function videoEmbedUrl(raw: unknown): string | null {
     loop: "1",
     dnt: "1",
   });
+  return `https://player.vimeo.com/video/${videoId}?${params}`;
+}
+
+/** Regular player embed URL (with controls) for the Video element. */
+export function videoPlayerUrl(
+  raw: unknown,
+  options: { autoplay?: boolean } = {},
+): string | null {
+  const video = parseVideoUrl(raw);
+  if (!video) return null;
+  const { provider, videoId } = video;
+
+  if (provider === "youtube") {
+    const params = new URLSearchParams({ rel: "0", playsinline: "1" });
+    // Browsers only allow muted autoplay.
+    if (options.autoplay) {
+      params.set("autoplay", "1");
+      params.set("mute", "1");
+    }
+    return `https://www.youtube-nocookie.com/embed/${videoId}?${params}`;
+  }
+  const params = new URLSearchParams({ dnt: "1" });
+  if (options.autoplay) {
+    params.set("autoplay", "1");
+    params.set("muted", "1");
+  }
   return `https://player.vimeo.com/video/${videoId}?${params}`;
 }
 
@@ -284,8 +330,9 @@ function normalizeSpacingBox(box: unknown): SpacingBox | undefined {
     "paddingBottom",
     "paddingLeft",
   ] as const) {
-    const value = clamp(source[key], 0, 400);
-    if (value !== null) result[key] = value;
+    // Guardrail: every value snaps to the spacing scale (0–128px).
+    const raw = source[key];
+    if (typeof raw === "number" && Number.isFinite(raw)) result[key] = snapSpacing(raw);
   }
   return Object.keys(result).length > 0 ? result : undefined;
 }

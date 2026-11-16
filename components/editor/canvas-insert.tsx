@@ -125,7 +125,7 @@ export function CanvasInsertZones() {
  * focus, and hides HIDE_DELAY_MS after the pointer leaves.
  */
 function InsertZone({ y, insertIndex }: { y: number; insertIndex: number }) {
-  const { openLibrary } = useSectionLibrary();
+  const { openLibrary, library } = useSectionLibrary();
   const zoneRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Local to this zone only: toggling it re-renders just this pill.
@@ -184,7 +184,7 @@ function InsertZone({ y, insertIndex }: { y: number; insertIndex: number }) {
     >
       <div
         className={`transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 ${
-          show ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+          show || (library.open && library.index === insertIndex) ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
         <AddSectionPill onClick={() => openLibrary(insertIndex)} small />
@@ -199,7 +199,7 @@ export function AddSectionEndBar() {
   const count = usePuckStore((s) => s.appState.data.content.length);
 
   return (
-    <div className="flex justify-center py-5">
+    <div data-section-end-bar className="flex justify-center py-5">
       <AddSectionPill onClick={() => openLibrary(count)}>
         {count === 0 ? "Add your first section" : "Add section"}
       </AddSectionPill>
@@ -231,7 +231,7 @@ function AddSectionPill({
       <span aria-hidden="true" className="text-base leading-none">
         +
       </span>
-      {children ?? "Add section"}
+      {children ?? <span className="sr-only">Add section</span>}
     </button>
   );
 }

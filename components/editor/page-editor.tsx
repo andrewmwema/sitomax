@@ -11,12 +11,15 @@ import {
 import {
   ActionBar,
   Puck,
+  createUsePuck,
   useGetPuck,
   type Data,
   type Overrides,
 } from "@puckeditor/core";
-import { Bookmark, TriangleAlert } from "lucide-react";
+import { Bookmark, LayoutGrid, TriangleAlert } from "lucide-react";
 import { puckConfig } from "@/lib/puck/config";
+import { editorConfig } from "@/lib/puck/editor-config";
+import { canConvertToLayout, convertToLayout } from "@/lib/layout/convert";
 import type { SiteTheme } from "@/lib/theme/presets";
 import {
   findUnreplacedPlaceholders,
@@ -28,7 +31,7 @@ import { ThemePanel } from "@/components/editor/theme-panel";
 import {
   ROOT_ZONE,
   SectionLibraryContext,
-  SectionLibraryModal,
+  SectionLibraryPanel,
   useSectionLibrary,
   type SectionLibraryUi,
 } from "@/components/editor/section-library";
@@ -38,6 +41,8 @@ import {
 } from "@/components/editor/canvas-insert";
 import { SaveDesignDialog } from "@/components/editor/save-design-dialog";
 import { BlockThumbnail } from "@/components/editor/block-thumbnail";
+import type { SectionDesign } from "@/lib/sections/catalog";
+import { SectionGhost } from "@/components/editor/section-ghost";
 
 type EditorUi = {
   pageId: string;
@@ -52,6 +57,8 @@ function useEditorUi(): EditorUi {
   if (!context) throw new Error("EditorUiContext missing");
   return context;
 }
+
+const usePuckStore = createUsePuck();
 
 /** Labels for the placeholder warning, from the block config. */
 const BLOCK_LABELS = Object.fromEntries(
@@ -110,7 +117,7 @@ function HeaderActions() {
     "rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:opacity-50";
 
   return (
-    <div className="flex items-center gap-2">
+    <div data-editor-header-actions className="flex items-center gap-2">
       {message ? <span className="text-xs text-zinc-500">{message}</span> : null}
       <button
         type="button"
@@ -204,8 +211,9 @@ function HeaderActions() {
 }
 
 /**
- * Action bar override: replicates Puck's default layout and adds the
- * super-admin-only "Save as design" action.
+ * Action bar override: replicates Puck's default layout and adds, for
+ * top-level sections, "Convert to custom layout" (designed blocks) and
+ * the "Save as design" action.
  */
 function EditorActionBar({
   label,
@@ -218,7 +226,39 @@ function EditorActionBar({
   parentAction: React.ReactNode;
   dragHandle?: React.ReactNode;
 }) {
-  const { isSuperAdmin, openSaveDesign } = useSectionLibrary();
+  const { openSaveDesign } = useSectionLibrary();
+  const getPuck = useGetPuck();
+  const zone = usePuckStore((s) => s.appState.ui.itemSelector?.zone);
+  const selectedType = usePuckStore((s) => s.selectedItem?.type);
+  const topLevel = !zone || zone === ROOT_ZONE;
+
+  const convert = useCallback(() => {
+    const { appState, selectedItem, config, dispatch } = getPuck();
+    const selector = appState.ui.itemSelector;
+    if (!selector || !selectedItem) return;
+    const label = config.components[selectedItem.type]?.label ?? selectedItem.type;
+    const ok = window.confirm(
+      `Convert this ${label} into a custom layout? You'll be able to move, add and remove ` +
+        "its elements freely. Undo restores the original section.",
+    );
+    if (!ok) return;
+    const converted = convertToLayout(
+      selectedItem as { type: string; props: Record<string, unknown> },
+      (type) => config.components[type]?.defaultProps as Record<string, unknown> | undefined,
+    );
+    if (!converted) return;
+    dispatch({
+      type: "replace",
+      destinationIndex: selector.index,
+      destinationZone: ROOT_ZONE,
+      data: converted,
+    });
+    dispatch({
+      type: "setUi",
+      ui: { itemSelector: { index: selector.index, zone: ROOT_ZONE } },
+    });
+  }, [getPuck]);
+
   return (
     <ActionBar>
       <ActionBar.Group>
@@ -226,7 +266,12 @@ function EditorActionBar({
         {label ? <ActionBar.Label label={label} /> : null}
       </ActionBar.Group>
       <ActionBar.Group>
-        {isSuperAdmin ? (
+        {topLevel && canConvertToLayout(selectedType) ? (
+          <ActionBar.Action label="Convert to custom layout" onClick={convert}>
+            <LayoutGrid size={16} />
+          </ActionBar.Action>
+        ) : null}
+        {topLevel ? (
           <ActionBar.Action label="Save as design" onClick={openSaveDesign}>
             <Bookmark size={16} />
           </ActionBar.Action>
@@ -264,7 +309,16 @@ export function PageEditor({
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
   const [themePanelOpen, setThemePanelOpen] = useState(false);
   const [library, setLibrary] = useState({ open: false, index: 0 });
+  const [preview, setPreview] = useState<SectionDesign | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const openLibrary = useCallback((index: number) => {
+    setPreview(null);
+    setLibrary({ open: true, index });
+  }, []);
+  const closeLibrary = useCallback(() => {
+    setPreview(null);
+    setLibrary((previous) => ({ ...previous, open: false }));
+  }, []);
 
   const editorUi = useMemo<EditorUi>(
     () => ({
@@ -280,13 +334,15 @@ export function PageEditor({
       isSuperAdmin,
       theme,
       library,
-      openLibrary: (index: number) => setLibrary({ open: true, index }),
-      closeLibrary: () => setLibrary((prev) => ({ ...prev, open: false })),
+      openLibrary,
+      closeLibrary,
+      preview,
+      setPreview,
       saveDialogOpen,
       openSaveDesign: () => setSaveDialogOpen(true),
       closeSaveDesign: () => setSaveDialogOpen(false),
     }),
-    [isSuperAdmin, theme, library, saveDialogOpen],
+    [isSuperAdmin, theme, library, saveDialogOpen, openLibrary, closeLibrary, preview],
   );
 
   // Stable overrides (Puck requirement); components read React context.
@@ -300,18 +356,21 @@ export function PageEditor({
           {children}
           <CanvasInsertZones />
           <AddSectionEndBar />
+          <SectionGhost />
         </>
       ),
       puck: ({ children }) => (
         <>
           {children}
-          <SectionLibraryModal />
+          <SectionLibraryPanel />
           <SaveDesignDialog />
         </>
       ),
     }),
     [],
   );
+
+  const config = useMemo(() => editorConfig(isSuperAdmin), [isSuperAdmin]);
 
   const data = useMemo<Data>(() => {
     const raw = (initialData ?? {}) as Partial<Data>;
@@ -333,7 +392,7 @@ export function PageEditor({
         <SectionLibraryContext.Provider value={sectionLibraryUi}>
           <div className="h-screen">
             <Puck
-              config={puckConfig}
+              config={config}
               data={data}
               metadata={{ theme }}
               overrides={overrides}

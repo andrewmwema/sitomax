@@ -25,23 +25,42 @@ import type { AnimationType, BlockDesign } from "@/lib/sections/design";
 
 export const SECTION_CATEGORIES = [
   "Hero",
-  "Features/Services",
+  "Services",
   "About",
-  "Text",
+  "Text & Image",
+  "Text blocks",
   "Stats",
-  "Process",
+  "Logos",
+  "Team",
   "Testimonials",
   "Pricing",
-  "Team",
-  "Gallery",
-  "Logos",
   "FAQ",
   "Call to action",
   "Contact",
+  "Gallery",
+  "Portfolio",
+  "Video",
+  "Tabs",
+  "Promotion",
+  "Social",
+  "Events",
+  "Restaurant menu",
+  "Coming soon",
+  "Full page",
   "Footer",
+  "Blank",
 ] as const;
 
 export type SectionCategory = (typeof SECTION_CATEGORIES)[number];
+
+/** Old saved designs keep working without rewriting their stored categories. */
+export function sectionCategory(value: string): SectionCategory | null {
+  if (value === "Features/Services" || value === "Process") return "Services";
+  if (value === "Text") return "Text blocks";
+  return (SECTION_CATEGORIES as readonly string[]).includes(value)
+    ? value as SectionCategory
+    : null;
+}
 
 export type SiteStyle = "classic" | "modern";
 
@@ -51,7 +70,7 @@ export type SectionDesign = {
   blockType: string;
   category: SectionCategory;
   name: string;
-  /** Static thumbnail URL; null = render a live preview (1280px, scaled). */
+  /** Legacy screenshot metadata; the editor always renders a themed live preview. */
   thumbnail: string | null;
   /**
    * Complete preset props for the block. Once the SectionShell design
@@ -61,6 +80,7 @@ export type SectionDesign = {
   props: Record<string, unknown>;
   /** Site styles this design looks good in. */
   styles: SiteStyle[];
+  saved?: { id: string; isGlobal: boolean; isOwner: boolean };
 };
 
 type BlockPropsMap = {
@@ -91,7 +111,7 @@ type BlockPropsMap = {
 function design<T extends keyof BlockPropsMap>(entry: {
   id: string;
   blockType: T;
-  category: SectionCategory;
+  category: SectionCategory | "Features/Services" | "Process" | "Text";
   name: string;
   props: Partial<BlockPropsMap[T]>;
   thumbnail?: string | null;
@@ -101,6 +121,7 @@ function design<T extends keyof BlockPropsMap>(entry: {
     thumbnail: entry.thumbnail ?? null,
     styles: entry.styles ?? ["classic", "modern"],
     ...entry,
+    category: sectionCategory(entry.category)!,
     props: entry.props as unknown as Record<string, unknown>,
   };
 }
@@ -1295,7 +1316,8 @@ export function designsForCategory(
   designs: SectionDesign[],
   category: SectionCategory,
 ): SectionDesign[] {
-  return designs.filter((entry) => entry.category === category);
+  return designs.filter((entry) => entry.category === category ||
+    (category === "Text & Image" && entry.blockType === "ImageWithText"));
 }
 
 export function searchSectionDesigns(designs: SectionDesign[], query: string): SectionDesign[] {

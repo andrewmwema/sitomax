@@ -5,6 +5,11 @@ import { requireUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/form-state";
 import { sanitizePuckData } from "@/lib/richtext";
 import { themeSchema } from "@/lib/theme/schema";
+import {
+  EMBED_MAX_LENGTH,
+  collectEmbeds,
+  hasUnauthorizedEmbeds,
+} from "@/lib/layout/embed";
 
 /**
  * Editor Server Actions. All queries run with the user-scoped client, so
@@ -45,16 +50,40 @@ async function updatePage(
     return { status: "error", message: "Invalid page data." };
   }
 
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const { data: page } = await supabase
     .from("pages")
-    .select("id, title, seo")
+    .select("id, title, seo, draft_data, published_data")
     .eq("id", parsedId.data)
     .maybeSingle();
 
   if (!page) {
     return { status: "error", message: "You do not have access to this page." };
+  }
+
+  const embeds = collectEmbeds(parsedData.data);
+  if (embeds.length > 0) {
+    const tooLong = embeds.some((embed) => {
+      const code = (embed.props as Record<string, unknown> | undefined)?.code;
+      return typeof code === "string" && code.length > EMBED_MAX_LENGTH;
+    });
+    if (tooLong) {
+      return { status: "error", message: "Embed code is too long." };
+    }
+    // Embed code is agency-only (see lib/layout/embed.ts); the database
+    // trigger guard_page_embeds enforces the same rule.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_super_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (
+      !profile?.is_super_admin &&
+      hasUnauthorizedEmbeds(parsedData.data, [page.draft_data, page.published_data])
+    ) {
+      return { status: "error", message: "Only your agency can add or change embed code." };
+    }
   }
 
   const root = rootProps(parsedData.data);

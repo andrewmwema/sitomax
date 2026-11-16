@@ -20,7 +20,8 @@ export type PlaceholderHit = {
 const PLACEHOLDER = /\[[^\[\]]+\]|\{\{[^{}]+\}\}/g;
 
 /** Props that never hold user-facing copy. */
-const SKIP_KEYS = new Set(["design", "id"]);
+// "code": Embed HTML/JS legitimately contains [brackets].
+const SKIP_KEYS = new Set(["design", "id", "code"]);
 
 function collectStrings(value: unknown, out: string[]): void {
   if (typeof value === "string") {

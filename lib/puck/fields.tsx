@@ -1,5 +1,5 @@
 import type { CustomField, RichtextField } from "@puckeditor/core";
-import type { BlockDesign } from "@/lib/sections/design";
+import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { IconPickerField } from "@/components/editor/icon-picker-field";
 import { DesignField } from "@/components/editor/design-field";
@@ -54,15 +54,16 @@ export function richTextField(label: string): RichtextField {
 
 /**
  * Shared "design" object for every block (SectionShell): Settings /
- * Style / Animation / Spacing tabs in the right-hand panel. Values are
+ * Style / Animation / Spacing tabs in the right-hand panel (rows,
+ * columns and elements get Style / Animation / Spacing). Values are
  * validated again at render time (lib/sections/design.ts).
  */
-export function designField(): CustomField<BlockDesign | undefined> {
+export function designField(level: DesignLevel = "section"): CustomField<BlockDesign | undefined> {
   return {
     type: "custom",
     label: "Design",
     render: ({ value, onChange, readOnly }) => (
-      <DesignField value={value} onChange={onChange} readOnly={readOnly} />
+      <DesignField value={value} onChange={onChange} readOnly={readOnly} level={level} />
     ),
   };
 }

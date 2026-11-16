@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { puckConfig } from "@/lib/puck/config";
+import { isLayoutOrElementType } from "@/lib/layout/structure";
 import { normalizeDesign, type BlockDesign } from "@/lib/sections/design";
 import { SECTION_CATEGORIES, sectionCatalog, searchSectionDesigns } from "./catalog";
 
@@ -32,8 +33,10 @@ describe("section catalog", () => {
     }
   });
 
-  it("every block exposes a variant field so designs can switch layout", () => {
+  it("every designed block exposes a variant field so designs can switch layout", () => {
     for (const [type, component] of Object.entries(puckConfig.components)) {
+      // Custom-layout blocks are composed freely instead of using variants.
+      if (isLayoutOrElementType(type)) continue;
       expect(component.fields, `${type} is missing a variant field`).toHaveProperty(
         "variant",
       );

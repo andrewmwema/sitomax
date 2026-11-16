@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useGetPuck } from "@puckeditor/core";
-import { toPng } from "html-to-image";
 import {
   SECTION_CATEGORIES,
   type SectionCategory,
@@ -13,14 +12,14 @@ import { useSectionLibrary } from "@/components/editor/section-library";
 /** Best-guess category per block type, editable in the dialog. */
 const DEFAULT_CATEGORY: Record<string, SectionCategory> = {
   Hero: "Hero",
-  Services: "Features/Services",
+  Services: "Services",
   Stats: "Stats",
-  TextSection: "Text",
+  TextSection: "Text blocks",
   ImageWithText: "About",
   Testimonials: "Testimonials",
   Logos: "Logos",
   Team: "Team",
-  Process: "Process",
+  Process: "Services",
   Pricing: "Pricing",
   Gallery: "Gallery",
   Faq: "FAQ",
@@ -31,68 +30,8 @@ const DEFAULT_CATEGORY: Record<string, SectionCategory> = {
   Navigation: "Hero",
 };
 
-/** Max PNG data-URL size accepted by the server action (see zod schema). */
-const MAX_THUMBNAIL_BYTES = 1_900_000;
-
-/** Finds the section's DOM node inside Puck's preview iframe. */
-function findComponentNode(componentId: string): HTMLElement | null {
-  const iframe = document.querySelector<HTMLIFrameElement>(
-    "iframe#preview-frame",
-  );
-  return (
-    iframe?.contentDocument?.querySelector<HTMLElement>(
-      `[data-puck-component="${CSS.escape(componentId)}"]`,
-    ) ?? null
-  );
-}
-
-async function embeddedFontCss(doc: Document): Promise<string> {
-  const links = [...doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
-    .filter((link) => link.href.startsWith("https://fonts.googleapis.com/css2?"));
-  const sheets = await Promise.all(links.map(async (link) => {
-    const response = await fetch(link.href);
-    if (!response.ok) throw new Error("Unable to load font stylesheet");
-    const css = await response.text();
-    const urls = [...new Set([...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map((match) => match[1]))];
-    const embedded = await Promise.all(urls.map(async (url) => {
-      const fontResponse = await fetch(url);
-      if (!fontResponse.ok) throw new Error("Unable to load font");
-      const blob = await fontResponse.blob();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Invalid font data"));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(blob);
-      });
-      return [url, dataUrl] as const;
-    }));
-    return embedded.reduce((result, [url, dataUrl]) => result.replaceAll(url, dataUrl), css);
-  }));
-  return sheets.join("\n");
-}
-
-/** Screenshot the section; a failed capture never blocks the save. */
-async function captureThumbnail(componentId: string): Promise<string | undefined> {
-  const node = findComponentNode(componentId);
-  if (!node || node.offsetWidth === 0) return undefined;
-  try {
-    const dataUrl = await toPng(node, {
-      canvasWidth: 640,
-      canvasHeight: Math.round((640 * node.offsetHeight) / node.offsetWidth),
-      pixelRatio: 1,
-      backgroundColor: "#ffffff",
-      fontEmbedCSS: await embeddedFontCss(node.ownerDocument),
-    });
-    return dataUrl.length <= MAX_THUMBNAIL_BYTES ? dataUrl : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
- * Super-admin dialog behind the "Save as design" action: names and
- * categorizes the selected section, captures a screenshot thumbnail and
- * stores everything in section_designs for the shared gallery.
+ * Names and categorizes a reusable section. Thumbnails render live.
  */
 export function SaveDesignDialog() {
   const { saveDialogOpen } = useSectionLibrary();
@@ -102,7 +41,7 @@ export function SaveDesignDialog() {
 }
 
 function SaveDesignDialogContent() {
-  const { closeSaveDesign } = useSectionLibrary();
+  const { closeSaveDesign, isSuperAdmin } = useSectionLibrary();
   const getPuck = useGetPuck();
 
   // Snapshot of the selected section, taken once when the dialog opens.
@@ -127,25 +66,24 @@ function SaveDesignDialogContent() {
     item ? (DEFAULT_CATEGORY[item.type] ?? "Hero") : "Hero",
   );
   const [busy, setBusy] = useState(false);
+  const [isGlobal, setIsGlobal] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const save = async () => {
     if (!item || busy) return;
     setBusy(true);
     setMessage(null);
-    const thumbnail = await captureThumbnail(item.id);
-    const result = await saveSectionDesign({
-      name,
-      category,
-      blockType: item.type,
-      props: item.props,
-      thumbnail,
-    });
-    setBusy(false);
-    if (result.status === "success") {
-      closeSaveDesign();
-    } else if (result.status === "error") {
-      setMessage(result.message);
+    try {
+      const result = await saveSectionDesign({
+        name, category, blockType: item.type, props: item.props, isGlobal,
+      });
+      if (result.status === "success") closeSaveDesign();
+      else if (result.status === "error") setMessage(result.message);
+    } catch (error) {
+      console.error("Unable to save design", error);
+      setMessage("Could not save the design. Please try again.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -196,9 +134,15 @@ function SaveDesignDialogContent() {
                 ))}
               </select>
             </label>
+            {isSuperAdmin ? (
+              <label className="flex items-center gap-2 text-sm text-zinc-700">
+                <input type="checkbox" checked={isGlobal} onChange={(event) => setIsGlobal(event.target.checked)} />
+                Share globally with all clients
+              </label>
+            ) : null}
             <p className="text-xs text-zinc-500">
-              The section&apos;s content and a screenshot are saved to the shared
-              design gallery for every client.
+              {isGlobal ? "Available to every client in Designed." : "Only you can see this design in Saved."}
+              {" "}Previews use the current site&apos;s theme.
             </p>
             {message ? <p className="text-xs text-red-600">{message}</p> : null}
             <div className="flex justify-end gap-2">

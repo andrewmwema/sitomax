@@ -73,7 +73,18 @@ describe("normalizeDesign", () => {
     expect(normalized.border?.width).toBe(8);
     expect(normalized.border?.color).toBe("#d4d4d8");
     expect(normalized.animation).toMatchObject({ duration: 3000, delay: 0 });
-    expect(normalized.spacing.mobile).toEqual({ paddingTop: 400, marginLeft: 0 });
+    expect(normalized.spacing.mobile).toEqual({ paddingTop: 128, marginLeft: 0 });
+  });
+
+  it("snaps spacing to the 0–128 spacing scale", () => {
+    const normalized = normalizeDesign({
+      spacing: { desktop: { paddingTop: 40, paddingBottom: 13, marginTop: 70 } },
+    });
+    expect(normalized.spacing.desktop).toEqual({
+      paddingTop: 32,
+      paddingBottom: 12,
+      marginTop: 64,
+    });
   });
 
   it("keeps only https image URLs and caps the slider at 8", () => {

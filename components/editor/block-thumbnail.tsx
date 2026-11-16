@@ -14,7 +14,7 @@ export function BlockThumbnail({ name, theme }: { name: string; theme: SiteTheme
     id: `element-${name}`,
     name: puckConfig.components[name as keyof typeof puckConfig.components]?.label ?? name,
     blockType: name,
-    category: "Text",
+    category: "Text blocks",
     props: {},
     thumbnail: null,
     styles: ["classic", "modern"],

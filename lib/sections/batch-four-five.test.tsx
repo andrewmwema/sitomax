@@ -12,9 +12,9 @@ import { findUnreplacedPlaceholders } from "./placeholders";
 type Block = keyof typeof puckConfig.components;
 const counts: Partial<Record<SectionCategory, number>> = {
   Testimonials: 4, Logos: 2, Team: 3, "Call to action": 4,
-  Contact: 3, Footer: 3, About: 3, Process: 3, Gallery: 3,
+  Contact: 3, Footer: 3, About: 3, Gallery: 3,
 };
-const designs = sectionCatalog.filter((design) => design.category in counts);
+const designs = sectionCatalog.filter((design) => design.category in counts || design.blockType === "Process");
 
 function dataFor(type: Block, props: Record<string, unknown>): PuckPageData {
   return {
@@ -32,6 +32,7 @@ function render(type: Block, props: Record<string, unknown>, style = "classic") 
 
 describe("Batches 4 and 5", () => {
   it("renders all 28 distinct designs through SectionShell in both styles with complete sample assets", () => {
+    expect(designs.filter((design) => design.blockType === "Process")).toHaveLength(3);
     for (const [category, count] of Object.entries(counts)) {
       const entries = designs.filter((design) => design.category === category);
       expect(entries, category).toHaveLength(count);

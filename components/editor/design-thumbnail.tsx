@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Render } from "@puckeditor/core";
-import { puckConfig } from "@/lib/puck/config";
+import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import { buildThemeStyle, type SiteTheme } from "@/lib/theme/presets";
 import type { SectionDesign } from "@/lib/sections/catalog";
 
@@ -90,14 +90,31 @@ async function whenFrameSettled(doc: Document): Promise<void> {
 export function DesignThumbnail({
   design,
   theme,
+  expanded = false,
 }: {
   design: SectionDesign;
   theme: SiteTheme;
+  expanded?: boolean;
 }) {
   const [cardWidth, setCardWidth] = useState(0);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [contentHeight, setContentHeight] = useState(RENDER_HEIGHT);
   const containerRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // Recompute the scale whenever the card resizes.
   useEffect(() => {
@@ -152,7 +169,10 @@ export function DesignThumbnail({
     sync();
     const observer = new MutationObserver(sync);
     observer.observe(document.head, { childList: true });
-    const resizeObserver = new ResizeObserver(updateBackground);
+    const resizeObserver = new ResizeObserver(() => {
+      updateBackground();
+      if (liveRef.current) setContentHeight(liveRef.current.scrollHeight);
+    });
     if (liveRef.current) resizeObserver.observe(liveRef.current);
     return () => {
       cancelled = true;
@@ -197,18 +217,9 @@ export function DesignThumbnail({
     <div
       ref={containerRef}
       className="relative w-full overflow-hidden"
-      style={{ aspectRatio: "16 / 10" }}
+      style={expanded ? { height: contentHeight * scale } : { aspectRatio: "16 / 10" }}
     >
-      {design.thumbnail ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={design.thumbnail}
-          alt=""
-          aria-hidden="true"
-          className="absolute left-0 top-0 h-auto w-full select-none"
-          loading="lazy"
-        />
-      ) : null}
+      {visible ? (
       <iframe
         ref={setFrame}
         title={`Preview of ${design.name}`}
@@ -219,12 +230,12 @@ export function DesignThumbnail({
         className="pointer-events-none absolute left-0 top-0 select-none border-0"
         style={{
           width: RENDER_WIDTH,
-          height: RENDER_HEIGHT,
-          visibility: design.thumbnail ? "hidden" : undefined,
+          height: expanded ? contentHeight : RENDER_HEIGHT,
           transform: `scale(${scale})`,
           transformOrigin: "top left",
         }}
       />
+      ) : null}
       {mountNode
         ? createPortal(
             <div
@@ -235,7 +246,7 @@ export function DesignThumbnail({
               <Render
                 config={puckConfig}
                 // Cast: a single-block preview fragment, not a full page.
-                data={data as never}
+                data={data as PuckPageData}
                 metadata={{ theme }}
                 // Same as the public renderer: RichTextContent sanitizes.
                 fieldTransforms={{ richtext: ({ value }) => value }}

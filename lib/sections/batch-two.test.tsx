@@ -10,7 +10,7 @@ import { sectionCatalog } from "./catalog";
 import { findUnreplacedPlaceholders } from "./placeholders";
 
 const designs = sectionCatalog.filter((design) =>
-  design.category === "Features/Services" || design.category === "Stats",
+  design.blockType === "Services" || design.blockType === "Stats",
 );
 
 function dataFor(blockType: string, props: Record<string, unknown>): PuckPageData {
@@ -23,7 +23,7 @@ function dataFor(blockType: string, props: Record<string, unknown>): PuckPageDat
 
 describe("Batch 2 designs", () => {
   it("renders all nine distinct layouts in both styles with complete sample assets", () => {
-    expect(designs.filter((design) => design.category === "Features/Services")).toHaveLength(6);
+    expect(designs.filter((design) => design.blockType === "Services")).toHaveLength(6);
     expect(designs.filter((design) => design.category === "Stats")).toHaveLength(3);
     expect(new Set(designs.map((design) => `${design.blockType}:${design.props.variant}`)).size).toBe(9);
 

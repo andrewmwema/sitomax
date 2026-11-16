@@ -5,9 +5,11 @@ import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import {
   videoEmbedUrl,
   type BlockDesign,
+  type DesignLevel,
   type DeviceId,
   type SpacingBox,
 } from "@/lib/sections/design";
+import { SPACING_SCALE, snapSpacing } from "@/lib/layout/spacing";
 import { SectionLibraryContext } from "@/components/editor/section-library";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { VideoUploadField } from "@/components/editor/video-upload-field";
@@ -32,12 +34,15 @@ export function DesignField({
   value,
   onChange,
   readOnly,
+  level = "section",
 }: {
   value: BlockDesign | undefined;
   onChange: (value: BlockDesign) => void;
   readOnly?: boolean;
+  level?: DesignLevel;
 }) {
-  const [tab, setTab] = useState<TabId>("settings");
+  const tabs = level === "section" ? TABS : TABS.filter((entry) => entry.id !== "settings");
+  const [tab, setTab] = useState<TabId>(tabs[0].id);
   const design = value ?? {};
 
   const patch = (next: Partial<BlockDesign>) => {
@@ -46,8 +51,11 @@ export function DesignField({
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50/60 p-2">
-      <div className="grid grid-cols-4 gap-1 rounded-md bg-zinc-100 p-1">
-        {TABS.map((entry) => (
+      <div
+        className="grid gap-1 rounded-md bg-zinc-100 p-1"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      >
+        {tabs.map((entry) => (
           <button
             key={entry.id}
             type="button"
@@ -66,7 +74,9 @@ export function DesignField({
         {tab === "settings" ? (
           <SettingsTab design={design} patch={patch} />
         ) : null}
-        {tab === "style" ? <StyleTab design={design} patch={patch} /> : null}
+        {tab === "style" ? (
+          <StyleTab design={design} patch={patch} level={level} />
+        ) : null}
         {tab === "animation" ? (
           <AnimationTab design={design} patch={patch} />
         ) : null}
@@ -303,7 +313,7 @@ function SettingsTab({ design, patch }: TabProps) {
 /* Style                                                               */
 /* ------------------------------------------------------------------ */
 
-function StyleTab({ design, patch }: TabProps) {
+function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
   const background = design.background ?? {};
   const border = design.border ?? {};
   const patchBackground = (
@@ -329,10 +339,10 @@ function StyleTab({ design, patch }: TabProps) {
         label="Background"
         value={backgroundType}
         options={[
-          { value: "none", label: "None" },
-          { value: "color", label: "Color" },
-          { value: "image", label: "Image" },
-          { value: "video", label: "Video" },
+          { value: "none" as const, label: "None" },
+          { value: "color" as const, label: "Color" },
+          ...(level !== "element" ? [{ value: "image" as const, label: "Image" }] : []),
+          ...(level === "section" ? [{ value: "video" as const, label: "Video" }] : []),
         ]}
         onChange={(type) => patchBackground({ type })}
       />
@@ -651,8 +661,8 @@ function SpacingTab({ design, patch }: TabProps) {
       </div>
 
       <p className="text-[11px] text-zinc-500">
-        Empty fields use the theme default. Values are in px; tablet and
-        mobile fall back to the desktop values.
+        Empty fields use the theme default. Values are in px on the
+        spacing scale; tablet and mobile fall back to the desktop values.
       </p>
       <button
         type="button"
@@ -675,23 +685,25 @@ function SpacingSides({
   onChange: (sideIndex: number, value: number | undefined) => void;
   children: ReactNode;
 }) {
+  // Guardrail: spacing is picked from the scale, never typed freely.
   const input = (sideIndex: number) => (
-    <input
-      type="number"
-      min={0}
-      max={400}
-      value={values[sideIndex] ?? ""}
-      placeholder="–"
+    <select
+      // Older values off the scale display (and render) snapped.
+      value={values[sideIndex] === undefined ? "" : snapSpacing(values[sideIndex])}
       aria-label={`${SPACING_SIDES[sideIndex]} spacing`}
       onChange={(event) => {
         const raw = event.target.value;
-        onChange(
-          sideIndex,
-          raw === "" ? undefined : Math.max(0, Math.min(400, Number(raw))),
-        );
+        onChange(sideIndex, raw === "" ? undefined : Number(raw));
       }}
-      className="h-6 w-12 rounded border border-zinc-300 bg-white text-center text-[10px] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-    />
+      className="h-6 w-12 rounded border border-zinc-300 bg-white text-center text-[10px]"
+    >
+      <option value="">–</option>
+      {SPACING_SCALE.map((step) => (
+        <option key={step} value={step}>
+          {step}
+        </option>
+      ))}
+    </select>
   );
 
   return (
