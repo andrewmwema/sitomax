@@ -15,6 +15,9 @@ import { Services, type ServicesProps } from "@/components/blocks/services";
 import { Stats, type StatsProps } from "@/components/blocks/stats";
 import { Gallery, type GalleryProps } from "@/components/blocks/gallery";
 import { Testimonials, type TestimonialsProps } from "@/components/blocks/testimonials";
+import { Logos, type LogosProps } from "@/components/blocks/logos";
+import { Team, type TeamProps } from "@/components/blocks/team";
+import { Process, type ProcessProps } from "@/components/blocks/process";
 import { Pricing, type PricingProps } from "@/components/blocks/pricing";
 import { Faq, type FaqProps } from "@/components/blocks/faq";
 import { CallToAction, type CallToActionProps } from "@/components/blocks/call-to-action";
@@ -31,6 +34,9 @@ type Components = {
   Stats: StatsProps;
   Gallery: GalleryProps;
   Testimonials: TestimonialsProps;
+  Logos: LogosProps;
+  Team: TeamProps;
+  Process: ProcessProps;
   Pricing: PricingProps;
   Faq: FaqProps;
   CallToAction: CallToActionProps;
@@ -95,6 +101,9 @@ export const puckConfig: PuckConfig = {
         "Services",
         "Stats",
         "Testimonials",
+        "Logos",
+        "Team",
+        "Process",
         "Pricing",
         "Faq",
       ],
@@ -148,6 +157,9 @@ export const puckConfig: PuckConfig = {
     Stats: withSectionShell(Stats),
     Gallery: withSectionShell(Gallery),
     Testimonials: withSectionShell(Testimonials),
+    Logos: withSectionShell(Logos),
+    Team: withSectionShell(Team),
+    Process: withSectionShell(Process),
     Pricing: withSectionShell(Pricing),
     Faq: withSectionShell(Faq),
     CallToAction: withSectionShell(CallToAction),

@@ -5,6 +5,10 @@ import type { ServicesProps } from "@/components/blocks/services";
 import type { StatsProps } from "@/components/blocks/stats";
 import type { GalleryProps } from "@/components/blocks/gallery";
 import type { TestimonialsProps } from "@/components/blocks/testimonials";
+import type { LogosProps } from "@/components/blocks/logos";
+import type { TeamProps } from "@/components/blocks/team";
+import type { ProcessProps } from "@/components/blocks/process";
+import { enquiryFields } from "@/components/blocks/ui/enquiry-form";
 import type { PricingProps } from "@/components/blocks/pricing";
 import type { FaqProps } from "@/components/blocks/faq";
 import type { CallToActionProps } from "@/components/blocks/call-to-action";
@@ -67,6 +71,9 @@ type BlockPropsMap = {
   Stats: StatsProps;
   Gallery: GalleryProps;
   Testimonials: TestimonialsProps;
+  Logos: LogosProps;
+  Team: TeamProps;
+  Process: ProcessProps;
   Pricing: PricingProps;
   Faq: FaqProps;
   CallToAction: CallToActionProps;
@@ -139,11 +146,44 @@ function shellDesign(
   };
 }
 
-/**
- * Built-in catalog. Categories without designs yet (Process,
- * Team, Logos) are filled by the Phase 4b design batches as new blocks
- * and presets are added — the gallery handles empty categories.
- */
+const sampleReviews: TestimonialsProps["testimonials"] = [
+  { quote: "[They took the time to understand what we wanted. The advice was clear, and the finished space feels like us.]", name: "[Alex P.]", role: "[Homeowner, neighbourhood]" },
+  { quote: "[Having one person to speak to made everything easier. We always knew what was happening next.]", name: "[Sam R.]", role: "[Local business owner]" },
+  { quote: "[A thoughtful team from the first conversation to the finishing touches. We felt in good hands throughout.]", name: "[Taylor M.]", role: "[Homeowner, neighbourhood]" },
+];
+
+const samplePartners: LogosProps["logos"] = [
+  { name: "[Oak & Co.]", image: "" }, { name: "[Northline]", image: "" },
+  { name: "[FIELDWORK]", image: "" }, { name: "[Goodkind]", image: "" },
+];
+
+const sampleTeam: TeamProps["members"] = [
+  { name: "[Jordan Morgan]", role: "[Founder & project lead]", bio: "<p>Good projects start with a good conversation. [Jordan] helps translate your ideas into a practical plan, with room for the details that matter to you.</p>", image: "/samples/team-at-work.jpg", imageAlt: "Sample team member planning a project", imagePosition: "left" },
+  { name: "[Alex Taylor]", role: "[Customer care]", bio: "<p>Questions, updates and all the in-between moments. [Alex] is here to help you feel informed and comfortable with the next step.</p>", image: "/samples/happy-customer.jpg", imageAlt: "Sample photograph for a customer care profile", imagePosition: "left" },
+  { name: "[Sam Reed]", role: "[Project specialist]", bio: "<p>[Sam] brings a careful eye and a practical approach to the small details that make the finished result feel right.</p>", image: "/samples/team-at-work.jpg", imageAlt: "Sample project specialist at work", imagePosition: "right" },
+];
+
+const sampleWork: GalleryProps["images"] = [
+  { url: "/samples/home-interior.jpg", alt: "Sample of a light-filled living room", caption: "[A brighter everyday space]" },
+  { url: "/samples/kitchen.jpg", alt: "Sample of a thoughtfully arranged kitchen", caption: "[Room to gather]" },
+  { url: "/samples/home-exterior.jpg", alt: "Sample of a welcoming home exterior", caption: "[A fresh first impression]" },
+  { url: "/samples/tools.jpg", alt: "Sample tools and working details", caption: "[Care in the details]" },
+  { url: "/samples/team-at-work.jpg", alt: "Sample of a team planning together", caption: "[Ideas taking shape]" },
+  { url: "/samples/happy-customer.jpg", alt: "Sample customer photograph", caption: "[Made for real life]" },
+];
+
+const sampleSteps: ProcessProps["steps"] = [
+  { title: "Start with a conversation", text: "<p>Tell us what you have in mind, what matters most and where you would like a little guidance.</p>", icon: "mail" },
+  { title: "Find the right way forward", text: "<p>Talk through the options and agree the scope, timing and costs before the work begins.</p>", icon: "ruler" },
+  { title: "Bring it all together", text: "<p>Follow the progress, ask questions and walk through the finishing details with the team.</p>", icon: "sparkles" },
+];
+
+const footerNavigation = [
+  { label: "Our services", href: "#services" }, { label: "Our story", href: "#about" },
+  { label: "Our work", href: "#gallery" }, { label: "Get in touch", href: "#contact" },
+];
+
+/** Ready-to-insert, theme-aware designs with editable sample content. */
 export const sectionCatalog: SectionDesign[] = [
   // ------------------------------------------------------------- Hero
   design({
@@ -513,39 +553,68 @@ export const sectionCatalog: SectionDesign[] = [
     category: "About",
     name: "Image with story",
     props: {
-      image: "",
-      imageAlt: "",
+      image: "/samples/team-at-work.jpg",
+      imageAlt: "Sample team discussing ideas around a table",
       eyebrow: "About us",
       heading: "A local team that cares",
-      text: "<p>We started with one van and a simple promise: do great work and treat every customer like a neighbour. Today our team serves the whole area — same promise, same care.</p>",
+      text: "<p>We are [Business name], a local team based in [Town]. We believe good work starts with listening: to your ideas, your day-to-day needs and the details that matter most.</p><p>From a small change to a fresh start, our approach is simple. Talk things through, make a considered plan and give the finishing touches the attention they deserve.</p>",
       variant: "image-right",
       design: shellDesign({ anchorId: "about" }),
     },
   }),
   design({
     id: "about-centered-statement",
-    blockType: "TextSection",
+    blockType: "ImageWithText",
     category: "About",
-    name: "Centered statement",
+    name: "Wide-photo brand story",
     props: {
       eyebrow: "Our story",
-      heading: "Built on word of mouth",
-      text: "<p>Most of our customers come from recommendations. We believe that says more than any ad could — quality work speaks for itself.</p>",
-      variant: "centered",
+      heading: "Local roots. A fresh perspective.",
+      text: "<p>Home is more than an address. It is the everyday spaces, familiar faces and small details that make a place feel like yours. At [Business name], that is where our work begins.</p>",
+      image: "/samples/home-interior.jpg", imageAlt: "Sample of a comfortable, light-filled home",
+      variant: "stacked",
       design: shellDesign({ anchorId: "about", animation: "fade" }),
     },
   }),
   design({
     id: "about-two-column",
-    blockType: "TextSection",
+    blockType: "ImageWithText",
     category: "About",
-    name: "Two-column text",
+    name: "Photo + guiding values",
     props: {
       eyebrow: "Who we are",
-      heading: "More than [20] years of experience",
-      text: "<p>Our certified team has handled every kind of project, from quick fixes to complete renovations.</p><p>We keep you informed at every step, stick to the schedule, and never charge for anything we haven't agreed up front.</p>",
-      variant: "two-column",
+      heading: "The way we work matters",
+      text: "<p>At [Business name], our values are practical. You should be able to see them in every conversation and every considered detail.</p><ul><li><strong>Listen first.</strong> Understand the person as well as the project.</li><li><strong>Keep it clear.</strong> Make room for questions and explain the options.</li><li><strong>Care about the finish.</strong> Small things make a lasting difference.</li></ul>",
+      image: "/samples/tools.jpg", imageAlt: "Sample of tools arranged with care",
+      variant: "image-left",
       design: shellDesign({ anchorId: "about" }),
+    },
+  }),
+
+  // ---------------------------------------------------------- Process
+  design({
+    id: "process-step-cards", blockType: "Process", category: "Process", name: "Numbered step cards",
+    props: {
+      eyebrow: "A clear path forward", heading: "Good things start simply",
+      text: "<p>From the first idea to the finishing touches, here is how we can move your project forward.</p>",
+      steps: sampleSteps, variant: "steps", design: shellDesign({ anchorId: "how-it-works" }),
+    },
+  }),
+  design({
+    id: "process-editorial-timeline", blockType: "Process", category: "Process", name: "Editorial process timeline",
+    props: {
+      eyebrow: "The journey", heading: "One considered step at a time",
+      text: "<p>Know what comes next, with space to talk things through at every stage.</p>",
+      steps: sampleSteps, variant: "timeline", design: shellDesign({ anchorId: "how-it-works" }),
+    },
+  }),
+  design({
+    id: "process-photo-checklist", blockType: "Process", category: "Process", name: "Photo + process checklist",
+    props: {
+      eyebrow: "From idea to everyday", heading: "A practical plan. A personal approach.",
+      text: "<p>Bring your ideas and questions. We will help you find a starting point that makes sense for you.</p>",
+      image: "/samples/team-at-work.jpg", imageAlt: "Sample team planning the next stages of a project",
+      steps: sampleSteps, variant: "checklist", design: shellDesign({ anchorId: "how-it-works" }),
     },
   }),
 
@@ -674,18 +743,7 @@ export const sectionCatalog: SectionDesign[] = [
     props: {
       eyebrow: "Testimonials",
       heading: "What our customers say",
-      testimonials: [
-        {
-          quote: "They did a fantastic job from start to finish. On time, on budget and spotless.",
-          name: "Alex P.",
-          role: "Homeowner",
-        },
-        {
-          quote: "Fast, friendly and professional. The only company we call now.",
-          name: "Sam R.",
-          role: "Local business",
-        },
-      ],
+      testimonials: sampleReviews,
       variant: "cards",
       design: shellDesign({ anchorId: "reviews" }),
     },
@@ -694,19 +752,75 @@ export const sectionCatalog: SectionDesign[] = [
     id: "testimonials-quotes",
     blockType: "Testimonials",
     category: "Testimonials",
-    name: "Large quotes",
+    name: "Single large quote",
     props: {
-      eyebrow: "Don't take our word for it",
-      heading: "Loved by the neighbourhood",
-      testimonials: [
-        {
-          quote: "The best decision we made on the whole renovation. Worth every penny.",
-          name: "Jordan K.",
-          role: "Homeowner",
-        },
-      ],
+      eyebrow: "In their own words",
+      heading: "The difference is in the details",
+      testimonials: sampleReviews.slice(0, 1),
       variant: "quotes",
       design: shellDesign({ anchorId: "reviews", animation: "fade" }),
+    },
+  }),
+  design({
+    id: "testimonials-carousel", blockType: "Testimonials", category: "Testimonials", name: "Customer story carousel",
+    props: {
+      eyebrow: "People & their projects", heading: "A few words from our neighbours",
+      testimonials: sampleReviews, variant: "carousel",
+      design: shellDesign({ anchorId: "reviews" }),
+    },
+  }),
+  design({
+    id: "testimonials-rating", blockType: "Testimonials", category: "Testimonials", name: "Rating summary + cards",
+    props: {
+      eyebrow: "Customer feedback", heading: "Small details. Lasting impressions.",
+      testimonials: sampleReviews.slice(0, 2), variant: "rating",
+      rating: "[4.9]/5", reviewCount: "Based on [200]+ reviews", ratingLabel: "[Review platform] · Customer feedback",
+      design: shellDesign({ anchorId: "reviews" }),
+    },
+  }),
+
+  // ------------------------------------------------------------ Logos
+  design({
+    id: "logos-wordmark-strip", blockType: "Logos", category: "Logos", name: "Understated wordmark strip",
+    props: {
+      eyebrow: "Our connections", heading: "Good company to keep",
+      text: "Meet the organisations that are part of our working world.",
+      logos: samplePartners, variant: "strip", design: shellDesign({ animation: "fade" }),
+    },
+  }),
+  design({
+    id: "logos-partner-grid", blockType: "Logos", category: "Logos", name: "Partner tile grid",
+    props: {
+      eyebrow: "Working together", heading: "A shared eye for quality",
+      text: "Thoughtful materials, practical knowledge and people who care about the details.",
+      logos: samplePartners, variant: "grid", design: shellDesign(),
+    },
+  }),
+
+  // ------------------------------------------------------------- Team
+  design({
+    id: "team-photo-cards", blockType: "Team", category: "Team", name: "Team photo cards",
+    props: {
+      eyebrow: "Hello from the team", heading: "People first. Good work follows.",
+      text: "<p>A few familiar faces, ready to listen and help you find the right next step.</p>",
+      members: sampleTeam, variant: "cards", design: shellDesign({ anchorId: "team" }),
+    },
+  }),
+  design({
+    id: "team-editorial-profiles", blockType: "Team", category: "Team", name: "Editorial team profiles",
+    props: {
+      eyebrow: "The people behind the work", heading: "Different skills. One thoughtful approach.",
+      text: "<p>Get to know the people who will guide your project, answer your questions and look after the details.</p>",
+      members: sampleTeam.slice(0, 2), variant: "profiles", design: shellDesign({ anchorId: "team" }),
+    },
+  }),
+  design({
+    id: "team-featured-lead", blockType: "Team", category: "Team", name: "Meet the founder",
+    props: {
+      eyebrow: "A personal introduction", heading: "It starts with a conversation",
+      text: "<p>A note from the person behind the business.</p>",
+      members: [{ ...sampleTeam[0], bio: "<p>I started [Business name] with a simple idea: make it easier for people to get thoughtful help close to home.</p><p>Tell us what you have in mind. We will listen, share a practical perspective and work out the next step together.</p>" }],
+      variant: "featured", design: shellDesign({ anchorId: "team", animation: "fade" }),
     },
   }),
 
@@ -864,15 +978,9 @@ export const sectionCatalog: SectionDesign[] = [
     name: "Square grid",
     props: {
       eyebrow: "Our work",
-      heading: "Recent projects",
-      images: [
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-      ],
+      heading: "A closer look at the details",
+      text: "Spaces, materials and finishing touches. Explore a few ideas for your next project.",
+      images: sampleWork,
       columns: "3",
       variant: "grid",
       design: shellDesign({ anchorId: "gallery" }),
@@ -886,16 +994,20 @@ export const sectionCatalog: SectionDesign[] = [
     props: {
       eyebrow: "Portfolio",
       heading: "A look at what we do",
-      images: [
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-        { url: "", alt: "" },
-      ],
+      text: "A collection of moments, from the first ideas to the everyday details.",
+      images: sampleWork,
       columns: "3",
       variant: "masonry",
       design: shellDesign({ anchorId: "gallery", animation: "fade" }),
+    },
+  }),
+  design({
+    id: "gallery-featured-project", blockType: "Gallery", category: "Gallery", name: "Featured project mosaic",
+    props: {
+      eyebrow: "In focus", heading: "The bigger picture. The smaller details.",
+      text: "Take a look around. There is inspiration in the everyday.",
+      images: sampleWork.slice(0, 5), columns: "3", variant: "featured",
+      design: shellDesign({ anchorId: "gallery" }),
     },
   }),
 
@@ -1010,11 +1122,12 @@ export const sectionCatalog: SectionDesign[] = [
     category: "Call to action",
     name: "Dark band",
     props: {
-      eyebrow: "Get started",
-      heading: "Ready to get started?",
-      text: "Contact us today for a free, no-obligation quote.",
-      buttonText: "Contact us",
-      buttonLink: "/contact",
+      eyebrow: "Your next chapter",
+      heading: "An idea worth talking about?",
+      text: "A small improvement or a fresh start. Tell us what you have in mind and let's explore the possibilities.",
+      buttonText: "Let's talk",
+      buttonLink: "#contact",
+      secondaryButtonText: "Explore our services", secondaryButtonLink: "#services",
       variant: "dark",
       design: shellDesign({ animation: "fade" }),
     },
@@ -1025,28 +1138,41 @@ export const sectionCatalog: SectionDesign[] = [
     category: "Call to action",
     name: "Primary band",
     props: {
-      eyebrow: "Limited availability",
-      heading: "Book your spot this month",
-      text: "Our calendar fills up fast — secure your preferred date today.",
-      buttonText: "Check availability",
-      buttonLink: "/contact",
+      eyebrow: "Make room for something better",
+      heading: "Start with a simple hello",
+      text: "You do not need to have all the answers. Bring your questions and we can work out the next step together.",
+      buttonText: "Tell us about your project",
+      buttonLink: "#contact",
       variant: "primary",
       design: shellDesign({ animation: "zoom-in" }),
     },
   }),
   design({
-    id: "cta-split",
+    id: "cta-image-background",
     blockType: "CallToAction",
     category: "Call to action",
-    name: "Split with button",
+    name: "Photo invitation",
     props: {
-      eyebrow: "Questions?",
-      heading: "Talk to a real person",
-      text: "Call or message us — we reply within one business day.",
-      buttonText: "Get in touch",
-      buttonLink: "/contact",
-      variant: "split",
+      eyebrow: "Picture the possibilities",
+      heading: "A space that feels more like you",
+      text: "From first thoughts to finishing touches, it all begins with a conversation.",
+      buttonText: "Start your project",
+      buttonLink: "#contact",
+      secondaryButtonText: "Find inspiration", secondaryButtonLink: "#gallery",
+      image: "/samples/home-interior.jpg", imageAlt: "Sample of a welcoming living room",
+      variant: "image",
       design: shellDesign(),
+    },
+  }),
+  design({
+    id: "cta-split-form", blockType: "CallToAction", category: "Call to action", name: "Project invitation + form",
+    props: {
+      eyebrow: "An idea. A question. A starting point.", heading: "Let's make a little progress",
+      text: "Share a few details about what you need. Big plans and small questions are equally welcome here.",
+      buttonText: "Start the conversation", buttonLink: "#contact",
+      formName: "project-enquiry", formFields: enquiryFields,
+      formNote: "Please avoid including sensitive information. Required fields are marked with an asterisk.",
+      variant: "form", design: shellDesign({ anchorId: "enquire" }),
     },
   }),
 
@@ -1059,6 +1185,8 @@ export const sectionCatalog: SectionDesign[] = [
     props: {
       eyebrow: "Contact",
       heading: "Send us a message",
+      text: "<p>A question, an idea or something you would like to talk through? Leave a note below.</p>",
+      note: "Required fields are marked with an asterisk.",
       formName: "contact",
       submitText: "Send message",
       formFields: [
@@ -1076,8 +1204,16 @@ export const sectionCatalog: SectionDesign[] = [
     category: "Contact",
     name: "Split form",
     props: {
-      eyebrow: "Free quote",
-      heading: "Tell us about your project",
+      eyebrow: "Good conversations start here",
+      heading: "Tell us what you have in mind",
+      text: "<p>Not sure where to begin? A few words about your project, location and preferred timing will help us point you in the right direction.</p>",
+      note: "Required fields are marked with an asterisk.",
+      details: [
+        { icon: "map-pin", label: "Our local area", value: "[Town and surrounding areas]" },
+        { icon: "clock", label: "Office hours", value: "[Monday-Friday, 9am-5pm]" },
+        { icon: "phone", label: "Prefer to call?", value: "[Business phone number]" },
+        { icon: "mail", label: "Write to us", value: "[Business email address]" },
+      ],
       formName: "quote",
       submitText: "Request my quote",
       formFields: [
@@ -1091,15 +1227,22 @@ export const sectionCatalog: SectionDesign[] = [
     },
   }),
   design({
-    id: "contact-map-split",
-    blockType: "Map",
+    id: "contact-visit-enquire",
+    blockType: "ContactForm",
     category: "Contact",
-    name: "Map with address",
+    name: "Visit & enquire",
     props: {
       eyebrow: "Location",
-      heading: "Come and see us",
-      address: "",
-      variant: "split",
+      heading: "A friendly place to start",
+      text: "<p>Find us in [Town]. Get in touch before visiting so we can make time to talk about what you need.</p>",
+      note: "Required fields are marked with an asterisk.",
+      image: "/samples/home-exterior.jpg", imageAlt: "Sample exterior for a local business location",
+      details: [
+        { icon: "map-pin", label: "Find us", value: "[Street address]\n[Town, postcode]" },
+        { icon: "clock", label: "Visit us", value: "[Opening days and hours]" },
+      ],
+      formName: "visit-enquiry", submitText: "Send your enquiry", formFields: enquiryFields,
+      variant: "visit",
       design: shellDesign({ anchorId: "contact", animation: "fade" }),
     },
   }),
@@ -1111,13 +1254,11 @@ export const sectionCatalog: SectionDesign[] = [
     category: "Footer",
     name: "Columns",
     props: {
-      businessName: "Your business",
-      phone: "(555) 123-4567",
-      address: "123 Main St, Springfield",
-      socialLinks: [
-        { platform: "facebook", url: "" },
-        { platform: "instagram", url: "" },
-      ],
+      businessName: "[Business name]",
+      tagline: "Thoughtful help, close to home. Let's make your next project a good one.",
+      phone: "[Business phone number]", email: "[Business email address]",
+      address: "[Street address, town, postcode]", hours: "[Opening days and hours]",
+      navigation: footerNavigation, socialLinks: [],
       variant: "columns",
       design: shellDesign({ animation: "none" }),
     },
@@ -1128,12 +1269,23 @@ export const sectionCatalog: SectionDesign[] = [
     category: "Footer",
     name: "Centered",
     props: {
-      businessName: "Your business",
-      phone: "(555) 123-4567",
-      address: "123 Main St, Springfield",
+      businessName: "[Business name]",
+      tagline: "Local people. Considered details. A fresh perspective.",
+      phone: "[Business phone number]",
+      address: "Serving [Town and surrounding areas]",
+      navigation: footerNavigation,
       socialLinks: [],
       variant: "centered",
       design: shellDesign({ animation: "none" }),
+    },
+  }),
+  design({
+    id: "footer-light-compact", blockType: "Footer", category: "Footer", name: "Light compact footer",
+    props: {
+      businessName: "[Business name]", tagline: "Good work starts with a conversation.",
+      phone: "", address: "[Town and surrounding areas]", socialLinks: [],
+      navigation: [{ label: "Our story", href: "#about" }, { label: "Get in touch", href: "#contact" }],
+      variant: "compact", design: shellDesign({ animation: "none" }),
     },
   }),
 ];

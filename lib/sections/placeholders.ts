@@ -17,7 +17,7 @@ export type PlaceholderHit = {
   snippets: string[];
 };
 
-const PLACEHOLDER = /\[[^\[\]\n]{1,80}\]/g;
+const PLACEHOLDER = /\[[^\[\]]+\]/g;
 
 /** Props that never hold user-facing copy. */
 const SKIP_KEYS = new Set(["design", "id"]);

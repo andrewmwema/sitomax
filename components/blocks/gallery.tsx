@@ -9,9 +9,10 @@ export type GalleryProps = {
   design?: BlockDesign;
   eyebrow: string;
   heading: string;
-  images: { url: string; alt: string }[];
+  images: { url: string; alt: string; caption?: string }[];
   columns: "2" | "3" | "4";
-  variant: "grid" | "masonry";
+  variant: "grid" | "masonry" | "featured";
+  text?: string;
 };
 
 const COLUMN_CLASSES: Record<GalleryProps["columns"], string> = {
@@ -35,6 +36,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
+    text: { type: "textarea", label: "Introduction", contentEditable: true },
     images: {
       type: "array",
       label: "Images",
@@ -43,6 +45,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
       arrayFields: {
         url: imageField("Image"),
         alt: { type: "text", label: "Alt text" },
+        caption: { type: "text", label: "Caption" },
       },
     },
     columns: {
@@ -60,6 +63,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
       options: [
         { label: "Grid", value: "grid" },
         { label: "Masonry", value: "masonry" },
+        { label: "Featured project", value: "featured" },
       ],
     },
   },
@@ -70,66 +74,80 @@ export const Gallery: ComponentConfig<GalleryProps> = {
     images: [],
     columns: "3",
     variant: "grid",
+    text: "",
   },
-  render: ({ eyebrow, heading, images, columns, variant }) => (
+  render: ({ eyebrow, heading, images, columns, variant, text }) => (
     <Section>
       <div className="flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         {heading ? <Heading level={2}>{heading}</Heading> : null}
+        {text ? <p className="max-w-[55ch]" style={{ color: "var(--color-muted)" }}>{text}</p> : null}
       </div>
-      {(variant ?? "grid") === "masonry" ? (
+      {variant === "featured" ? (
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {images.map((image, i) => (
+            <figure key={i} className={`relative isolate min-h-52 overflow-hidden rounded-[var(--radius-lg)] ${i === 0 ? "sm:col-span-2 lg:row-span-2" : "aspect-[4/3]"}`}>
+              {image.url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={image.url} alt={image.alt} loading="lazy" className="h-full w-full object-cover" />
+              ) : <div className="h-full min-h-64 bg-[var(--color-soft-bg)]" />}
+              {image.caption ? <figcaption className="absolute inset-x-0 bottom-0 px-6 pb-5 pt-16 text-lg font-semibold" style={{ color: "white", background: "linear-gradient(transparent, rgba(0,0,0,0.75))" }}>{image.caption}</figcaption> : null}
+            </figure>
+          ))}
+        </div>
+      ) : (variant ?? "grid") === "masonry" ? (
         <div className={`mt-12 columns-1 gap-4 ${MASONRY_CLASSES[columns] ?? MASONRY_CLASSES["3"]}`}>
-          {images.map((image, i) =>
-            image.url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                key={i}
-                src={image.url}
-                alt={image.alt}
-                loading="lazy"
-                className="mb-4 w-full break-inside-avoid object-cover"
-                style={{ borderRadius: "var(--radius-lg)" }}
-              />
-            ) : (
-              <div
-                key={i}
-                className={`mb-4 w-full break-inside-avoid ${
-                  MASONRY_PLACEHOLDER_HEIGHTS[i % MASONRY_PLACEHOLDER_HEIGHTS.length]
-                }`}
-                style={{
-                  backgroundColor: "var(--color-soft-bg)",
-                  borderRadius: "var(--radius-lg)",
-                  border: "1px solid var(--color-border)",
-                }}
-              />
-            ),
-          )}
+          {images.map((image, i) => (
+            <figure key={i} className="mb-4 break-inside-avoid">
+              {image.url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={image.url}
+                  alt={image.alt}
+                  loading="lazy"
+                  className="w-full object-cover"
+                  style={{ borderRadius: "var(--radius-lg)", aspectRatio: i % 2 ? "4/5" : "4/3" }}
+                />
+              ) : (
+                <div
+                  className={`w-full ${MASONRY_PLACEHOLDER_HEIGHTS[i % MASONRY_PLACEHOLDER_HEIGHTS.length]}`}
+                  style={{
+                    backgroundColor: "var(--color-soft-bg)",
+                    borderRadius: "var(--radius-lg)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                />
+              )}
+              {image.caption ? <figcaption className="py-3 text-sm" style={{ color: "var(--color-muted)" }}>{image.caption}</figcaption> : null}
+            </figure>
+          ))}
         </div>
       ) : (
         <div className={`mt-12 grid grid-cols-1 gap-4 ${COLUMN_CLASSES[columns] ?? COLUMN_CLASSES["3"]}`}>
-          {images.map((image, i) =>
-            image.url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                key={i}
-                src={image.url}
-                alt={image.alt}
-                loading="lazy"
-                className="aspect-square w-full object-cover"
-                style={{ borderRadius: "var(--radius-lg)" }}
-              />
-            ) : (
-              <div
-                key={i}
-                className="aspect-square w-full"
-                style={{
-                  backgroundColor: "var(--color-soft-bg)",
-                  borderRadius: "var(--radius-lg)",
-                  border: "1px solid var(--color-border)",
-                }}
-              />
-            ),
-          )}
+          {images.map((image, i) => (
+            <figure key={i}>
+              {image.url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={image.url}
+                  alt={image.alt}
+                  loading="lazy"
+                  className="aspect-square w-full object-cover"
+                  style={{ borderRadius: "var(--radius-lg)" }}
+                />
+              ) : (
+                <div
+                  className="aspect-square w-full"
+                  style={{
+                    backgroundColor: "var(--color-soft-bg)",
+                    borderRadius: "var(--radius-lg)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                />
+              )}
+              {image.caption ? <figcaption className="py-3 text-sm" style={{ color: "var(--color-muted)" }}>{image.caption}</figcaption> : null}
+            </figure>
+          ))}
         </div>
       )}
     </Section>

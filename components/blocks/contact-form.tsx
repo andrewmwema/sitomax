@@ -1,10 +1,14 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField } from "@/lib/puck/fields";
+import { designField, imageField, richTextField } from "@/lib/puck/fields";
+import type { RichText } from "@puckeditor/core";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { Card } from "./ui/card";
+import { EnquiryForm, enquiryFieldsField } from "./ui/enquiry-form";
+import { RichTextContent } from "./ui/rich-text";
+import { BlockIcon } from "./ui/icon";
 
 export type ContactFormProps = {
   design?: BlockDesign;
@@ -17,16 +21,13 @@ export type ContactFormProps = {
     fieldType: "text" | "email" | "tel" | "textarea";
     required: boolean;
   }[];
-  variant: "centered" | "split";
+  variant: "centered" | "split" | "visit";
+  text?: RichText;
+  details?: { icon: string; label: string; value: string }[];
+  image: string;
+  imageAlt?: string;
+  note?: string;
 };
-
-const inputStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-sm)",
-  backgroundColor: "var(--color-bg)",
-  color: "var(--color-text)",
-  lineHeight: 1.6,
-} as const;
 
 export const ContactForm: ComponentConfig<ContactFormProps> = {
   label: "Contact form",
@@ -36,39 +37,23 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     heading: { type: "text", label: "Heading", contentEditable: true },
     formName: { type: "text", label: "Form name", placeholder: "contact" },
     submitText: { type: "text", label: "Submit button text", contentEditable: true },
-    formFields: {
-      type: "array",
-      label: "Fields",
-      getItemSummary: (item) => item.label || "Field",
-      defaultItemProps: { label: "New field", fieldType: "text", required: false },
-      arrayFields: {
-        label: { type: "text", label: "Label" },
-        fieldType: {
-          type: "select",
-          label: "Type",
-          options: [
-            { label: "Text", value: "text" },
-            { label: "Email", value: "email" },
-            { label: "Phone", value: "tel" },
-            { label: "Multi-line text", value: "textarea" },
-          ],
-        },
-        required: {
-          type: "radio",
-          label: "Required",
-          options: [
-            { label: "Yes", value: true },
-            { label: "No", value: false },
-          ],
-        },
-      },
+    text: richTextField("Introduction"),
+    image: imageField("Location photo"),
+    imageAlt: { type: "text", label: "Photo alt text" },
+    note: { type: "textarea", label: "Form note" },
+    details: {
+      type: "array", label: "Contact details", getItemSummary: (item) => item.label,
+      defaultItemProps: { icon: "map-pin", label: "Visit", value: "[Street address, town]" },
+      arrayFields: { icon: { type: "text", label: "Icon name" }, label: { type: "text", label: "Label" }, value: { type: "text", label: "Details" } },
     },
+    formFields: enquiryFieldsField,
     variant: {
       type: "radio",
       label: "Layout",
       options: [
         { label: "Centered", value: "centered" },
         { label: "Split", value: "split" },
+        { label: "Visit & enquire", value: "visit" },
       ],
     },
   },
@@ -84,74 +69,39 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
       { label: "Message", fieldType: "textarea", required: true },
     ],
     variant: "centered",
+    image: "/samples/home-exterior.jpg",
+    imageAlt: "Sample exterior for a business location",
+    text: "",
+    details: [],
+    note: "",
   },
-  render: ({ eyebrow, heading, formName, submitText, formFields, variant }) => {
-    const split = (variant ?? "centered") === "split";
+  render: ({ eyebrow, heading, formName, submitText, formFields, variant, text, details, image, imageAlt, note }) => {
+    const split = variant === "split" || variant === "visit";
 
     const form = (
       <Card className="gap-0 p-6 sm:p-8">
-        {/* Submission handling is wired to /api/forms/submit. */}
-        <form method="post" action="/api/forms/submit" className="flex flex-col gap-4">
-          <input type="hidden" name="_form_name" value={formName} />
-          {/* Honeypot field for spam bots: humans never see or fill it. */}
-          <input
-            type="text"
-            name="_website"
-            tabIndex={-1}
-            autoComplete="off"
-            aria-hidden="true"
-            className="hidden"
-          />
-          {formFields.map((field, i) => {
-            const id = `field-${i}`;
-            return (
-              <label key={i} htmlFor={id} className="flex flex-col gap-1.5 text-sm font-medium">
-                {field.label}
-                {field.fieldType === "textarea" ? (
-                  <textarea
-                    id={id}
-                    name={field.label}
-                    required={field.required}
-                    rows={4}
-                    className="w-full px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
-                    style={inputStyle}
-                  />
-                ) : (
-                  <input
-                    id={id}
-                    name={field.label}
-                    type={field.fieldType}
-                    required={field.required}
-                    className="min-h-12 w-full px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
-                    style={inputStyle}
-                  />
-                )}
-              </label>
-            );
-          })}
-          <button
-            type="submit"
-            className="min-h-12 px-5 py-3 text-sm font-semibold transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{
-              backgroundColor: "var(--color-primary)",
-              color: "var(--color-on-primary)",
-              borderRadius: "var(--radius-sm)",
-              outlineColor: "var(--color-secondary)",
-            }}
-          >
-            {submitText}
-          </button>
-        </form>
+        <EnquiryForm formName={formName} submitText={submitText} fields={formFields} note={note} />
       </Card>
     );
 
     if (split) {
       return (
-        <Section background="soft">
+        <Section background={variant === "visit" ? "default" : "soft"}>
           <div className="grid items-start gap-10 md:grid-cols-2 md:gap-16">
             <div className="flex flex-col gap-3">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <Heading level={2}>{heading}</Heading>
+              {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}
+              {variant === "visit" && image ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={image} alt={imageAlt || ""} loading="lazy" className="mt-4 aspect-[16/9] w-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+              ) : null}
+              {details?.length ? <dl className="mt-5 grid gap-5 border-t pt-6 sm:grid-cols-2" style={{ borderColor: "var(--color-border)" }}>
+                {details.map((detail, i) => <div key={i} className="flex flex-col gap-2">
+                  <dt className="flex items-center gap-2 text-sm font-semibold"><BlockIcon name={detail.icon} size={18} />{detail.label}</dt>
+                  <dd className="whitespace-pre-line text-sm" style={{ color: "var(--color-muted)" }}>{detail.value}</dd>
+                </div>)}
+              </dl> : null}
             </div>
             {form}
           </div>
@@ -165,6 +115,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
           <div className="flex flex-col items-center gap-3 text-center">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
             <Heading level={2}>{heading}</Heading>
+            {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}
           </div>
           {form}
         </div>

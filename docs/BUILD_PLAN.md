@@ -207,6 +207,39 @@ FAQ layouts preserve the same questions and rich-text answers; accordion designs
 can start with the first answer open. Prices and business-specific facts remain
 bracketed examples for the editor's existing publish warning.
 
+Batch 4 catalog designs:
+- Testimonials: Review cards, Single large quote, Customer story carousel, Rating summary + cards.
+- Logos: Understated wordmark strip, Partner tile grid.
+- Team: Team photo cards, Editorial team profiles, Meet the founder.
+
+The testimonial carousel supports touch/trackpad scrolling, Previous/Next buttons,
+Left/Right/Home/End keys and reduced motion. It never advances automatically.
+Quotes, ratings, partner names and team identities are bracketed samples, not
+endorsements or verified business facts. Logo uploads replace the original
+placeholder wordmarks; team photos use the existing royalty-free sample images.
+All people and reviews are retained when switching layouts.
+
+Batch 5 catalog designs:
+- Call to action: Dark band, Primary band, Photo invitation, Project invitation + form.
+- Contact: Centered form, Split form, Visit & enquire.
+- Footer: Columns, Centered, Light compact footer.
+- About: Image with story, Wide-photo brand story, Photo + guiding values.
+- Process: Numbered step cards, Editorial process timeline, Photo + process checklist.
+- Gallery: Grid, Masonry, Featured project mosaic.
+
+All designs use SectionShell, the site theme and shared UI primitives. Photo CTAs
+have a 58% dark overlay and the shared contrast-aware buttons. Contact and CTA
+forms share labelled fields, native validation and the existing POST contract at
+`/api/forms/submit`; that endpoint is not implemented yet, so these forms are not
+ready to collect submissions. Form backend work remains in the forms phase.
+Footer contact details, location information and project captions are bracketed
+samples. Gallery photos and captions stay intact when changing layouts. Legacy
+CTA split, About text and Map blocks remain available on saved pages.
+The publish check also detects long and multiline bracketed sample quotations.
+Both batches were checked in Classic and Modern at 375/768/1280px, including
+carousel mouse/keyboard navigation, reduced motion, field labels, native form
+validation, image loading, overflow and CTA button contrast.
+
 **Prompt F: polish pass**
 ```
 Do a visual polish pass on all designs:

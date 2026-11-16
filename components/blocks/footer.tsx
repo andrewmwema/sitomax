@@ -10,11 +10,15 @@ export type FooterProps = {
   businessName: string;
   phone: string;
   address: string;
+  tagline?: string;
+  email?: string;
+  hours?: string;
+  navigation?: { label: string; href: string }[];
   socialLinks: {
     platform: "facebook" | "instagram" | "x" | "linkedin" | "youtube" | "tiktok";
     url: string;
   }[];
-  variant: "columns" | "centered";
+  variant: "columns" | "centered" | "compact";
 };
 
 const PLATFORM_LABELS: Record<FooterProps["socialLinks"][number]["platform"], string> = {
@@ -33,6 +37,14 @@ export const Footer: ComponentConfig<FooterProps> = {
     businessName: { type: "text", label: "Business name", contentEditable: true },
     phone: { type: "text", label: "Phone" },
     address: { type: "text", label: "Address" },
+    tagline: { type: "textarea", label: "Brand introduction" },
+    email: { type: "text", label: "Email" },
+    hours: { type: "text", label: "Opening hours" },
+    navigation: {
+      type: "array", label: "Navigation", getItemSummary: (item) => item.label,
+      defaultItemProps: { label: "Contact", href: "#contact" },
+      arrayFields: { label: { type: "text", label: "Label" }, href: { type: "text", label: "Link" } },
+    },
     socialLinks: {
       type: "array",
       label: "Social links",
@@ -53,6 +65,7 @@ export const Footer: ComponentConfig<FooterProps> = {
       options: [
         { label: "Columns", value: "columns" },
         { label: "Centered", value: "centered" },
+        { label: "Light compact", value: "compact" },
       ],
     },
   },
@@ -63,8 +76,12 @@ export const Footer: ComponentConfig<FooterProps> = {
     address: "",
     socialLinks: [],
     variant: "columns",
+    tagline: "",
+    email: "",
+    hours: "",
+    navigation: [],
   },
-  render: ({ businessName, phone, address, socialLinks, variant }) => {
+  render: ({ businessName, phone, address, socialLinks, variant, tagline, email, hours, navigation }) => {
     const centered = (variant ?? "columns") === "centered";
 
     const contact = (
@@ -74,19 +91,21 @@ export const Footer: ComponentConfig<FooterProps> = {
       >
         {phone ? (
           <a
-            href={`tel:${phone.replace(/\s+/g, "")}`}
-            className="inline-flex items-center gap-2 transition hover:opacity-80"
+            href={phone.includes("[") ? undefined : `tel:${phone.replace(/\s+/g, "")}`}
+            className="inline-flex min-h-12 items-center gap-2 transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <BlockIcon name="phone" size={15} />
             {phone}
           </a>
         ) : null}
+        {email ? <a href={email.includes("[") ? undefined : `mailto:${email}`} className="inline-flex min-h-12 items-center gap-2 break-all focus-visible:outline-2 focus-visible:outline-offset-2"><BlockIcon name="mail" size={15} />{email}</a> : null}
         {address ? (
           <p className="inline-flex items-center gap-2" style={{ color: "var(--color-muted)" }}>
             <BlockIcon name="map-pin" size={15} />
             {address}
           </p>
         ) : null}
+        {hours ? <p style={{ color: "var(--color-muted)" }}>{hours}</p> : null}
       </div>
     );
 
@@ -99,7 +118,7 @@ export const Footer: ComponentConfig<FooterProps> = {
               href={link.url || "#"}
               target="_blank"
               rel="noreferrer"
-              className="transition hover:opacity-80"
+              className="inline-flex min-h-12 items-center transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               {PLATFORM_LABELS[link.platform] ?? link.platform}
             </a>
@@ -119,6 +138,7 @@ export const Footer: ComponentConfig<FooterProps> = {
         >
           {businessName}
         </p>
+        {tagline ? <p className="max-w-[32ch] text-sm" style={{ color: "var(--color-muted)" }}>{tagline}</p> : null}
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           © {new Date().getFullYear()} {businessName}. All rights reserved.
         </p>
@@ -127,7 +147,7 @@ export const Footer: ComponentConfig<FooterProps> = {
 
     return (
       <Section
-        background="dark"
+        background={variant === "compact" ? "soft" : "dark"}
         container={false}
         style={{ paddingTop: 56, paddingBottom: 56 }}
       >
@@ -140,6 +160,9 @@ export const Footer: ComponentConfig<FooterProps> = {
             }
           >
             {brand}
+            {navigation?.length ? <nav aria-label={`${businessName} footer`} className={`flex flex-wrap gap-x-6 ${centered ? "justify-center" : variant === "columns" ? "flex-col" : ""}`}>
+              {navigation.map((link, i) => <a key={i} href={link.href || "#"} className="inline-flex min-h-12 items-center text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2">{link.label}</a>)}
+            </nav> : null}
             {contact}
             {social}
           </Container>
