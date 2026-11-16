@@ -128,6 +128,37 @@ export function onPrimaryColor(primary: string): string {
   }
 }
 
+/** Mix two hex colors (JS equivalent of color-mix for computed vars). */
+function mixHex(a: string, b: string, weightA: number): string {
+  const parse = (hex: string) => {
+    let v = hex.replace("#", "");
+    if (v.length === 3) v = v.split("").map((c) => c + c).join("");
+    return [0, 2, 4].map((o) => parseInt(v.slice(o, o + 2), 16));
+  };
+  const [ca, cb] = [parse(a), parse(b)];
+  return `#${ca
+    .map((ch, i) =>
+      Math.round(ch * weightA + cb[i] * (1 - weightA))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
+/**
+ * Call-to-action color on a dark or photo background: the accent when
+ * it stands out at WCAG 4.5:1, otherwise white. Used by Section
+ * (dark/primary) and SectionShell (light text over photos/video) so
+ * primary buttons stay visible on every dark surface.
+ */
+export function ctaOnColor(background: string, accent: string): string {
+  try {
+    return contrastRatio(accent, background) >= 4.5 ? accent : "#ffffff";
+  } catch {
+    return "#ffffff";
+  }
+}
+
 /**
  * All theme CSS variables for a site: palette colors, computed tints and
  * the chosen style preset. Applied once on the Puck page root.
@@ -135,6 +166,11 @@ export function onPrimaryColor(primary: string): string {
 export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSProperties {
   const colors = { ...DEFAULT_COLORS, ...theme?.colors };
   const preset = STYLE_PRESETS[theme?.style ?? "classic"] ?? STYLE_PRESETS.classic;
+
+  // Computed in JS (not color-mix) so button contrast can be measured.
+  const darkBg = mixHex(colors.text, "#000000", 0.92);
+  const ctaDark = ctaOnColor(darkBg, colors.secondary);
+  const ctaPrimary = ctaOnColor(colors.primary, colors.secondary);
 
   return {
     "--color-primary": colors.primary,
@@ -146,7 +182,12 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
     "--color-muted": "color-mix(in srgb, var(--color-text) 64%, var(--color-bg))",
     "--color-soft-bg": "color-mix(in srgb, var(--color-primary) 6%, var(--color-bg))",
     "--color-border": "color-mix(in srgb, var(--color-text) 14%, transparent)",
-    "--color-dark-bg": "color-mix(in srgb, var(--color-text) 92%, black)",
+    "--color-dark-bg": darkBg,
+    // Primary-button colors on dark and primary backgrounds.
+    "--color-cta-dark": ctaDark,
+    "--color-on-cta-dark": onPrimaryColor(ctaDark),
+    "--color-cta-primary": ctaPrimary,
+    "--color-on-cta-primary": onPrimaryColor(ctaPrimary),
     ...preset.vars,
   } as CSSProperties;
 }

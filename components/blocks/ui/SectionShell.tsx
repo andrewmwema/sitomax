@@ -35,12 +35,22 @@ const TEXT_SCHEMES = {
     "--color-text": "#f8fafc",
     "--color-muted": "rgba(248, 250, 252, 0.8)",
     "--color-border": "rgba(248, 250, 252, 0.24)",
+    // Light text means a dark/photo surface: accent (or white) primary
+    // button and a white outline for the secondary button.
+    "--btn-bg": "var(--color-cta-dark)",
+    "--btn-fg": "var(--color-on-cta-dark)",
+    "--btn-outline": "rgba(255, 255, 255, 0.85)",
+    // Accent eyebrows can vanish against photos; go light instead.
+    "--eyebrow-color": "rgba(248, 250, 252, 0.92)",
     color: "#f8fafc",
   },
   dark: {
     "--color-text": "#17202b",
     "--color-muted": "rgba(23, 32, 43, 0.72)",
     "--color-border": "rgba(23, 32, 43, 0.16)",
+    "--btn-bg": "var(--color-primary)",
+    "--btn-fg": "var(--color-on-primary)",
+    "--btn-outline": "rgba(23, 32, 43, 0.3)",
     color: "#17202b",
   },
 } as const;

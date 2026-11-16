@@ -1,4 +1,5 @@
 import type { ComponentConfig } from "@puckeditor/core";
+import type { CSSProperties, ReactNode } from "react";
 import { designField, imageField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
@@ -6,88 +7,526 @@ import { Container } from "./ui/container";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Card } from "./ui/card";
+import { BlockIcon } from "./ui/icon";
+
+export type HeroStat = { value: string; label: string };
+
+export type HeroFormField = {
+  label: string;
+  fieldType: "text" | "email" | "tel";
+  required: boolean;
+};
+
+export type HeroVariant = "centered" | "split" | "overlay" | "lead-form" | "stats";
 
 export type HeroProps = {
   eyebrow: string;
+  /** Pill badge with a star icon; replaces the eyebrow when set. */
+  badgeText?: string;
   heading: string;
   subheading: string;
   buttonText: string;
   buttonLink: string;
+  secondaryButtonText?: string;
+  secondaryButtonLink?: string;
   backgroundImage: string;
-  variant: "centered" | "split";
+  /** Second photo for the collage shown by the "stats" variant. */
+  secondaryImage: string;
+  variant: HeroVariant;
+  /** Shown by the "stats" variant as a row under the heading. */
+  stats?: HeroStat[];
+  /** Lead form settings, used by the "lead-form" variant. */
+  formName?: string;
+  submitText?: string;
+  formFields?: HeroFormField[];
   design?: BlockDesign;
   /** @deprecated legacy prop, replaced by variant. */
   layout?: "centered" | "split";
 };
 
+/* ------------------------------------------------------------------ */
+/* Shared pieces                                                       */
+/* ------------------------------------------------------------------ */
+
+/** Badge (with star) when set, otherwise the eyebrow label. */
+function HeroLabel({ badgeText, eyebrow }: { badgeText?: string; eyebrow: string }) {
+  if (badgeText) {
+    return (
+      <Badge>
+        <BlockIcon name="star" size={13} />
+        {badgeText}
+      </Badge>
+    );
+  }
+  return eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null;
+}
+
+/** Primary + optional secondary CTA; full width under 480px. */
+function HeroButtons({
+  buttonText,
+  buttonLink,
+  secondaryButtonText,
+  secondaryButtonLink,
+  center = false,
+}: Pick<
+  HeroProps,
+  "buttonText" | "buttonLink" | "secondaryButtonText" | "secondaryButtonLink"
+> & { center?: boolean }) {
+  if (!buttonText && !secondaryButtonText) return null;
+  return (
+    <div
+      className={`flex w-full flex-col gap-3 pt-1 min-[480px]:w-auto min-[480px]:flex-row min-[480px]:flex-wrap ${
+        center ? "min-[480px]:justify-center" : ""
+      }`}
+    >
+      {buttonText ? <Button href={buttonLink}>{buttonText}</Button> : null}
+      {secondaryButtonText ? (
+        <Button href={secondaryButtonLink} variant="secondary">
+          {secondaryButtonText}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function Subheading({
+  children,
+  className = "",
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <p
+      className={`max-w-[60ch] text-lg ${className}`}
+      style={{ color: "var(--color-muted)", lineHeight: 1.6, ...style }}
+    >
+      {children}
+    </p>
+  );
+}
+
+const leadInputStyle: CSSProperties = {
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-sm)",
+  backgroundColor: "var(--color-bg)",
+  color: "var(--color-text)",
+  lineHeight: 1.6,
+};
+
+/* ------------------------------------------------------------------ */
+/* Block                                                               */
+/* ------------------------------------------------------------------ */
+
 export const Hero: ComponentConfig<HeroProps> = {
   label: "Hero",
   fields: {
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
+    badgeText: {
+      type: "text",
+      label: "Badge (replaces eyebrow)",
+      contentEditable: true,
+    },
     heading: { type: "text", label: "Heading", contentEditable: true },
     subheading: { type: "textarea", label: "Subheading", contentEditable: true },
     buttonText: { type: "text", label: "Button text", contentEditable: true },
     buttonLink: { type: "text", label: "Button link", placeholder: "/contact" },
+    secondaryButtonText: {
+      type: "text",
+      label: "Second button text",
+      contentEditable: true,
+    },
+    secondaryButtonLink: {
+      type: "text",
+      label: "Second button link",
+      placeholder: "#services",
+    },
     backgroundImage: imageField("Image"),
+    secondaryImage: imageField("Second image (collage)"),
     variant: {
-      type: "radio",
+      type: "select",
       label: "Layout",
       options: [
-        { label: "Centered", value: "centered" },
-        { label: "Split", value: "split" },
+        { label: "Centered band", value: "centered" },
+        { label: "Split with image", value: "split" },
+        { label: "Photo with overlay", value: "overlay" },
+        { label: "With lead form", value: "lead-form" },
+        { label: "With stats row", value: "stats" },
       ],
+    },
+    stats: {
+      type: "array",
+      label: "Stats",
+      getItemSummary: (item) => item.label || "Stat",
+      defaultItemProps: { value: "100%", label: "Satisfaction guarantee" },
+      arrayFields: {
+        value: { type: "text", label: "Value" },
+        label: { type: "text", label: "Label" },
+      },
+    },
+    formName: { type: "text", label: "Form name", placeholder: "quote" },
+    submitText: { type: "text", label: "Submit button text", contentEditable: true },
+    formFields: {
+      type: "array",
+      label: "Form fields",
+      getItemSummary: (item) => item.label || "Field",
+      defaultItemProps: { label: "New field", fieldType: "text", required: false },
+      arrayFields: {
+        label: { type: "text", label: "Label" },
+        fieldType: {
+          type: "select",
+          label: "Type",
+          options: [
+            { label: "Text", value: "text" },
+            { label: "Email", value: "email" },
+            { label: "Phone", value: "tel" },
+          ],
+        },
+        required: {
+          type: "radio",
+          label: "Required",
+          options: [
+            { label: "Yes", value: true },
+            { label: "No", value: false },
+          ],
+        },
+      },
     },
     design: designField(),
   },
+  // Only show the fields the chosen layout actually uses.
+  resolveFields: (data, { fields }) => {
+    const variant = data.props.variant ?? data.props.layout ?? "centered";
+    const { backgroundImage, secondaryImage, stats, formName, submitText, formFields, ...rest } =
+      fields;
+    return {
+      ...rest,
+      ...(variant === "lead-form" ? null : { backgroundImage }),
+      ...(variant === "stats" ? { secondaryImage, stats } : null),
+      ...(variant === "lead-form" ? { formName, submitText, formFields } : null),
+      // Hidden fields stay typed as present; Puck only renders the
+      // returned subset, so narrowing back to the full shape is safe.
+    } as typeof fields;
+  },
   defaultProps: {
     eyebrow: "Trusted local experts",
+    badgeText: "",
     heading: "Grow your business with us",
     subheading: "We make it easy for your customers to find and contact you.",
     buttonText: "Get in touch",
     buttonLink: "/contact",
+    secondaryButtonText: "",
+    secondaryButtonLink: "",
     backgroundImage: "",
+    secondaryImage: "",
     variant: "centered",
+    stats: [
+      { value: "[20]+", label: "Years in business" },
+      { value: "[1,500]+", label: "Projects completed" },
+      { value: "[4.9]/5", label: "Average rating" },
+      { value: "[100]%", label: "Satisfaction guarantee" },
+    ],
+    formName: "quote",
+    submitText: "Get my free quote",
+    formFields: [
+      { label: "Name", fieldType: "text", required: true },
+      { label: "Phone", fieldType: "tel", required: false },
+      { label: "Email", fieldType: "email", required: true },
+    ],
     design: {},
   },
-  render: ({ eyebrow, heading, subheading, buttonText, buttonLink, backgroundImage, variant, layout }) => {
-    if ((variant ?? layout) === "split") {
+  render: ({
+    eyebrow,
+    badgeText,
+    heading,
+    subheading,
+    buttonText,
+    buttonLink,
+    secondaryButtonText,
+    secondaryButtonLink,
+    backgroundImage,
+    secondaryImage,
+    variant,
+    stats,
+    formName,
+    submitText,
+    formFields,
+    layout,
+  }) => {
+    const resolved: HeroVariant = variant ?? layout ?? "centered";
+    const buttons = (center = false) => (
+      <HeroButtons
+        buttonText={buttonText}
+        buttonLink={buttonLink}
+        secondaryButtonText={secondaryButtonText}
+        secondaryButtonLink={secondaryButtonLink}
+        center={center}
+      />
+    );
+
+    /* ------------------------------------------------- Split image */
+    if (resolved === "split") {
       return (
         <Section container={false}>
-          <Container className="grid items-center gap-12 md:grid-cols-2">
+          <Container className="grid items-center gap-12 md:grid-cols-2 lg:gap-16">
             <div className="flex flex-col items-start gap-5">
-              {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+              <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
               <Heading level={1}>{heading}</Heading>
-              <p
-                className="max-w-[65ch] text-lg"
-                style={{ color: "var(--color-muted)", lineHeight: 1.6 }}
-              >
-                {subheading}
-              </p>
-              {buttonText ? <Button href={buttonLink}>{buttonText}</Button> : null}
+              <Subheading>{subheading}</Subheading>
+              {buttons()}
             </div>
-            {backgroundImage ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={backgroundImage}
-                alt=""
-                className="h-72 w-full object-cover sm:h-96"
-                style={{ borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)" }}
-              />
-            ) : (
+            <div className="relative">
+              {/* Offset accent frame behind the image. */}
               <div
-                className="h-72 w-full sm:h-96"
+                aria-hidden="true"
+                className="absolute hidden md:block"
                 style={{
-                  backgroundColor: "var(--color-soft-bg)",
+                  inset: "1.25rem -1.25rem -1.25rem 1.25rem",
+                  border: "2px solid var(--color-secondary)",
                   borderRadius: "var(--radius-lg)",
-                  border: "1px solid var(--color-border)",
+                  opacity: 0.45,
                 }}
               />
-            )}
+              {backgroundImage ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={backgroundImage}
+                  alt=""
+                  className="relative h-72 w-full object-cover sm:h-96"
+                  style={{
+                    borderRadius: "var(--radius-lg)",
+                    boxShadow: "var(--shadow-card)",
+                  }}
+                />
+              ) : (
+                <div
+                  className="relative flex h-72 w-full items-center justify-center sm:h-96"
+                  style={{
+                    backgroundColor: "var(--color-soft-bg)",
+                    borderRadius: "var(--radius-lg)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                >
+                  <BlockIcon name="camera" size={34} className="opacity-25" />
+                </div>
+              )}
+            </div>
           </Container>
         </Section>
       );
     }
 
+    /* -------------------------------- Full-width photo with overlay */
+    if (resolved === "overlay") {
+      return (
+        <Section
+          background="dark"
+          container={false}
+          className="relative overflow-hidden"
+          style={
+            backgroundImage
+              ? ({
+                  backgroundImage: `url(${backgroundImage})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  "--eyebrow-color": "rgba(248, 250, 252, 0.92)",
+                } as CSSProperties)
+              : undefined
+          }
+        >
+          {backgroundImage ? (
+            <div
+              className="absolute inset-0"
+              style={{ backgroundColor: "rgba(10, 14, 20, 0.56)" }}
+            />
+          ) : null}
+          <Container className="relative flex min-h-[380px] flex-col justify-center gap-6 sm:min-h-[460px]">
+            <div className="flex max-w-2xl flex-col items-start gap-5">
+              <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+              <Heading
+                level={1}
+                style={backgroundImage ? { color: "#ffffff" } : undefined}
+              >
+                {heading}
+              </Heading>
+              <Subheading
+                style={
+                  backgroundImage ? { color: "rgba(255,255,255,0.84)" } : undefined
+                }
+              >
+                {subheading}
+              </Subheading>
+              {buttons()}
+            </div>
+          </Container>
+        </Section>
+      );
+    }
+
+    /* ------------------------------------------------ Lead form */
+    if (resolved === "lead-form") {
+      const fields = formFields ?? [];
+      return (
+        <Section background="dark" container={false}>
+          <Container className="grid items-center gap-12 lg:grid-cols-[1.05fr_minmax(0,30rem)] lg:gap-16">
+            <div className="flex flex-col items-start gap-5">
+              <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+              <Heading level={1}>{heading}</Heading>
+              <Subheading>{subheading}</Subheading>
+              {buttons()}
+            </div>
+            <Card
+              className="gap-0 p-6 sm:p-8"
+              style={{
+                // Reset the dark-band tints: this card sits on the theme
+                // background again, so derive muted/border from its text.
+                "--color-muted": "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                "--color-border": "color-mix(in srgb, var(--color-text) 16%, transparent)",
+                "--btn-bg": "var(--color-primary)",
+                "--btn-fg": "var(--color-on-primary)",
+                "--btn-outline": "var(--color-border)",
+              } as CSSProperties}
+            >
+              {/* Submission handling is wired to /api/forms/submit. */}
+              <form
+                method="post"
+                action="/api/forms/submit"
+                className="flex flex-col gap-4"
+              >
+                <input type="hidden" name="_form_name" value={formName || "quote"} />
+                {/* Honeypot field for spam bots: humans never see it. */}
+                <input
+                  type="text"
+                  name="_website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="hidden"
+                />
+                {fields.map((field, i) => {
+                  const id = `hero-field-${i}`;
+                  return (
+                    <label
+                      key={i}
+                      htmlFor={id}
+                      className="flex flex-col gap-1.5 text-sm font-medium"
+                    >
+                      {field.label}
+                      <input
+                        id={id}
+                        name={field.label}
+                        type={field.fieldType}
+                        required={field.required}
+                        className="min-h-12 w-full px-3.5 py-2.5 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
+                        style={leadInputStyle}
+                      />
+                    </label>
+                  );
+                })}
+                <button
+                  type="submit"
+                  className="min-h-12 px-5 py-3 text-sm font-semibold transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={{
+                    backgroundColor: "var(--color-primary)",
+                    color: "var(--color-on-primary)",
+                    borderRadius: "var(--radius-sm)",
+                    outlineColor: "var(--color-secondary)",
+                  }}
+                >
+                  {submitText || "Send"}
+                </button>
+              </form>
+            </Card>
+          </Container>
+        </Section>
+      );
+    }
+
+    /* ------------------------------------------------- Stats row */
+    if (resolved === "stats") {
+      const items = stats ?? [];
+      const content = (
+        <div className="flex max-w-2xl flex-col items-start gap-5">
+          <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+          <Heading level={1}>{heading}</Heading>
+          <Subheading>{subheading}</Subheading>
+          {buttons()}
+        </div>
+      );
+      return (
+        <Section container={false}>
+          <Container className="flex flex-col gap-12 lg:gap-16">
+            {backgroundImage ? (
+              <div className="grid items-center gap-12 md:grid-cols-[1.1fr_0.9fr] lg:gap-16">
+                {content}
+                {/* Two-photo collage: main image + offset inset photo. */}
+                <div className={secondaryImage ? "relative sm:pb-10 sm:pl-8" : "relative"}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={backgroundImage}
+                    alt=""
+                    className="h-64 w-full object-cover sm:h-80"
+                    style={{
+                      borderRadius: "var(--radius-lg)",
+                      boxShadow: "var(--shadow-card)",
+                    }}
+                  />
+                  {secondaryImage ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={secondaryImage}
+                      alt=""
+                      className="absolute bottom-0 left-0 hidden w-[45%] object-cover sm:block"
+                      style={{
+                        aspectRatio: "4 / 3",
+                        borderRadius: "var(--radius-lg)",
+                        border: "5px solid var(--color-bg)",
+                        boxShadow: "var(--shadow-card)",
+                      }}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              content
+            )}
+            {items.length > 0 ? (
+              <dl
+                className="grid grid-cols-2 gap-x-6 gap-y-8 border-t pt-10 lg:grid-cols-4"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                {items.map((stat, i) => (
+                  <div key={i} className="flex flex-col gap-1">
+                    <dd
+                      className="order-first"
+                      style={{
+                        fontFamily: "var(--font-heading)",
+                        fontWeight: "var(--heading-weight)" as CSSProperties["fontWeight"],
+                        fontSize: "clamp(1.9rem, 1.4rem + 1.6vw, 2.75rem)",
+                        letterSpacing: "-1px",
+                        lineHeight: 1.1,
+                        color: "var(--color-primary)",
+                      }}
+                    >
+                      {stat.value}
+                    </dd>
+                    <dt className="text-sm" style={{ color: "var(--color-muted)" }}>
+                      {stat.label}
+                    </dt>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </Container>
+        </Section>
+      );
+    }
+
+    /* -------------------------------------------- Centered band */
     return (
       <Section
         background="dark"
@@ -95,32 +534,33 @@ export const Hero: ComponentConfig<HeroProps> = {
         className="relative overflow-hidden"
         style={
           backgroundImage
-            ? {
+            ? ({
                 backgroundImage: `url(${backgroundImage})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
-              }
+                "--eyebrow-color": "rgba(248, 250, 252, 0.92)",
+              } as CSSProperties)
             : undefined
         }
       >
         {backgroundImage ? (
-          <div className="absolute inset-0" style={{ backgroundColor: "rgba(10, 14, 20, 0.62)" }} />
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: "rgba(10, 14, 20, 0.62)" }}
+          />
         ) : null}
         <Container className="relative flex max-w-3xl flex-col items-center gap-6 text-center">
-          {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+          <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
           <Heading level={1} style={backgroundImage ? { color: "#ffffff" } : undefined}>
             {heading}
           </Heading>
-          <p
-            className="max-w-[55ch] text-lg"
-            style={{
-              color: backgroundImage ? "rgba(255,255,255,0.82)" : "var(--color-muted)",
-              lineHeight: 1.6,
-            }}
+          <Subheading
+            className="max-w-[55ch]"
+            style={backgroundImage ? { color: "rgba(255,255,255,0.82)" } : undefined}
           >
             {subheading}
-          </p>
-          {buttonText ? <Button href={buttonLink}>{buttonText}</Button> : null}
+          </Subheading>
+          {buttons(true)}
         </Container>
       </Section>
     );

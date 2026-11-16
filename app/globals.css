@@ -107,6 +107,19 @@ body {
   font-style: italic;
 }
 
+/* Long-form article layout: drop cap on the opening paragraph.
+   (Descendant selector: Puck's richtext render wraps paragraphs in a div.) */
+.rich-text-drop-cap p:first-of-type::first-letter {
+  float: left;
+  font-family: var(--font-heading, inherit);
+  font-weight: var(--heading-weight, 700);
+  font-size: 3.4em;
+  line-height: 0.8;
+  padding-right: 0.14em;
+  padding-top: 0.08em;
+  color: var(--color-primary);
+}
+
 /*
  * SectionShell (components/blocks/ui/SectionShell.tsx).
  *

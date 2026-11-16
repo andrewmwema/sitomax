@@ -324,12 +324,15 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
         video.source !== "upload" ? videoEmbedUrl(video.embedUrl) : null;
       const fileUrl =
         video.source === "upload" ? safeUploadedVideoUrl(video.uploadUrl) : null;
-      if (embedUrl || fileUrl) {
+      const poster = safeMediaUrl(video.poster);
+      // A poster alone still renders (as a static image) so video
+      // designs look finished before a video is added.
+      if (embedUrl || fileUrl || poster) {
         background = {
           kind: "video",
           embedUrl,
           fileUrl,
-          poster: safeMediaUrl(video.poster),
+          poster,
           overlay: normalizeOverlay(rawBackground),
         };
       }

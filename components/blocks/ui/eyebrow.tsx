@@ -12,7 +12,7 @@ export function Eyebrow({
     <p
       className={`text-xs font-semibold uppercase ${className}`}
       style={{
-        color: "var(--color-secondary)",
+        color: "var(--eyebrow-color, var(--color-secondary))",
         letterSpacing: "0.14em",
         fontFamily: "var(--font-body)",
       }}

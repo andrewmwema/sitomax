@@ -3,15 +3,18 @@ import type { CSSProperties, ReactNode } from "react";
 type Variant = "primary" | "secondary" | "ghost";
 
 const VARIANTS: Record<Variant, CSSProperties> = {
+  // --btn-* vars are set by dark/primary Sections and by SectionShell's
+  // light text scheme (photo/video backgrounds), so primary buttons use
+  // the accent (or white) and secondary buttons a white outline there.
   primary: {
-    backgroundColor: "var(--color-primary)",
-    color: "var(--color-on-primary)",
+    backgroundColor: "var(--btn-bg, var(--color-primary))",
+    color: "var(--btn-fg, var(--color-on-primary))",
     border: "1px solid transparent",
   },
   secondary: {
     backgroundColor: "transparent",
     color: "inherit",
-    border: "1px solid var(--color-border)",
+    border: "1px solid var(--btn-outline, var(--color-border))",
   },
   ghost: {
     backgroundColor: "transparent",

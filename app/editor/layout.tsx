@@ -1,7 +1,10 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import "@puckeditor/core/puck.css";
+// no-external variant: the default puck.css @imports a remote font
+// stylesheet (rsms.me Inter), which leaks a third-party request and
+// breaks html-to-image thumbnail capture. Fonts come from next/font.
+import "@puckeditor/core/no-external.css";
 
 /**
  * Auth gate for the full-screen editor. Dynamic auth access lives inside

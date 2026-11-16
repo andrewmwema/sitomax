@@ -1,60 +1,194 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { createUsePuck, registerOverlayPortal } from "@puckeditor/core";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { createUsePuck } from "@puckeditor/core";
 import { useSectionLibrary } from "@/components/editor/section-library";
 
 const usePuckStore = createUsePuck();
 
+/** How long the pill stays visible after the pointer leaves its zone. */
+const HIDE_DELAY_MS = 150;
+/** Full height of the boundary hover zone, centered on the boundary. */
+const ZONE_HEIGHT = 32;
+
+type Boundary = { insertIndex: number; y: number };
+
 /**
- * "+ Add section" buttons shown on the canvas. One straddles the top
- * edge of the first section and one the bottom edge of every section
- * (i.e. between any two sections and after the last one); they appear
- * on hover/selection via Puck's componentOverlay override.
+ * "+ Add section" buttons between sections.
+ *
+ * Puck only mounts componentOverlay while a section is hovered or
+ * selected, so overlay-based buttons unmount exactly when the pointer
+ * reaches them (the flicker). Instead, this layer is ALWAYS mounted:
+ * it portals a full-width, 32px-tall hover zone into the canvas iframe
+ * for every section boundary (top of the first section and bottom of
+ * each section), positioned from measured section rects and kept in
+ * sync with a ResizeObserver + MutationObserver.
+ *
+ * Visibility is per-zone local state driven by pointer hit-testing —
+ * hovering never touches Puck or editor state, so the canvas never
+ * re-renders while showing or hiding a pill.
  */
-export function OverlayInsertButtons({
-  componentId,
-  visible,
-}: {
-  componentId: string;
-  visible: boolean;
-}) {
-  const index = usePuckStore((s) =>
-    s.appState.data.content.findIndex((item) => item.props.id === componentId),
-  );
+export function CanvasInsertZones() {
+  const [frameBody, setFrameBody] = useState<HTMLElement | null>(null);
+  const [boundaries, setBoundaries] = useState<Boundary[]>([]);
+  // Re-measure when sections are added/removed/reordered.
+  const contentLength = usePuckStore((s) => s.appState.data.content.length);
 
-  // Only top-level sections get insert buttons (not items inside slots).
-  if (!visible || index < 0) return null;
+  // Find the canvas iframe body (Puck mounts it asynchronously).
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const frame = document.querySelector<HTMLIFrameElement>("iframe#preview-frame");
+      const body = frame?.contentDocument?.body;
+      if (body) {
+        setFrameBody(body);
+        window.clearInterval(timer);
+      }
+    }, 200);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  return (
-    <>
-      {index === 0 ? <InsertButton position="top" insertIndex={0} /> : null}
-      <InsertButton position="bottom" insertIndex={index + 1} />
-    </>
+  // Measure top-level section boundaries in document coordinates.
+  useEffect(() => {
+    if (!frameBody) return;
+    const doc = frameBody.ownerDocument;
+    const win = doc.defaultView;
+    if (!win) return;
+
+    const sections = () =>
+      [...doc.querySelectorAll<HTMLElement>("[data-puck-component]")].filter(
+        // Top-level sections only, not items nested inside slots.
+        (el) => !el.parentElement?.closest("[data-puck-component]"),
+      );
+
+    const observer = new ResizeObserver(() => measure());
+    const measure = () => {
+      const list: Boundary[] = [];
+      sections().forEach((el, i) => {
+        observer.observe(el); // Re-observing the same element is a no-op.
+        const rect = el.getBoundingClientRect();
+        const top = rect.top + win.scrollY;
+        if (i === 0) list.push({ insertIndex: 0, y: top });
+        list.push({ insertIndex: i + 1, y: top + rect.height });
+      });
+      setBoundaries((prev) =>
+        prev.length === list.length &&
+        prev.every((b, i) => b.y === list[i].y && b.insertIndex === list[i].insertIndex)
+          ? prev
+          : list,
+      );
+    };
+
+    measure();
+    observer.observe(doc.documentElement);
+    win.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      win.removeEventListener("resize", measure);
+    };
+  }, [frameBody, contentLength]);
+
+  if (!frameBody || boundaries.length === 0) return null;
+
+  return createPortal(
+    // The layer itself never intercepts the canvas.
+    <div
+      aria-hidden={undefined}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        pointerEvents: "none",
+        // Above Puck's selection outline and block action toolbar.
+        zIndex: 80,
+      }}
+    >
+      {boundaries.map((boundary) => (
+        <InsertZone
+          key={boundary.insertIndex}
+          y={boundary.y}
+          insertIndex={boundary.insertIndex}
+        />
+      ))}
+    </div>,
+    frameBody,
   );
 }
 
-function InsertButton({
-  position,
-  insertIndex,
-}: {
-  position: "top" | "bottom";
-  insertIndex: number;
-}) {
+/**
+ * A 32px-tall, full-width hover zone centered on a section boundary.
+ * The zone has pointer-events: none so it never steals clicks or hovers
+ * from the sections; the pointer is hit-tested against its rect on
+ * pointermove instead. The pill shows while the pointer is inside the
+ * zone (which contains the button) or while the button has keyboard
+ * focus, and hides HIDE_DELAY_MS after the pointer leaves.
+ */
+function InsertZone({ y, insertIndex }: { y: number; insertIndex: number }) {
   const { openLibrary } = useSectionLibrary();
-  const portalRef = useRef<HTMLDivElement>(null);
+  const zoneRef = useRef<HTMLDivElement>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Local to this zone only: toggling it re-renders just this pill.
+  const [show, setShow] = useState(false);
 
-  // Overlay elements are inert by default; the portal makes it clickable.
-  useEffect(() => registerOverlayPortal(portalRef.current), []);
+  useEffect(() => {
+    const zone = zoneRef.current;
+    if (!zone) return;
+    const doc = zone.ownerDocument;
+
+    const cancelHide = () => {
+      if (hideTimer.current) {
+        clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
+    };
+    const scheduleHide = () => {
+      if (!hideTimer.current) {
+        hideTimer.current = setTimeout(() => {
+          hideTimer.current = null;
+          setShow(false);
+        }, HIDE_DELAY_MS);
+      }
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      const rect = zone.getBoundingClientRect();
+      const inside =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+      if (inside) {
+        cancelHide();
+        setShow(true); // Same-value updates bail out: no re-renders.
+      } else {
+        scheduleHide();
+      }
+    };
+    const onPointerLeave = () => scheduleHide();
+
+    doc.addEventListener("pointermove", onPointerMove, { passive: true });
+    doc.documentElement.addEventListener("pointerleave", onPointerLeave);
+    return () => {
+      doc.removeEventListener("pointermove", onPointerMove);
+      doc.documentElement.removeEventListener("pointerleave", onPointerLeave);
+      cancelHide();
+    };
+  }, []);
 
   return (
     <div
-      ref={portalRef}
-      className={`absolute left-1/2 z-50 -translate-x-1/2 ${
-        position === "top" ? "top-0 -translate-y-1/2" : "bottom-0 translate-y-1/2"
-      }`}
+      ref={zoneRef}
+      data-insert-zone={insertIndex}
+      className="pointer-events-none absolute inset-x-0 flex items-center justify-center"
+      style={{ top: y - ZONE_HEIGHT / 2, height: ZONE_HEIGHT }}
     >
-      <AddSectionPill onClick={() => openLibrary(insertIndex)} small />
+      <div
+        className={`transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 ${
+          show ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      >
+        <AddSectionPill onClick={() => openLibrary(insertIndex)} small />
+      </div>
     </div>
   );
 }
@@ -86,7 +220,11 @@ function AddSectionPill({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full bg-zinc-900 font-medium text-white shadow-lg transition hover:bg-zinc-700 ${
+      // Keep Puck's canvas drag sensor from hijacking the click.
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      aria-label="Add section here"
+      className={`inline-flex items-center gap-1.5 rounded-full bg-zinc-900 font-medium text-white shadow-lg transition hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
         small ? "px-3 py-1 text-xs" : "px-4 py-2 text-sm"
       }`}
     >

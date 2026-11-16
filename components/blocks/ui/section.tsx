@@ -20,12 +20,19 @@ const BACKGROUNDS: Record<SectionBackground, CSSProperties> = {
     // Re-derive tints for light-on-dark content.
     "--color-muted": "color-mix(in srgb, var(--color-bg) 72%, transparent)",
     "--color-border": "color-mix(in srgb, var(--color-bg) 18%, transparent)",
+    // Buttons on dark: accent primary (white if low contrast), white outline.
+    "--btn-bg": "var(--color-cta-dark)",
+    "--btn-fg": "var(--color-on-cta-dark)",
+    "--btn-outline": "rgba(255, 255, 255, 0.85)",
   } as CSSProperties,
   primary: {
     backgroundColor: "var(--section-bg-override, var(--color-primary))",
     color: "var(--color-on-primary)",
     "--color-muted": "color-mix(in srgb, var(--color-on-primary) 78%, transparent)",
     "--color-border": "color-mix(in srgb, var(--color-on-primary) 25%, transparent)",
+    "--btn-bg": "var(--color-cta-primary)",
+    "--btn-fg": "var(--color-on-cta-primary)",
+    "--btn-outline": "rgba(255, 255, 255, 0.85)",
   } as CSSProperties,
 };
 

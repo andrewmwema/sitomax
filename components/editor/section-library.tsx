@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useGetPuck, type Data } from "@puckeditor/core";
@@ -108,6 +109,14 @@ function SectionLibraryModalContent() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeLibrary]);
 
+  // Opening from a canvas pill leaves focus inside the preview iframe,
+  // where the window keydown listener above would never hear Escape.
+  // Standard dialog behavior fixes it: move focus into the dialog.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
   const allDesigns = useMemo(
     () => [...sectionCatalog, ...(savedDesigns ?? [])],
     [savedDesigns],
@@ -161,7 +170,9 @@ function SectionLibraryModalContent() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/50 p-4 sm:p-8"
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/50 p-4 outline-none sm:p-8"
       role="dialog"
       aria-modal="true"
       aria-label="Add section"
@@ -282,17 +293,27 @@ function SectionLibraryModalContent() {
                 </p>
               ) : (
                 categoryDesigns.map((entry) => (
-                  <button
+                  // NOT a <button>: the preview contains buttons, links
+                  // and form fields, which cannot nest inside a button.
+                  // The card is a div with an inert preview and a
+                  // transparent overlay button for click and keyboard.
+                  <div
                     key={entry.id}
-                    type="button"
-                    onClick={() => insertDesign(entry)}
-                    className="group overflow-hidden rounded-xl border border-zinc-200 text-left shadow-sm transition hover:border-zinc-400 hover:shadow-md"
+                    className="group relative overflow-hidden rounded-xl border border-zinc-200 shadow-sm transition focus-within:border-zinc-400 hover:border-zinc-400 hover:shadow-md"
                   >
-                    <DesignThumbnail design={entry} theme={theme} />
-                    <span className="block border-t border-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700 group-hover:text-zinc-900">
-                      {entry.name}
-                    </span>
-                  </button>
+                    <div inert aria-hidden="true" className="pointer-events-none select-none">
+                      <DesignThumbnail design={entry} theme={theme} />
+                      <span className="block border-t border-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700 group-hover:text-zinc-900">
+                        {entry.name}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => insertDesign(entry)}
+                      aria-label={`Insert ${entry.name}`}
+                      className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600"
+                    />
+                  </div>
                 ))
               )}
             </div>

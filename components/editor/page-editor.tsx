@@ -15,13 +15,18 @@ import {
   type Data,
   type Overrides,
 } from "@puckeditor/core";
-import { Bookmark } from "lucide-react";
+import { Bookmark, TriangleAlert } from "lucide-react";
 import { puckConfig } from "@/lib/puck/config";
 import type { SiteTheme } from "@/lib/theme/presets";
+import {
+  findUnreplacedPlaceholders,
+  type PlaceholderHit,
+} from "@/lib/sections/placeholders";
 import { publishPage, savePageDraft } from "@/app/editor/[pageId]/actions";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
 import { ThemePanel } from "@/components/editor/theme-panel";
 import {
+  ROOT_ZONE,
   SectionLibraryContext,
   SectionLibraryModal,
   useSectionLibrary,
@@ -29,7 +34,7 @@ import {
 } from "@/components/editor/section-library";
 import {
   AddSectionEndBar,
-  OverlayInsertButtons,
+  CanvasInsertZones,
 } from "@/components/editor/canvas-insert";
 import { SaveDesignDialog } from "@/components/editor/save-design-dialog";
 
@@ -47,12 +52,21 @@ function useEditorUi(): EditorUi {
   return context;
 }
 
+/** Labels for the placeholder warning, from the block config. */
+const BLOCK_LABELS = Object.fromEntries(
+  Object.entries(puckConfig.components).map(([type, component]) => [
+    type,
+    component.label ?? type,
+  ]),
+);
+
 /** Header buttons: Save draft, Preview, Publish and the theme panel toggle. */
 function HeaderActions() {
   const getPuck = useGetPuck();
   const { pageId, previewUrl, openThemePanel } = useEditorUi();
   const [busy, setBusy] = useState<"save" | "publish" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
   const messageTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const run = useCallback(
@@ -67,6 +81,28 @@ function HeaderActions() {
       messageTimeout.current = setTimeout(() => setMessage(null), 4000);
     },
     [getPuck, pageId],
+  );
+
+  // Publishing first checks for leftover [placeholder] text in designs.
+  const requestPublish = useCallback(() => {
+    const { appState } = getPuck();
+    const hits = findUnreplacedPlaceholders(appState.data, BLOCK_LABELS);
+    if (hits.length > 0) {
+      setPlaceholderHits(hits);
+      return;
+    }
+    void run("publish");
+  }, [getPuck, run]);
+
+  const selectSection = useCallback(
+    (index: number) => {
+      getPuck().dispatch({
+        type: "setUi",
+        ui: { itemSelector: { index, zone: ROOT_ZONE } },
+      });
+      setPlaceholderHits(null);
+    },
+    [getPuck],
   );
 
   const buttonClasses =
@@ -101,11 +137,67 @@ function HeaderActions() {
       <button
         type="button"
         disabled={busy !== null}
-        onClick={() => void run("publish")}
+        onClick={requestPublish}
         className={`${buttonClasses} bg-emerald-600 text-white hover:bg-emerald-700`}
       >
         {busy === "publish" ? "Publishing…" : "Publish"}
       </button>
+      {placeholderHits ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <TriangleAlert size={20} className="mt-0.5 shrink-0 text-amber-500" />
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">
+                  Some placeholder text hasn&apos;t been replaced yet
+                </h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Text in [brackets] is sample content — replace it with this
+                  business&apos;s real details before publishing.
+                </p>
+              </div>
+            </div>
+            <ul className="mt-4 max-h-56 space-y-1.5 overflow-y-auto">
+              {placeholderHits.map((hit) => (
+                <li key={hit.index}>
+                  <button
+                    type="button"
+                    onClick={() => selectSection(hit.index)}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50"
+                  >
+                    <span className="block text-sm font-medium text-zinc-800">
+                      {hit.label}
+                      <span className="font-normal text-zinc-400"> · section {hit.index + 1}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-amber-600">
+                      {hit.snippets.join("  ")}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPlaceholderHits(null)}
+                className={`${buttonClasses} border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50`}
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPlaceholderHits(null);
+                  void run("publish");
+                }}
+                className={`${buttonClasses} bg-emerald-600 text-white hover:bg-emerald-700`}
+              >
+                Publish anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -191,18 +283,10 @@ export function PageEditor({
     () => ({
       headerActions: () => <HeaderActions />,
       actionBar: (props) => <EditorActionBar {...props} />,
-      componentOverlay: ({ children, hover, isSelected, componentId }) => (
-        <>
-          {children}
-          <OverlayInsertButtons
-            componentId={componentId}
-            visible={hover || isSelected}
-          />
-        </>
-      ),
       preview: ({ children }) => (
         <>
           {children}
+          <CanvasInsertZones />
           <AddSectionEndBar />
         </>
       ),

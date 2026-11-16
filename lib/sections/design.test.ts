@@ -119,6 +119,27 @@ describe("normalizeDesign", () => {
     expect(bad.background).toEqual({ kind: "none" });
   });
 
+  it("keeps a poster-only video background as a static frame", () => {
+    const posterOnly = normalizeDesign({
+      background: {
+        type: "video",
+        video: { poster: "/samples/kitchen.jpg" },
+      },
+    });
+    expect(posterOnly.background).toMatchObject({
+      kind: "video",
+      embedUrl: null,
+      fileUrl: null,
+      poster: "/samples/kitchen.jpg",
+    });
+
+    // No poster and no valid video still collapses to none.
+    const empty = normalizeDesign({
+      background: { type: "video", video: {} },
+    });
+    expect(empty.background).toEqual({ kind: "none" });
+  });
+
   it("resolves auto text color for WCAG contrast", () => {
     expect(autoTextScheme("#0a0e14")).toBe("light");
     expect(autoTextScheme("#ffffff")).toBe("dark");
