@@ -1297,3 +1297,11 @@ export function designsForCategory(
 ): SectionDesign[] {
   return designs.filter((entry) => entry.category === category);
 }
+
+export function searchSectionDesigns(designs: SectionDesign[], query: string): SectionDesign[] {
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return designs.filter((entry) => {
+    const text = `${entry.name} ${entry.category} ${entry.blockType}`.toLowerCase();
+    return terms.every((term) => text.includes(term));
+  });
+}

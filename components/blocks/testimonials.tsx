@@ -70,7 +70,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
         <Heading level={2}>{heading}</Heading>
       </div>
       {variant === "carousel" ? (
-        <div className="mx-auto mt-12 max-w-4xl">
+        <div className="mx-auto mt-[var(--section-gap)] max-w-4xl">
           <Carousel label={typeof heading === "string" ? heading : "Customer testimonials"} items={testimonials.map((t, i) => (
             <Card key={i} className="min-h-80 justify-center gap-8 p-8 sm:p-14">
               <span className="text-sm font-medium uppercase tracking-[0.16em]" style={{ color: "var(--color-muted)" }}>Customer story / {String(i + 1).padStart(2, "0")}</span>
@@ -80,7 +80,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
           ))} />
         </div>
       ) : (variant ?? "cards") === "quotes" ? (
-        <div className="mx-auto mt-12 flex max-w-[44rem] flex-col gap-14">
+        <div className="mx-auto mt-[var(--section-gap)] flex max-w-[44rem] flex-col gap-[var(--section-gap)]">
           {testimonials.map((t, i) => (
             <figure key={i} className="flex flex-col items-center gap-5 text-center">
               <span
@@ -111,7 +111,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
           ))}
         </div>
       ) : (
-        <div className={variant === "rating" ? "mt-12 grid items-start gap-10 lg:grid-cols-[1fr_2fr]" : "mt-12"}>
+        <div className={variant === "rating" ? "mt-[var(--section-gap)] grid items-start gap-[var(--section-gap)] lg:grid-cols-[1fr_2fr]" : "mt-[var(--section-gap)]"}>
           {variant === "rating" ? (
             <div className="flex flex-col items-start gap-4 border-t-2 pt-6" style={{ borderColor: "var(--color-secondary)" }}>
               <BlockIcon name="star" size={32} />

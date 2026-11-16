@@ -202,6 +202,14 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
     "--color-cta-primary": ctaPrimary,
     "--color-on-cta-primary": onPrimaryColor(ctaPrimary),
     ...preset.vars,
+    "--section-gap": "calc(var(--section-pad) / 2)",
+    "--content-gap": "calc(var(--section-pad) / 4)",
+    "--detail-gap": "calc(var(--section-pad) / 8)",
+    "--card-hover-y": theme?.style === "modern" ? "-2px" : "0px",
+    "--card-hover-shadow": theme?.style === "modern"
+      ? "0 16px 36px -12px color-mix(in srgb, var(--color-text) 24%, transparent)"
+      : "var(--shadow-card)",
+    "--card-hover-border": theme?.style === "modern" ? "var(--color-border)" : "var(--color-secondary)",
     "--font-heading": fontFamily(headingFont),
     "--font-body": fontFamily(bodyFont),
   } as CSSProperties;

@@ -294,12 +294,12 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
       return (
         <Section>
           <div className="mx-auto max-w-[48rem]">
-            <div className="mb-6 flex flex-col gap-4">
+            <div className="mb-[var(--content-gap)] flex flex-col gap-4">
               <SectionHeader eyebrow={eyebrow} heading={heading} />
             </div>
             {pullQuote ? (
               <blockquote
-                className="mb-5 md:float-right md:mb-4 md:ml-10 md:w-[42%]"
+                className="mb-[var(--content-gap)] md:float-right md:mb-[var(--content-gap)] md:ml-[var(--section-gap)] md:w-[42%]"
                 style={{
                   borderTop: "3px solid var(--color-secondary)",
                   paddingTop: "1.1rem",

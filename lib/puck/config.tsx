@@ -25,6 +25,7 @@ import { ContactForm, type ContactFormProps } from "@/components/blocks/contact-
 import { Map, type MapProps } from "@/components/blocks/map";
 import { Spacer, type SpacerProps } from "@/components/blocks/spacer";
 import { Footer, type FooterProps } from "@/components/blocks/footer";
+import { Navigation, type NavigationProps } from "@/components/blocks/navigation";
 
 type Components = {
   Hero: HeroProps;
@@ -44,6 +45,7 @@ type Components = {
   Map: MapProps;
   Spacer: SpacerProps;
   Footer: FooterProps;
+  Navigation: NavigationProps;
 };
 
 export type RootProps = {
@@ -91,7 +93,7 @@ export const puckConfig: PuckConfig = {
   categories: {
     layout: {
       title: "Layout",
-      components: ["Hero", "Spacer", "Footer"],
+      components: ["Navigation", "Hero", "Spacer", "Footer"],
     },
     content: {
       title: "Content",
@@ -134,7 +136,8 @@ export const puckConfig: PuckConfig = {
       const theme = (puck.metadata?.theme ?? {}) as SiteTheme;
       return (
         <div
-          className="flex min-h-screen flex-col antialiased"
+          className="site-content flex min-h-screen min-w-0 flex-col antialiased"
+          data-site-style={theme.style === "modern" ? "modern" : "classic"}
           style={{
             ...buildThemeStyle(theme),
             backgroundColor: "var(--color-bg)",
@@ -167,5 +170,6 @@ export const puckConfig: PuckConfig = {
     Map: withSectionShell(Map),
     Spacer: withSectionShell(Spacer),
     Footer: withSectionShell(Footer),
+    Navigation: withSectionShell(Navigation),
   },
 };

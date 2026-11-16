@@ -128,7 +128,7 @@ export const Services: ComponentConfig<ServicesProps> = {
       return (
         <Section>
           {intro}
-          <div className="mt-12 flex flex-col gap-12 md:gap-16">
+          <div className="mt-[var(--section-gap)] flex flex-col gap-[var(--section-gap)]">
             {services.map((service, i) => (
               <div key={i} className="grid items-center gap-7 md:grid-cols-2 md:gap-12">
                 <ServiceImage service={service} className={i % 2 === 1 ? "md:order-2" : ""} />
@@ -150,7 +150,7 @@ export const Services: ComponentConfig<ServicesProps> = {
       return (
         <Section>
           {intro}
-          <div className="mt-10">
+          <div className="mt-[var(--section-gap)]">
             <Tabs
               label={typeof heading === "string" ? heading : "Our services"}
               items={services.map((service) => ({
@@ -179,7 +179,7 @@ export const Services: ComponentConfig<ServicesProps> = {
         <Section>
           {intro}
           <div
-            className="mt-12 grid gap-px overflow-hidden border sm:grid-cols-2 lg:grid-cols-3"
+            className="mt-[var(--section-gap)] grid gap-px overflow-hidden border sm:grid-cols-2 lg:grid-cols-3"
             style={{
               borderColor: "var(--color-border)",
               borderRadius: "var(--radius-lg)",
@@ -206,7 +206,7 @@ export const Services: ComponentConfig<ServicesProps> = {
     return (
       <Section background={variant === "image-cards" ? "default" : "soft"}>
         {intro}
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-[var(--section-gap)] grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((service, i) => (
             <Card
               key={i}

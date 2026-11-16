@@ -7,7 +7,7 @@ export function BillingToggle({ monthly, yearly }: { monthly: ReactNode; yearly:
 
   return (
     <div>
-      <div className="mb-9 flex justify-center">
+      <div className="mb-[var(--section-gap)] flex justify-center">
         <div
           role="group"
           aria-label="Billing period"

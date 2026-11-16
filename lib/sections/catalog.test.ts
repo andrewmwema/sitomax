@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { puckConfig } from "@/lib/puck/config";
 import { normalizeDesign, type BlockDesign } from "@/lib/sections/design";
-import { SECTION_CATEGORIES, sectionCatalog } from "./catalog";
+import { SECTION_CATEGORIES, sectionCatalog, searchSectionDesigns } from "./catalog";
 
 describe("section catalog", () => {
   it("has unique design ids", () => {
@@ -38,5 +38,14 @@ describe("section catalog", () => {
         "variant",
       );
     }
+  });
+
+  it("searches built-in and saved designs across names, blocks and categories", () => {
+    const saved = { ...sectionCatalog[0], id: "saved-custom", name: "Seasonal welcome" };
+    const designs = [...sectionCatalog, saved];
+    expect(searchSectionDesigns(designs, "  HERO seasonal  ")).toEqual([saved]);
+    expect(searchSectionDesigns(designs, "contact sidebar").map((entry) => entry.id)).toEqual(["faq-contact-sidebar"]);
+    expect(searchSectionDesigns(designs, "no matching section")).toEqual([]);
+    expect(searchSectionDesigns(designs, "   ")).toHaveLength(designs.length);
   });
 });

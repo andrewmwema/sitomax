@@ -251,6 +251,32 @@ Do a visual polish pass on all designs:
 ```
 **Check:** click "Add section" → Designed → insert a Pricing design, then change its background to an image, add a fade-up animation, and change the mobile padding. Switch the site Style between Classic and Modern. Every design should look finished without editing; bold, italic and bullets should work in body text.
 
+Polish implementation:
+- Section spacing and inter-content margins derive from `--section-pad` through
+  `--section-gap`, `--content-gap` and `--detail-gap`. Authored per-device
+  SectionShell spacing remains supported.
+- Shared cards lift 2px with a stronger shadow in Modern; Classic changes the
+  border color without lifting. Reduced-motion preferences disable movement.
+- Action buttons and form submit buttons fill their container below 480px.
+  Carousel, billing and menu controls remain compact. Navigation is an editable
+  block with a collapsible menu below 768px, Escape handling and focus restoration.
+  Existing saved pages do not receive navigation automatically.
+- Elements and Blank blocks have thumbnails; live previews are inert, sandboxed
+  and mounted near the visible list area. Designed search matches names, categories and block types
+  across built-in and saved designs. Saved-design failures show a retry notice.
+- Gallery previews use equal 16:10 frames, scale to card width and crop from the
+  top without scrollbars. Short previews (including saved screenshots) fill with
+  the section background, and single-line labels stay aligned. Pricing cards,
+  including the highlighted plan, use a surface distinct from the section.
+- Plumber, salon, restaurant and general-business templates now compose catalog
+  designs into Home, About, Services and Contact pages, including navigation and
+  footer. Template `{{businessName}}`-style tokens also trigger publish warnings.
+
+Still unfinished: template selection/application in the create-site wizard,
+the `/api/forms/submit` backend, and replacing sample copy, reviews, contact details
+and stock photos with real business content (especially salon/restaurant photos).
+The video hero needs an actual video URL; its default presentation uses a poster.
+
 ---
 
 ## Phase 4c: Pro editor experience (sleeker than the competition)

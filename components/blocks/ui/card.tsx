@@ -12,13 +12,13 @@ export function Card({
 }) {
   return (
     <div
-      className={`flex flex-col gap-3 p-6 sm:p-7 ${className}`}
+      className={`site-card flex min-w-0 flex-col gap-3 p-6 sm:p-7 ${className}`}
       style={{
         backgroundColor: "var(--color-bg)",
         color: "var(--color-text)",
-        border: "1px solid var(--color-border)",
+        border: "1px solid var(--card-border, var(--color-border))",
         borderRadius: "var(--radius-lg)",
-        boxShadow: "var(--shadow-card)",
+        boxShadow: "var(--card-shadow, var(--shadow-card))",
         ...style,
       }}
     >

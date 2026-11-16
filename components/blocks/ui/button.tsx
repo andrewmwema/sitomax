@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEventHandler, ReactNode } from "react";
 
 type Variant = "primary" | "secondary" | "ghost";
 
@@ -33,17 +33,20 @@ export function Button({
   children,
   className = "",
   style,
+  onClick,
 }: {
   href?: string;
   variant?: Variant;
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
 }) {
   return (
     <a
       href={href || "#"}
-      className={`inline-flex min-h-12 items-center justify-center gap-2 px-6 py-3 text-base font-semibold no-underline transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 ${className}`}
+      onClick={onClick}
+      className={`site-button inline-flex min-h-12 items-center justify-center gap-2 px-6 py-3 text-center text-base font-semibold whitespace-normal no-underline transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 ${className}`}
       style={{
         borderRadius: "var(--radius-sm)",
         fontFamily: "var(--font-body)",

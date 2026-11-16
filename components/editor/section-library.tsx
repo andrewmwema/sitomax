@@ -16,11 +16,13 @@ import {
   SECTION_CATEGORIES,
   designsForCategory,
   sectionCatalog,
+  searchSectionDesigns,
   type SectionCategory,
   type SectionDesign,
 } from "@/lib/sections/catalog";
 import { listSavedDesigns } from "@/lib/sections/actions";
 import { DesignThumbnail } from "@/components/editor/design-thumbnail";
+import { BlockThumbnail } from "@/components/editor/block-thumbnail";
 
 /** Root content zone id used by Puck for top-level sections. */
 export const ROOT_ZONE = "root:default-zone";
@@ -84,6 +86,8 @@ function SectionLibraryModalContent() {
   const [mode, setMode] = useState<"choose" | "blank" | "designed">("choose");
   const [category, setCategory] = useState<SectionCategory>("Hero");
   const [savedDesigns, setSavedDesigns] = useState<SectionDesign[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [savedError, setSavedError] = useState<string | null>(null);
 
   // Load the agency's saved designs when the gallery is first shown.
   useEffect(() => {
@@ -93,8 +97,12 @@ function SectionLibraryModalContent() {
       .then((designs) => {
         if (!cancelled) setSavedDesigns(designs);
       })
-      .catch(() => {
-        if (!cancelled) setSavedDesigns([]);
+      .catch((error: unknown) => {
+        console.error("Unable to load saved section designs", error);
+        if (!cancelled) {
+          setSavedError("Saved designs could not be loaded. Built-in designs are still available.");
+          setSavedDesigns([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -166,7 +174,10 @@ function SectionLibraryModalContent() {
     [getPuck, library.index, selectAfterInsert, closeLibrary],
   );
 
-  const categoryDesigns = designsForCategory(allDesigns, category);
+  const searching = query.trim().length > 0;
+  const categoryDesigns = searching
+    ? searchSectionDesigns(allDesigns, query)
+    : designsForCategory(allDesigns, category);
 
   return (
     <div
@@ -242,32 +253,42 @@ function SectionLibraryModalContent() {
         ) : null}
 
         {mode === "blank" ? (
-          <div className="grid flex-1 content-start gap-3 overflow-y-auto p-6 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid flex-1 auto-rows-max content-start gap-3 overflow-y-auto p-6 sm:grid-cols-3 lg:grid-cols-4">
             {Object.entries(puckConfig.components).map(([type, component]) => (
-              <button
+              <div
                 key={type}
-                type="button"
-                onClick={() => insertBlank(type)}
-                className="rounded-xl border border-zinc-200 px-4 py-6 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+                className="relative overflow-hidden rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 focus-within:ring-2 focus-within:ring-blue-600"
               >
-                {component.label ?? type}
-              </button>
+                <BlockThumbnail name={type} theme={theme} />
+                <span className="block border-t border-zinc-100 p-3">{component.label ?? type}</span>
+                <button type="button" aria-label={`Insert blank ${component.label ?? type}`} onClick={() => insertBlank(type)} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600" />
+              </div>
             ))}
           </div>
         ) : null}
 
         {mode === "designed" ? (
-          <div className="flex min-h-0 flex-1">
-            <nav className="w-44 shrink-0 overflow-y-auto border-r border-zinc-200 p-3">
+          <>
+          <div className="border-b border-zinc-200 px-5 py-3">
+            <label htmlFor="section-design-search" className="sr-only">Search section designs</label>
+            <input id="section-design-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all designs..." className="min-h-11 w-full rounded-lg border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-blue-600" />
+            {searching ? <p role="status" className="mt-2 text-xs text-zinc-500">{categoryDesigns.length} results across all categories</p> : null}
+            {savedError ? <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-800">
+              <span>{savedError}</span>
+              <button type="button" className="underline" onClick={() => { setSavedError(null); setSavedDesigns(null); }}>Retry</button>
+            </div> : null}
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+            <nav aria-label="Section categories" className="grid max-h-36 shrink-0 grid-cols-2 overflow-y-auto border-b border-zinc-200 p-3 sm:block sm:max-h-none sm:w-44 sm:border-r sm:border-b-0">
               {SECTION_CATEGORIES.map((entry) => {
                 const count = designsForCategory(allDesigns, entry).length;
                 return (
                   <button
                     key={entry}
                     type="button"
-                    onClick={() => setCategory(entry)}
+                    onClick={() => { setCategory(entry); setQuery(""); }}
                     className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
-                      category === entry
+                      !searching && category === entry
                         ? "bg-zinc-900 text-white"
                         : "text-zinc-600 hover:bg-zinc-100"
                     }`}
@@ -275,7 +296,7 @@ function SectionLibraryModalContent() {
                     <span>{entry}</span>
                     <span
                       className={
-                        category === entry ? "text-zinc-300" : "text-zinc-400"
+                        !searching && category === entry ? "text-zinc-300" : "text-zinc-400"
                       }
                     >
                       {count}
@@ -284,10 +305,12 @@ function SectionLibraryModalContent() {
                 );
               })}
             </nav>
-            <div className="grid flex-1 content-start gap-4 overflow-y-auto p-5 sm:grid-cols-2">
+            <div className="grid min-w-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto p-5 sm:grid-cols-2">
               {categoryDesigns.length === 0 ? (
                 <p className="col-span-full py-12 text-center text-sm text-zinc-500">
-                  {savedDesigns === null
+                  {searching
+                    ? "No designs match your search."
+                    : savedDesigns === null
                     ? "Loading designs…"
                     : "No designs in this category yet."}
                 </p>
@@ -303,7 +326,7 @@ function SectionLibraryModalContent() {
                   >
                     <div inert aria-hidden="true" className="pointer-events-none select-none">
                       <DesignThumbnail design={entry} theme={theme} />
-                      <span className="block border-t border-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700 group-hover:text-zinc-900">
+                      <span className="block truncate border-t border-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700 group-hover:text-zinc-900">
                         {entry.name}
                       </span>
                     </div>
@@ -318,6 +341,7 @@ function SectionLibraryModalContent() {
               )}
             </div>
           </div>
+          </>
         ) : null}
       </div>
     </div>

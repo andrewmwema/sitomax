@@ -28,6 +28,59 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.site-content {
+  overflow-wrap: anywhere;
+}
+
+.site-content :where(.flex, .grid) > * {
+  min-width: 0;
+}
+
+.site-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+@media (hover: hover) {
+  .site-card:hover {
+    --card-shadow: var(--card-hover-shadow);
+    --card-border: var(--card-hover-border);
+    transform: translateY(var(--card-hover-y));
+    box-shadow: var(--card-hover-shadow) !important;
+  }
+
+  .site-content[data-site-style="classic"] .site-card:hover {
+    border-color: var(--card-hover-border) !important;
+  }
+}
+
+.site-card:focus-within {
+  --card-border: var(--card-hover-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-card,
+  .site-button {
+    transition: none;
+    transform: none !important;
+  }
+}
+
+@media (width < 480px) {
+  .site-content .site-button,
+  .site-content button[type="submit"] {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .site-content :where(.flex, .grid) > .site-button {
+    flex-shrink: 1;
+  }
+
+  .site-content .site-actions {
+    width: 100%;
+  }
+}
+
 /*
  * Shared styles for rich text content (Puck richtext fields), used on
  * public tenant pages and inside the editor preview. Colors and fonts
@@ -136,8 +189,9 @@ body {
   margin-left: var(--shell-ml-d, 0px);
   padding-left: var(--shell-pl-d, 0px);
   padding-right: var(--shell-pr-d, 0px);
-  --section-pad-top: var(--shell-pt-d, var(--section-pad));
-  --section-pad-bottom: var(--shell-pb-d, var(--section-pad));
+  /* Consumers choose their normal or compact fallback when no override is set. */
+  --section-pad-top: var(--shell-pt-d);
+  --section-pad-bottom: var(--shell-pb-d);
 }
 
 @media (max-width: 1023.98px) {
@@ -148,8 +202,8 @@ body {
     margin-left: var(--shell-ml-t, var(--shell-ml-d, 0px));
     padding-left: var(--shell-pl-t, var(--shell-pl-d, 0px));
     padding-right: var(--shell-pr-t, var(--shell-pr-d, 0px));
-    --section-pad-top: var(--shell-pt-t, var(--shell-pt-d, var(--section-pad)));
-    --section-pad-bottom: var(--shell-pb-t, var(--shell-pb-d, var(--section-pad)));
+    --section-pad-top: var(--shell-pt-t, var(--shell-pt-d));
+    --section-pad-bottom: var(--shell-pb-t, var(--shell-pb-d));
   }
 }
 
@@ -161,8 +215,8 @@ body {
     margin-left: var(--shell-ml-m, var(--shell-ml-t, var(--shell-ml-d, 0px)));
     padding-left: var(--shell-pl-m, var(--shell-pl-t, var(--shell-pl-d, 0px)));
     padding-right: var(--shell-pr-m, var(--shell-pr-t, var(--shell-pr-d, 0px)));
-    --section-pad-top: var(--shell-pt-m, var(--shell-pt-t, var(--shell-pt-d, var(--section-pad))));
-    --section-pad-bottom: var(--shell-pb-m, var(--shell-pb-t, var(--shell-pb-d, var(--section-pad))));
+    --section-pad-top: var(--shell-pt-m, var(--shell-pt-t, var(--shell-pt-d)));
+    --section-pad-bottom: var(--shell-pb-m, var(--shell-pb-t, var(--shell-pb-d)));
   }
 }
 

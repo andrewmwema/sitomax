@@ -25,7 +25,7 @@ export type StatsProps = {
 function StatNumber({ value }: { value: string }) {
   return (
     <dd
-      className="mt-2 text-balance leading-none tracking-tight wrap-anywhere tabular-nums"
+      className="mt-[var(--detail-gap)] text-balance leading-none tracking-tight wrap-anywhere tabular-nums"
       style={{
         fontFamily: "var(--font-heading)",
         fontWeight: "var(--heading-weight)" as CSSProperties["fontWeight"],
@@ -114,7 +114,7 @@ export const Stats: ComponentConfig<StatsProps> = {
                 <div key={i} className="flex min-w-0 flex-col border-t pt-6" style={{ borderColor: "var(--color-border)" }}>
                   <dt className="text-sm font-medium">{stat.label}</dt>
                   <StatNumber value={stat.value} />
-                  {stat.detail ? <dd className="mt-4 max-w-[32ch] text-sm" style={{ color: "var(--color-muted)" }}>{stat.detail}</dd> : null}
+                  {stat.detail ? <dd className="mt-[var(--detail-gap)] max-w-[32ch] text-sm" style={{ color: "var(--color-muted)" }}>{stat.detail}</dd> : null}
                 </div>
               ))}
             </dl>
@@ -126,7 +126,7 @@ export const Stats: ComponentConfig<StatsProps> = {
     return (
       <Section background={variant === "cards" ? "soft" : "default"}>
         {intro}
-        <div className={`mt-12 grid gap-6 ${variant === "cards" ? "md:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
+        <div className={`mt-[var(--section-gap)] grid gap-6 ${variant === "cards" ? "md:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
           {stats.map((stat, i) => variant === "cards" ? (
             <div key={i} className="min-w-0">
               <Card className="h-full">
@@ -144,7 +144,7 @@ export const Stats: ComponentConfig<StatsProps> = {
             <dl key={i} className="min-w-0 border-t pt-6" style={{ borderColor: "var(--color-border)" }}>
               <dt className="text-sm font-semibold">{stat.label}</dt>
               <StatNumber value={stat.value} />
-              {stat.detail ? <dd className="mt-4 max-w-[32ch] text-sm" style={{ color: "var(--color-muted)" }}>{stat.detail}</dd> : null}
+              {stat.detail ? <dd className="mt-[var(--detail-gap)] max-w-[32ch] text-sm" style={{ color: "var(--color-muted)" }}>{stat.detail}</dd> : null}
             </dl>
           ))}
         </div>

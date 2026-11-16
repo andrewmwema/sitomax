@@ -94,9 +94,9 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
               {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}
               {variant === "visit" && image ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={image} alt={imageAlt || ""} loading="lazy" className="mt-4 aspect-[16/9] w-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+                <img src={image} alt={imageAlt || ""} loading="lazy" className="mt-[var(--content-gap)] aspect-[16/9] w-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
               ) : null}
-              {details?.length ? <dl className="mt-5 grid gap-5 border-t pt-6 sm:grid-cols-2" style={{ borderColor: "var(--color-border)" }}>
+              {details?.length ? <dl className="mt-[var(--content-gap)] grid gap-5 border-t pt-6 sm:grid-cols-2" style={{ borderColor: "var(--color-border)" }}>
                 {details.map((detail, i) => <div key={i} className="flex flex-col gap-2">
                   <dt className="flex items-center gap-2 text-sm font-semibold"><BlockIcon name={detail.icon} size={18} />{detail.label}</dt>
                   <dd className="whitespace-pre-line text-sm" style={{ color: "var(--color-muted)" }}>{detail.value}</dd>

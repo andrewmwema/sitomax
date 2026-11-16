@@ -138,7 +138,7 @@ export const Faq: ComponentConfig<FaqProps> = {
                 <BlockIcon name="plus" size={18} />
               </span>
             </summary>
-            <RichTextContent value={item.answer} className="mt-3 w-full max-w-[65ch] text-sm" />
+            <RichTextContent value={item.answer} className="mt-[var(--detail-gap)] w-full max-w-[65ch] text-sm" />
           </details>
         ))}
       </div>
@@ -148,7 +148,7 @@ export const Faq: ComponentConfig<FaqProps> = {
       return (
         <Section background="soft">
           {intro}
-          <div className="mt-10 grid items-start gap-8 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-12">
+          <div className="mt-[var(--section-gap)] grid items-start gap-[var(--section-gap)] md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             {accordion}
             <Card className="min-w-0" style={{ padding: 0, overflow: "hidden", gap: 0 }}>
               {contactImage ? (

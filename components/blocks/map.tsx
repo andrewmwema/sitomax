@@ -85,7 +85,7 @@ export const Map: ComponentConfig<MapProps> = {
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
           {heading ? <Heading level={2}>{heading}</Heading> : null}
         </div>
-        <div className="mt-10">{map}</div>
+        <div className="mt-[var(--section-gap)]">{map}</div>
       </Section>
     );
   },

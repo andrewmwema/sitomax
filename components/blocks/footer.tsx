@@ -149,7 +149,6 @@ export const Footer: ComponentConfig<FooterProps> = {
       <Section
         background={variant === "compact" ? "soft" : "dark"}
         container={false}
-        style={{ paddingTop: 56, paddingBottom: 56 }}
       >
         <footer>
           <Container

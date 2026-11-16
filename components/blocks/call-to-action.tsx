@@ -80,7 +80,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <Heading level={2}>{heading}</Heading>
               <p className="max-w-[48ch] text-lg" style={{ color: "var(--color-muted)" }}>{text}</p>
-              <div className="mt-4 border-t pt-6 text-sm" style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>A little detail now helps us make our first conversation more useful.</div>
+              <div className="mt-[var(--content-gap)] border-t pt-6 text-sm" style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>A little detail now helps us make our first conversation more useful.</div>
             </div>
             <Card className="p-6 sm:p-8">
               <EnquiryForm formName={formName || "project-enquiry"} submitText={buttonText} fields={formFields ?? enquiryFields} note={formNote} />

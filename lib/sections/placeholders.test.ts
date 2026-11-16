@@ -40,6 +40,14 @@ describe("findUnreplacedPlaceholders", () => {
         },
       ],
     });
+
     expect(hits).toEqual([]);
+  });
+
+  it("warns about unreplaced template business details in nested props", () => {
+    const hits = findUnreplacedPlaceholders({
+      content: [{ type: "Footer", props: { id: "template-footer", businessName: "{{businessName}}", navigation: [{ label: "Visit {{city}}", href: "/contact" }] } }],
+    });
+    expect(hits[0].snippets).toEqual(["{{businessName}}", "{{city}}"]);
   });
 });

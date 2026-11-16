@@ -50,7 +50,7 @@ export function Carousel({ items, label }: { items: ReactNode[]; label: string }
           </div>
         ))}
       </div>
-      <div className="mt-6 flex items-center justify-between gap-4">
+      <div className="mt-[var(--content-gap)] flex items-center justify-between gap-4">
         <p aria-live="polite" aria-atomic="true" className="text-sm" style={{ color: "var(--color-muted)" }}>
           {activeIndex + 1} / {items.length}
         </p>

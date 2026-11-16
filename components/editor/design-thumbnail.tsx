@@ -12,23 +12,19 @@ import type { SectionDesign } from "@/lib/sections/catalog";
  * fixed 1280px viewport inside a sandboxed <iframe> (no scripts), scaled
  * down with transform: scale(cardWidth / 1280) from the top-left — the
  * full width is always visible (nothing cropped horizontally) and tall
- * sections are cropped from the top of the card downward. The card
- * height adapts to the content (capped), so there is no empty space.
+ * sections are cropped from the top of a fixed 16:10 card. Short
+ * sections leave a fill matching their own background.
  *
  * The iframe document receives everything the real page has: the app's
  * compiled stylesheets (kept in sync with a MutationObserver, since dev
  * HMR injects styles after mount), and the site theme CSS variables on
- * its root. Content is
- * measured after the iframe's fonts load (document.fonts.ready).
+ * its root. Backgrounds are resolved after its fonts and styles load.
  *
  * Live previews preserve the site's remotely loaded fonts.
  */
 
 const RENDER_WIDTH = 1280;
-/** Tallest content slice (in 1280px-viewport pixels) a card shows. */
-const MAX_CONTENT_HEIGHT = 720;
-
-type Snapshot = { url: string; height: number };
+const RENDER_HEIGHT = RENDER_WIDTH * 10 / 16;
 
 const COPY_MARK = "data-design-thumb-style";
 
@@ -48,13 +44,13 @@ function syncFrameStyles(doc: Document) {
   const reset = doc.createElement("style");
   reset.setAttribute(COPY_MARK, "");
   reset.textContent = `
+    html, body { overflow: hidden !important; }
     .design-thumb-content [class~="min-h-screen"] { min-height: 0 !important; }
     .design-thumb-content .shell-anim { transition: none !important; }
     .design-thumb-content .shell-anim-hidden { opacity: 1 !important; transform: none !important; }
   `;
   doc.head.appendChild(reset);
   doc.body.style.margin = "0";
-  doc.body.style.background = "#ffffff";
 }
 
 /**
@@ -98,42 +94,17 @@ export function DesignThumbnail({
   design: SectionDesign;
   theme: SiteTheme;
 }) {
-  const cacheKey = useMemo(
-    () => `${design.id}:${JSON.stringify(theme)}`,
-    [design.id, theme],
-  );
-
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(() =>
-    design.thumbnail
-      ? { url: design.thumbnail, height: MAX_CONTENT_HEIGHT }
-      : null,
-  );
   const [cardWidth, setCardWidth] = useState(0);
-  /** Content height at the 1280px viewport, measured after fonts load. */
-  const [contentHeight, setContentHeight] = useState<number | null>(null);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
-
-  // Render-time adjustment (not an effect): re-resolve the cached image
-  // when the design or theme changes.
-  const [lastKey, setLastKey] = useState(cacheKey);
-  if (lastKey !== cacheKey) {
-    setLastKey(cacheKey);
-    setSnapshot(
-      design.thumbnail
-        ? { url: design.thumbnail, height: MAX_CONTENT_HEIGHT }
-        : null,
-    );
-    setContentHeight(null);
-  }
 
   // Recompute the scale whenever the card resizes.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => {
-      if (el.clientWidth > 0) setCardWidth(el.clientWidth);
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setCardWidth(entry.contentRect.width);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -152,11 +123,43 @@ export function DesignThumbnail({
   useEffect(() => {
     if (!mountNode) return;
     const doc = mountNode.ownerDocument;
-    syncFrameStyles(doc);
-    const observer = new MutationObserver(() => syncFrameStyles(doc));
+    let cancelled = false;
+    const sync = () => {
+      syncFrameStyles(doc);
+      void whenFrameSettled(doc).then(() => {
+        if (!cancelled) updateBackground();
+      });
+    };
+    const updateBackground = () => {
+      const content = liveRef.current;
+      const win = doc.defaultView;
+      if (!content || !win) return;
+      // A custom shell background sits behind the transparent section.
+      const surfaces = [
+        content.querySelector("section"),
+        content.querySelector('.section-shell > [aria-hidden="true"] > div'),
+        content.querySelector(".site-content"),
+      ];
+      const background = surfaces
+        .filter((element): element is Element => element !== null)
+        .map((element) => win.getComputedStyle(element).backgroundColor)
+        .find((color) => color !== "rgba(0, 0, 0, 0)" && color !== "transparent");
+      if (!background) return;
+      doc.documentElement.style.backgroundColor = background;
+      doc.body.style.backgroundColor = background;
+      if (containerRef.current) containerRef.current.style.backgroundColor = background;
+    };
+    sync();
+    const observer = new MutationObserver(sync);
     observer.observe(document.head, { childList: true });
-    return () => observer.disconnect();
-  }, [mountNode]);
+    const resizeObserver = new ResizeObserver(updateBackground);
+    if (liveRef.current) resizeObserver.observe(liveRef.current);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      resizeObserver.disconnect();
+    };
+  }, [mountNode, design, theme]);
 
   // Site theme variables (colors, fonts, radii, shadows) on the iframe
   // root, exactly like the page root applies them.
@@ -168,26 +171,6 @@ export function DesignThumbnail({
       root.style.setProperty(key, String(value));
     }
   }, [mountNode, theme]);
-
-  // Measure the content height once the iframe's stylesheets and fonts
-  // are ready, and re-measure if the content reflows (images loading).
-  useEffect(() => {
-    if (snapshot || !mountNode) return;
-    const doc = mountNode.ownerDocument;
-    let cancelled = false;
-    const measure = () => {
-      const height = liveRef.current?.offsetHeight;
-      if (!cancelled && height) setContentHeight(height);
-    };
-    void whenFrameSettled(doc).then(measure);
-    const node = liveRef.current;
-    const observer = node ? new ResizeObserver(measure) : null;
-    if (node && observer) observer.observe(node);
-    return () => {
-      cancelled = true;
-      observer?.disconnect();
-    };
-  }, [snapshot, mountNode]);
 
   const data = useMemo(
     () => ({
@@ -208,67 +191,59 @@ export function DesignThumbnail({
     [design],
   );
 
-  // Fixed 1280px viewport scaled to the card; crop tall content from
-  // the top of the card downward (the iframe shows cardHeight / scale
-  // content pixels). The card height tracks the content so short
-  // sections leave no empty space.
   const scale = cardWidth > 0 ? cardWidth / RENDER_WIDTH : 0.2;
-  const knownHeight = snapshot?.height ?? contentHeight ?? MAX_CONTENT_HEIGHT;
-  const visibleContentHeight = Math.min(knownHeight, MAX_CONTENT_HEIGHT);
-  const cardHeight = visibleContentHeight * scale;
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden bg-white"
-      style={{ height: cardWidth > 0 ? cardHeight : undefined }}
+      className="relative w-full overflow-hidden"
+      style={{ aspectRatio: "16 / 10" }}
     >
-      {snapshot ? (
+      {design.thumbnail ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
-          src={snapshot.url}
+          src={design.thumbnail}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full select-none object-cover object-top"
+          className="absolute left-0 top-0 h-auto w-full select-none"
           loading="lazy"
         />
-      ) : (
-        <>
-          <iframe
-            ref={setFrame}
-            title={`Preview of ${design.name}`}
-            sandbox="allow-same-origin"
-            tabIndex={-1}
-            aria-hidden="true"
-            className="pointer-events-none absolute left-0 top-0 select-none border-0"
-            style={{
-              width: RENDER_WIDTH,
-              height: visibleContentHeight,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-            }}
-          />
-          {mountNode
-            ? createPortal(
-                <div
-                  ref={liveRef}
-                  className="design-thumb-content"
-                  style={{ width: RENDER_WIDTH }}
-                >
-                  <Render
-                    config={puckConfig}
-                    // Cast: a single-block preview fragment, not a full page.
-                    data={data as never}
-                    metadata={{ theme }}
-                    // Same as the public renderer: RichTextContent sanitizes.
-                    fieldTransforms={{ richtext: ({ value }) => value }}
-                  />
-                </div>,
-                mountNode,
-              )
-            : null}
-        </>
-      )}
+      ) : null}
+      <iframe
+        ref={setFrame}
+        title={`Preview of ${design.name}`}
+        sandbox="allow-same-origin"
+        scrolling="no"
+        tabIndex={-1}
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-0 select-none border-0"
+        style={{
+          width: RENDER_WIDTH,
+          height: RENDER_HEIGHT,
+          visibility: design.thumbnail ? "hidden" : undefined,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      />
+      {mountNode
+        ? createPortal(
+            <div
+              ref={liveRef}
+              className="design-thumb-content"
+              style={{ width: RENDER_WIDTH }}
+            >
+              <Render
+                config={puckConfig}
+                // Cast: a single-block preview fragment, not a full page.
+                data={data as never}
+                metadata={{ theme }}
+                // Same as the public renderer: RichTextContent sanitizes.
+                fieldTransforms={{ richtext: ({ value }) => value }}
+              />
+            </div>,
+            mountNode,
+          )
+        : null}
     </div>
   );
 }

@@ -66,7 +66,7 @@ function PlanFeatures({ features }: { features: string[] }) {
     <ul className="flex flex-1 flex-col gap-3 text-sm">
       {features.map((feature, index) => (
         <li key={index} className="flex items-start gap-3">
-          <span className="mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }}>
+          <span className="shrink-0 self-start" style={{ color: "var(--color-primary)" }}>
             <BlockIcon name="check" size={18} />
           </span>
           <span style={{ color: "var(--color-muted)" }}>{feature}</span>
@@ -116,7 +116,7 @@ function Comparison({ plans, highlightLabel }: { plans: PricingPlan[]; highlight
                 const included = featuresFor(plan).includes(feature);
                 return (
                   <li key={feature} className="flex items-start gap-3">
-                    <span className="mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }}>
+                    <span className="shrink-0 self-start" style={{ color: "var(--color-primary)" }}>
                       {included ? <BlockIcon name="check" size={18} /> : <span aria-hidden="true">&mdash;</span>}
                       <span className="sr-only">{included ? "Included: " : "Not included: "}</span>
                     </span>
@@ -270,7 +270,10 @@ export const Pricing: ComponentConfig<PricingProps> = {
             <PlanBody plan={plan} yearly={yearly} highlightLabel={highlightLabel} />
           </div>
         ) : (
-          <Card key={index} className="min-w-0 gap-5" style={plan.highlighted ? { borderColor: "var(--color-primary)", borderWidth: 2, backgroundColor: "var(--color-soft-bg)" } : undefined}>
+          <Card key={index} className="min-w-0 gap-5" style={{
+            backgroundColor: variant === "billing" ? "var(--color-soft-bg)" : "var(--color-bg)",
+            ...(plan.highlighted ? { borderColor: "var(--color-primary)", borderWidth: 2 } : {}),
+          }}>
             <PlanBody plan={plan} yearly={yearly} highlightLabel={highlightLabel} />
           </Card>
         ))}
@@ -292,13 +295,13 @@ export const Pricing: ComponentConfig<PricingProps> = {
         ) : (
           <>
             {intro}
-            <div className="mt-12">
+            <div className="mt-[var(--section-gap)]">
               {variant === "billing" ? <BillingToggle monthly={cards()} yearly={cards(true)} /> :
                 variant === "comparison" ? <Comparison plans={plans} highlightLabel={highlightLabel} /> : cards()}
             </div>
           </>
         )}
-        {note ? <RichTextContent value={note} className="mx-auto mt-8 w-full text-center text-xs" /> : null}
+        {note ? <RichTextContent value={note} className="mx-auto mt-[var(--content-gap)] w-full text-center text-xs" /> : null}
       </Section>
     );
   },

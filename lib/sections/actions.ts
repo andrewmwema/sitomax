@@ -31,11 +31,13 @@ type DesignRow = {
 export async function listSavedDesigns(): Promise<SectionDesign[]> {
   const { supabase } = await requireUser();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("section_designs")
     .select("id, name, category, block_type, props, thumbnail_url")
     .eq("is_global", true)
     .order("created_at", { ascending: false });
+
+  if (error) throw new Error("Unable to load saved section designs", { cause: error });
 
   return ((data ?? []) as DesignRow[])
     .filter(

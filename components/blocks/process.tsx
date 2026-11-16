@@ -55,7 +55,7 @@ export const Process: ComponentConfig<ProcessProps> = {
           </div>
           {variant === "checklist" && image ? (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={image} alt={imageAlt} loading="lazy" className="mt-5 aspect-[4/3] w-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+            <img src={image} alt={imageAlt} loading="lazy" className="mt-[var(--content-gap)] aspect-[4/3] w-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
           ) : null}
         </div>
         <ol className={variant === "steps" ? "grid gap-5 md:grid-cols-3" : variant === "timeline" ? "mx-auto w-full max-w-4xl border-l pl-6 sm:pl-10" : "flex flex-col gap-7"} style={{ borderColor: "var(--color-border)" }}>

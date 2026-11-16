@@ -84,7 +84,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
         {text ? <p className="max-w-[55ch]" style={{ color: "var(--color-muted)" }}>{text}</p> : null}
       </div>
       {variant === "featured" ? (
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-[var(--section-gap)] grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {images.map((image, i) => (
             <figure key={i} className={`relative isolate min-h-52 overflow-hidden rounded-[var(--radius-lg)] ${i === 0 ? "sm:col-span-2 lg:row-span-2" : "aspect-[4/3]"}`}>
               {image.url ? (
@@ -96,9 +96,9 @@ export const Gallery: ComponentConfig<GalleryProps> = {
           ))}
         </div>
       ) : (variant ?? "grid") === "masonry" ? (
-        <div className={`mt-12 columns-1 gap-4 ${MASONRY_CLASSES[columns] ?? MASONRY_CLASSES["3"]}`}>
+        <div className={`mt-[var(--section-gap)] columns-1 gap-4 ${MASONRY_CLASSES[columns] ?? MASONRY_CLASSES["3"]}`}>
           {images.map((image, i) => (
-            <figure key={i} className="mb-4 break-inside-avoid">
+            <figure key={i} className="mb-[var(--detail-gap)] break-inside-avoid">
               {image.url ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -123,7 +123,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
           ))}
         </div>
       ) : (
-        <div className={`mt-12 grid grid-cols-1 gap-4 ${COLUMN_CLASSES[columns] ?? COLUMN_CLASSES["3"]}`}>
+        <div className={`mt-[var(--section-gap)] grid grid-cols-1 gap-4 ${COLUMN_CLASSES[columns] ?? COLUMN_CLASSES["3"]}`}>
           {images.map((image, i) => (
             <figure key={i}>
               {image.url ? (

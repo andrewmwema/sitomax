@@ -43,9 +43,9 @@ export const Logos: ComponentConfig<LogosProps> = {
           <Heading level={2}>{heading}</Heading>
           {text ? <p className="max-w-[50ch]" style={{ color: "var(--color-muted)" }}>{text}</p> : null}
         </div>
-        <ul className={`grid grid-cols-2 ${variant === "grid" ? "gap-3" : "mt-10 gap-x-8 gap-y-4 md:grid-cols-4"}`}>
+        <ul className={`grid grid-cols-2 ${variant === "grid" ? "gap-3" : "mt-[var(--section-gap)] gap-x-8 gap-y-4 md:grid-cols-4"}`}>
           {logos.map((logo, i) => (
-            <li key={i} className="flex min-h-28 min-w-0 items-center justify-center gap-2 px-4 py-6 text-center"
+            <li key={i} className={`flex min-h-28 min-w-0 items-center justify-center gap-2 px-4 py-6 text-center ${variant === "grid" ? "site-card" : ""}`}
               style={variant === "grid" ? { background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)" } : { borderBlock: "1px solid var(--color-border)" }}>
               {logo.image ? (
                 /* eslint-disable-next-line @next/next/no-img-element */

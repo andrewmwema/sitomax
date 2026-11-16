@@ -28,6 +28,7 @@ const DEFAULT_CATEGORY: Record<string, SectionCategory> = {
   ContactForm: "Contact",
   Map: "Contact",
   Footer: "Footer",
+  Navigation: "Hero",
 };
 
 /** Max PNG data-URL size accepted by the server action (see zod schema). */

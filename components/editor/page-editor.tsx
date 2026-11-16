@@ -37,6 +37,7 @@ import {
   CanvasInsertZones,
 } from "@/components/editor/canvas-insert";
 import { SaveDesignDialog } from "@/components/editor/save-design-dialog";
+import { BlockThumbnail } from "@/components/editor/block-thumbnail";
 
 type EditorUi = {
   pageId: string;
@@ -152,7 +153,7 @@ function HeaderActions() {
                   Some placeholder text hasn&apos;t been replaced yet
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Text in [brackets] is sample content — replace it with this
+                  Text in [brackets] or template placeholders is sample content — replace it with this
                   business&apos;s real details before publishing.
                 </p>
               </div>
@@ -237,6 +238,16 @@ function EditorActionBar({
   );
 }
 
+function EditorDrawerItem({ children, name }: { children: React.ReactNode; name: string }) {
+  const { theme } = useSectionLibrary();
+  return (
+    <div className="w-full overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <BlockThumbnail name={name} theme={theme} />
+      {children}
+    </div>
+  );
+}
+
 export function PageEditor({
   page,
   site,
@@ -283,6 +294,7 @@ export function PageEditor({
     () => ({
       headerActions: () => <HeaderActions />,
       actionBar: (props) => <EditorActionBar {...props} />,
+      drawerItem: (props) => <EditorDrawerItem {...props} />,
       preview: ({ children }) => (
         <>
           {children}

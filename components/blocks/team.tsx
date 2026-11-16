@@ -44,21 +44,21 @@ export const Team: ComponentConfig<TeamProps> = {
   },
   render: ({ eyebrow, heading, text, members, variant }) => (
     <Section background={variant === "featured" ? "soft" : "default"}>
-      <div className="mb-12 flex max-w-2xl flex-col gap-4">
+      <div className="mb-[var(--section-gap)] flex max-w-2xl flex-col gap-4">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <Heading level={2}>{heading}</Heading>
         <RichTextContent value={text} />
       </div>
       <div className={variant === "profiles" ? "flex flex-col gap-8" : variant === "featured" ? "grid gap-8" : "grid gap-8 md:grid-cols-3"}>
         {members.map((member, i) => (
-          <article key={i} className={`min-w-0 ${variant === "profiles" ? "grid items-center gap-6 border-t pt-8 md:grid-cols-[1fr_2fr]" : variant === "featured" ? `grid items-center gap-8 ${i === 0 ? "md:grid-cols-2" : "md:grid-cols-[1fr_2fr]"}` : ""}`} style={{ borderColor: "var(--color-border)" }}>
+          <article key={i} className={`min-w-0 ${variant === "profiles" ? "grid items-center gap-6 border-t pt-8 md:grid-cols-[1fr_2fr]" : variant === "featured" ? `grid items-center gap-8 ${i === 0 ? "md:grid-cols-2" : "md:grid-cols-[1fr_2fr]"}` : "site-card overflow-hidden rounded-[var(--radius-lg)] border"}`} style={{ borderColor: "var(--color-border)" }}>
             {member.image ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={member.image} alt={member.imageAlt} loading="lazy"
                 className={`w-full object-cover ${variant === "profiles" ? "aspect-[4/3] max-h-80" : "aspect-[3/4]"}`}
                 style={{ borderRadius: "var(--radius-lg)", objectPosition: member.imagePosition ?? "center" }} />
             ) : null}
-            <div className={`flex min-w-0 flex-col gap-3 ${variant === "cards" ? "border-b py-6" : "py-4"}`} style={{ borderColor: "var(--color-border)" }}>
+            <div className={`flex min-w-0 flex-col gap-3 ${variant === "cards" ? "p-6" : "py-4"}`} style={{ borderColor: "var(--color-border)" }}>
               <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-muted)" }}>{member.role}</p>
               <h3 className={variant === "cards" ? "text-2xl" : "text-3xl sm:text-4xl"} style={{ fontFamily: "var(--font-heading)" }}>{member.name}</h3>
               <RichTextContent value={member.bio} className="max-w-[55ch]" />
