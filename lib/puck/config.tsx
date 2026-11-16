@@ -4,8 +4,8 @@ import type {
   DefaultComponentProps,
   WithPuckProps,
 } from "@puckeditor/core";
-import { buildThemeStyle, type SiteTheme } from "@/lib/theme/presets";
-import { fontVariables } from "@/lib/theme/fonts";
+import { buildThemeStyle, themeFonts, type SiteTheme } from "@/lib/theme/presets";
+import { googleFontsUrl } from "@/lib/theme/fonts";
 import type { BlockDesign } from "@/lib/sections/design";
 import { SectionShell } from "@/components/blocks/ui/SectionShell";
 import { Hero, type HeroProps } from "@/components/blocks/hero";
@@ -122,7 +122,7 @@ export const puckConfig: PuckConfig = {
       const theme = (puck.metadata?.theme ?? {}) as SiteTheme;
       return (
         <div
-          className={`${fontVariables} flex min-h-screen flex-col antialiased`}
+          className="flex min-h-screen flex-col antialiased"
           style={{
             ...buildThemeStyle(theme),
             backgroundColor: "var(--color-bg)",
@@ -131,6 +131,7 @@ export const puckConfig: PuckConfig = {
             lineHeight: 1.6,
           }}
         >
+          <link rel="stylesheet" href={googleFontsUrl(themeFonts(theme))} />
           {children}
         </div>
       );

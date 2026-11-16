@@ -58,6 +58,9 @@ describe("sanitizeRichText", () => {
     expect(
       sanitizeRichText("<span style=\"font-family: 'DM Serif Display'\">a</span>"),
     ).toBe('<span style="font-family: &quot;DM Serif Display&quot;">a</span>');
+    expect(sanitizeRichText('<span style="font-family: Lora">a</span>')).toBe(
+      '<span style="font-family: Lora">a</span>',
+    );
   });
 
   it("keeps valid colors and drops malformed ones", () => {

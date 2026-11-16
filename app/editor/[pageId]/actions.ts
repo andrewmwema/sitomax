@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/form-state";
 import { sanitizePuckData } from "@/lib/richtext";
+import { themeSchema } from "@/lib/theme/schema";
 
 /**
  * Editor Server Actions. All queries run with the user-scoped client, so
@@ -92,24 +93,6 @@ export async function savePageDraft(pageId: string, data: unknown): Promise<Acti
 export async function publishPage(pageId: string, data: unknown): Promise<ActionState> {
   return updatePage(pageId, data, true);
 }
-
-const colorSchema = z
-  .string()
-  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
-  .optional();
-
-const themeSchema = z.object({
-  style: z.enum(["classic", "modern"]).optional(),
-  colors: z
-    .object({
-      primary: colorSchema,
-      secondary: colorSchema,
-      background: colorSchema,
-      text: colorSchema,
-    })
-    .optional(),
-  logoUrl: z.union([z.url(), z.literal("")]).optional(),
-});
 
 /**
  * Saves the site-wide theme to sites.theme. RLS lets account members

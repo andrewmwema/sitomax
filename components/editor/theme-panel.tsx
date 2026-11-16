@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   COLOR_PALETTES,
   DEFAULT_COLORS,
   STYLE_PRESETS,
+  themeFonts,
   type SiteTheme,
   type StyleId,
 } from "@/lib/theme/presets";
+import {
+  CURATED_FONTS,
+  FONT_CATEGORIES,
+  googleFontsUrl,
+  type CuratedFont,
+} from "@/lib/theme/fonts";
 import { saveSiteTheme } from "@/app/editor/[pageId]/actions";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 
@@ -17,6 +24,88 @@ const COLOR_LABELS = [
   ["background", "Background"],
   ["text", "Text"],
 ] as const;
+
+const FONT_PAIRINGS: { label: string; heading: CuratedFont; body: CuratedFont }[] = [
+  { label: "Elegant", heading: "Playfair Display", body: "Lato" },
+  { label: "Modern", heading: "Plus Jakarta Sans", body: "Inter" },
+  { label: "Friendly", heading: "Nunito", body: "Nunito" },
+  { label: "Bold", heading: "Bebas Neue", body: "Open Sans" },
+  { label: "Editorial", heading: "Lora", body: "Source Sans 3" },
+  { label: "Warm", heading: "Fraunces", body: "DM Sans" },
+];
+
+function FontPicker({
+  label,
+  value,
+  preset,
+  onOpen,
+  onChange,
+}: {
+  label: string;
+  value: CuratedFont | undefined;
+  preset: CuratedFont;
+  onOpen: () => void;
+  onChange: (value: CuratedFont | undefined) => void;
+}) {
+  const details = useRef<HTMLDetailsElement>(null);
+
+  function choose(font: CuratedFont | undefined) {
+    onChange(font);
+    if (details.current) {
+      details.current.open = false;
+      details.current.querySelector("summary")?.focus();
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1 text-sm text-zinc-700">
+      <span>{label}</span>
+      <details
+        ref={details}
+        className="relative"
+        onToggle={(event) => {
+          if (event.currentTarget.open) onOpen();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && details.current?.open) {
+            details.current.open = false;
+            details.current.querySelector("summary")?.focus();
+          }
+        }}
+      >
+        <summary
+          aria-label={label}
+          className="cursor-pointer rounded-md border border-zinc-300 bg-white px-3 py-2"
+          style={{ fontFamily: `"${value ?? preset}"` }}
+        >
+          {value ?? `Use preset (${preset})`}
+        </summary>
+        <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+          <button type="button" onClick={() => choose(undefined)} className="w-full rounded px-2 py-2 text-left hover:bg-zinc-100">
+            Use preset ({preset})
+          </button>
+          {FONT_CATEGORIES.map((category) => (
+            <div key={category} role="group" aria-label={category}>
+              <p className="px-2 pt-2 text-xs font-semibold text-zinc-500">{category}</p>
+              {CURATED_FONTS.filter((font) => font.category === category).map((font) => (
+                <button
+                  key={font.name}
+                  type="button"
+                  onClick={() => choose(font.name)}
+                  aria-pressed={value === font.name}
+                  className="w-full rounded px-2 py-2 text-left hover:bg-zinc-100"
+                  style={{ fontFamily: `"${font.name}"` }}
+                >
+                  {font.name}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
 
 /**
  * Slide-over panel for the site-wide theme: style preset (Classic or
@@ -38,6 +127,7 @@ export function ThemePanel({
 }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [previewFonts, setPreviewFonts] = useState(false);
 
   if (!open) return null;
 
@@ -72,6 +162,10 @@ export function ThemePanel({
         className="flex-1 cursor-default"
       />
       <aside className="flex h-full w-85 flex-col gap-7 overflow-y-auto bg-white p-6 shadow-2xl">
+        <link rel="stylesheet" href={googleFontsUrl(themeFonts(theme))} />
+        {previewFonts ? (
+          <link rel="stylesheet" href={googleFontsUrl(CURATED_FONTS.map((font) => font.name))} />
+        ) : null}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-zinc-900">Site theme</h2>
           <button
@@ -107,8 +201,8 @@ export function ThemePanel({
                     style={{
                       fontFamily:
                         styleId === "classic"
-                          ? "var(--font-dm-serif), Georgia, serif"
-                          : "var(--font-jakarta), system-ui, sans-serif",
+                          ? '"DM Serif Display", Georgia, serif'
+                          : '"Plus Jakarta Sans", system-ui, sans-serif',
                       fontWeight: styleId === "classic" ? 400 : 800,
                     }}
                   >
@@ -122,6 +216,35 @@ export function ThemePanel({
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+            Fonts
+          </h3>
+          {(["headingFont", "bodyFont"] as const).map((field, index) => (
+            <FontPicker
+              key={field}
+              label={field === "headingFont" ? "Heading font" : "Body font"}
+              value={theme[field]}
+              preset={themeFonts({ style: activeStyle })[index]}
+              onOpen={() => setPreviewFonts(true)}
+              onChange={(font) => onChange({ ...theme, [field]: font })}
+            />
+          ))}
+          <p className="text-xs text-zinc-500">Suggested pairings</p>
+          <div className="grid gap-2">
+            {FONT_PAIRINGS.map((pairing) => (
+              <button
+                key={pairing.label}
+                type="button"
+                onClick={() => onChange({ ...theme, headingFont: pairing.heading, bodyFont: pairing.body })}
+                className="rounded-lg border border-zinc-200 px-3 py-2 text-left text-xs text-zinc-700 hover:border-zinc-400"
+              >
+                <span className="font-semibold">{pairing.label}:</span> {pairing.heading} + {pairing.body}
+              </button>
+            ))}
           </div>
         </section>
 

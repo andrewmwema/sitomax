@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { fontFamily, isCuratedFont, type CuratedFont } from "./fonts";
 
 /**
  * Shared design foundation for every Puck block.
@@ -16,6 +17,8 @@ export type StyleId = "classic" | "modern";
 
 export type SiteTheme = {
   style?: StyleId;
+  headingFont?: CuratedFont;
+  bodyFont?: CuratedFont;
   colors?: {
     primary?: string;
     secondary?: string;
@@ -40,8 +43,8 @@ export const STYLE_PRESETS: Record<
     label: "Classic",
     description: "Serif display headings, crisp corners, editorial feel.",
     vars: {
-      "--font-heading": "var(--font-dm-serif), Georgia, serif",
-      "--font-body": "var(--font-inter), system-ui, sans-serif",
+      "--font-heading": '"DM Serif Display", Georgia, serif',
+      "--font-body": '"Inter", system-ui, sans-serif',
       "--heading-weight": "400",
       "--radius-sm": "4px",
       "--radius-lg": "6px",
@@ -54,8 +57,8 @@ export const STYLE_PRESETS: Record<
     label: "Modern",
     description: "Bold geometric headings, large radii, soft shadows.",
     vars: {
-      "--font-heading": "var(--font-jakarta), system-ui, sans-serif",
-      "--font-body": "var(--font-inter), system-ui, sans-serif",
+      "--font-heading": '"Plus Jakarta Sans", system-ui, sans-serif',
+      "--font-body": '"Inter", system-ui, sans-serif',
       "--heading-weight": "800",
       "--radius-sm": "16px",
       "--radius-lg": "24px",
@@ -66,6 +69,15 @@ export const STYLE_PRESETS: Record<
     },
   },
 };
+
+export function themeFonts(theme: SiteTheme | null | undefined): [CuratedFont, CuratedFont] {
+  return [
+    isCuratedFont(theme?.headingFont)
+      ? theme.headingFont
+      : theme?.style === "modern" ? "Plus Jakarta Sans" : "DM Serif Display",
+    isCuratedFont(theme?.bodyFont) ? theme.bodyFont : "Inter",
+  ];
+}
 
 /** Curated palettes offered in the theme panel. */
 export const COLOR_PALETTES = [
@@ -171,6 +183,7 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
   const darkBg = mixHex(colors.text, "#000000", 0.92);
   const ctaDark = ctaOnColor(darkBg, colors.secondary);
   const ctaPrimary = ctaOnColor(colors.primary, colors.secondary);
+  const [headingFont, bodyFont] = themeFonts(theme);
 
   return {
     "--color-primary": colors.primary,
@@ -189,5 +202,7 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
     "--color-cta-primary": ctaPrimary,
     "--color-on-cta-primary": onPrimaryColor(ctaPrimary),
     ...preset.vars,
+    "--font-heading": fontFamily(headingFont),
+    "--font-body": fontFamily(bodyFont),
   } as CSSProperties;
 }

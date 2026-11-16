@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Render } from "@puckeditor/core";
-import { toPng } from "html-to-image";
 import { puckConfig } from "@/lib/puck/config";
 import { buildThemeStyle, type SiteTheme } from "@/lib/theme/presets";
-import { fontVariables } from "@/lib/theme/fonts";
 import type { SectionDesign } from "@/lib/sections/catalog";
 
 /**
@@ -19,12 +17,11 @@ import type { SectionDesign } from "@/lib/sections/catalog";
  *
  * The iframe document receives everything the real page has: the app's
  * compiled stylesheets (kept in sync with a MutationObserver, since dev
- * HMR injects styles after mount), the next/font variable classes on
- * its <body>, and the site theme CSS variables on its root. Content is
+ * HMR injects styles after mount), and the site theme CSS variables on
+ * its root. Content is
  * measured after the iframe's fonts load (document.fonts.ready).
  *
- * After the first settled paint the preview is captured to a PNG and
- * cached, so reopening the gallery shows a cheap <img>.
+ * Live previews preserve the site's remotely loaded fonts.
  */
 
 const RENDER_WIDTH = 1280;
@@ -32,9 +29,6 @@ const RENDER_WIDTH = 1280;
 const MAX_CONTENT_HEIGHT = 720;
 
 type Snapshot = { url: string; height: number };
-
-/** Capture cache, keyed by design + theme so restyling re-renders. */
-const thumbnailCache = new Map<string, Snapshot>();
 
 const COPY_MARK = "data-design-thumb-style";
 
@@ -59,8 +53,6 @@ function syncFrameStyles(doc: Document) {
     .design-thumb-content .shell-anim-hidden { opacity: 1 !important; transform: none !important; }
   `;
   doc.head.appendChild(reset);
-  // next/font variable classes, as on the real page's root elements.
-  fontVariables.split(" ").forEach((cls) => doc.body.classList.add(cls));
   doc.body.style.margin = "0";
   doc.body.style.background = "#ffffff";
 }
@@ -74,7 +66,7 @@ function syncFrameStyles(doc: Document) {
  */
 async function whenFrameSettled(doc: Document): Promise<void> {
   const links = [
-    ...doc.querySelectorAll<HTMLLinkElement>(`link[rel="stylesheet"][${COPY_MARK}]`),
+    ...doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
   ];
   await Promise.all(
     links.map((link) =>
@@ -114,7 +106,7 @@ export function DesignThumbnail({
   const [snapshot, setSnapshot] = useState<Snapshot | null>(() =>
     design.thumbnail
       ? { url: design.thumbnail, height: MAX_CONTENT_HEIGHT }
-      : (thumbnailCache.get(cacheKey) ?? null),
+      : null,
   );
   const [cardWidth, setCardWidth] = useState(0);
   /** Content height at the 1280px viewport, measured after fonts load. */
@@ -131,7 +123,7 @@ export function DesignThumbnail({
     setSnapshot(
       design.thumbnail
         ? { url: design.thumbnail, height: MAX_CONTENT_HEIGHT }
-        : (thumbnailCache.get(cacheKey) ?? null),
+        : null,
     );
     setContentHeight(null);
   }
@@ -196,40 +188,6 @@ export function DesignThumbnail({
       observer?.disconnect();
     };
   }, [snapshot, mountNode]);
-
-  // One-off capture after stylesheets, fonts and layout settle.
-  useEffect(() => {
-    if (snapshot || !mountNode) return;
-    const doc = mountNode.ownerDocument;
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      await whenFrameSettled(doc);
-      const node = liveRef.current;
-      if (!node || cancelled) return;
-      const height = Math.min(node.offsetHeight || MAX_CONTENT_HEIGHT, MAX_CONTENT_HEIGHT);
-      toPng(node, {
-        width: RENDER_WIDTH,
-        height,
-        canvasWidth: 512,
-        canvasHeight: Math.max(1, Math.round((512 * height) / RENDER_WIDTH)),
-        pixelRatio: 1,
-      })
-        .then((url) => {
-          if (cancelled) return;
-          const entry = { url, height };
-          thumbnailCache.set(cacheKey, entry);
-          setSnapshot(entry);
-        })
-        .catch(() => {
-          // Capture can fail (e.g. cross-origin images): keep the live
-          // scaled preview, which is always correct.
-        });
-    }, 700);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [cacheKey, snapshot, mountNode]);
 
   const data = useMemo(
     () => ({

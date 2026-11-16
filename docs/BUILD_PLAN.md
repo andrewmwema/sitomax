@@ -129,7 +129,7 @@ Read .github/copilot-instructions.md. Create a shared design foundation for all 
    - "modern": Plus Jakarta Sans 700/800 headings + Inter body, 16–24px radius, soft shadows, pill badges.
    Each preset sets CSS variables: --font-heading, --font-body, --radius-sm, --radius-lg, --shadow-card, --section-pad (96–112px desktop, 64px mobile), --container (1200px).
    Colors stay from the theme: --color-primary, --color-secondary, --color-bg, --color-text, plus computed --color-muted, --color-soft-bg, --color-border, --color-on-primary (white or dark, whichever passes WCAG 4.5:1 contrast).
-2. Load fonts with next/font/google (no layout shift).
+2. Load the site's selected heading and body fonts through Google Fonts with `display=swap`; defaults follow the style preset. The theme panel loads font previews when a picker opens.
 3. components/blocks/ui/: shared primitives every block must use: Container, Section (background: "default" | "soft" | "dark" | "primary"), Eyebrow, Heading (h1/h2/h3 with fluid clamp() sizes), Button (primary / secondary / ghost, min-height 48px, hover + focus-visible styles), Card, Badge, IconTile.
 4. Icons: install lucide-react. Create an IconPicker custom Puck field (searchable list of ~60 relevant icons: wrench, droplet, flame, scissors, utensils, home, shield-check, clock, star, phone, etc.). Remove all emoji icons from blocks.
 5. Theme panel: add a "Style" switch (Classic / Modern), and a color picker that shows preset palettes (Navy & brass, Ocean blue, Forest green, Charcoal & gold, Plum).

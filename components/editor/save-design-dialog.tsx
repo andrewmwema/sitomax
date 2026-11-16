@@ -41,6 +41,31 @@ function findComponentNode(componentId: string): HTMLElement | null {
   );
 }
 
+async function embeddedFontCss(doc: Document): Promise<string> {
+  const links = [...doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
+    .filter((link) => link.href.startsWith("https://fonts.googleapis.com/css2?"));
+  const sheets = await Promise.all(links.map(async (link) => {
+    const response = await fetch(link.href);
+    if (!response.ok) throw new Error("Unable to load font stylesheet");
+    const css = await response.text();
+    const urls = [...new Set([...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map((match) => match[1]))];
+    const embedded = await Promise.all(urls.map(async (url) => {
+      const fontResponse = await fetch(url);
+      if (!fontResponse.ok) throw new Error("Unable to load font");
+      const blob = await fontResponse.blob();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Invalid font data"));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      return [url, dataUrl] as const;
+    }));
+    return embedded.reduce((result, [url, dataUrl]) => result.replaceAll(url, dataUrl), css);
+  }));
+  return sheets.join("\n");
+}
+
 /** Screenshot the section; a failed capture never blocks the save. */
 async function captureThumbnail(componentId: string): Promise<string | undefined> {
   const node = findComponentNode(componentId);
@@ -51,6 +76,7 @@ async function captureThumbnail(componentId: string): Promise<string | undefined
       canvasHeight: Math.round((640 * node.offsetHeight) / node.offsetWidth),
       pixelRatio: 1,
       backgroundColor: "#ffffff",
+      fontEmbedCSS: await embeddedFontCss(node.ownerDocument),
     });
     return dataUrl.length <= MAX_THUMBNAIL_BYTES ? dataUrl : undefined;
   } catch {

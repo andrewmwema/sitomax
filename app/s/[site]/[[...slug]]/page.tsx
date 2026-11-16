@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Render } from "@puckeditor/core/rsc";
 import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import type { SiteTheme } from "@/lib/theme/presets";
+import { TenantFontHints } from "@/components/tenant-font-hints";
 import { createClient } from "@/lib/supabase/server";
 import {
   getSiteByHost,
@@ -100,6 +101,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
 
   return (
     <>
+      <TenantFontHints />
       {isPreview ? (
         <div className="fixed right-4 bottom-4 z-50 rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-lg">
           Preview — showing unpublished draft

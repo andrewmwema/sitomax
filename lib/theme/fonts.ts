@@ -1,49 +1,53 @@
-import { DM_Serif_Display, Inter, Plus_Jakarta_Sans } from "next/font/google";
-
-/**
- * All platform fonts, loaded with next/font (self-hosted, no layout
- * shift). Each exposes a CSS variable that the style presets map onto
- * --font-heading / --font-body.
- */
-
-export const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
-export const dmSerifDisplay = DM_Serif_Display({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-dm-serif",
-  display: "swap",
-});
-
-export const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-jakarta",
-  display: "swap",
-});
-
-/**
- * Class names that define the font CSS variables. Applied to the root
- * layout AND to the Puck page root, so the variables also exist inside
- * the editor's preview iframe.
- */
-export const fontVariables = `${inter.variable} ${dmSerifDisplay.variable} ${plusJakartaSans.variable}`;
-
-/**
- * Curated font families clients may pick in the rich text toolbar
- * (Phase 4c). The sanitizer (lib/richtext.ts) only accepts font-family
- * values from this list — keep both in sync when adding fonts.
- */
+/** Font names are also the allowlist for rich text and saved themes. */
 export const CURATED_FONTS = [
-  { name: "Inter", cssVariable: "--font-inter" },
-  { name: "DM Serif Display", cssVariable: "--font-dm-serif" },
-  { name: "Plus Jakarta Sans", cssVariable: "--font-jakarta" },
+  { name: "DM Serif Display", category: "Serif", weights: "400" },
+  { name: "Playfair Display", category: "Serif", weights: "400;600;700" },
+  { name: "Lora", category: "Serif", weights: "400;600;700" },
+  { name: "Merriweather", category: "Serif", weights: "400;600;700" },
+  { name: "Cormorant Garamond", category: "Serif", weights: "400;600;700" },
+  { name: "Libre Baskerville", category: "Serif", weights: "400;700" },
+  { name: "Fraunces", category: "Serif", weights: "400;600;700" },
+  { name: "Inter", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Plus Jakarta Sans", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Poppins", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Montserrat", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Open Sans", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Lato", category: "Sans-serif", weights: "400;700" },
+  { name: "Raleway", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Nunito", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Work Sans", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Manrope", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Outfit", category: "Sans-serif", weights: "400;600;700" },
+  { name: "DM Sans", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Source Sans 3", category: "Sans-serif", weights: "400;600;700" },
+  { name: "Bebas Neue", category: "Display", weights: "400" },
+  { name: "Oswald", category: "Display", weights: "400;600;700" },
+  { name: "Archivo Black", category: "Display", weights: "400" },
+  { name: "Caveat", category: "Handwriting", weights: "400;600;700" },
+  { name: "Dancing Script", category: "Handwriting", weights: "400;600;700" },
 ] as const;
 
-export const CURATED_FONT_NAMES: readonly string[] = CURATED_FONTS.map(
-  (font) => font.name,
-);
+export type CuratedFont = (typeof CURATED_FONTS)[number]["name"];
+export const FONT_CATEGORIES = ["Serif", "Sans-serif", "Display", "Handwriting"] as const;
+export const CURATED_FONT_NAMES = CURATED_FONTS.map((font) => font.name);
+
+export function isCuratedFont(value: unknown): value is CuratedFont {
+  return CURATED_FONTS.some((font) => font.name === value);
+}
+
+export function fontFamily(name: CuratedFont): string {
+  const font = CURATED_FONTS.find((item) => item.name === name);
+  const fallback = font?.category === "Serif"
+    ? "Georgia, serif"
+    : font?.category === "Handwriting" ? "cursive" : "system-ui, sans-serif";
+  return `"${name}", ${fallback}`;
+}
+
+export function googleFontsUrl(names: readonly CuratedFont[]): string {
+  const families = [...new Set(names)].map((name) => {
+    const font = CURATED_FONTS.find((item) => item.name === name);
+    if (!font) throw new Error(`Unknown font: ${name}`);
+    return `family=${encodeURIComponent(font.name).replace(/%20/g, "+")}:wght@${font.weights}`;
+  });
+  return `https://fonts.googleapis.com/css2?${families.join("&")}&display=swap`;
+}
