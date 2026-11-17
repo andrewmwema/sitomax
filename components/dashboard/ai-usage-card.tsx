@@ -9,6 +9,6 @@ export function AiUsageCard({ usage }: { usage: AiUsageSummary }) {
       <div><dt className="text-zinc-500">Included edits &amp; rewrites</dt><dd className="font-medium">{usage.included_edits} / {usage.monthly_edits}</dd></div>
       <div><dt className="text-zinc-500">Extra credits remaining</dt><dd className="font-medium">{usage.extra_credits}</dd></div>
     </dl>
-    <p className="mt-3 text-xs text-zinc-500">{usage.site_generations} sites and {usage.edits} edits completed. {usage.pending_requests > 0 ? `${usage.pending_requests} requests reserved or awaiting reconciliation. ` : ""}Extra credits never expire: 10 per site, 1 per edit after the included quota. Agency requests are unlimited and do not consume client quotas.</p>
+    <p className="mt-3 text-xs text-zinc-500">{usage.site_generations} site generations and {usage.edits} edits recorded. {usage.pending_requests > 0 ? `${usage.pending_requests} requests reserved or awaiting reconciliation. ` : ""}Extra credits never expire: 10 per site, 1 per edit after the included quota. Agency requests are unlimited and do not consume client quotas.</p>
   </section>;
 }

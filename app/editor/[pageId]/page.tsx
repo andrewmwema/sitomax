@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { z } from "zod";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { PageEditor } from "@/components/editor/page-editor";
@@ -31,6 +32,7 @@ type EditorSite = {
   name: string | null;
   subdomain: string;
   theme: SiteTheme | null;
+  draft_theme: SiteTheme | null;
 };
 
 async function EditorLoader({
@@ -45,7 +47,7 @@ async function EditorLoader({
     supabase
       .from("pages")
       .select(
-        "id, slug, title, draft_data, site:sites(id, account_id, name, subdomain, theme)",
+        "id, slug, title, draft_data, site:sites(id, account_id, name, subdomain, theme, draft_theme)",
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -73,16 +75,20 @@ async function EditorLoader({
   const protocol = root.includes("localhost") ? "http" : "https";
   const path = data.slug ? `/${data.slug}` : "/";
   const previewUrl = `${protocol}://${site.subdomain}.${root}${path}?preview=1`;
+  const generated = z.object({
+    root: z.object({ props: z.object({ generationWarnings: z.array(z.string()).optional() }).optional() }).optional(),
+  }).safeParse(data.draft_data);
 
   return (
     <PageEditor
       page={{ id: data.id, slug: data.slug, title: data.title }}
-      site={site}
+      site={{ ...site, theme: site.draft_theme ?? site.theme }}
       initialData={data.draft_data as Record<string, unknown>}
       previewUrl={previewUrl}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
       userId={user.id}
       sitePages={sitePages ?? []}
+      generationWarnings={generated.data?.root?.props?.generationWarnings ?? []}
     />
   );
 }

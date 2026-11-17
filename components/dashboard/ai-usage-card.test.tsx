@@ -14,7 +14,7 @@ describe("account AI usage card", () => {
     }));
     expect(html).toContain("1 / 1");
     expect(html).toContain("50 / 50");
-    expect(html).toContain("2 sites and 55 edits completed");
+    expect(html).toContain("2 site generations and 55 edits recorded");
     expect(html).toContain("1 requests reserved");
     expect(html).toContain("10 per site, 1 per edit");
     expect(html).not.toMatch(/Anthropic|Claude|Supabase|cost_usd/);

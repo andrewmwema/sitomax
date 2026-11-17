@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getSiteUrl } from "@/lib/tenant";
 import { PagesManager, type ManagedPage } from "@/components/dashboard/pages-manager";
+import { AiDraftHistory } from "@/components/dashboard/ai-draft-history";
 
 /**
  * Site detail page: live URL and the pages manager (add, rename, reorder,
@@ -40,7 +41,7 @@ async function SiteDetail({
   const { data: site } = await supabase
     .from("sites")
     .select(
-      "id, name, subdomain, custom_domain, domain_verified, pages(id, slug, title, sort_order, published_at)",
+      "id, account_id, name, subdomain, custom_domain, domain_verified, pages(id, slug, title, sort_order, published_at)",
     )
     .eq("id", siteId)
     .maybeSingle();
@@ -48,6 +49,13 @@ async function SiteDetail({
   if (!site) {
     notFound();
   }
+  const [{ data: admin, error: adminError }, { data: owner, error: ownerError }] = await Promise.all([
+    supabase.rpc("is_super_admin"), supabase.rpc("is_account_owner", { acc: site.account_id }),
+  ]);
+  if (adminError || ownerError) throw new Error("Could not check site permissions.");
+  const canGenerate = Boolean(admin || owner);
+  const backups = canGenerate ? await supabase.from("site_draft_versions").select("id, created_at")
+    .eq("site_id", siteId).order("created_at", { ascending: false }).limit(20) : null;
 
   const url = getSiteUrl(site);
   const pages = ([...(site.pages ?? [])] as ManagedPage[]).sort(
@@ -59,6 +67,7 @@ async function SiteDetail({
     <section className="flex flex-col gap-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
+          {canGenerate ? <Link href={`/dashboard/sites/${siteId}/generate`} className="mb-5 inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Build with AI</Link> : null}
           <p className="text-sm text-zinc-500">
             <Link href="/dashboard" className="hover:underline">
               Sites
@@ -93,6 +102,8 @@ async function SiteDetail({
         </h2>
         <PagesManager siteId={site.id} pages={pages} />
       </div>
+      {canGenerate ? backups?.error ? <p role="alert" className="text-sm text-red-700">Draft history is unavailable. Ask your agency to apply the AI site-generator migration.</p>
+        : <AiDraftHistory siteId={site.id} versions={backups?.data ?? []} /> : null}
     </section>
   );
 }

@@ -31,6 +31,19 @@ beforeEach(() => {
   mocks.profile.mockResolvedValue({ data: { is_super_admin: false } });
 });
 describe("editor persistence", () => {
+  it("keeps generated SEO draft-only during autosave and applies it on explicit publish", async () => {
+    mocks.load.mockResolvedValue({ data: { id: PAGE, title: "Published page", seo: {
+      title: "Published SEO", description: "Published description", image: "/existing-social-image.jpg",
+    }, draft_data: {}, published_data: {} }, error: null });
+    const data = { root: { props: { title: "Generated SEO title", description: "Generated description" } }, content: [] };
+    expect(await savePageDraft(PAGE, data)).toMatchObject({ status: "success" });
+    expect(mocks.update).toHaveBeenLastCalledWith({ draft_data: data });
+    expect(await publishPage(PAGE, data)).toMatchObject({ status: "success" });
+    expect(mocks.update).toHaveBeenLastCalledWith({
+      draft_data: data, published_data: data, published_at: expect.any(String), title: "Generated SEO title",
+      seo: { title: "Generated SEO title", description: "Generated description", image: "/existing-social-image.jpg" },
+    });
+  });
   it("only writes published data when publishing and sanitizes both paths", async () => {
     expect(await savePageDraft(PAGE, payload())).toMatchObject({ status: "success" });
     expect(mocks.update.mock.calls[0][0]).not.toHaveProperty("published_data");

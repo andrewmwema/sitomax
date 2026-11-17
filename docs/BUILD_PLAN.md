@@ -496,7 +496,7 @@ Upgrade the domain settings page into a guided "Connect your domain" wizard:
 ```
 Add a "Have us connect it for you" option in the domain wizard:
 1. The client clicks it and sees provider-specific instructions for giving us SAFE delegated access (never their password): GoDaddy "Delegate Access", Namecheap "Share Access", Cloudflare "Invite member" with DNS-only permission, Squarespace "Add a domain manager", and for others "Add us as a user". Show our agency support email from agency_settings as the address to invite.
-2. Table domain_requests (migration 0012; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
+2. Table domain_requests (migration 0013; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
 3. Super admin dashboard: "Domain requests" list with status updates; the client sees the status on their domain page and gets an email when it is done.
 4. Never store registrar passwords or ask for them anywhere in the UI. Show a note: "We will never ask for your password."
 ```
@@ -585,8 +585,8 @@ Implemented foundation:
   Usage is assigned to the request's reservation month. Costs exclude pending
   requests until reconciled. These are estimates based on configured rates,
   not invoice totals or credit-pack prices.
-- The AI generator and editor commands remain future work; this foundation
-  exposes the metered server entry point but does not add generation buttons.
+- The site generator below uses this metered entry point. AI editor commands
+  remain future work.
 
 **Prompt B: "Build my site with AI" generator**
 ```
@@ -602,6 +602,73 @@ Build the AI site generator using the section design catalog (lib/sections/catal
 6. Save everything as drafts (draft_data), never publish automatically. Stream progress to the UI with steps: "Planning your site…", "Designing Home…", "Writing Services…", "Finding photos…", then open the editor.
 7. Record usage and enforce limits from Prompt A.
 ```
+
+**Implemented site-generator setup and behavior**
+
+- Apply `0012_ai_site_generator.sql` manually after `0011_ai_usage.sql`.
+  This adds grouped accounting, draft-only themes and site-wide draft backups.
+  Set server-only `ANTHROPIC_API_KEY`; optional `UNSPLASH_ACCESS_KEY` enables
+  photo search. Never expose either key through a public environment variable.
+- Agency: **Sites → Create site → Build with AI** selects a client and a
+  subdomain. Owners: open their site, then **Build with AI**. Editors cannot
+  generate or restore site-wide backups; database functions enforce this too.
+  The replacement confirmation reads: “This will replace your current
+  unpublished changes. You can restore them from version history.”
+- Generates Home, About, Services and Contact. Other existing pages are left
+  untouched. Existing page IDs, live content, SEO and live theme are preserved.
+  Before replacement, one transaction backs up **all** current page drafts and
+  the draft theme, then writes the generated drafts. **Version history: AI draft
+  backups** on the site dashboard restores the whole backup without publishing.
+  Editor **History** links there. Restore itself creates another backup; pages
+  absent from a backup are cleared only if created by that generation, never
+  deleted. Deleted original pages require agency recovery.
+- `sites.draft_theme` is used in the editor and authenticated preview only.
+  Publishing a page explicitly applies the pending site-wide theme. As with all
+  site-wide theme changes, that publish changes the palette/fonts across the
+  site. While an AI theme is pending, the theme inspector edits that draft.
+- `generateSite` and the streamed POST transport use the same server-only
+  pipeline. All planning/page/repair calls use Sonnet via `requestAi`.
+  Strict tool schemas come from the actual Puck content fields (including nested
+  arrays/objects); layout/design controls remain the catalog preset. Tool
+  definitions and the long system prompt are stable across calls for prompt
+  caching. Four pages fill in parallel, with at most ten calls total: plan plus
+  four pages, each with one validation repair.
+- Each invalid response gets one repair with Zod errors. Invalid sections then
+  use the preset layout with clearly marked placeholder copy, not unverifiable
+  sample claims. Two invalid plans stop without changing drafts. Rich text uses
+  the same DOMPurify sanitizer as manual edits. Review factual accuracy, SEO,
+  links and placeholders before publishing; AI output is not verified business
+  evidence. Forms remain unconnected, with this limitation disclosed.
+- One whole run consumes **one** included site generation or **10** shared
+  credits, not one charge per page. Each actual provider call has a separate
+  ledger row and counts toward the rolling 10/minute/user rate limit, including
+  repairs and rejections. Agency remains quota/credit-exempt.
+  An entirely rejected run refunds the reserved quota/credits. Any completed
+  billable call retains the generation charge even if later validation or saving
+  fails. Unknown call outcomes hold the reservation for agency reconciliation.
+  After reconciling child requests, finalize the group with service-only
+  `finish_ai_site_generation`; never simply refund a partly billed generation.
+  New-site ledger rows are linked to the site once it is saved.
+- The UI streams progress and opens the Home editor when saved. Missing photos
+  and fallback sections produce persistent review notes in the editor. Keep the
+  wizard open: there is no durable background-job queue or automatic retry.
+  Interrupted sessions may leave held reservations; check drafts and provider
+  billing before retrying. Both transports allow up to 300 seconds, subject to
+  the hosting plan's execution limits. Long runs may time out and require agency
+  reconciliation; photo work has a one-minute budget.
+- Photo search uses generic image queries, hotlinks original Unsplash URLs and
+  records each selected download. Photographer/source links include referral
+  parameters. Attribution travels in each section's `photoCredits` metadata and
+  is rendered by the shared shell, so copy/paste and saved designs keep it.
+  Images get stock-photo alt text. No key, missing results or API errors leave
+  placeholders; failures are disclosed. Staff portraits and partner logos are
+  not substituted with stock imagery.
+- Regression commands: `npx vitest run lib/ai`, `npx tsc --noEmit`,
+  `npm run lint`, `npm run build`. Against an **isolated test database** with
+  migrations applied, run `supabase/tests/ai_site_generator.sql` as the database
+  owner. It rolls back its fixtures and checks group billing, exact rate limits,
+  RLS, backup/restore (including approved embeds), draft/live isolation and
+  explicit theme publishing. Tests never call live AI or a hosted database.
 
 **Prompt C: AI assistant inside the editor**
 ```

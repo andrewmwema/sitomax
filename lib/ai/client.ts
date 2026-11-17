@@ -19,6 +19,14 @@ const requestSchema = z.object({
   siteId: z.uuid().optional(),
   action: z.enum(AI_ACTIONS),
   largeRewrite: z.boolean().default(false),
+  generationId: z.uuid().optional(),
+  tools: z.array(z.strictObject({
+    name: z.string().regex(/^[a-zA-Z0-9_-]+$/),
+    description: z.string().optional(),
+    strict: z.literal(true),
+    input_schema: z.looseObject({ type: z.literal("object") }),
+  })).optional(),
+  toolName: z.string().optional(),
   system: z.string().min(1).optional(),
   cacheTtl: z.enum(["5m", "1h"]).optional(),
   messages: z.array(z.object({
@@ -37,8 +45,10 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
     throw new Error("Prompt caching requires a priced model and a system prompt.");
   }
   const sdk = getClient();
+  if (input.tools && !input.tools.some((tool) => tool.name === input.toolName)) throw new Error("Choose a supplied AI tool.");
   const reservation = await checkLimit(input.accountId, input.action, {
     siteId: input.siteId, largeRewrite: input.largeRewrite,
+    ...(input.generationId ? { generationId: input.generationId } : {}),
   });
   let response: Anthropic.Message;
   try {
@@ -47,6 +57,10 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
       system: input.cacheTtl
         ? [{ type: "text", text: input.system!, cache_control: { type: "ephemeral", ttl: input.cacheTtl } }]
         : input.system,
+      ...(input.tools ? {
+        tools: input.tools,
+        tool_choice: { type: "tool" as const, name: input.toolName!, disable_parallel_tool_use: true },
+      } : {}),
     });
   } catch (cause) {
     const status = cause instanceof Anthropic.APIError ? cause.status : undefined;

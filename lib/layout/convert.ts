@@ -197,7 +197,7 @@ const CONVERTERS: Record<string, Converter> = {
     const side =
       variant === "lead-form"
         ? [form(b, p, "formFields")]
-        : compact([imageEl(b, p.backgroundImage, "", { aspect: "4/3" })]);
+        : compact([imageEl(b, p.backgroundImage, p.backgroundImageAlt, { aspect: "4/3" })]);
     const rows = [row([lead("left"), side], { columnProps: { verticalAlign: "center" } })];
     const stats = list(p.stats).map((s) => [
       b.el("StatNumber", { value: str(s.value), label: str(s.label), size: "3xl" }),
@@ -530,5 +530,7 @@ export function convertToLayout(
       },
     }),
   };
-  return CONVERTERS[item.type](b, item.props ?? {});
+  const converted = CONVERTERS[item.type](b, item.props ?? {});
+  if (item.props.photoCredits !== undefined) converted.props.photoCredits = structuredClone(item.props.photoCredits);
+  return converted;
 }

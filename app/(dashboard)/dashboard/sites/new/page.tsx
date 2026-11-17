@@ -25,6 +25,10 @@ export default async function NewSitePage() {
       <h1 className="mt-2 text-2xl font-semibold">Create a site</h1>
       <p className="mt-1 text-sm text-zinc-600">Choose a client and a starting design, then add their business details.</p>
     </header>
+    <Link href="/dashboard/sites/new/ai" className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white p-5 transition hover:border-zinc-400">
+      <span><span className="block font-semibold">Build with AI</span><span className="mt-1 block text-sm text-zinc-600">Start with your business, not a template. Review and publish when you are ready.</span></span>
+      <span aria-hidden="true">&rarr;</span>
+    </Link>
     {accounts?.length ? <NewSiteWizard accounts={accounts} choices={choices} rootDomain={process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost:3000"} /> :
       <p className="rounded-xl border bg-white p-6 text-sm">Create a <Link className="underline" href="/dashboard/clients">client account</Link> first.</p>}
   </section>;

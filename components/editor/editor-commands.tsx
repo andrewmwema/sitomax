@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useGetPuck } from "@puckeditor/core";
 import { listPageVersions } from "@/app/editor/[pageId]/actions";
 import { useSectionLibrary } from "./section-library";
@@ -79,7 +80,7 @@ export function EditorCommands({ persistence, onPublish, onTheme }: {
   </>;
 }
 
-export function VersionHistory({ persistence }: { persistence: Persistence }) {
+export function VersionHistory({ persistence, siteId }: { persistence: Persistence; siteId: string }) {
   const { pageId } = useInteractions();
   const ref = useRef<HTMLDialogElement>(null);
   const [versions, setVersions] = useState<{ id: string; published_at: string }[]>([]);
@@ -96,6 +97,7 @@ export function VersionHistory({ persistence }: { persistence: Persistence }) {
     <dialog ref={ref} aria-label="Published version history" className="m-auto w-[min(480px,94vw)] rounded-xl border border-zinc-200 p-5 shadow-xl backdrop:bg-zinc-950/30">
       <h2 className="text-sm font-semibold">Published versions</h2>
       <p className="my-2 text-xs text-zinc-500">The last 20 published versions. Restore updates the draft, not the live site.</p>
+      <Link href={`/dashboard/sites/${siteId}#ai-history`} className="my-2 block text-xs underline">Site-wide AI draft backups (account owners)</Link>
       {loading ? <p role="status">Loading...</p> : null}
       {error ? <p role="alert" className="text-xs text-red-600">{error} <button type="button" className="underline" onClick={() => void load()}>Retry</button></p> : null}
       <ol className="my-3 max-h-80 overflow-y-auto">

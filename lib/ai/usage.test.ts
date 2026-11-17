@@ -4,7 +4,7 @@ import { SITE_GENERATION_MODEL } from "./models";
 const mocks = vi.hoisted(() => ({ authorize: vi.fn(), account: vi.fn(), rpc: vi.fn(), admin: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireUser: mocks.authorize }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
-import { checkLimit, recordUsage } from "./usage";
+import { beginSiteGeneration, checkLimit, finishSiteGeneration, recordUsage } from "./usage";
 
 const id = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
@@ -47,5 +47,15 @@ describe("AI server-side accounting", () => {
     }));
     mocks.rpc.mockResolvedValueOnce({ error: { message: "offline" } });
     await expect(recordUsage({ id, model: SITE_GENERATION_MODEL }, usage)).rejects.toThrow("remains held");
+  });
+  it("reserves one generation, rate-checks each child call and closes the shared quota separately", async () => {
+    const generationId = await beginSiteGeneration(id, id);
+    await checkLimit(id, "generate_site", { siteId: id, generationId });
+    expect(mocks.rpc).toHaveBeenCalledWith("begin_ai_site_generation", expect.objectContaining({ p_account_id: id }));
+    expect(mocks.rpc).toHaveBeenCalledWith("reserve_ai_generation_call", expect.objectContaining({
+      p_generation_id: generationId, p_user_id: "authenticated-user",
+    }));
+    await finishSiteGeneration(generationId, true);
+    expect(mocks.rpc).toHaveBeenLastCalledWith("finish_ai_site_generation", { p_generation_id: generationId, p_success: true });
   });
 });

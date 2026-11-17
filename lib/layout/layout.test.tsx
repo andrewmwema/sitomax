@@ -140,6 +140,18 @@ describe("embed element", () => {
 });
 
 describe("convert to custom layout", () => {
+  it("keeps AI photo attribution and image alt text when converting a designed hero", () => {
+    const photoCredits = [{ url: "https://images.unsplash.com/photo-1", alt: "Stock photo of plumbing tools",
+      photographer: "Photographer", photographerUrl: "https://unsplash.com/@photographer", sourceUrl: "https://unsplash.com/photos/photo-1" }];
+    const converted = convertToLayout(el("Hero", { variant: "split", backgroundImage: photoCredits[0].url,
+      backgroundImageAlt: photoCredits[0].alt, photoCredits }), defaults)!;
+    expect(converted.props.photoCredits).toEqual(photoCredits);
+    expect(converted.props.photoCredits).not.toBe(photoCredits);
+    const html = render([converted]);
+    expect(html).toContain('alt="Stock photo of plumbing tools"');
+    expect(html).toContain('aria-label="Photo credits"');
+    expect(html).toContain("Photographer");
+  });
   it("converts every designed catalog section into a renderable Section → Row → Column tree", () => {
     expect(canConvertToLayout("Navigation")).toBe(false);
     const types = new Set<string>();

@@ -32,8 +32,10 @@ export type HeroProps = {
   secondaryButtonText?: string;
   secondaryButtonLink?: string;
   backgroundImage: string;
+  backgroundImageAlt?: string;
   /** Second photo for the collage shown by the "stats" variant. */
   secondaryImage: string;
+  secondaryImageAlt?: string;
   variant: HeroVariant;
   /** Shown by the "stats" variant as a row under the heading. */
   stats?: HeroStat[];
@@ -146,7 +148,9 @@ export const Hero: ComponentConfig<HeroProps> = {
       placeholder: "#services",
     },
     backgroundImage: imageField("Image"),
+    backgroundImageAlt: { type: "text", label: "Image alt text" },
     secondaryImage: imageField("Second image (collage)"),
+    secondaryImageAlt: { type: "text", label: "Second image alt text" },
     variant: {
       type: "select",
       label: "Layout",
@@ -201,12 +205,12 @@ export const Hero: ComponentConfig<HeroProps> = {
   // Only show the fields the chosen layout actually uses.
   resolveFields: (data, { fields }) => {
     const variant = data.props.variant ?? data.props.layout ?? "centered";
-    const { backgroundImage, secondaryImage, stats, formName, submitText, formFields, ...rest } =
+    const { backgroundImage, backgroundImageAlt, secondaryImage, secondaryImageAlt, stats, formName, submitText, formFields, ...rest } =
       fields;
     return {
       ...rest,
-      ...(variant === "lead-form" ? null : { backgroundImage }),
-      ...(variant === "stats" ? { secondaryImage, stats } : null),
+      ...(variant === "lead-form" ? null : { backgroundImage, backgroundImageAlt }),
+      ...(variant === "stats" ? { secondaryImage, secondaryImageAlt, stats } : null),
       ...(variant === "lead-form" ? { formName, submitText, formFields } : null),
       // Hidden fields stay typed as present; Puck only renders the
       // returned subset, so narrowing back to the full shape is safe.
@@ -222,7 +226,9 @@ export const Hero: ComponentConfig<HeroProps> = {
     secondaryButtonText: "",
     secondaryButtonLink: "",
     backgroundImage: "",
+    backgroundImageAlt: "",
     secondaryImage: "",
+    secondaryImageAlt: "",
     variant: "centered",
     stats: [
       { value: "[20]+", label: "Years in business" },
@@ -249,7 +255,9 @@ export const Hero: ComponentConfig<HeroProps> = {
     secondaryButtonText,
     secondaryButtonLink,
     backgroundImage,
+    backgroundImageAlt,
     secondaryImage,
+    secondaryImageAlt,
     variant,
     stats,
     formName,
@@ -295,7 +303,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={backgroundImage}
-                  alt=""
+                  alt={backgroundImageAlt || ""}
                   className="relative h-72 w-full object-cover sm:h-96"
                   style={{
                     borderRadius: "var(--radius-lg)",
@@ -468,7 +476,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={backgroundImage}
-                    alt=""
+                    alt={backgroundImageAlt || ""}
                     className="h-64 w-full object-cover sm:h-80"
                     style={{
                       borderRadius: "var(--radius-lg)",
@@ -479,7 +487,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={secondaryImage}
-                      alt=""
+                      alt={secondaryImageAlt || ""}
                       className="absolute bottom-0 left-0 hidden w-[45%] object-cover sm:block"
                       style={{
                         aspectRatio: "4 / 3",

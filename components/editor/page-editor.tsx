@@ -50,6 +50,7 @@ import { EditorCommands, VersionHistory } from "./editor-commands";
 
 type EditorUi = {
   pageId: string;
+  siteId: string;
   previewUrl: string;
   openThemePanel: () => void;
 };
@@ -75,7 +76,7 @@ const BLOCK_LABELS = Object.fromEntries(
 /** Header buttons: Save draft, Preview, Publish and the theme panel toggle. */
 function HeaderActions() {
   const getPuck = useGetPuck();
-  const { pageId, previewUrl, openThemePanel } = useEditorUi();
+  const { pageId, siteId, previewUrl, openThemePanel } = useEditorUi();
   const persistence = useDraftPersistence(pageId);
   const { busy } = persistence;
   const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
@@ -112,7 +113,7 @@ function HeaderActions() {
         {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
       </span>
       <EditorCommands persistence={persistence} onPublish={requestPublish} onTheme={openThemePanel} />
-      <VersionHistory persistence={persistence} />
+      <VersionHistory persistence={persistence} siteId={siteId} />
       <button
         type="button"
         onClick={openThemePanel}
@@ -296,6 +297,7 @@ export function PageEditor({
   isSuperAdmin,
   userId,
   sitePages,
+  generationWarnings = [],
 }: {
   page: { id: string; slug: string; title: string | null };
   site: { id: string; account_id: string; name: string | null; subdomain: string; theme: SiteTheme | null };
@@ -304,7 +306,9 @@ export function PageEditor({
   isSuperAdmin: boolean;
   userId: string;
   sitePages: EditorPageLink[];
+  generationWarnings?: string[];
 }) {
+  const [showGenerationWarnings, setShowGenerationWarnings] = useState(true);
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
   const [themePanelOpen, setThemePanelOpen] = useState(false);
   const [library, setLibrary] = useState<SectionLibraryUi["library"]>({ open: false, index: 0 });
@@ -331,8 +335,9 @@ export function PageEditor({
       pageId: page.id,
       previewUrl,
       openThemePanel: () => setThemePanelOpen(true),
+      siteId: site.id,
     }),
-    [page.id, previewUrl],
+    [page.id, previewUrl, site.id],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
@@ -400,6 +405,11 @@ export function PageEditor({
         <SectionLibraryContext.Provider value={sectionLibraryUi}>
           <InteractionContext.Provider value={interactionUi}>
           <div className="h-screen pb-9">
+            {showGenerationWarnings && generationWarnings.length ? <aside role="status" className="fixed bottom-12 left-4 z-[100] max-h-56 w-[min(420px,90vw)] overflow-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950 shadow-lg">
+              <p className="font-semibold">AI draft review notes</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4">{generationWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+              <button type="button" className="mt-3 underline" onClick={() => setShowGenerationWarnings(false)}>Dismiss</button>
+            </aside> : null}
             <Puck
               config={config}
               data={data}

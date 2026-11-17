@@ -81,6 +81,17 @@ describe("metered AI entry point", () => {
       inputTokens: 30, outputTokens: 10, cacheReadTokens: 100, cacheWrite5mTokens: 100, cacheWrite1hTokens: 50,
     });
   });
+  it("passes strict tool schemas and the shared generation reservation through the metered entry point", async () => {
+    const generationId = "00000000-0000-4000-8000-000000000002";
+    mocks.check.mockResolvedValueOnce({ id, model: SITE_GENERATION_MODEL });
+    mocks.create.mockResolvedValueOnce({ model: SITE_GENERATION_MODEL, usage: { input_tokens: 10, output_tokens: 10 } });
+    const tools = [{ name: "plan_site", strict: true as const, input_schema: { type: "object" as const, properties: {}, additionalProperties: false } }];
+    await requestAi({ ...input, action: "generate_site", generationId, tools, toolName: "plan_site" });
+    expect(mocks.check).toHaveBeenCalledWith(id, "generate_site", expect.objectContaining({ generationId }));
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
+      tools, tool_choice: { type: "tool", name: "plan_site", disable_parallel_tool_use: true },
+    }));
+  });
   it("rejects unpriced caching before calling, and leaves unknown response models held", async () => {
     await expect(requestAi({ ...input, system: "Instructions", cacheTtl: "5m" })).rejects.toThrow("caching");
     expect(mocks.check).not.toHaveBeenCalled();

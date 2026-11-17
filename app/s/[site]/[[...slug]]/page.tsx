@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { Metadata } from "next";
+import { z } from "zod";
 import { notFound } from "next/navigation";
 import { Render } from "@puckeditor/core/rsc";
 import { puckConfig, type PuckPageData } from "@/lib/puck/config";
@@ -82,7 +83,10 @@ export async function generateMetadata({
   if (!loaded) return {};
 
   const { site, page } = loaded;
-  const seo = (page.seo ?? {}) as PageSeo;
+  const preview = loaded.isPreview ? z.object({
+    root: z.object({ props: z.object({ title: z.string().optional(), description: z.string().optional() }).optional() }).optional(),
+  }).safeParse(loaded.data).data?.root?.props : undefined;
+  const seo = (preview ?? page.seo ?? {}) as PageSeo;
   const title = seo.title || page.title || site.name || site.subdomain;
 
   return {
@@ -97,7 +101,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   if (!loaded) notFound();
 
   const { site, data, isPreview } = loaded;
-  const theme = (site.theme ?? {}) as SiteTheme;
+  const theme = ((isPreview ? site.draft_theme ?? site.theme : site.theme) ?? {}) as SiteTheme;
 
   return (
     <>

@@ -10,9 +10,10 @@ import { editorTextExtensions } from "./richtext-extensions";
  * Reusable image field for blocks. The field UI only ever renders inside
  * the (client-side) editor; the public renderer never calls it.
  */
-export function imageField(label: string): CustomField<string> {
+export function imageField(label: string): CustomField<string> & { aiKind: "image" } {
   return {
     type: "custom",
+    aiKind: "image",
     label,
     render: ({ value, onChange, readOnly }) => (
       <ImageUploadField value={value} onChange={onChange} readOnly={readOnly} />
@@ -21,9 +22,10 @@ export function imageField(label: string): CustomField<string> {
 }
 
 /** Reusable icon field: searchable picker over the curated lucide set. */
-export function iconField(label: string): CustomField<string> {
+export function iconField(label: string): CustomField<string> & { aiKind: "icon" } {
   return {
     type: "custom",
+    aiKind: "icon",
     label,
     render: ({ value, onChange, readOnly }) => (
       <IconPickerField value={value} onChange={onChange} readOnly={readOnly} />

@@ -64,6 +64,7 @@ export type TenantSite = {
   custom_domain: string | null;
   domain_verified: boolean;
   theme: Record<string, unknown>;
+  draft_theme?: Record<string, unknown> | null;
 };
 
 export type TenantPage = {
@@ -78,7 +79,7 @@ export type TenantPage = {
 };
 
 const SITE_COLUMNS =
-  "id, account_id, name, subdomain, custom_domain, domain_verified, theme";
+  "id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme";
 
 /**
  * Resolves the tenant key from the /s/[site] segment to a site row.

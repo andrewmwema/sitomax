@@ -36,8 +36,8 @@ function rootProps(data: PuckDataInput): { title?: string; description?: string 
 
 /**
  * Loads the page (via RLS) and applies the update. Also syncs the page
- * title and SEO description from the Puck root fields into pages.title
- * and pages.seo, which generateMetadata reads on the public site.
+ * title and SEO from the Puck root fields into pages.title/pages.seo on
+ * publish only; autosaving a draft must not change the live metadata.
  */
 async function updatePage(
   pageId: string,
@@ -92,6 +92,7 @@ async function updatePage(
 
   const root = rootProps(parsedData.data);
   const seo = { ...(page.seo as Record<string, unknown>) };
+  if (root.title !== undefined) seo.title = root.title;
   if (root.description !== undefined) seo.description = root.description;
 
   // Rich text props are client-authored HTML: sanitize before storing so
@@ -100,10 +101,10 @@ async function updatePage(
 
   const update: Record<string, unknown> = {
     draft_data: cleanData,
-    title: root.title || page.title,
-    seo,
   };
   if (publish) {
+    update.title = root.title || page.title;
+    update.seo = seo;
     update.published_data = cleanData;
     update.published_at = new Date().toISOString();
   }
@@ -153,8 +154,8 @@ export async function restorePageVersion(pageId: string, versionId: string) {
     : result;
 }
 /**
- * Saves the site-wide theme to sites.theme. RLS lets account members
- * update only name and theme on their own sites.
+ * Saves a pending AI theme to draft_theme; other theme edits retain the
+ * existing live-theme behavior. RLS scopes both to the member's sites.
  */
 export async function saveSiteTheme(siteId: string, rawTheme: unknown): Promise<ActionState> {
   const parsedId = z.uuid().safeParse(siteId);
@@ -164,9 +165,12 @@ export async function saveSiteTheme(siteId: string, rawTheme: unknown): Promise<
   }
 
   const { supabase } = await requireUser();
+  const { data: site, error: siteError } = await supabase.from("sites").select("draft_theme")
+    .eq("id", parsedId.data).maybeSingle();
+  if (siteError || !site) return { status: "error", message: "Could not load the site theme." };
   const { data, error } = await supabase
     .from("sites")
-    .update({ theme: parsedTheme.data })
+    .update(site.draft_theme ? { draft_theme: parsedTheme.data } : { theme: parsedTheme.data })
     .eq("id", parsedId.data)
     .select("id");
 

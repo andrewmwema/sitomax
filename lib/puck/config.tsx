@@ -8,6 +8,7 @@ import { buildThemeStyle, themeFonts, type SiteTheme } from "@/lib/theme/presets
 import { googleFontsUrl } from "@/lib/theme/fonts";
 import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
 import { SectionShell } from "@/components/blocks/ui/SectionShell";
+import { PhotoCredits } from "@/components/blocks/ui/photo-credits";
 import { Hero, type HeroProps } from "@/components/blocks/hero";
 import { TextSection, type TextSectionProps } from "@/components/blocks/text-section";
 import { ImageWithText, type ImageWithTextProps } from "@/components/blocks/image-with-text";
@@ -124,7 +125,7 @@ function withSectionShell<C extends ComponentConfig<any>>(
 ): C {
   const BaseRender = config.render;
   const render = ((
-    props: WithPuckProps<DefaultComponentProps & { design?: BlockDesign }> & {
+    props: WithPuckProps<DefaultComponentProps & { design?: BlockDesign; photoCredits?: unknown }> & {
       id: string;
     },
   ) => (
@@ -135,6 +136,7 @@ function withSectionShell<C extends ComponentConfig<any>>(
       dragRef={config.inline ? props.puck.dragRef : undefined}
     >
       <BaseRender {...props} />
+      <PhotoCredits credits={props.photoCredits} />
     </SectionShell>
   )) as C["render"];
   return { ...config, render };
