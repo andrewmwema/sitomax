@@ -1,172 +1,78 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BarChart3, CircleDollarSign, Globe2, Inbox, LayoutDashboard, LogOut, Search, Settings, Users } from "lucide-react";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  superAdminOnly?: boolean;
-};
-
-const iconProps = {
-  className: "size-5",
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.8,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-  "aria-hidden": true,
-} as const;
-
-const NAV_ITEMS: NavItem[] = [
-  {
-    href: "/dashboard",
-    label: "Sites",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/clients",
-    label: "Clients",
-    superAdminOnly: true,
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="9" cy="8" r="3.5" />
-        <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4.5-6.2" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/forms",
-    label: "Forms",
-    icon: (
-      <svg {...iconProps}>
-        <rect x="4" y="3" width="16" height="18" rx="2" />
-        <path d="M8 8h8M8 12h8M8 16h5" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/analytics",
-    label: "Analytics",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/ai-usage",
-    label: "AI costs",
-    superAdminOnly: true,
-    icon: (
-      <svg {...iconProps}>
-        <path d="M12 3v18M17 7H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/settings",
-    label: "Settings",
-    icon: (
-      <svg {...iconProps}>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1z" />
-      </svg>
-    ),
-  },
+const groups = [
+  { label: "Main", items: [
+    { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+    { href: "/dashboard#sites", label: "Sites", icon: Globe2 },
+    { href: "/dashboard/clients", label: "Clients", icon: Users, admin: true },
+    { href: "/dashboard/forms", label: "Forms", icon: Inbox },
+    { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+  ] },
+  { label: "Workspace", items: [
+    { href: "/dashboard/ai-usage", label: "AI costs", icon: CircleDollarSign, admin: true },
+    { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  ] },
 ];
 
-export function Sidebar({
-  agencyName,
-  logoUrl,
-  isSuperAdmin,
-  userEmail,
-  signOutAction,
-}: {
-  agencyName: string;
-  logoUrl: string | null;
-  isSuperAdmin: boolean;
-  userEmail: string;
+export function Sidebar({ agencyName, logoUrl, isSuperAdmin, userEmail, userName, signOutAction }: {
+  agencyName: string; logoUrl: string | null; isSuperAdmin: boolean; userEmail: string; userName: string;
   signOutAction: () => Promise<void>;
 }) {
   const pathname = usePathname();
-
-  const items = NAV_ITEMS.filter(
-    (item) => !item.superAdminOnly || isSuperAdmin,
-  );
-
-  return (
-    <aside className="sticky top-0 flex h-screen w-16 shrink-0 flex-col border-r border-zinc-200 bg-white md:w-64">
-      <div className="flex items-center gap-3 px-3 py-5 md:px-5">
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- remote logo host is user-configured
-          <img
-            src={logoUrl}
-            alt={agencyName}
-            className="size-9 shrink-0 rounded-lg object-contain"
-          />
-        ) : (
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-            {agencyName.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <span className="hidden truncate text-sm font-semibold tracking-tight md:block">
-          {agencyName}
-        </span>
-      </div>
-
-      <nav className="flex flex-1 flex-col gap-1 px-2 md:px-3">
-        {items.map((item) => {
-          const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={item.label}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                active
-                  ? "bg-primary/10 text-primary"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-              }`}
-            >
-              {item.icon}
-              <span className="hidden md:block">{item.label}</span>
-            </Link>
-          );
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const items = groups.flatMap((group) => group.items).filter((item) => !("admin" in item) || isSuperAdmin);
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault(); setOpen(true);
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, []);
+  useEffect(() => {
+    if (open && !dialog.current?.open) dialog.current?.showModal();
+    if (!open && dialog.current?.open) dialog.current.close();
+  }, [open]);
+  return <aside className="sticky top-0 flex h-screen w-16 shrink-0 flex-col gap-5 border-r border-[#E8E7E3] bg-[#FBFBFA] px-2 py-4 md:w-[248px] md:px-3">
+    <div className="flex min-h-12 items-center gap-2.5 px-1 md:px-2">
+      {/* eslint-disable-next-line @next/next/no-img-element -- branding host is user-configured */}
+      {logoUrl ? <img src={logoUrl} alt="" className="size-8 shrink-0 rounded-lg object-contain" /> :
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] bg-[#121212] text-sm font-semibold text-white">{agencyName.charAt(0).toUpperCase()}</span>}
+      <span className="hidden min-w-0 md:block"><strong className="block truncate text-[15px]">{agencyName}</strong><span className="block text-xs text-[#6B6A66]">Agency workspace</span></span>
+    </div>
+    <button type="button" onClick={() => setOpen(true)} title="Search or jump to" aria-label="Search or jump to" className="flex min-h-10 items-center gap-2.5 rounded-[10px] border border-[#E8E7E3] bg-white px-3 text-left text-[13px] text-[#6B6A66] hover:bg-[#F7F7F5]">
+      <Search size={16} /><span className="hidden flex-1 md:block">Search or jump to...</span><kbd className="hidden rounded-md border border-[#E8E7E3] bg-[#F7F7F5] px-1.5 py-0.5 text-[11px] md:block">Ctrl K</kbd>
+    </button>
+    <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-5">
+      {groups.map((group) => <div key={group.label} className="flex flex-col gap-0.5">
+        {group.label !== "Main" ? <p className="mb-1 hidden px-3 text-[11px] font-semibold tracking-wider text-[#6B6A66] uppercase md:block">{group.label}</p> : null}
+        {group.items.filter((item) => !("admin" in item) || isSuperAdmin).map((item) => {
+          const active = !item.href.includes("#") && (item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href));
+          return <Link key={item.href} href={item.href} title={item.label} aria-current={active ? "page" : undefined}
+            className={`flex min-h-10 items-center gap-3 rounded-[10px] px-3 text-sm transition ${active ? "bg-white font-medium text-[#121212] shadow-[0_1px_2px_rgba(18,18,18,0.06),0_0_0_1px_#E8E7E3]" : "text-[#3D3C39] hover:bg-[#EFEEEA]"}`}>
+            <item.icon size={18} strokeWidth={1.8} /><span className="hidden md:block">{item.label}</span>
+          </Link>;
         })}
-      </nav>
-
-      <div className="border-t border-zinc-200 px-3 py-4 md:px-5">
-        <p
-          className="hidden truncate text-xs text-zinc-500 md:block"
-          title={userEmail}
-        >
-          {userEmail}
-        </p>
-        <form action={signOutAction}>
-          <button
-            type="submit"
-            className="mt-2 flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-sm font-medium text-zinc-600 transition hover:text-zinc-900"
-          >
-            <svg {...iconProps} className="size-4">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-            </svg>
-            <span className="hidden md:block">Sign out</span>
-          </button>
-        </form>
-      </div>
-    </aside>
-  );
+      </div>)}
+    </nav>
+    <div className="border-t border-[#E8E7E3] px-1 pt-4 md:px-2">
+      <p className="hidden truncate text-sm font-medium md:block">{userName || userEmail}</p>
+      {userName ? <p className="hidden truncate text-xs text-[#6B6A66] md:block">{userEmail}</p> : null}
+      <form action={signOutAction}><button type="submit" className="mt-2 flex items-center gap-2 py-1 text-sm text-[#5F5E5A] hover:text-[#121212]"><LogOut size={16} /><span className="hidden md:block">Sign out</span></button></form>
+    </div>
+    <dialog ref={dialog} onClose={() => { setOpen(false); setSearch(""); }} aria-label="Search navigation" className="m-auto w-[min(520px,90vw)] rounded-2xl border border-[#E8E7E3] bg-white p-4 text-[#121212] shadow-xl backdrop:bg-black/30">
+      <label className="flex items-center gap-3 rounded-lg border border-[#E8E7E3] px-3"><Search size={18} /><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search pages..." className="h-11 w-full outline-none" /></label>
+      <div className="mt-2 max-h-80 overflow-y-auto">{items.filter((item) => item.label.toLowerCase().includes(search.toLowerCase().trim())).map((item) =>
+        <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-[#F7F7F5]"><item.icon size={17} />{item.label}</Link>)}</div>
+      <button type="button" className="mt-2 text-xs text-[#6B6A66] underline" onClick={() => setOpen(false)}>Close</button>
+    </dialog>
+  </aside>;
 }

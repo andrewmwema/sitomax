@@ -28,6 +28,15 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Platform chrome only. Tenant render roots set their own theme and fonts. */
+.platform-ui {
+  --primary: #121212;
+  font-family: Inter, system-ui, sans-serif;
+}
+.platform-ui h1, .platform-ui h2, .platform-ui h3 {
+  font-family: "Inter Tight", Inter, system-ui, sans-serif;
+}
+
 .site-content {
   overflow-wrap: anywhere;
 }

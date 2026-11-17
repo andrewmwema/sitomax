@@ -7,7 +7,7 @@ import { signInWithPassword, type LoginState } from "./actions";
 const initialState: LoginState = { status: "idle" };
 
 const inputClasses =
-  "rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+  "rounded-[10px] border border-[#E8E7E3] bg-white px-3.5 py-2.5 text-sm text-[#121212] placeholder:text-[#A8A7A2] focus:border-[#4B3FE0] focus:ring-2 focus:ring-[#4B3FE0]/20 focus:outline-none";
 
 export function LoginForm({ next }: { next: string }) {
   const [state, formAction, pending] = useActionState(
@@ -20,7 +20,7 @@ export function LoginForm({ next }: { next: string }) {
       <input type="hidden" name="next" value={next} />
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <span className="text-sm font-medium text-[#3D3C39]">
           Email address
         </span>
         <input
@@ -35,7 +35,7 @@ export function LoginForm({ next }: { next: string }) {
 
       <label className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <span className="text-sm font-medium text-[#3D3C39]">
             Password
           </span>
           <Link

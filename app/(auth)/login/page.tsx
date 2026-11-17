@@ -11,7 +11,9 @@ import { LoginForm } from "./login-form";
  */
 export default function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6 py-16 dark:bg-zinc-950">
+    <main className="platform-ui flex flex-1 flex-col items-center justify-center bg-[#F7F7F5] px-6 py-16">
+      {/* eslint-disable-next-line @next/next/no-page-custom-font -- platform-only font, not tenant content */}
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" />
       <Suspense
         fallback={
           <div className="h-72 w-full max-w-sm animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
@@ -51,6 +53,7 @@ async function LoginCard({
   return (
     <AuthCard
       settings={settings}
+      platform
       title={`Sign in to ${settings.name}`}
       subtitle="Enter your email and password to continue."
     >

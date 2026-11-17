@@ -10,15 +10,17 @@ export function AuthCard({
   title,
   subtitle,
   children,
+  platform = false,
 }: {
   settings: AgencySettings;
   title: string;
   subtitle: string;
   children: React.ReactNode;
+  platform?: boolean;
 }) {
   return (
     <div
-      style={{ "--primary": settings.primaryColor } as CSSProperties}
+      style={{ "--primary": platform ? "#121212" : settings.primaryColor } as CSSProperties}
       className="w-full max-w-sm"
     >
       <div className="flex flex-col items-center gap-3 text-center">
@@ -34,13 +36,13 @@ export function AuthCard({
             {settings.name.charAt(0).toUpperCase()}
           </div>
         )}
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+        <h1 className={`text-2xl font-semibold tracking-tight ${platform ? "text-[#121212]" : "text-zinc-900 dark:text-zinc-100"}`}>
           {title}
         </h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{subtitle}</p>
+        <p className={`text-sm ${platform ? "text-[#5F5E5A]" : "text-zinc-600 dark:text-zinc-400"}`}>{subtitle}</p>
       </div>
 
-      <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className={`mt-8 border bg-white p-6 shadow-sm ${platform ? "rounded-[14px] border-[#E8E7E3]" : "rounded-2xl border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900"}`}>
         {children}
       </div>
 

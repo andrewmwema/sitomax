@@ -13,6 +13,7 @@
 
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
+export { getSiteUrl } from "@/lib/site-url";
 
 function rootDomain(): string {
   return process.env.ROOT_DOMAIN ?? "localhost:3000";
@@ -22,20 +23,6 @@ function rootDomain(): string {
  * Public URL of a site: verified custom domain first, subdomain otherwise.
  * Uses NEXT_PUBLIC_ROOT_DOMAIN so it also works in Client Components.
  */
-export function getSiteUrl(site: {
-  subdomain: string;
-  custom_domain: string | null;
-  domain_verified: boolean;
-}): string {
-  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost:3000";
-  const host =
-    site.custom_domain && site.domain_verified
-      ? site.custom_domain
-      : `${site.subdomain}.${root}`;
-  const protocol = host.includes("localhost") ? "http" : "https";
-  return `${protocol}://${host}`;
-}
-
 /**
  * Returns the tenant key for a hostname, or null when the host is the
  * agency's own root domain (marketing site + dashboard).
