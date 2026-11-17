@@ -59,3 +59,25 @@ longer. The configured Supabase public storage origin is optimized by
 URLs continue to work. Google Analytics and Meta Pixel load only when their IDs
 are configured and never in preview; site operators are responsible for any
 applicable consent requirements.
+
+## Custom domains
+
+Account owners and the agency can open a site's **Domains** tab. Configure
+`VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID` and, for team projects, `VERCEL_TEAM_ID`
+on the server. The token must have permission to manage that project's domains;
+never use a `NEXT_PUBLIC_` variable for it. No additional migration is needed
+for this feature: existing unique `sites.custom_domain` and protected
+`sites.domain_verified` columns are used.
+
+Enter a domain such as `example.com` (a leading `www` is treated as its alias).
+The platform attaches both hostnames, with a permanent redirect from `www`
+to the root. The DNS table uses the hosting API's preferred A and CNAME values,
+plus any required TXT ownership challenges; no shared IP or target is hard-coded.
+Click **Check again** after updating DNS. Both hostnames must pass ownership
+and DNS checks before the custom domain becomes the live site URL. DNS changes
+can take up to 48 hours.
+
+Incomplete connections stay saved so **Retry connection** can finish setup.
+Remove an existing domain before replacing it. Removal detaches both hostnames
+before clearing the saved domain; retry if only part of the removal succeeds.
+Removing a domain does not delete DNS records at the domain provider.

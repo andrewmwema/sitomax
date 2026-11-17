@@ -16,12 +16,16 @@ async function SeoContent({ params }: { params: PageProps<"/dashboard/sites/[sit
   const { siteId } = await params;
   const { supabase } = await requireUser();
   const [{ data: site, error: siteError }, { data: redirects, error: redirectsError }, { data: pages, error: pagesError }] = await Promise.all([
-    supabase.from("sites").select("id, name, subdomain, business, seo").eq("id", siteId).maybeSingle(),
+    supabase.from("sites").select("id, account_id, name, subdomain, business, seo").eq("id", siteId).maybeSingle(),
     supabase.from("redirects").select("id, from_path, to_path").eq("site_id", siteId).order("from_path"),
     supabase.from("pages").select("id, title, slug, draft_data, seo, published_at").eq("site_id", siteId).order("sort_order"),
   ]);
   if (siteError || redirectsError || pagesError) throw new Error("Could not load SEO settings. Check the SEO migration.");
   if (!site) notFound();
+  const [admin, owner] = await Promise.all([
+    supabase.rpc("is_super_admin"), supabase.rpc("is_account_owner", { acc: site.account_id }),
+  ]);
+  if (admin.error || owner.error) throw new Error("Could not check site permissions.");
   const business = businessSchema.parse({ ...emptyBusiness, ...site.business });
   const seo = siteSeoSchema.parse(site.seo);
   const seoPages: PageSeoRow[] = (pages ?? []).map((page) => {
@@ -58,7 +62,11 @@ async function SeoContent({ params }: { params: PageProps<"/dashboard/sites/[sit
   return <section className="space-y-6">
     <header><p className="text-sm text-zinc-500"><Link href={`/dashboard/sites/${siteId}`} className="hover:underline">{site.name || site.subdomain}</Link> / SEO</p>
       <h1 className="mt-1 text-2xl font-semibold">SEO</h1></header>
-    <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm"><Link href={`/dashboard/sites/${siteId}`} className="pb-3">Pages</Link><span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">SEO</span></nav>
+    <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm">
+      <Link href={`/dashboard/sites/${siteId}`} className="pb-3">Pages</Link>
+      <span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">SEO</span>
+      {admin.data || owner.data ? <Link href={`/dashboard/sites/${siteId}/domains`} className="pb-3 hover:underline">Domains</Link> : null}
+    </nav>
     <PageSeoManager siteId={site.id} siteSeo={seo} pages={seoPages} averageScore={averageScore} />
     <section className="platform-panel p-6"><h2 className="font-semibold">Business information</h2>
       <p className="mt-2 text-sm text-zinc-600">Used for structured data and shared with your business profile.</p>
