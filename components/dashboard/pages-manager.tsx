@@ -61,13 +61,13 @@ export function PagesManager({
         </p>
       ) : null}
 
-      <ul className="divide-y divide-zinc-100 overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+      <ul className="platform-panel divide-y divide-[#F0EFEA] overflow-hidden">
         {pages.map((page, index) => {
           const isHome = page.slug === "";
           const isEditing = editing?.id === page.id;
 
           return (
-            <li key={page.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+            <li key={page.id} className="flex flex-wrap items-center gap-3 px-5 py-5">
               {isEditing ? (
                 <form
                   className="flex flex-1 flex-wrap items-center gap-2"

@@ -19,7 +19,7 @@ export function AgencySettingsForm({
   return (
     <form
       action={formAction}
-      className="flex max-w-xl flex-col gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+      className="platform-panel flex max-w-xl flex-col gap-5 p-6 sm:p-8"
     >
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-zinc-700">Agency name</span>

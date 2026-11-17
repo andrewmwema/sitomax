@@ -80,13 +80,13 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain }: {
       setError(cause instanceof Error && !(cause instanceof z.ZodError) ? cause.message : "The progress response was invalid. Check your drafts before retrying.");
     } finally { setBusy(false); }
   };
-  if (result) return <div className="rounded-2xl border bg-white p-6">
+  if (result) return <div className="platform-panel p-6">
     <h2 className="text-xl font-semibold">Your drafts are ready</h2>
     <p className="mt-2 text-sm text-zinc-600">Nothing has been published. Review every page, placeholder and photo before publishing.</p>
     {result.warnings.length ? <ul role="status" className="my-4 list-disc space-y-2 pl-5 text-sm text-amber-900">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
     <button className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white" onClick={() => router.push(`/editor/${result.pageId}`)}>Open editor</button>
   </div>;
-  return <form className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-8" onSubmit={(event) => {
+  return <form className="platform-panel p-5 sm:p-8" onSubmit={(event) => {
     event.preventDefault();
     if (step === 0) {
       if (!values.services.length && !service.trim()) { setError("Add at least one service."); return; }

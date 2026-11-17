@@ -69,15 +69,13 @@ async function SiteDetail({
     <section className="flex flex-col gap-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          {canGenerate ? <Link href={`/dashboard/sites/${siteId}/generate`} className="mb-5 inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Build with AI</Link> : null}
-          {canGenerate ? <Link href={`/dashboard/analytics?site=${encodeURIComponent(siteId)}`} className="mb-5 ml-2 inline-flex rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium">View analytics</Link> : null}
           <p className="text-sm text-zinc-500">
             <Link href="/dashboard" className="hover:underline">
               Sites
             </Link>{" "}
             /
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
             {site.name ?? site.subdomain}
           </h1>
           <a
@@ -89,15 +87,18 @@ async function SiteDetail({
             {url.replace(/^https?:\/\//, "")}
           </a>
         </div>
-        <div id="business-info"><BusinessInfo siteId={site.id} initialBusiness={businessSchema.parse({ ...emptyBusiness, ...site.business })} /></div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-        >
-          View live
-        </a>
+        <div className="flex flex-wrap gap-2">
+          {canGenerate ? <Link href={`/dashboard/analytics?site=${encodeURIComponent(siteId)}`} className="platform-button">View analytics</Link> : null}
+          {canGenerate ? <Link href={`/dashboard/sites/${siteId}/generate`} className="platform-button platform-button-ai">Build with AI</Link> : null}
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="platform-button platform-button-primary"
+          >
+            View live
+          </a>
+        </div>
       </header>
 
       <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm">
@@ -109,6 +110,9 @@ async function SiteDetail({
           Pages
         </h2>
         <PagesManager siteId={site.id} pages={pages} />
+      </div>
+      <div id="business-info">
+        <BusinessInfo siteId={site.id} initialBusiness={businessSchema.parse({ ...emptyBusiness, ...site.business })} />
       </div>
       {canGenerate ? backups?.error ? <p role="alert" className="text-sm text-red-700">Draft history is unavailable. Ask your agency to apply the AI site-generator migration.</p>
         : <AiDraftHistory siteId={site.id} versions={backups?.data ?? []} /> : null}

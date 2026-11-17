@@ -148,9 +148,10 @@ function LibraryContent() {
   const clearPreview = () => setPreview(null);
   return (
     <aside ref={panelRef} tabIndex={-1} aria-label="Section library" className="section-library-panel">
-      <header className="flex items-center justify-between border-b border-zinc-200 p-4">
+      <header className="flex items-center justify-between border-b border-[#E8E7E3] px-5 py-5">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-900">Section library</h2>
+          <p className="platform-eyebrow mb-1">Build beautifully</p>
+          <h2 className="text-base font-semibold tracking-tight text-zinc-900">Section library</h2>
           <p className="mt-1 text-xs text-zinc-500">Insert at position {library.index + 1} · Hover to try it</p>
         </div>
         <button type="button" onClick={closeLibrary} aria-label="Close section library" className="rounded-lg p-2 hover:bg-zinc-100"><X size={18} /></button>
@@ -190,7 +191,7 @@ function LibraryContent() {
           {SECTION_CATEGORIES.map((entry) => (
             <button key={entry} type="button" aria-current={!searching && category === entry ? "true" : undefined}
               onClick={() => { setCategory(entry); setQuery(""); clearPreview(); }}
-              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${!searching && category === entry ? "border-[#121212] bg-[#121212] text-white" : "border-[#E8E7E3] text-zinc-600 hover:bg-[#F7F7F5]"}`}>
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] ${!searching && category === entry ? "border-[#D9D3FF] bg-[#F1EFFF] font-medium text-[#4B3FE0]" : "border-[#E8E7E3] text-zinc-600 hover:bg-[#F7F7F5]"}`}>
               <span>{entry}</span>
               <span className="tabular-nums opacity-60">{entry === "Blank" ? ROW_LAYOUT_IDS.length : designsForCategory(source, entry).length}</span>
             </button>

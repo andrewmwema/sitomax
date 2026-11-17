@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./platform.css";
 
 export const metadata: Metadata = {
   title: process.env.NEXT_PUBLIC_AGENCY_NAME ?? "My Agency",

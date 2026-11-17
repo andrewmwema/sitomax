@@ -18,7 +18,7 @@ import {
   type Overrides,
   type Plugin,
 } from "@puckeditor/core";
-import { Bookmark, FileText, Layers, LayoutGrid, Palette, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Bookmark, Check, Eye, FileText, Layers, LayoutGrid, Palette, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BusinessInfo } from "@/components/dashboard/business-info";
 import type { Business } from "@/lib/business";
@@ -99,8 +99,8 @@ function PagesPanel() {
   const { pages, pageId } = useInteractions();
   const persistence = usePersistence();
   const router = useRouter();
-  return <div className="p-4">
-    <h2 className="mb-3 text-sm font-semibold">Pages</h2>
+  return <div className="editor-panel">
+    <header className="editor-panel-header mb-4"><p className="platform-eyebrow mb-1">Site structure</p><h2 className="font-semibold">Pages</h2></header>
     <div className="flex flex-col gap-1">
       {pages.map((page) => <button key={page.id} type="button" aria-current={page.id === pageId ? "page" : undefined}
         disabled={page.id === pageId || persistence.busy !== null}
@@ -115,9 +115,9 @@ function PagesPanel() {
 
 function ThemeTool() {
   const { openThemePanel, siteId, business } = useEditorUi();
-  return <div className="min-h-0 overflow-y-auto p-4"><h2 className="text-sm font-semibold">Theme</h2>
-    <p className="my-3 text-xs text-zinc-500">Update this site&apos;s colors, fonts and style.</p>
-    <button type="button" className="rounded-lg bg-[#121212] px-3 py-2 text-xs text-white" onClick={openThemePanel}>Edit theme</button>
+  return <div className="editor-panel min-h-0 overflow-y-auto"><header className="editor-panel-header"><p className="platform-eyebrow mb-1">Visual identity</p><h2 className="font-semibold">Theme</h2>
+    <p className="mt-2 text-xs leading-relaxed text-zinc-500">Update this site&apos;s colors, fonts and style.</p></header>
+    <button type="button" className="platform-button platform-button-primary mt-4 w-full" onClick={openThemePanel}><Palette size={14} />Edit theme</button>
     <div className="mt-4"><BusinessInfo siteId={siteId} initialBusiness={business} /></div>
   </div>;
 }
@@ -141,19 +141,20 @@ function AiTool() {
   const selection = usePuckStore((state) => state.appState.ui.itemSelector);
   const canEdit = usePuckStore((state) => state.getPermissions({ item: state.selectedItem }).edit !== false);
   const topLevel = selection && (!selection.zone || selection.zone === ROOT_ZONE) && canEdit;
-  return <div className="p-4"><h2 className="text-sm font-semibold">AI editing</h2>
-    <p className="mt-3 text-xs text-zinc-500">Preview changes before adding them to your draft.</p>
-    <button type="button" disabled={!topLevel} onClick={openSection} className="mt-3 w-full rounded-lg border px-3 py-2 text-xs disabled:opacity-40">Edit selected section</button>
-    <button type="button" onClick={openAdd} className="mt-2 w-full rounded-lg bg-[#4B3FE0] px-3 py-2 text-xs text-white">Add a section with AI</button>
+  return <div className="editor-panel"><header className="editor-panel-header"><p className="platform-eyebrow mb-1">Creative assistant</p><h2 className="font-semibold">AI editing</h2>
+    <p className="mt-2 text-xs leading-relaxed text-zinc-500">Preview changes before adding them to your draft.</p></header>
+    <button type="button" disabled={!topLevel} onClick={openSection} className="platform-button mt-4 w-full">Edit selected section</button>
+    <button type="button" onClick={openAdd} className="platform-button platform-button-ai mt-2 w-full"><Sparkles size={14} />Add a section with AI</button>
   </div>;
 }
 
 function AiCommandBar() {
   const { openAdd } = useEditorAi();
-  return <aside aria-label="AI editing" className="editor-ai-bar">
-    <button type="button" onClick={openAdd} className="flex w-full items-center gap-2 text-left text-sm text-zinc-500">
-      <Sparkles size={16} className="text-[#4B3FE0]" />
-      <span>Add a section with AI</span>
+  return <aside aria-label="AI editing" className="platform-ui editor-ai-bar">
+    <button type="button" onClick={openAdd} className="flex w-full items-center gap-3 text-left">
+      <span className="rounded-xl bg-[#F1EFFF] p-2.5 text-[#4B3FE0]"><Sparkles size={16} strokeWidth={1.6} /></span>
+      <span className="flex-1"><span className="block text-xs font-medium text-[#3D3C39]">Add a section with AI</span><span className="mt-0.5 block text-[11px] text-[#6B6A66]">Describe an idea. Preview the possibilities.</span></span>
+      <ArrowUpRight size={16} className="text-[#6B6A66]" />
     </button>
   </aside>;
 }
@@ -218,11 +219,12 @@ function HeaderActions() {
     "rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:opacity-50";
 
   return (
-    <div data-editor-header-actions className="flex flex-wrap items-center justify-end gap-2">
+    <div data-editor-header-actions className="flex flex-wrap items-center justify-end gap-1.5">
       <button type="button" disabled={busy !== null} onClick={async () => {
         if (!persistence.dirty || await persistence.save()) router.push("/dashboard");
-      }} className="rounded-lg border border-[#E8E7E3] px-3 py-2 text-xs text-zinc-700 disabled:opacity-50">Dashboard</button>
-      <span role={persistence.error ? "alert" : "status"} className={`max-w-64 text-xs ${persistence.error ? "text-red-600" : "text-zinc-500"}`}>
+      }} className="platform-button"><ArrowLeft size={13} />Dashboard</button>
+      <span role={persistence.error ? "alert" : "status"} className={`mx-1.5 inline-flex max-w-64 items-center gap-1.5 text-[11px] ${persistence.error ? "text-red-600" : "text-zinc-500"}`}>
+        {!persistence.error && !busy && !persistence.dirty ? <Check size={12} className="shrink-0 text-[#6B6A66]" /> : null}
         {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
       </span>
       <EditorCommands persistence={persistence} onPublish={requestPublish} onTheme={openThemePanel} />
@@ -230,15 +232,15 @@ function HeaderActions() {
       <button
         type="button"
         onClick={openThemePanel}
-        className={`${buttonClasses} border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50`}
+        className="platform-button"
       >
-        Theme
+        <Palette size={13} />Theme
       </button>
       <button
         type="button"
         disabled={busy !== null}
         onClick={() => void run("save")}
-        className={`${buttonClasses} border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50`}
+        className="platform-button"
       >
         {busy === "save" ? "Saving…" : "Save draft"}
       </button>
@@ -246,15 +248,15 @@ function HeaderActions() {
         href={previewUrl}
         target="_blank"
         rel="noreferrer"
-        className={`${buttonClasses} border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50`}
+        className="platform-button"
       >
-        Preview
+        <Eye size={13} />Preview
       </a>
       <button
         type="button"
         disabled={busy !== null}
         onClick={requestPublish}
-        className={`${buttonClasses} bg-[#121212] text-white hover:bg-zinc-700`}
+        className="platform-button platform-button-primary"
       >
         {busy === "publish" ? "Publishing…" : "Publish"}
       </button>
@@ -555,15 +557,15 @@ export function PageEditor({
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}
               headerPath={page.slug ? `/${page.slug}` : "/"}
             />
+            <ThemePanel
+              siteId={site.id}
+              theme={theme}
+              onChange={setTheme}
+              open={themePanelOpen}
+              onClose={() => setThemePanelOpen(false)}
+            />
           </div>
           </InteractionContext.Provider>
-          <ThemePanel
-            siteId={site.id}
-            theme={theme}
-            onChange={setTheme}
-            open={themePanelOpen}
-            onClose={() => setThemePanelOpen(false)}
-          />
         </SectionLibraryContext.Provider>
       </EditorUiContext.Provider>
     </EditorSiteContext.Provider>

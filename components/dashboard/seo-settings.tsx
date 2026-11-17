@@ -14,7 +14,7 @@ function Feedback({ state }: { state: typeof initial }) {
 
 export function SeoSettings({ siteId, seo }: { siteId: string; seo: SiteSeo }) {
   const [state, action, pending] = useActionState(saveSeo.bind(null, siteId), initial);
-  return <form action={action} className="space-y-4 rounded-xl border border-[#E8E7E3] bg-white p-5">
+  return <form action={action} className="platform-panel space-y-5 p-6">
     <h2 className="font-semibold">Site SEO settings</h2>
     <label className="block text-sm">Default social share image URL<input className={control} name="socialImage" defaultValue={seo.socialImage} /></label>
     <label className="block text-sm">Google Search Console verification code<input className={control} name="googleVerification" defaultValue={seo.googleVerification} />
@@ -24,19 +24,19 @@ export function SeoSettings({ siteId, seo }: { siteId: string; seo: SiteSeo }) {
     <label className="block text-sm">Meta Pixel ID<input className={control} name="metaPixelId" defaultValue={seo.metaPixelId} inputMode="numeric" />
       <span className="mt-1 block text-xs text-zinc-500">Optional. Loads Meta Pixel on published pages.</span></label>
     <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="noindex" defaultChecked={seo.noindex} />Hide pages from search engines by default</label>
-    <button disabled={pending} className="rounded-lg bg-[#121212] px-4 py-2 text-sm text-white disabled:opacity-50">{pending ? "Saving..." : "Save SEO settings"}</button>
+    <button disabled={pending} className="platform-button platform-button-primary">{pending ? "Saving..." : "Save SEO settings"}</button>
     <Feedback state={state} />
   </form>;
 }
 
 export function RedirectManager({ siteId, redirects }: { siteId: string; redirects: { id: string; from_path: string; to_path: string }[] }) {
   const [state, action, pending] = useActionState(addRedirect.bind(null, siteId), initial);
-  return <section className="space-y-4 rounded-xl border border-[#E8E7E3] bg-white p-5"><h2 className="font-semibold">Redirects</h2>
+  return <section className="platform-panel space-y-4 p-6"><h2 className="font-semibold">Redirects</h2>
     <p className="text-xs text-zinc-500">Use paths on this site. Changes may take 30 seconds to appear; browsers may cache permanent redirects.</p>
     <form action={action} className="flex flex-wrap items-end gap-3">
       <label className="text-sm">From<input name="fromPath" required placeholder="/old-page" className={control} /></label>
       <label className="text-sm">To<input name="toPath" required placeholder="/new-page" className={control} /></label>
-      <button disabled={pending} className="rounded-lg bg-[#121212] px-4 py-2 text-sm text-white disabled:opacity-50">Add redirect</button>
+      <button disabled={pending} className="platform-button platform-button-primary">Add redirect</button>
     </form><Feedback state={state} />
     {redirects.length ? <ul className="divide-y divide-[#E8E7E3]">{redirects.map((redirect) =>
       <li key={redirect.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span className="break-all">{redirect.from_path} → {redirect.to_path}</span><DeleteRedirect siteId={siteId} id={redirect.id} /></li>)}</ul>

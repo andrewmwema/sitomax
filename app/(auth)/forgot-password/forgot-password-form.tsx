@@ -30,12 +30,12 @@ export function ForgotPasswordForm() {
             <path d="m3 7 9 6 9-6" />
           </svg>
         </div>
-        <p className="font-medium text-zinc-900 dark:text-zinc-100">
+        <p className="font-medium text-zinc-900">
           Check your email
         </p>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-zinc-600">
           If an account exists for{" "}
-          <span className="font-medium text-zinc-900 dark:text-zinc-100">
+          <span className="font-medium text-zinc-900">
             {state.email}
           </span>
           , a password reset link is on its way.
@@ -53,7 +53,7 @@ export function ForgotPasswordForm() {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <span className="text-sm font-medium text-zinc-700">
           Email address
         </span>
         <input
@@ -62,7 +62,7 @@ export function ForgotPasswordForm() {
           required
           autoComplete="email"
           placeholder="you@company.com"
-          className="rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
         />
       </label>
 

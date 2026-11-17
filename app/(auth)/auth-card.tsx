@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import type { AgencySettings } from "@/lib/agency";
+import { LockKeyhole } from "lucide-react";
 
 /**
  * Shared branded shell for the auth pages (login, forgot password,
@@ -10,20 +10,15 @@ export function AuthCard({
   title,
   subtitle,
   children,
-  platform = false,
 }: {
   settings: AgencySettings;
   title: string;
   subtitle: string;
   children: React.ReactNode;
-  platform?: boolean;
 }) {
   return (
-    <div
-      style={{ "--primary": platform ? "#121212" : settings.primaryColor } as CSSProperties}
-      className="w-full max-w-sm"
-    >
-      <div className="flex flex-col items-center gap-3 text-center">
+    <div className="w-full max-w-[420px]">
+      <div className="flex flex-col items-center gap-4 text-center">
         {settings.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- remote logo host is user-configured
           <img
@@ -32,19 +27,21 @@ export function AuthCard({
             className="h-12 w-auto"
           />
         ) : (
-          <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-xl font-semibold text-white shadow-[inset_0_1px_0_#ffffff26,0_6px_12px_#12121214]">
             {settings.name.charAt(0).toUpperCase()}
           </div>
         )}
-        <h1 className={`text-2xl font-semibold tracking-tight ${platform ? "text-[#121212]" : "text-zinc-900 dark:text-zinc-100"}`}>
+        <p className="platform-eyebrow mt-2">{settings.name} workspace</p>
+        <h1 className="text-[30px] leading-tight font-semibold tracking-[-1px] text-[#121212]">
           {title}
         </h1>
-        <p className={`text-sm ${platform ? "text-[#5F5E5A]" : "text-zinc-600 dark:text-zinc-400"}`}>{subtitle}</p>
+        <p className="max-w-80 text-sm leading-relaxed text-[#6B6A66]">{subtitle}</p>
       </div>
 
-      <div className={`mt-8 border bg-white p-6 shadow-sm ${platform ? "rounded-[14px] border-[#E8E7E3]" : "rounded-2xl border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900"}`}>
+      <div className="platform-panel platform-auth-card mt-8 p-6 sm:p-8">
         {children}
       </div>
+      <p className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-[#6B6A66]"><LockKeyhole size={12} />Your private workspace. Access by invitation.</p>
 
       {settings.supportEmail && (
         <p className="mt-6 text-center text-sm text-zinc-500">

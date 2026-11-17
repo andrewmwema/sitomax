@@ -3,6 +3,7 @@ import { getAgencySettings } from "@/lib/agency";
 import { requireUser } from "@/lib/auth";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { signOut } from "./actions";
+import { ChevronRight, Layers2 } from "lucide-react";
 
 /**
  * Dashboard shell: auth gate + branded sidebar. Everything dynamic
@@ -59,7 +60,18 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         signOutAction={signOut}
       />
       <main className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-[1276px] px-4 py-8 sm:px-8 lg:px-12 lg:py-10">{children}</div>
+        <div className="flex min-h-16 items-center justify-between gap-4 border-b border-[#E8E7E3] bg-white/70 px-4 sm:px-8 lg:px-10">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-[#6B6A66]">
+            <Layers2 size={15} className="shrink-0" />
+            <span className="hidden sm:inline">Workspace</span>
+            <ChevronRight size={12} className="shrink-0 text-[#B5B2A9]" />
+            <span className="truncate font-medium text-[#3D3C39]">{settings.name}</span>
+          </div>
+          <span className="shrink-0 rounded-full border border-[#E8E7E3] bg-white px-2.5 py-1 text-[10px] font-medium tracking-wide text-[#6B6A66]">
+            {profile?.is_super_admin ? "Agency workspace" : "Client workspace"}
+          </span>
+        </div>
+        <div className="platform-content mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-8 lg:px-10 lg:py-10">{children}</div>
       </main>
     </div>
   );

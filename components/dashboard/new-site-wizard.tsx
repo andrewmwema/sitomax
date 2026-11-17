@@ -64,7 +64,7 @@ export function NewSiteWizard({ accounts, choices, rootDomain }: {
     { key: "city", label: "City" }, { key: "services", label: "Services" },
     { key: "email", label: "Email", type: "email" }, { key: "address", label: "Address" },
   ];
-  return <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-8">
+  return <div className="platform-panel p-5 sm:p-8">
     <ol className="mb-7 flex flex-wrap gap-3 text-xs font-medium text-zinc-500" aria-label="Creation steps">
       {["Client", "Template", "Business details"].map((label, index) =>
         <li key={label} aria-current={step === index ? "step" : undefined} className={step === index ? "text-zinc-900" : ""}>{index + 1}. {label}</li>)}

@@ -11,7 +11,7 @@ export function CreateAccountForm({
   const [state, formAction, pending] = useActionState(action, idleState);
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+    <div className="platform-panel p-6">
       <h2 className="font-semibold text-zinc-900">New client</h2>
       <form action={formAction} className="mt-3 flex flex-col gap-3 sm:flex-row">
         <input

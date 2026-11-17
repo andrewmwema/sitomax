@@ -10,7 +10,7 @@ export function AiDraftHistory({ siteId, versions }: {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const router = useRouter();
-  return <section id="ai-history" className="rounded-xl border bg-white p-5">
+  return <section id="ai-history" className="platform-panel p-6">
     <h2 className="font-semibold">Version history: AI draft backups</h2>
     <p className="mt-2 text-sm text-zinc-600">Site-wide drafts and theme saved before AI replacement or restore. Published pages are never changed. Page-level published versions remain available in the editor&apos;s History.</p>
     <ul className="mt-4 divide-y">{versions.map((version) => <li key={version.id} className="flex items-center justify-between gap-3 py-3 text-sm">

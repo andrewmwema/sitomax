@@ -18,13 +18,13 @@ async function MonthlyCosts({ searchParams }: { searchParams: Promise<{ month?: 
   return <section className="flex flex-col gap-6">
     <header><h1 className="text-2xl font-semibold">AI cost by client</h1>
       <p className="mt-1 text-sm text-zinc-600">Monthly estimates from the configured token rates, in USD. Calendar months use UTC.</p></header>
-    <form className="flex items-end gap-3">
+    <form className="platform-panel flex flex-wrap items-end gap-3 p-5">
       <label className="flex flex-col gap-1 text-sm">Month<input type="month" name="month" defaultValue={parsed.data} required className="rounded-lg border bg-white p-2" /></label>
-      <button type="submit" className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">View</button>
+      <button type="submit" className="platform-button platform-button-primary">View</button>
     </form>
     <p className="font-medium">Total: {money(rows.reduce((total, row) => total + row.cost_usd, 0))}</p>
     <p className="text-xs text-zinc-500">Recorded requests only. Pending reservations and accounting failures are excluded until reconciled; check the AI usage cards on Sites for held requests.</p>
-    <div className="overflow-x-auto rounded-xl border bg-white">
+    <div className="platform-panel overflow-x-auto">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">AI costs per client for {parsed.data}</caption>
         <thead><tr className="border-b"><th className="p-4">Client</th><th className="p-4">Requests</th><th className="p-4">Estimated cost (USD)</th></tr></thead>

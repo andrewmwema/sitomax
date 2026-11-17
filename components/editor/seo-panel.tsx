@@ -68,10 +68,10 @@ export function SeoPanel({ siteId, pageId, pageTitle, publicUrl, siteSeo, pages 
   };
   const scoreColor = (value: number) => value === 100 ? "text-green-700" : value >= 50 ? "text-amber-700" : "text-red-700";
 
-  return <div className="flex flex-col gap-5 p-3">
+  return <div className="editor-panel flex flex-col gap-6">
     {pages.length ? <section aria-label="All pages">
-      <h2 className="mb-2 text-sm font-semibold">All pages</h2>
-      <ul className="flex flex-col gap-1">
+      <h2 className="mb-3 text-sm font-semibold">All pages</h2>
+      <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto p-1">
         {pages.map((page) => {
           const current = page.id === pageId;
           const currentScore = current ? score : page.score;
@@ -102,7 +102,7 @@ export function SeoPanel({ siteId, pageId, pageTitle, publicUrl, siteSeo, pages 
       </ul>
       {switchError ? <p role="alert" className="mt-2 text-xs text-red-700">{switchError}</p> : null}
     </section> : null}
-    <header>
+    <header className="editor-panel-header">
       <h2 className="text-sm font-semibold">Page SEO</h2>
       <p className="mt-1 text-xs text-[#6B6A66]">Changes save with your draft and go live when you publish.</p>
     </header>
@@ -134,7 +134,7 @@ export function SeoPanel({ siteId, pageId, pageTitle, publicUrl, siteSeo, pages 
       </fieldset>
     </section>
 
-    <section aria-label="Google search preview" className="rounded-xl border border-[#E8E7E3] bg-white p-3">
+    <section aria-label="Google search preview" className="platform-panel p-4">
       <h3 className="text-xs font-semibold">Google search preview</h3>
       <div className="mt-3">
         <p className="truncate text-xs text-[#3D3C39]">{publicUrl}</p>
@@ -143,7 +143,7 @@ export function SeoPanel({ siteId, pageId, pageTitle, publicUrl, siteSeo, pages 
       </div>
     </section>
 
-    <section aria-label="Social share preview" className="overflow-hidden rounded-xl border border-[#E8E7E3] bg-white">
+    <section aria-label="Social share preview" className="platform-panel overflow-hidden">
       <h3 className="px-3 pt-3 text-xs font-semibold">Social share preview</h3>
       <div className="mt-3 flex aspect-[1.91/1] items-center justify-center bg-[#F7F7F5]">
         {image ? (
@@ -159,7 +159,7 @@ export function SeoPanel({ siteId, pageId, pageTitle, publicUrl, siteSeo, pages 
       </div>
     </section>
 
-    <section aria-label="SEO checklist" className="rounded-xl border border-[#E8E7E3] bg-white p-3">
+    <section aria-label="SEO checklist" className="platform-panel p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold">SEO checklist</h3>
         <span className={`text-xs font-semibold ${score >= 80 ? "text-green-700" : score >= 50 ? "text-amber-700" : "text-red-700"}`}>{score}%</span>

@@ -15,7 +15,7 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
   const set = (key: Exclude<keyof Business, "services">, value: string) =>
     setValues((previous) => ({ ...previous, [key]: value }));
   const control = "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm";
-  return <form className="rounded-xl border border-[#E8E7E3] bg-white p-4" onSubmit={async (event) => {
+  return <form className="platform-panel p-5" onSubmit={async (event) => {
     event.preventDefault();
     const parsed = businessSchema.safeParse({ ...values, services: services.split("\n").map((s) => s.trim()).filter(Boolean) });
     if (!parsed.success) { setError(true); setMessage(parsed.error.issues[0]?.message ?? "Check your details."); return; }

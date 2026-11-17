@@ -161,13 +161,13 @@ export function ThemePanel({
         onClick={onClose}
         className="flex-1 cursor-default"
       />
-      <aside className="flex h-full w-85 flex-col gap-7 overflow-y-auto bg-white p-6 shadow-2xl">
+      <aside className="flex h-full w-[min(400px,100vw)] flex-col gap-7 overflow-y-auto border-l border-[#E8E7E3] bg-white p-6 shadow-2xl">
         <link rel="stylesheet" href={googleFontsUrl(themeFonts(theme))} />
         {previewFonts ? (
           <link rel="stylesheet" href={googleFontsUrl(CURATED_FONTS.map((font) => font.name))} />
         ) : null}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900">Site theme</h2>
+        <div className="editor-panel-header flex items-center justify-between">
+          <div><p className="platform-eyebrow mb-1">Visual identity</p><h2 className="text-lg font-semibold text-zinc-900">Site theme</h2></div>
           <button
             type="button"
             onClick={onClose}

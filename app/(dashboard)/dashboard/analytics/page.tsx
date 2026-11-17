@@ -38,19 +38,19 @@ async function AnalyticsContent({ searchParams }: { searchParams: PageProps<"/da
   return <section className="flex flex-col gap-6">
     <header><h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
       <p className="mt-1 text-sm text-[#6B6A66]">Traffic and submissions by site. Dates use UTC.</p></header>
-    <form className="flex flex-wrap items-end gap-3">
+    <form className="platform-panel flex flex-wrap items-end gap-3 p-5">
       <label className="flex flex-col gap-1 text-sm">Site<select name="site" defaultValue={selected.id} className="rounded-lg border border-[#E8E7E3] bg-white p-2.5">
         {allowedSites.map((site) => <option key={site.id} value={site.id}>{site.name || site.subdomain}</option>)}</select></label>
       <label className="flex flex-col gap-1 text-sm">Date range<select name="days" defaultValue={daysParam} className="rounded-lg border border-[#E8E7E3] bg-white p-2.5">
         {[7, 30, 90].map((days) => <option key={days} value={days}>Last {days} days</option>)}</select></label>
-      <button className="rounded-lg bg-[#121212] px-4 py-2.5 text-sm font-medium text-white">View</button>
+      <button className="platform-button platform-button-primary">View</button>
     </form>
-    <div className="grid gap-px overflow-hidden rounded-[14px] border border-[#E8E7E3] bg-[#E8E7E3] sm:grid-cols-3">
+    <div className="platform-metrics">
       {[["Visits", report.visits], ["Unique visitors (daily)", report.unique_visitors], ["Form submissions", report.form_submissions]].map(([label, count]) =>
-        <div key={label} className="bg-white p-5"><p className="text-sm text-[#6B6A66]">{label}</p><p className="mt-2 text-3xl font-semibold tabular-nums">{Number(count).toLocaleString()}</p></div>)}
+        <div key={label} className="platform-panel platform-metric"><p className="text-xs font-medium text-[#6B6A66]">{label}</p><p className="mt-4 text-[32px] font-semibold tracking-tight tabular-nums">{Number(count).toLocaleString()}</p></div>)}
     </div>
     <p className="text-xs text-[#6B6A66]">Visitor identifiers change daily, so a returning visitor can be counted once on each day.</p>
-    <section className="rounded-[14px] border border-[#E8E7E3] bg-white p-5">
+    <section className="platform-panel p-6">
       <h2 className="font-semibold">Visits per day</h2>
       <VisitsChart daily={report.daily} />
     </section>
@@ -68,7 +68,7 @@ function VisitsChart({ daily }: { daily: { day: string; visits: number }[] }) {
   return <>
     <svg viewBox="0 0 600 170" role="img" aria-label={`Daily visits from ${daily[0]?.day} to ${daily[daily.length - 1]?.day}. Maximum ${max} visits per day.`} className="mt-4 h-48 w-full" preserveAspectRatio="none">
       <path d="M20 20V150H580" fill="none" stroke="#E8E7E3" />
-      <polyline points={points} fill="none" stroke="#4B3FE0" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      <polyline points={points} fill="none" stroke="#55534E" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
     <div className="flex justify-between text-xs text-[#6B6A66]"><span>{daily[0]?.day}</span><span>{daily[daily.length - 1]?.day}</span></div>
     <details className="mt-3 text-xs text-[#6B6A66]"><summary className="cursor-pointer">Daily values</summary>
@@ -77,7 +77,7 @@ function VisitsChart({ daily }: { daily: { day: string; visits: number }[] }) {
 }
 
 function Breakdown({ title, rows }: { title: string; rows: { label: string; count: number }[] }) {
-  return <section className="rounded-[14px] border border-[#E8E7E3] bg-white p-5"><h2 className="font-semibold">{title}</h2>
+  return <section className="platform-panel p-6"><h2 className="font-semibold">{title}</h2>
     {rows.length ? <ul className="mt-3 divide-y divide-[#E8E7E3] text-sm">{rows.map((row) =>
       <li key={row.label} className="flex justify-between gap-4 py-2"><span className="break-all">{row.label}</span><span className="tabular-nums">{row.count.toLocaleString()}</span></li>)}</ul>
       : <p className="mt-3 text-sm text-[#6B6A66]">No data yet.</p>}</section>;

@@ -11,12 +11,10 @@ import { LoginForm } from "./login-form";
  */
 export default function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
-    <main className="platform-ui flex flex-1 flex-col items-center justify-center bg-[#F7F7F5] px-6 py-16">
-      {/* eslint-disable-next-line @next/next/no-page-custom-font -- platform-only font, not tenant content */}
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" />
+    <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
       <Suspense
         fallback={
-          <div className="h-72 w-full max-w-sm animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-72 w-full max-w-sm animate-pulse rounded-2xl bg-[#EFEEEA]" />
         }
       >
         <LoginCard searchParams={searchParams} />
@@ -53,13 +51,12 @@ async function LoginCard({
   return (
     <AuthCard
       settings={settings}
-      platform
       title={`Sign in to ${settings.name}`}
       subtitle="Enter your email and password to continue."
     >
       {linkError && (
         <p
-          className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
+          className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
           role="alert"
         >
           That link is invalid or has expired. Sign in below or request a new

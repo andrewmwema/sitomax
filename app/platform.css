@@ -1,0 +1,347 @@
+/* Platform surfaces only; tenant pages and preview iframe documents keep their own theme. */
+:where(.platform-ui, .platform-editor) {
+  --platform-ground: #f7f7f5;
+  --platform-surface: #ffffff;
+  --platform-ink: #121212;
+  --platform-muted: #6b6a66;
+  --platform-line: #e8e7e3;
+  --platform-accent: #4b3fe0;
+  --platform-accent-soft: #f1efff;
+  --platform-shadow: 0 2px 3px rgb(26 25 22 / 2%), 0 8px 28px rgb(26 25 22 / 3%);
+  color-scheme: light;
+  color: var(--platform-ink);
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+.platform-ui {
+  --primary: #121212;
+  background: var(--platform-ground);
+}
+
+:where(.platform-ui, .platform-editor) :where(h1, h2, h3) {
+  font-family: "Inter Tight", Inter, system-ui, sans-serif;
+  text-wrap: balance;
+}
+
+.platform-content > :where(section, div) > header h1 {
+  font-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+
+:where(.platform-ui, .platform-editor) :where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--platform-accent);
+  outline-offset: 3px;
+}
+
+:where(.platform-ui, .platform-editor) :where(button, a, input, textarea, select) {
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
+}
+
+:where(.platform-ui, .platform-editor) :where(button:not(:disabled), summary) {
+  cursor: pointer;
+}
+
+:where(.platform-ui, .platform-editor) :where(input, textarea, select) {
+  accent-color: var(--platform-accent);
+}
+
+.platform-ui :where(input:not([type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="hidden"]), textarea, select) {
+  min-height: 42px;
+  border-color: var(--platform-line);
+  border-radius: 10px;
+  background-color: var(--platform-surface);
+  color: var(--platform-ink);
+  box-shadow: 0 1px 2px rgb(26 25 22 / 2%);
+}
+
+.platform-ui :where(input, textarea, select):focus {
+  border-color: var(--platform-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(75 63 224 / 9%);
+}
+
+.platform-ui :where(input, textarea)::placeholder {
+  color: #85837d;
+}
+
+.platform-panel {
+  border: 1px solid var(--platform-line);
+  border-radius: 18px;
+  background: var(--platform-surface);
+  box-shadow: var(--platform-shadow);
+}
+
+.platform-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  color: var(--platform-muted);
+}
+
+.platform-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid var(--platform-line);
+  border-radius: 10px;
+  padding: 9px 14px;
+  background: white;
+  color: var(--platform-ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgb(18 18 18 / 3%);
+}
+
+.platform-button-primary {
+  border-color: var(--platform-ink);
+  background: var(--platform-ink);
+  color: white;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), 0 2px 4px rgb(18 18 18 / 10%);
+}
+
+.platform-button-ai {
+  border-color: #e4dfff;
+  background: var(--platform-accent-soft);
+  color: var(--platform-accent);
+}
+
+.platform-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.platform-ui table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.platform-ui thead {
+  background: #fbfbf9;
+}
+
+.platform-ui th {
+  border-bottom: 1px solid var(--platform-line);
+  padding-block: 14px;
+  color: var(--platform-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.platform-ui td {
+  border-bottom: 1px solid #f0efeb;
+  padding-block: 17px;
+}
+
+.platform-ui tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.platform-ui tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.platform-sidebar {
+  background: #fcfcfa;
+}
+
+.platform-nav-link[aria-current="page"] {
+  position: relative;
+  background: white;
+  box-shadow: 0 1px 3px rgb(26 25 22 / 4%), 0 0 0 1px var(--platform-line);
+}
+
+.platform-nav-link[aria-current="page"]::before {
+  position: absolute;
+  inset: 12px auto 12px 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: var(--platform-accent);
+  content: "";
+}
+
+.platform-site-card {
+  border-radius: 18px;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.platform-site-preview {
+  aspect-ratio: 16 / 10;
+  border-bottom: 1px solid var(--platform-line);
+}
+
+.platform-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 14px;
+}
+
+.platform-metric {
+  position: relative;
+  overflow: hidden;
+  padding: 22px;
+}
+
+.platform-studio {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #2e2c36;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 100% 0, #34303f, transparent 70%), #19181d;
+  box-shadow: 0 10px 24px rgb(18 18 18 / 8%);
+}
+
+.platform-auth {
+  background: radial-gradient(ellipse at 50% 0, #eeece5, transparent 65%), var(--platform-ground);
+}
+
+.platform-auth-card {
+  box-shadow: 0 2px 4px rgb(26 25 22 / 2%), 0 20px 70px -24px rgb(26 25 22 / 16%);
+}
+
+.platform-editor {
+  --puck-color-surface: #ffffff;
+  --puck-color-surface-muted: #f4f3ef;
+  --puck-color-surface-subtle: #f7f7f5;
+  --puck-color-border: #e8e7e3;
+  --puck-color-border-muted: #eeede8;
+  --puck-color-border-hover: #b6b3aa;
+  --puck-color-text: #121212;
+  --puck-color-text-secondary: #55534e;
+  --puck-color-text-muted: #6b6a66;
+  --puck-color-interactive: #4b3fe0;
+  --puck-color-interactive-hover: #3d32c2;
+  --puck-color-interactive-active: #3329a8;
+  --puck-color-interactive-subtle: #eeebff;
+  --puck-color-interactive-soft: #f5f3ff;
+  --puck-color-interactive-soft-hover: #efedff;
+  --puck-color-interactive-neutral-hover: #f1f0eb;
+  --puck-color-focus-ring: #4b3fe0;
+  --puck-color-selection-bg: rgb(75 63 224 / 4%);
+  --puck-color-selection-border: #c9c3ff;
+  --puck-color-line-placeholder: #4b3fe0;
+  --puck-radius-xs: 4px;
+  --puck-radius-s: 6px;
+  --puck-radius-m: 8px;
+  --puck-radius-l: 12px;
+  --puck-canvas-color-bg: #efeee9;
+  --puck-space-chrome-gutter: 12px;
+  --puck-font-family: Inter, system-ui, sans-serif;
+  --puck-letter-spacing-heading: -0.02em;
+  --puck-letter-spacing-ui: 0;
+}
+
+.editor-panel {
+  padding: 20px 16px;
+}
+
+.platform-editor [data-editor-header-actions] .platform-button {
+  min-height: 36px;
+  padding: 8px 11px;
+  font-size: 11px;
+}
+
+.platform-editor :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="hidden"], [type="file"]), textarea, select) {
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.platform-editor :where(input, textarea, select):focus-visible {
+  outline-offset: 1px;
+}
+
+.editor-panel-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--platform-line);
+}
+
+.editor-panel-header h2 {
+  font-size: 16px;
+  letter-spacing: -0.025em;
+}
+
+.editor-device-picker {
+  padding: 4px;
+  border: 1px solid var(--platform-line);
+  border-radius: 12px;
+  background: #f7f7f5;
+}
+
+.editor-device-picker button {
+  flex: 1;
+  justify-content: center;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--platform-muted);
+}
+
+.editor-device-picker button[aria-pressed="true"] {
+  background: white;
+  color: var(--platform-ink);
+  box-shadow: 0 1px 3px rgb(18 18 18 / 8%), 0 0 0 1px rgb(18 18 18 / 4%);
+}
+
+.platform-editor .editor-ai-bar,
+.editor-ai-bar.platform-ui {
+  background: white;
+  border-color: #e2def3;
+  border-radius: 16px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 10px rgb(18 18 18 / 3%), 0 16px 48px -16px rgb(18 18 18 / 22%);
+}
+
+.platform-editor .section-library-panel {
+  border-color: var(--platform-line);
+  box-shadow: 16px 0 48px -16px rgb(26 25 22 / 15%);
+}
+
+@media (min-width: 1000px) {
+  /* Preserve Puck's native header controls without equal-width spacer columns. */
+  .platform-editor header:has([data-editor-header-actions]) > div {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+@media (hover: hover) {
+  .platform-button:not(:disabled):hover {
+    border-color: #ccc9c0;
+    background: #f8f8f5;
+  }
+  .platform-button-primary:not(:disabled):hover {
+    border-color: #33322f;
+    background: #33322f;
+  }
+  .platform-button-ai:not(:disabled):hover {
+    border-color: #cfc8ff;
+    background: #e9e5ff;
+  }
+  .platform-site-card:hover {
+    transform: translateY(-3px);
+    border-color: #cfccc3;
+    box-shadow: 0 4px 8px rgb(26 25 22 / 3%), 0 16px 36px -12px rgb(26 25 22 / 14%);
+  }
+  .platform-ui tbody tr:hover {
+    background: #fbfbf8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.platform-ui, .platform-editor) :where(button, a, input, textarea, select),
+  .platform-site-card,
+  .platform-ui tbody tr {
+    transition: none;
+  }
+  .platform-site-card:hover {
+    transform: none;
+  }
+}

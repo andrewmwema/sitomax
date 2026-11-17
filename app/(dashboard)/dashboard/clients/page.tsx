@@ -67,7 +67,7 @@ async function ClientsContent() {
           {accounts.map((account) => (
             <li
               key={account.id}
-              className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
+              className="platform-panel p-6"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>

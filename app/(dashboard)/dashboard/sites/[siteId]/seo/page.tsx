@@ -60,7 +60,7 @@ async function SeoContent({ params }: { params: PageProps<"/dashboard/sites/[sit
       <h1 className="mt-1 text-2xl font-semibold">SEO</h1></header>
     <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm"><Link href={`/dashboard/sites/${siteId}`} className="pb-3">Pages</Link><span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">SEO</span></nav>
     <PageSeoManager siteId={site.id} siteSeo={seo} pages={seoPages} averageScore={averageScore} />
-    <section className="rounded-xl border border-[#E8E7E3] bg-white p-5"><h2 className="font-semibold">Business information</h2>
+    <section className="platform-panel p-6"><h2 className="font-semibold">Business information</h2>
       <p className="mt-2 text-sm text-zinc-600">Used for structured data and shared with your business profile.</p>
       <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">{([
         ["Name", business.businessName || site.name || site.subdomain], ["Type", business.businessType],
@@ -71,7 +71,7 @@ async function SeoContent({ params }: { params: PageProps<"/dashboard/sites/[sit
       <Link href={`/dashboard/sites/${siteId}#business-info`} className="mt-3 inline-block text-sm text-[#4B3FE0] underline">Edit business info</Link></section>
     <SeoSettings siteId={site.id} seo={seo} />
     <RedirectManager siteId={site.id} redirects={redirects ?? []} />
-    <section className="rounded-xl border border-[#E8E7E3] bg-white p-5"><h2 className="font-semibold">Page checklist</h2>
+    <section className="platform-panel p-6"><h2 className="font-semibold">Page checklist</h2>
       <p className="mt-1 text-xs text-zinc-500">Checks the current draft. Publish a page to apply its SEO changes.</p>
       <ul className="mt-3 divide-y divide-[#E8E7E3]">{(pages ?? []).map((page) => {
         const { score, issues } = seoChecklist(page.draft_data, page.title, seo, page.seo);

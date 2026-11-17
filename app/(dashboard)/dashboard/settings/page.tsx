@@ -42,7 +42,7 @@ async function SettingsContent() {
 
   if (!profile?.is_super_admin) {
     return (
-      <div className="max-w-xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="platform-panel max-w-xl p-6">
         <p className="font-medium text-zinc-900">
           Your workspace is managed by {settings.name}
         </p>

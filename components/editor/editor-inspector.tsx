@@ -38,8 +38,9 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
   const patchAppearance = (patch: typeof appearance) => change({
     ...design, appearance: { ...design.appearance, [device]: { ...appearance, ...patch } },
   });
-  return <section aria-label="Inspector" className="flex flex-col gap-3 p-3">
-    <div className="flex items-center justify-between gap-1" role="group" aria-label="Editing device">
+  return <section aria-label="Inspector" className="editor-panel flex flex-col gap-4">
+    <header className="editor-panel-header"><p className="platform-eyebrow mb-1">Inspector</p><h2 className="font-semibold">{selected ? selected.type.replace(/([a-z])([A-Z])/g, "$1 $2") : "Page settings"}</h2><p className="mt-1 text-[11px] text-[#6B6A66]">{selected ? "Refine the details of your selection." : "Page content and search appearance."}</p></header>
+    <div className="editor-device-picker flex items-center justify-between gap-1" role="group" aria-label="Editing device">
       {([{ id: "desktop", width: 1280, Icon: Monitor }, { id: "tablet", width: 768, Icon: Tablet }, { id: "mobile", width: 390, Icon: Smartphone }] as const).map(({ id, width: target, Icon }) =>
         <button key={id} type="button" aria-label={`Edit ${id}`} aria-pressed={device === id}
           className={`flex items-center gap-1 rounded px-2 py-2 text-xs ${device === id ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}

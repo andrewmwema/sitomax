@@ -28,7 +28,7 @@ export function PageSeoManager({ siteId, siteSeo, pages, averageScore }: {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = pages.find((page) => page.id === selectedId) ?? null;
   return <EditorSiteContext.Provider value={{ siteId }}>
-    <section className="overflow-hidden rounded-xl border border-[#E8E7E3] bg-white">
+    <section className="platform-panel overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E8E7E3] px-5 py-4">
         <div>
           <h2 className="font-semibold">Pages</h2>
@@ -111,7 +111,7 @@ function PageSeoDrawer({ siteId, siteSeo, page, onClose }: {
         <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-sm text-zinc-600 hover:bg-[#F7F7F5]">Close</button>
       </header>
       <div className="flex-1 space-y-5 p-6">
-        <section className="space-y-4 rounded-xl border border-[#E8E7E3] bg-white p-4">
+        <section className="platform-panel space-y-5 p-5">
           <label className="block text-sm font-medium">SEO title
             <input className={fieldClass} maxLength={500} value={seoTitle} onChange={(event) => setSeoTitle(event.target.value)} />
             <span className="mt-1 block text-right text-xs text-zinc-500">{seoTitle.length}/60 characters</span>
@@ -139,10 +139,10 @@ function PageSeoDrawer({ siteId, siteSeo, page, onClose }: {
         {message ? <p role={message.error ? "alert" : "status"} className={`text-sm ${message.error ? "text-red-700" : "text-zinc-600"}`}>{message.text}</p> : null}
       </div>
       <footer className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-[#E8E7E3] bg-white px-6 py-4">
-        <button type="button" disabled={busy !== null} onClick={() => void submit("save")} className="rounded-lg border border-[#E8E7E3] px-4 py-2 text-sm disabled:opacity-50">
+        <button type="button" disabled={busy !== null} onClick={() => void submit("save")} className="platform-button">
           {busy === "save" ? "Saving..." : "Save draft"}
         </button>
-        <button type="button" disabled={busy !== null} onClick={() => void submit("publish")} className="rounded-lg bg-[#121212] px-4 py-2 text-sm text-white disabled:opacity-50">
+        <button type="button" disabled={busy !== null} onClick={() => void submit("publish")} className="platform-button platform-button-primary">
           {busy === "publish" ? "Publishing..." : "Publish to apply"}
         </button>
       </footer>

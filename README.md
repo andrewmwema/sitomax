@@ -1,5 +1,14 @@
 # white-label-multi-tenant-website-platform
 
+## Platform appearance
+
+The dashboard, authentication screens and editor share the warm neutral,
+charcoal and restrained violet styles in `app/platform.css`. Shared panels
+and controls use the `platform-panel` and `platform-button` classes; editor
+chrome also uses Puck's documented theme tokens. Keep platform styling
+inside `.platform-ui` or `.platform-editor`. Public tenant pages and the
+editor's preview iframe retain each site's own colors, fonts and content.
+
 ## Editor AI and business information
 
 Apply migrations through `0013_site_business.sql` in order before using this version.

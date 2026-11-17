@@ -5,7 +5,7 @@ import { idleState } from "@/lib/form-state";
 import { setPassword } from "./actions";
 
 const inputClasses =
-  "rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+  "rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none";
 
 export function SetPasswordForm() {
   const [state, formAction, pending] = useActionState(setPassword, idleState);
@@ -13,7 +13,7 @@ export function SetPasswordForm() {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <span className="text-sm font-medium text-zinc-700">
           New password
         </span>
         <input
@@ -28,7 +28,7 @@ export function SetPasswordForm() {
       </label>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <span className="text-sm font-medium text-zinc-700">
           Confirm password
         </span>
         <input

@@ -10,10 +10,10 @@ import { SetPasswordForm } from "./set-password-form";
  */
 export default function SetPasswordPage() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6 py-16 dark:bg-zinc-950">
+    <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
       <Suspense
         fallback={
-          <div className="h-72 w-full max-w-sm animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-72 w-full max-w-sm animate-pulse rounded-2xl bg-[#EFEEEA]" />
         }
       >
         <SetPasswordCard />

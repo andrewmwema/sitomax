@@ -1,7 +1,7 @@
 import type { AiUsageSummary } from "@/lib/ai/reporting";
 
 export function AiUsageCard({ usage }: { usage: AiUsageSummary }) {
-  return <section aria-label={`AI usage for ${usage.account_name}`} className="rounded-xl border border-zinc-200 bg-white p-5">
+  return <section aria-label={`AI usage for ${usage.account_name}`} className="platform-panel p-6">
     <h3 className="text-sm font-semibold">AI usage</h3>
     <p className="mt-1 text-xs text-zinc-500">This month (UTC) · {usage.account_name}</p>
     <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">

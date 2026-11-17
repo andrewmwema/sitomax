@@ -32,15 +32,15 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
   const rows: Submission[] = data ?? [];
   return <section className="flex flex-col gap-6">
     <header><h1 className="text-2xl font-semibold tracking-tight">Forms</h1><p className="mt-1 text-sm text-[#6B6A66]">Submissions from your websites.</p></header>
-    <div className="flex flex-wrap items-end gap-3">
+    <div className="platform-panel flex flex-wrap items-end gap-3 p-5">
       <form className="flex items-end gap-3">
         <label className="flex flex-col gap-1 text-sm">Site<select name="site" defaultValue={siteId} className="rounded-lg border border-[#E8E7E3] bg-white p-2.5">
           <option value="">All sites</option>{allowed.map((site) => <option key={site.id} value={site.id}>{site.name || site.subdomain}</option>)}</select></label>
-        <button className="rounded-lg bg-[#121212] px-4 py-2.5 text-sm font-medium text-white">View</button>
+        <button className="platform-button platform-button-primary">View</button>
       </form>
-      <a href={`/dashboard/forms/export${siteId ? `?site=${encodeURIComponent(siteId)}` : ""}`} className="rounded-lg border border-[#E8E7E3] bg-white px-4 py-2.5 text-sm font-medium">Export CSV</a>
+      <a href={`/dashboard/forms/export${siteId ? `?site=${encodeURIComponent(siteId)}` : ""}`} className="platform-button">Export CSV</a>
     </div>
-    {rows.length ? <div className="overflow-x-auto rounded-[14px] border border-[#E8E7E3] bg-white">
+    {rows.length ? <div className="platform-panel overflow-x-auto">
       <table className="w-full min-w-[640px] text-left text-sm"><thead className="text-xs text-[#6B6A66]"><tr>
         {["Site", "Form", "Received", "Status", "Details"].map((heading) => <th key={heading} className="px-4 py-3 font-medium">{heading}</th>)}</tr></thead>
         <tbody>{rows.map((row) => {

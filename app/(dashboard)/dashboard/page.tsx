@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Plus, Sparkles, UserPlus } from "lucide-react";
+import { ArrowUpRight, BarChart3, CircleDollarSign, Globe2, Inbox, Plus, Sparkles, UserPlus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { findUnreplacedPlaceholders } from "@/lib/sections/placeholders";
 import { getMonthlyAiCosts } from "@/lib/ai/reporting";
@@ -56,31 +56,35 @@ async function Overview() {
   const greeting = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
   const liveSites = cards.filter((site) => site.pages.some((page) => page.slug === "" && page.published_at)).length;
   const metrics = [
-    { label: "Live sites", value: String(liveSites), detail: `of ${cards.length} sites` },
-    { label: "Page views · 30 days", value: !canSeeReporting ? "—" : viewsResult?.error ? "Unavailable" : (viewsResult?.count ?? 0).toLocaleString() },
-    { label: "Leads · last 7 days", value: !canSeeReporting ? "—" : newLeadsResult?.error ? "Unavailable" : (newLeadsResult?.count ?? 0).toLocaleString() },
-    ...(isAdmin ? [{ label: "AI spend · this month", value: costResult?.error ? "Unavailable" : `$${(costResult?.total ?? 0).toFixed(2)}`, detail: "estimated" }] : []),
+    { label: "Live sites", value: String(liveSites), detail: `of ${cards.length} sites`, icon: Globe2 },
+    { label: "Page views · 30 days", value: !canSeeReporting ? "—" : viewsResult?.error ? "Unavailable" : (viewsResult?.count ?? 0).toLocaleString(), icon: BarChart3 },
+    { label: "Leads · last 7 days", value: !canSeeReporting ? "—" : newLeadsResult?.error ? "Unavailable" : (newLeadsResult?.count ?? 0).toLocaleString(), icon: Inbox },
+    ...(isAdmin ? [{ label: "AI spend · this month", value: costResult?.error ? "Unavailable" : `$${(costResult?.total ?? 0).toFixed(2)}`, detail: "estimated", icon: CircleDollarSign }] : []),
   ];
   const ownerSite = sites.find((site) => memberships?.some((member) => member.account_id === site.account_id));
   const aiHref = isAdmin ? "/dashboard/sites/new/ai" : ownerSite ? `/dashboard/sites/${ownerSite.id}/generate` : null;
   return <div className="flex flex-col gap-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="text-[13px] text-[#6B6A66]">{new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(now)}</p>
-        <h1 className="mt-1.5 text-[32px] leading-tight font-semibold tracking-[-0.8px]">Good {greeting}, {displayName}</h1></div>
+      <div><p className="platform-eyebrow">{new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(now)}</p>
+        <h1 className="mt-2 text-[32px] leading-tight font-semibold tracking-[-0.8px]">Good {greeting}, {displayName}</h1>
+        <p className="mt-2 text-[13px] text-[#6B6A66]">A clear view of your websites, clients and what&apos;s next.</p></div>
       {isAdmin ? <div className="flex flex-wrap gap-2.5">
-        <Link href="/dashboard/clients" className="inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-[#E8E7E3] bg-white px-4 text-sm font-medium"><UserPlus size={16} />Invite client</Link>
-        <Link href="/dashboard/sites/new/ai" className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-[#EFEDFF] px-4 text-sm font-semibold text-[#4B3FE0]"><Sparkles size={16} />Build with AI</Link>
-        <Link href="/dashboard/sites/new" className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-[#121212] px-4 text-sm font-semibold text-white"><Plus size={16} />New site</Link>
+        <Link href="/dashboard/clients" className="platform-button"><UserPlus size={15} />Invite client</Link>
+        <Link href="/dashboard/sites/new/ai" className="platform-button platform-button-ai"><Sparkles size={15} />Build with AI</Link>
+        <Link href="/dashboard/sites/new" className="platform-button platform-button-primary"><Plus size={15} />New site</Link>
       </div> : null}
     </header>
-    <section aria-label="At a glance" className="grid gap-px overflow-hidden rounded-[14px] border border-[#E8E7E3] bg-[#E8E7E3] sm:grid-cols-2 xl:grid-cols-4">
-      {metrics.map((metric) => <div key={metric.label} className="bg-white px-[22px] py-5"><p className="text-[13px] text-[#5F5E5A]">{metric.label}</p>
-        <p className="mt-2 text-[30px] leading-tight font-semibold tracking-tight">{metric.value} {metric.detail ? <span className="text-[13px] font-normal tracking-normal text-[#6B6A66]">{metric.detail}</span> : null}</p></div>)}
+    <section aria-label="At a glance" className="platform-metrics">
+      {metrics.map((metric) => <div key={metric.label} className="platform-panel platform-metric">
+        <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-[#6B6A66]">{metric.label}</p><metric.icon size={16} strokeWidth={1.5} className="shrink-0 text-[#9A978E]" /></div>
+        <p className="mt-4 text-[32px] leading-tight font-semibold tracking-[-1px] tabular-nums">{metric.value}</p>
+        {metric.detail ? <p className="mt-1 text-[11px] text-[#6B6A66]">{metric.detail}</p> : null}
+      </div>)}
     </section>
     <SiteGrid sites={cards} />
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
-      {canSeeReporting ? <section className="overflow-hidden rounded-[14px] border border-[#E8E7E3] bg-white">
-        <div className="flex items-center justify-between border-b border-[#EFEEEA] px-[22px] py-[18px]"><h2 className="font-semibold">Recent leads</h2><Link href="/dashboard/forms" className="text-xs font-medium text-[#4B3FE0] hover:underline">View all</Link></div>
+      {canSeeReporting ? <section className="platform-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[#EFEEEA] px-6 py-5"><div><h2 className="text-[15px] font-semibold">Recent leads</h2><p className="mt-1 text-xs text-[#6B6A66]">The latest conversations from your sites.</p></div><Link href="/dashboard/forms" className="inline-flex items-center gap-1 text-xs font-medium text-[#55534E] hover:text-[#121212]">View all<ArrowUpRight size={13} /></Link></div>
         {leadsResult?.error ? <p role="alert" className="p-5 text-sm text-red-700">Could not load recent leads.</p> :
           leadsResult?.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-[13px]">
             <thead className="text-[#6B6A66]"><tr><th className="px-5 py-3 font-medium">From</th><th className="px-3 py-3 font-medium">Site</th><th className="px-3 py-3 font-medium">Message</th><th className="px-5 py-3 text-right font-medium">Received</th></tr></thead>
@@ -91,11 +95,11 @@ async function Overview() {
               return <tr key={lead.id} className="border-t border-[#F1F0EC]"><td className="px-5 py-3 font-medium">{!lead.is_read ? <span aria-label="New" className="mr-2 inline-block size-1.5 rounded-full bg-[#4B3FE0]" /> : null}{name}</td>
                 <td className="px-3 py-3">{lead.site?.name || lead.site?.subdomain || "Site"}</td><td className="max-w-56 truncate px-3 py-3 text-[#5F5E5A]">{message}</td><td className="px-5 py-3 text-right text-[#6B6A66]">{new Date(lead.created_at).toLocaleDateString("en", { timeZone: "UTC" })}</td></tr>;
             })}</tbody></table></div> : <p className="p-6 text-sm text-[#6B6A66]">No submissions yet. Form submissions will appear here when forms are connected.</p>}
-      </section> : <section className="rounded-[14px] border border-[#E8E7E3] bg-white p-5 text-sm text-[#6B6A66]">Lead and analytics reporting is available to account owners.</section>}
+      </section> : <section className="platform-panel p-5 text-sm text-[#6B6A66]">Lead and analytics reporting is available to account owners.</section>}
       <div className="flex flex-col gap-5">
-        {aiHref ? <section className="rounded-[14px] bg-[#121212] p-[22px] text-white"><div className="flex items-center gap-3"><span className="rounded-lg bg-[#2A2A2A] p-2 text-[#C9C3FF]"><Sparkles size={16} /></span><h2 className="font-semibold">AI Studio</h2></div>
-          <p className="mt-3 text-[13px] text-[#BDBCB7]">Describe a business and create a draft site using your design library.</p>
-          <Link href={aiHref} className="mt-5 inline-flex rounded-[10px] bg-white px-4 py-2.5 text-sm font-semibold text-[#121212]">Build a draft site</Link>
+        {aiHref ? <section className="platform-studio p-6 text-white"><div className="flex items-center gap-3"><span className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-[#C9C3FF]"><Sparkles size={18} strokeWidth={1.5} /></span><div><p className="text-[10px] font-medium tracking-[0.15em] text-[#C9C3FF] uppercase">Create with intention</p><h2 className="mt-0.5 text-lg font-medium">AI Studio</h2></div></div>
+          <p className="mt-4 text-[13px] leading-relaxed text-[#C2BFCB]">Describe a business and create a draft site using your design library.</p>
+          <Link href={aiHref} className="mt-6 inline-flex items-center gap-3 rounded-[10px] bg-white px-4 py-2.5 text-xs font-semibold text-[#121212] transition hover:bg-[#F1EFFF]">Build a draft site<ArrowUpRight size={14} /></Link>
         </section> : null}
         <Suspense fallback={<p className="text-sm text-[#6B6A66]">Loading AI usage...</p>}><AiUsageCards isSuperAdmin={isAdmin} /></Suspense>
       </div>
