@@ -168,11 +168,13 @@ export async function saveSiteTheme(siteId: string, rawTheme: unknown): Promise<
   const { data: site, error: siteError } = await supabase.from("sites").select("draft_theme")
     .eq("id", parsedId.data).maybeSingle();
   if (siteError || !site) return { status: "error", message: "Could not load the site theme." };
-  const { data, error } = await supabase
-    .from("sites")
-    .update(site.draft_theme ? { draft_theme: parsedTheme.data } : { theme: parsedTheme.data })
-    .eq("id", parsedId.data)
-    .select("id");
+  if (site.draft_theme) {
+    const { data, error } = await supabase.rpc("save_site_draft_theme", { p_site_id: parsedId.data, p_theme: parsedTheme.data });
+    if (error || !data) return { status: "error", message: "Could not save the theme." };
+    return { status: "success", message: "Theme saved." };
+  }
+  const { data, error } = await supabase.from("sites")
+    .update({ theme: parsedTheme.data }).eq("id", parsedId.data).select("id");
 
   if (error || !data?.length) {
     return { status: "error", message: "Could not save the theme." };

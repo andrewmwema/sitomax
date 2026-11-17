@@ -366,7 +366,6 @@ body {
   padding: 10px 12px;
   background: white;
   box-shadow: 0 8px 24px rgb(18 18 18 / 10%);
-  pointer-events: none;
 }
 
 @media (max-width: 637px) {

@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/auth";
 import { getSiteUrl } from "@/lib/tenant";
 import { PagesManager, type ManagedPage } from "@/components/dashboard/pages-manager";
 import { AiDraftHistory } from "@/components/dashboard/ai-draft-history";
+import { BusinessInfo } from "@/components/dashboard/business-info";
+import { businessSchema, emptyBusiness } from "@/lib/business";
 
 /**
  * Site detail page: live URL and the pages manager (add, rename, reorder,
@@ -41,7 +43,7 @@ async function SiteDetail({
   const { data: site } = await supabase
     .from("sites")
     .select(
-      "id, account_id, name, subdomain, custom_domain, domain_verified, pages(id, slug, title, sort_order, published_at)",
+      "id, account_id, name, subdomain, custom_domain, domain_verified, business, pages(id, slug, title, sort_order, published_at)",
     )
     .eq("id", siteId)
     .maybeSingle();
@@ -86,6 +88,7 @@ async function SiteDetail({
             {url.replace(/^https?:\/\//, "")}
           </a>
         </div>
+        <BusinessInfo siteId={site.id} initialBusiness={businessSchema.parse({ ...emptyBusiness, ...site.business })} />
         <a
           href={url}
           target="_blank"

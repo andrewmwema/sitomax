@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { generationInputSchema, type GenerationInput } from "@/lib/ai/site-input";
+import type { Business } from "@/lib/business";
 
 const fieldClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
 const eventSchema = z.discriminatedUnion("type", [
@@ -14,14 +15,18 @@ const eventSchema = z.discriminatedUnion("type", [
 
 export function AiSiteWizard({ accounts, existingSite, rootDomain }: {
   accounts: { id: string; name: string }[];
-  existingSite?: { id: string; accountId: string; name: string };
+  existingSite?: { id: string; accountId: string; name: string; business: Business };
   rootDomain: string;
 }) {
   const router = useRouter();
   const [values, setValues] = useState<GenerationInput>({
     accountId: existingSite?.accountId ?? "", siteId: existingSite?.id, subdomain: existingSite ? undefined : "",
-    businessName: existingSite?.name ?? "", businessType: "", city: "", services: [], difference: "",
-    style: "auto", primaryColor: "", secondaryColor: "", phone: "", email: "", address: "", description: "", confirmReplace: false,
+    businessName: existingSite?.business.businessName || existingSite?.name || "",
+    businessType: existingSite?.business.businessType ?? "", city: existingSite?.business.city ?? "",
+    services: existingSite?.business.services ?? [], difference: existingSite?.business.difference ?? "",
+    tone: existingSite?.business.tone ?? "", openingHours: existingSite?.business.openingHours ?? "",
+    style: "auto", primaryColor: "", secondaryColor: "", phone: existingSite?.business.phone ?? "",
+    email: existingSite?.business.email ?? "", address: existingSite?.business.address ?? "", description: "", confirmReplace: false,
   });
   const [service, setService] = useState("");
   const [step, setStep] = useState(0);
@@ -120,6 +125,12 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain }: {
         </div>
         <label className="text-sm font-medium sm:col-span-2">What makes you different?
           <textarea maxLength={1000} className={`${fieldClass} mt-2`} rows={2} value={values.difference} onChange={(event) => set("difference", event.target.value)} />
+        </label>
+        <label className="text-sm font-medium">Tone of voice
+          <input maxLength={200} className={`${fieldClass} mt-2`} value={values.tone} onChange={(event) => set("tone", event.target.value)} />
+        </label>
+        <label className="text-sm font-medium">Opening hours
+          <input maxLength={1000} className={`${fieldClass} mt-2`} value={values.openingHours} onChange={(event) => set("openingHours", event.target.value)} />
         </label>
         <label className="text-sm font-medium sm:col-span-2">Describe your business
           <textarea maxLength={4000} className={`${fieldClass} mt-2`} rows={4} value={values.description} onChange={(event) => set("description", event.target.value)}

@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { puckConfig } from "@/lib/puck/config";
 import { sanitizePuckData } from "@/lib/richtext";
+import { businessSchema } from "@/lib/business";
 import { contrastRatio } from "@/lib/theme/presets";
 import { requestAi } from "./client";
 import { beginSiteGeneration, finishSiteGeneration } from "./usage";
@@ -112,7 +113,13 @@ export async function buildGeneratedSite(
   const business = JSON.stringify({
     businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
     difference: input.difference, style: input.style, primaryColor: input.primaryColor, secondaryColor: input.secondaryColor,
-    phone: input.phone, email: input.email, address: input.address, description: input.description,
+    phone: input.phone, email: input.email, address: input.address, tone: input.tone,
+    openingHours: input.openingHours, description: input.description,
+  });
+  const businessProfile = businessSchema.parse({
+    businessName: input.businessName, businessType: input.businessType, city: input.city,
+    services: input.services, difference: input.difference, tone: input.tone,
+    phone: input.phone, email: input.email, address: input.address, openingHours: input.openingHours,
   });
   const call = async (name: "plan_site" | "fill_page", task: string, errors?: string) => {
     const response = await requestAi({
@@ -197,14 +204,14 @@ export async function buildGeneratedSite(
     let siteId = input.siteId;
     let pageId: string;
     if (siteId) {
-      const { data, error } = await supabase.rpc("replace_ai_site_drafts", { p_site_id: siteId, p_theme: theme, p_pages: enrichedPages });
+      const { data, error } = await supabase.rpc("replace_ai_site_drafts_with_business", { p_site_id: siteId, p_theme: theme, p_pages: enrichedPages, p_business: businessProfile });
       if (error) throw new SiteGenerationError("Could not confirm the draft save. Check your drafts and contact your agency before retrying.");
       pageId = z.uuid().parse(data);
     } else {
       if (!isAdmin) throw new SiteGenerationError("Only the agency can create a site.");
-      const { data, error } = await createAdminClient().rpc("create_ai_site", {
+      const { data, error } = await createAdminClient().rpc("create_ai_site_with_business", {
         p_account_id: input.accountId, p_name: input.businessName, p_subdomain: input.subdomain!,
-        p_theme: theme, p_pages: enrichedPages,
+        p_theme: theme, p_pages: enrichedPages, p_business: businessProfile,
       });
       if (error) throw new SiteGenerationError(error.code === "23505" ? "This subdomain was just taken. No site was saved; contact your agency before retrying." : "Could not save the generated site. Contact your agency before retrying.");
       const saved = z.array(z.object({ site_id: z.uuid(), page_id: z.uuid() })).length(1).parse(data)[0];

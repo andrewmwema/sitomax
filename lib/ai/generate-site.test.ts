@@ -77,11 +77,12 @@ describe("catalog site generation", () => {
     for (const [request] of mocks.request.mock.calls) expect(request).toMatchObject({
       generationId, action: "generate_site", tools: GENERATION_TOOLS, cacheTtl: "5m", system: SITE_SYSTEM_PROMPT,
     });
-    const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts")![1];
+    const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1];
     expect(save.p_pages).toHaveLength(4);
     expect(JSON.stringify(save.p_pages)).not.toMatch(/onclick|<script>|bad\(\)/);
     expect(save).not.toHaveProperty("published_data");
     expect(save.p_pages[0].data.content[0].props.businessName).toBe("Local Plumbing");
+    expect(save.p_business).toMatchObject({ businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi", services: ["Repairs"] });
     expect(progress).toContain("Finding photos…");
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
     expect(mocks.admin).not.toHaveBeenCalled();
@@ -123,7 +124,7 @@ describe("catalog site generation", () => {
     });
     await buildGeneratedSite(input);
     expect(mocks.request).toHaveBeenCalledTimes(9);
-    const saved = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts")![1].p_pages;
+    const saved = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1].p_pages;
     expect(JSON.stringify(saved)).not.toContain("<script>");
     expect(saved[0].data.content).toHaveLength(3);
   });
@@ -139,7 +140,7 @@ describe("catalog site generation", () => {
     const result = await buildGeneratedSite(input);
     expect(mocks.request).toHaveBeenCalledTimes(6);
     expect(result.warnings.some((warning) => warning.includes("validation failed twice"))).toBe(true);
-    const saved = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts")![1].p_pages;
+    const saved = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1].p_pages;
     expect(saved.find((page: { slug: string }) => page.slug === "about").data.content[1].props.heading).toMatch(/\[Add /);
     const fallback = safeDefaultSection("hero-centered-badge");
     expect(fallback.props.badgeText).toMatch(/^\[Add /);
@@ -157,7 +158,7 @@ describe("catalog site generation", () => {
     const create = vi.fn().mockResolvedValue({ data: [{ site_id: siteId, page_id: pageId }], error: null });
     mocks.admin.mockReturnValue({ rpc: create });
     await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "local-plumbing" })).resolves.toMatchObject({ siteId, pageId });
-    expect(create).toHaveBeenCalledWith("create_ai_site", expect.objectContaining({ p_account_id: accountId, p_subdomain: "local-plumbing" }));
+    expect(create).toHaveBeenCalledWith("create_ai_site_with_business", expect.objectContaining({ p_account_id: accountId, p_subdomain: "local-plumbing" }));
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
     for (const [request] of mocks.request.mock.calls) expect(request.messages[0].content).not.toContain(accountId);
   });
@@ -165,7 +166,7 @@ describe("catalog site generation", () => {
     mocks.request.mockResolvedValue(message("plan_site", { style: "invented" }));
     await expect(buildGeneratedSite(input)).rejects.toThrow("invalid twice");
     expect(mocks.request).toHaveBeenCalledTimes(2);
-    expect(mocks.rpc.mock.calls.some(([name]) => name === "replace_ai_site_drafts")).toBe(false);
+    expect(mocks.rpc.mock.calls.some(([name]) => name === "replace_ai_site_drafts_with_business")).toBe(false);
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
   it("builds strict content contracts directly from all catalog block fields", () => {

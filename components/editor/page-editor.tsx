@@ -20,6 +20,8 @@ import {
 } from "@puckeditor/core";
 import { Bookmark, FileText, Layers, LayoutGrid, Palette, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { BusinessInfo } from "@/components/dashboard/business-info";
+import type { Business } from "@/lib/business";
 import { puckConfig } from "@/lib/puck/config";
 import { editorConfig } from "@/lib/puck/editor-config";
 import { canConvertToLayout, convertToLayout } from "@/lib/layout/convert";
@@ -51,12 +53,15 @@ import { EditorInspector } from "./editor-inspector";
 import { EditorInteractions, SelectionMenuButton } from "./editor-interactions";
 import { useDraftPersistence } from "./use-draft-persistence";
 import { EditorCommands, VersionHistory } from "./editor-commands";
+import { EditorAiProvider } from "./editor-ai";
+import { useEditorAi } from "./editor-ai-context";
 
 type EditorUi = {
   pageId: string;
   siteId: string;
   previewUrl: string;
   openThemePanel: () => void;
+  business: Business;
 };
 
 const EditorUiContext = createContext<EditorUi | null>(null);
@@ -101,10 +106,11 @@ function PagesPanel() {
 }
 
 function ThemeTool() {
-  const { openThemePanel } = useEditorUi();
-  return <div className="p-4"><h2 className="text-sm font-semibold">Theme</h2>
+  const { openThemePanel, siteId, business } = useEditorUi();
+  return <div className="min-h-0 overflow-y-auto p-4"><h2 className="text-sm font-semibold">Theme</h2>
     <p className="my-3 text-xs text-zinc-500">Update this site&apos;s colors, fonts and style.</p>
     <button type="button" className="rounded-lg bg-[#121212] px-3 py-2 text-xs text-white" onClick={openThemePanel}>Edit theme</button>
+    <div className="mt-4"><BusinessInfo siteId={siteId} initialBusiness={business} /></div>
   </div>;
 }
 
@@ -121,22 +127,24 @@ function SeoTool() {
 }
 
 function AiTool() {
+  const { openSection, openAdd } = useEditorAi();
+  const selection = usePuckStore((state) => state.appState.ui.itemSelector);
+  const canEdit = usePuckStore((state) => state.getPermissions({ item: state.selectedItem }).edit !== false);
+  const topLevel = selection && (!selection.zone || selection.zone === ROOT_ZONE) && canEdit;
   return <div className="p-4"><h2 className="text-sm font-semibold">AI editing</h2>
-    <p className="mt-3 text-xs text-zinc-500">AI editing in the editor is not available yet.</p>
+    <p className="mt-3 text-xs text-zinc-500">Preview changes before adding them to your draft.</p>
+    <button type="button" disabled={!topLevel} onClick={openSection} className="mt-3 w-full rounded-lg border px-3 py-2 text-xs disabled:opacity-40">Edit selected section</button>
+    <button type="button" onClick={openAdd} className="mt-2 w-full rounded-lg bg-[#4B3FE0] px-3 py-2 text-xs text-white">Add a section with AI</button>
   </div>;
 }
 
 function AiCommandBar() {
+  const { openAdd } = useEditorAi();
   return <aside aria-label="AI editing" className="editor-ai-bar">
-    <div className="flex items-center gap-2 text-sm text-zinc-500">
+    <button type="button" onClick={openAdd} className="flex w-full items-center gap-2 text-left text-sm text-zinc-500">
       <Sparkles size={16} className="text-[#4B3FE0]" />
-      <span>Ask AI to edit this page</span>
-      <span className="ml-auto text-xs">Coming soon</span>
-    </div>
-    <div className="mt-2 flex flex-wrap gap-1.5" aria-label="AI suggestions, coming soon">
-      {["Improve this copy", "Make it shorter", "Suggest a section"].map((suggestion) =>
-        <span key={suggestion} className="rounded-full border border-[#E8E7E3] px-2 py-1 text-[11px] text-zinc-400">{suggestion}</span>)}
-    </div>
+      <span>Add a section with AI</span>
+    </button>
   </aside>;
 }
 
@@ -317,9 +325,11 @@ function EditorActionBar({
   dragHandle?: React.ReactNode;
 }) {
   const { openSaveDesign, isSuperAdmin } = useSectionLibrary();
+  const { openSection } = useEditorAi();
   const getPuck = useGetPuck();
   const zone = usePuckStore((s) => s.appState.ui.itemSelector?.zone);
   const selectedType = usePuckStore((s) => s.selectedItem?.type);
+  const canEdit = usePuckStore((s) => s.getPermissions({ item: s.selectedItem }).edit !== false);
   const topLevel = !zone || zone === ROOT_ZONE;
 
   const convert = useCallback(() => {
@@ -352,7 +362,7 @@ function EditorActionBar({
   return (
     <ActionBar>
       <ActionBar.Group>
-        <ActionBar.Action label="Ask AI (coming soon)" disabled><Sparkles size={16} /></ActionBar.Action>
+        <ActionBar.Action label="Ask AI" disabled={!topLevel || !canEdit} onClick={openSection}><Sparkles size={16} /></ActionBar.Action>
         {parentAction}
         {label ? <ActionBar.Label label={label} /> : null}
       </ActionBar.Group>
@@ -394,6 +404,7 @@ export function PageEditor({
   userId,
   sitePages,
   generationWarnings = [],
+  business,
 }: {
   page: { id: string; slug: string; title: string | null };
   site: { id: string; account_id: string; name: string | null; subdomain: string; theme: SiteTheme | null };
@@ -403,6 +414,7 @@ export function PageEditor({
   userId: string;
   sitePages: EditorPageLink[];
   generationWarnings?: string[];
+  business: Business;
 }) {
   const [showGenerationWarnings, setShowGenerationWarnings] = useState(true);
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
@@ -432,8 +444,9 @@ export function PageEditor({
       previewUrl,
       openThemePanel: () => setThemePanelOpen(true),
       siteId: site.id,
+      business,
     }),
-    [page.id, previewUrl, site.id],
+    [page.id, previewUrl, site.id, business],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
@@ -470,12 +483,12 @@ export function PageEditor({
         </>
       ),
       puck: ({ children }) => (
-        <EditorRuntime>
+        <EditorRuntime><EditorAiProvider>
           {children}
           <SectionLibraryPanel />
           <SaveDesignDialog />
           <EditorInteractions />
-        </EditorRuntime>
+        </EditorAiProvider></EditorRuntime>
       ),
     }),
     [],

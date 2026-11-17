@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { PageEditor } from "@/components/editor/page-editor";
 import type { SiteTheme } from "@/lib/theme/presets";
+import { businessSchema, emptyBusiness } from "@/lib/business";
 
 /**
  * Full-screen visual editor for a page.
@@ -33,6 +34,7 @@ type EditorSite = {
   subdomain: string;
   theme: SiteTheme | null;
   draft_theme: SiteTheme | null;
+  business: unknown;
 };
 
 async function EditorLoader({
@@ -47,7 +49,7 @@ async function EditorLoader({
     supabase
       .from("pages")
       .select(
-        "id, slug, title, draft_data, site:sites(id, account_id, name, subdomain, theme, draft_theme)",
+        "id, slug, title, draft_data, site:sites(id, account_id, name, subdomain, theme, draft_theme, business)",
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -84,6 +86,7 @@ async function EditorLoader({
       key={data.id}
       page={{ id: data.id, slug: data.slug, title: data.title }}
       site={{ ...site, theme: site.draft_theme ?? site.theme }}
+      business={businessSchema.parse({ ...emptyBusiness, ...(site.business as object) })}
       initialData={data.draft_data as Record<string, unknown>}
       previewUrl={previewUrl}
       isSuperAdmin={Boolean(profile?.is_super_admin)}

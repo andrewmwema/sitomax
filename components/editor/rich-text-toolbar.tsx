@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { registerOverlayPortal } from "@puckeditor/core";
@@ -9,18 +9,29 @@ import { safeHref } from "@/lib/layout/guardrails";
 import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import { SectionLibraryContext } from "./section-library";
 import { appPoint, InteractionContext } from "./interaction-context";
+import { useOptionalEditorAi } from "./editor-ai-context";
 
 export function RichTextToolbar({ editor, readOnly, floating = false }: {
   editor: Editor | null; readOnly: boolean; floating?: boolean;
 }) {
   const ui = useContext(InteractionContext);
   const library = useContext(SectionLibraryContext);
+  const ai = useOptionalEditorAi();
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [href, setHref] = useState("");
   const [newTab, setNewTab] = useState(false);
   const [error, setError] = useState("");
+  const hasSelection = useSyncExternalStore(
+    useCallback((notify: () => void) => {
+      if (!editor) return () => {};
+      editor.on("selectionUpdate", notify);
+      return () => { editor.off("selectionUpdate", notify); };
+    }, [editor]),
+    useCallback(() => Boolean(editor && !editor.state.selection.empty), [editor]),
+    () => false,
+  );
 
   useEffect(() => {
     if (!editor || !floating) return;
@@ -154,6 +165,7 @@ export function RichTextToolbar({ editor, readOnly, floating = false }: {
       })}
       {button("Undo", () => { editor.chain().focus().undo().run(); }, false, !editor.can().undo())}
       {button("Redo", () => { editor.chain().focus().redo().run(); }, false, !editor.can().redo())}
+      {ai && hasSelection ? button("Rewrite with AI", () => ai.openText(editor)) : null}
       {linkOpen ? <form className="flex w-full flex-wrap items-center gap-2 border-t pt-2 text-xs" onSubmit={(event) => {
         event.preventDefault();
         if (href && safeHref(href) === "#" && href !== "#") { setError("Use a page, anchor, https, mailto or tel link."); return; }

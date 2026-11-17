@@ -7,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ push: vi.fn(), fetch: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 import { AiSiteWizard } from "./ai-site-wizard";
+import { emptyBusiness } from "@/lib/business";
 
 let container: HTMLDivElement, root: Root;
-const site = { id: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000002", name: "Local Plumbing" };
+const site = { id: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000002", name: "Local Plumbing", business: emptyBusiness };
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.stubGlobal("fetch", mocks.fetch);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -34,6 +35,13 @@ async function review() {
 }
 
 describe("AI site wizard", () => {
+  it("prefills previously saved business information", async () => {
+    const business = { ...emptyBusiness, businessName: "Example", businessType: "Plumber", city: "York", services: ["Repairs"], tone: "Friendly" };
+    await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={{ ...site, business }} rootDomain="localhost:3000" />));
+    const field = [...container.querySelectorAll("label")].find((item) => item.textContent?.startsWith("Tone of voice"))!.querySelector("input")!;
+    expect(field.value).toBe("Friendly");
+    expect(container.textContent).toContain("Repairs");
+  });
   it("requires explicit draft replacement confirmation, decodes chunked UTF-8 progress and opens the editor with review warnings", async () => {
     await review();
     expect(container.textContent).toContain("This will replace your current unpublished changes. You can restore them from version history.");
