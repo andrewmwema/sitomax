@@ -20,8 +20,8 @@ refresh, auth guards, tenant redirect lookup and static-asset matcher:
 ```ts
 const ROOT = (process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost:3000").toLowerCase();
 const MARKETING = process.env.MARKETING_SITE_SUBDOMAIN ?? "sitomax";
-const PLATFORM_PREFIXES = ["/dashboard", "/editor", "/login", "/forgot-password", "/set-password", "/auth"];
-const PUBLIC_API = ["/api/forms/submit", "/api/analytics", "/api/cron"];
+const PLATFORM_PREFIXES = ["/dashboard", "/login", "/signup", "/auth", "/invite", "/editor", "/forgot-password", "/set-password"];
+const PUBLIC_API = ["/api/cron", "/api/forms/submit", "/api/analytics"];
 
 function isAppHost(host: string) {
   return host === `app.${ROOT}` || host.startsWith("localhost") ||

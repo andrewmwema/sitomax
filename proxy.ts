@@ -5,7 +5,7 @@ import { updateSession } from "@/lib/supabase/proxy";
 import { lookupTenantRedirect } from "@/lib/redirect-lookup";
 
 const PLATFORM_PREFIXES = [
-  "/dashboard", "/editor", "/login", "/forgot-password", "/set-password", "/auth",
+  "/dashboard", "/login", "/signup", "/auth", "/invite", "/editor", "/forgot-password", "/set-password",
 ];
 const PUBLIC_API_PREFIXES = ["/api/forms/submit", "/api/analytics", "/api/cron"];
 

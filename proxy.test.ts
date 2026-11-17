@@ -37,7 +37,7 @@ describe("host routing", () => {
   });
 
   it("returns 404 for platform pages and private APIs on site hosts", async () => {
-    for (const path of ["/dashboard", "/editor/page", "/login", "/auth/callback", "/api/ai/generate-site", "/api/forms/export"]) {
+    for (const path of ["/dashboard", "/editor/page", "/login", "/signup", "/invite", "/auth/callback", "/api/ai/generate-site", "/api/forms/export"]) {
       expect((await proxy(request(`https://client.test${path}`))).status).toBe(404);
     }
     expect(mocks.updateSession).not.toHaveBeenCalled();
