@@ -5,6 +5,7 @@ import { createUsePuck, useGetPuck } from "@puckeditor/core";
 import { Monitor, Smartphone, Tablet } from "lucide-react";
 import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
 import { ELEMENT_TYPES } from "@/lib/layout/structure";
+import { hasPlaceholder } from "@/lib/sections/placeholders";
 import { DesignField } from "./design-field";
 import { useInteractions } from "./interaction-context";
 
@@ -12,6 +13,7 @@ const usePuck = createUsePuck();
 export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<string, ReactNode>>; isLoading: boolean }) {
   const ui = useInteractions();
   const selected = usePuck((state) => state.selectedItem);
+  const rootProps = usePuck((state) => state.appState.data.root.props);
   const getPuck = useGetPuck();
   const width = usePuck((state) => state.appState.ui.viewports.current.width);
   const device = width === "100%" || width >= 1024 ? "desktop" : width >= 768 ? "tablet" : "mobile";
@@ -47,16 +49,31 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
             dispatch({ type: "setUi", ui: { viewports: { ...appState.ui.viewports, current: { width: target, height: "auto" } } } });
           }}><Icon size={13} />{id}</button>)}
     </div>
-    <div role="tablist" aria-label="Inspector tabs" className="grid grid-cols-4 border-b border-zinc-200">
-      {(["content", "style", "animation", "spacing"] as const).map((tab) =>
-        <button key={tab} type="button" role="tab" aria-selected={ui.tab === tab}
-          onClick={() => ui.setTab(tab)} className={`border-b-2 py-2 text-[11px] capitalize ${ui.tab === tab ? "border-zinc-900" : "border-transparent text-zinc-500"}`}>{tab}</button>)}
+    <div role="tablist" aria-label="Inspector tabs" className="grid grid-cols-3 border-b border-[#E8E7E3]">
+      {([
+        { id: "content", label: "Content" },
+        { id: "style", label: "Design" },
+        { id: "animation", label: "Motion" },
+      ] as const).map(({ id, label }) =>
+        <button key={id} type="button" role="tab" aria-selected={ui.tab === id || (id === "style" && ui.tab === "spacing")}
+          onClick={() => ui.setTab(id)} className={`border-b-2 py-2 text-xs font-medium ${ui.tab === id || (id === "style" && ui.tab === "spacing") ? "border-[#4B3FE0] text-[#4B3FE0]" : "border-transparent text-zinc-500"}`}>{label}</button>)}
     </div>
     {isLoading ? <p role="status" className="text-xs">Loading controls...</p> : null}
     {ui.tab === "content" || !selected ? <>
-      {Object.entries(fields).filter(([key]) => key !== "design").map(([key, field]) => <div key={key}>{field}</div>)}
+      {Object.entries(fields).filter(([key]) => key !== "design").map(([key, field]) => {
+        const value = (selected?.props ?? rootProps)?.[key];
+        const placeholder = hasPlaceholder(value);
+        return <div key={key} className={placeholder ? "editor-placeholder-field" : undefined}>
+          {field}
+          {placeholder ? <p className="px-1 text-[11px] text-amber-700">Replace placeholder text before publishing.</p> : null}
+        </div>;
+      })}
       {selected && !locked ? <DesignField value={design} onChange={change} level={level} panelTab="settings" /> : null}
     </> : locked ? <p className="text-xs text-zinc-500">Only the agency can edit this block.</p> : <>
+      {ui.tab === "style" || ui.tab === "spacing" ? <div role="group" aria-label="Design controls" className="flex gap-1 rounded-lg bg-[#F7F7F5] p-1">
+        {(["style", "spacing"] as const).map((tab) => <button key={tab} type="button" aria-pressed={ui.tab === tab}
+          onClick={() => ui.setTab(tab)} className={`flex-1 rounded-md px-2 py-1.5 text-xs capitalize ${ui.tab === tab ? "bg-white font-medium shadow-sm" : "text-zinc-500"}`}>{tab}</button>)}
+      </div> : null}
       {ui.tab === "style" ? <fieldset className="flex flex-col gap-3 rounded-lg border p-3 text-xs">
         <legend className="px-1 capitalize">{device} appearance</legend>
         {(["backgroundColor", "textColor"] as const).map((key) => <label key={key} className="flex items-center justify-between gap-2">

@@ -40,6 +40,13 @@ function collectStrings(value: unknown, out: string[]): void {
   }
 }
 
+/** Whether a field contains sample text, including nested rich text or lists. */
+export function hasPlaceholder(value: unknown): boolean {
+  const strings: string[] = [];
+  collectStrings(value, strings);
+  return strings.some((text) => text.match(PLACEHOLDER) !== null);
+}
+
 /** Sections of a draft that still contain [placeholder] text. */
 export function findUnreplacedPlaceholders(
   data: Partial<Data>,

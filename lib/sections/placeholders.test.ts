@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findUnreplacedPlaceholders } from "./placeholders";
+import { findUnreplacedPlaceholders, hasPlaceholder } from "./placeholders";
 
 describe("findUnreplacedPlaceholders", () => {
   it("reports sections whose copy still contains [placeholders]", () => {
@@ -25,6 +25,15 @@ describe("findUnreplacedPlaceholders", () => {
     expect(hits[0].snippets).toEqual(
       expect.arrayContaining(["[4.9]", "[300]", "[20]"]),
     );
+  });
+
+  describe("hasPlaceholder", () => {
+    it("finds placeholders in nested field values but ignores non-copy fields", () => {
+      expect(hasPlaceholder({ content: [{ text: "Call {{phone}}" }] })).toBe(true);
+      expect(hasPlaceholder([{ label: "[Add a review]" }])).toBe(true);
+      expect(hasPlaceholder({ code: "items[0]", design: { anchorId: "[id]" } })).toBe(false);
+      expect(hasPlaceholder("Ready for customers")).toBe(false);
+    });
   });
 
   it("ignores the design object and returns nothing when clean", () => {

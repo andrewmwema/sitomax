@@ -81,6 +81,7 @@ async function EditorLoader({
 
   return (
     <PageEditor
+      key={data.id}
       page={{ id: data.id, slug: data.slug, title: data.title }}
       site={{ ...site, theme: site.draft_theme ?? site.theme }}
       initialData={data.draft_data as Record<string, unknown>}

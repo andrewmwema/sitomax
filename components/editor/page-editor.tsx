@@ -10,12 +10,16 @@ import {
 import {
   ActionBar,
   Puck,
+  blocksPlugin,
   createUsePuck,
+  outlinePlugin,
   useGetPuck,
   type Data,
   type Overrides,
+  type Plugin,
 } from "@puckeditor/core";
-import { Bookmark, LayoutGrid, TriangleAlert } from "lucide-react";
+import { Bookmark, FileText, Layers, LayoutGrid, Palette, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { puckConfig } from "@/lib/puck/config";
 import { editorConfig } from "@/lib/puck/editor-config";
 import { canConvertToLayout, convertToLayout } from "@/lib/layout/convert";
@@ -41,7 +45,7 @@ import { SaveDesignDialog } from "@/components/editor/save-design-dialog";
 import { BlockThumbnail } from "@/components/editor/block-thumbnail";
 import type { SectionCategory, SectionDesign } from "@/lib/sections/catalog";
 import { SectionGhost } from "@/components/editor/section-ghost";
-import { InteractionContext, type InteractionUi, type EditorPageLink, type InspectorTab } from "./interaction-context";
+import { InteractionContext, useInteractions, type InteractionUi, type EditorPageLink, type InspectorTab } from "./interaction-context";
 import type { DeviceId } from "@/lib/sections/design";
 import { EditorInspector } from "./editor-inspector";
 import { EditorInteractions, SelectionMenuButton } from "./editor-interactions";
@@ -64,6 +68,93 @@ function useEditorUi(): EditorUi {
 }
 
 const usePuckStore = createUsePuck();
+const PersistenceContext = createContext<ReturnType<typeof useDraftPersistence> | null>(null);
+
+function usePersistence() {
+  const persistence = useContext(PersistenceContext);
+  if (!persistence) throw new Error("Editor persistence missing");
+  return persistence;
+}
+
+function EditorRuntime({ children }: { children: React.ReactNode }) {
+  const { pageId } = useEditorUi();
+  const persistence = useDraftPersistence(pageId);
+  return <PersistenceContext.Provider value={persistence}>{children}</PersistenceContext.Provider>;
+}
+
+function PagesPanel() {
+  const { pages, pageId } = useInteractions();
+  const persistence = usePersistence();
+  const router = useRouter();
+  return <div className="p-4">
+    <h2 className="mb-3 text-sm font-semibold">Pages</h2>
+    <div className="flex flex-col gap-1">
+      {pages.map((page) => <button key={page.id} type="button" aria-current={page.id === pageId ? "page" : undefined}
+        disabled={page.id === pageId || persistence.busy !== null}
+        className="rounded-lg px-3 py-2 text-left text-sm hover:bg-[#F7F7F5] disabled:opacity-60"
+        onClick={async () => {
+          if (!persistence.dirty || await persistence.save()) router.push(`/editor/${page.id}`);
+        }}>{page.title || page.slug || "Home"}</button>)}
+    </div>
+    {persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
+  </div>;
+}
+
+function ThemeTool() {
+  const { openThemePanel } = useEditorUi();
+  return <div className="p-4"><h2 className="text-sm font-semibold">Theme</h2>
+    <p className="my-3 text-xs text-zinc-500">Update this site&apos;s colors, fonts and style.</p>
+    <button type="button" className="rounded-lg bg-[#121212] px-3 py-2 text-xs text-white" onClick={openThemePanel}>Edit theme</button>
+  </div>;
+}
+
+function SeoTool() {
+  const getPuck = useGetPuck();
+  const { setTab } = useInteractions();
+  return <div className="p-4"><h2 className="text-sm font-semibold">Page SEO</h2>
+    <p className="my-3 text-xs text-zinc-500">Edit the page title and description in the inspector.</p>
+    <button type="button" className="rounded-lg bg-[#121212] px-3 py-2 text-xs text-white" onClick={() => {
+      setTab("content");
+      getPuck().dispatch({ type: "setUi", ui: { itemSelector: null, rightSideBarVisible: true } });
+    }}>Open page settings</button>
+  </div>;
+}
+
+function AiTool() {
+  return <div className="p-4"><h2 className="text-sm font-semibold">AI editing</h2>
+    <p className="mt-3 text-xs text-zinc-500">AI editing in the editor is not available yet.</p>
+  </div>;
+}
+
+function AiCommandBar() {
+  return <aside aria-label="AI editing" className="editor-ai-bar">
+    <div className="flex items-center gap-2 text-sm text-zinc-500">
+      <Sparkles size={16} className="text-[#4B3FE0]" />
+      <span>Ask AI to edit this page</span>
+      <span className="ml-auto text-xs">Coming soon</span>
+    </div>
+    <div className="mt-2 flex flex-wrap gap-1.5" aria-label="AI suggestions, coming soon">
+      {["Improve this copy", "Make it shorter", "Suggest a section"].map((suggestion) =>
+        <span key={suggestion} className="rounded-full border border-[#E8E7E3] px-2 py-1 text-[11px] text-zinc-400">{suggestion}</span>)}
+    </div>
+  </aside>;
+}
+
+function EditorDrawer({ children }: { children: React.ReactNode }) {
+  const { openLibrary } = useSectionLibrary();
+  const count = usePuckStore((state) => state.appState.data.content.length);
+  return <><div className="p-3"><button type="button" onClick={() => openLibrary(count)}
+    className="w-full rounded-lg bg-[#121212] px-3 py-2 text-xs font-medium text-white">Browse section designs</button></div>{children}</>;
+}
+
+const editorPlugins: Plugin[] = [
+  blocksPlugin({ label: "Add", icon: <Plus size={18} /> }),
+  outlinePlugin({ label: "Layers", icon: <Layers size={18} /> }),
+  { name: "pages", label: "Pages", icon: <FileText size={18} />, render: () => <PagesPanel /> },
+  { name: "theme", label: "Theme", icon: <Palette size={18} />, render: () => <ThemeTool /> },
+  { name: "ai", label: "AI", icon: <Sparkles size={18} />, render: () => <AiTool /> },
+  { name: "seo", label: "SEO", icon: <Search size={18} />, render: () => <SeoTool /> },
+];
 
 /** Labels for the placeholder warning, from the block config. */
 const BLOCK_LABELS = Object.fromEntries(
@@ -76,8 +167,9 @@ const BLOCK_LABELS = Object.fromEntries(
 /** Header buttons: Save draft, Preview, Publish and the theme panel toggle. */
 function HeaderActions() {
   const getPuck = useGetPuck();
-  const { pageId, siteId, previewUrl, openThemePanel } = useEditorUi();
-  const persistence = useDraftPersistence(pageId);
+  const { siteId, previewUrl, openThemePanel } = useEditorUi();
+  const persistence = usePersistence();
+  const router = useRouter();
   const { busy } = persistence;
   const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
   const run = persistence.save;
@@ -109,6 +201,9 @@ function HeaderActions() {
 
   return (
     <div data-editor-header-actions className="flex flex-wrap items-center justify-end gap-2">
+      <button type="button" disabled={busy !== null} onClick={async () => {
+        if (!persistence.dirty || await persistence.save()) router.push("/dashboard");
+      }} className="rounded-lg border border-[#E8E7E3] px-3 py-2 text-xs text-zinc-700 disabled:opacity-50">Dashboard</button>
       <span role={persistence.error ? "alert" : "status"} className={`max-w-64 text-xs ${persistence.error ? "text-red-600" : "text-zinc-500"}`}>
         {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
       </span>
@@ -141,7 +236,7 @@ function HeaderActions() {
         type="button"
         disabled={busy !== null}
         onClick={requestPublish}
-        className={`${buttonClasses} bg-emerald-600 text-white hover:bg-emerald-700`}
+        className={`${buttonClasses} bg-[#121212] text-white hover:bg-zinc-700`}
       >
         {busy === "publish" ? "Publishing…" : "Publish"}
       </button>
@@ -193,7 +288,7 @@ function HeaderActions() {
                   setPlaceholderHits(null);
                   void run("publish");
                 }}
-                className={`${buttonClasses} bg-emerald-600 text-white hover:bg-emerald-700`}
+                className={`${buttonClasses} bg-[#121212] text-white hover:bg-zinc-700`}
               >
                 Publish anyway
               </button>
@@ -257,6 +352,7 @@ function EditorActionBar({
   return (
     <ActionBar>
       <ActionBar.Group>
+        <ActionBar.Action label="Ask AI (coming soon)" disabled><Sparkles size={16} /></ActionBar.Action>
         {parentAction}
         {label ? <ActionBar.Label label={label} /> : null}
       </ActionBar.Group>
@@ -362,6 +458,7 @@ export function PageEditor({
       headerActions: () => <HeaderActions />,
       actionBar: (props) => <EditorActionBar {...props} />,
       drawerItem: (props) => <EditorDrawerItem {...props} />,
+      drawer: ({ children }) => <EditorDrawer>{children}</EditorDrawer>,
       fields: (props) => <EditorInspector {...props} />,
       preview: ({ children }) => (
         <>
@@ -369,15 +466,16 @@ export function PageEditor({
           <CanvasInsertZones />
           <AddSectionEndBar />
           <SectionGhost />
+          <AiCommandBar />
         </>
       ),
       puck: ({ children }) => (
-        <>
+        <EditorRuntime>
           {children}
           <SectionLibraryPanel />
           <SaveDesignDialog />
           <EditorInteractions />
-        </>
+        </EditorRuntime>
       ),
     }),
     [],
@@ -404,7 +502,7 @@ export function PageEditor({
       <EditorUiContext.Provider value={editorUi}>
         <SectionLibraryContext.Provider value={sectionLibraryUi}>
           <InteractionContext.Provider value={interactionUi}>
-          <div className="h-screen pb-9">
+          <div className="platform-editor h-screen pb-9">
             {showGenerationWarnings && generationWarnings.length ? <aside role="status" className="fixed bottom-12 left-4 z-[100] max-h-56 w-[min(420px,90vw)] overflow-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950 shadow-lg">
               <p className="font-semibold">AI draft review notes</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">{generationWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
@@ -415,7 +513,8 @@ export function PageEditor({
               data={data}
               metadata={{ theme }}
               overrides={overrides}
-              headerTitle={page.title ?? site.name ?? site.subdomain}
+              plugins={editorPlugins}
+              headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}
               headerPath={page.slug ? `/${page.slug}` : "/"}
             />
           </div>

@@ -32,5 +32,10 @@ async function EditorGate({ children }: { children: React.ReactNode }) {
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return <>
+    {/* Keep platform fonts out of public tenant pages. */}
+    {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" />
+    {children}
+  </>;
 }

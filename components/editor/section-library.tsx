@@ -159,7 +159,7 @@ function LibraryContent() {
         {(["designed", "saved"] as const).map((value) => (
           <button key={value} type="button" role="tab" id={`library-tab-${value}`}
             aria-selected={tab === value} aria-controls="library-designs"
-            className={`border-b-2 px-4 py-2 text-sm font-medium ${tab === value ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500"}`}
+            className={`border-b-2 px-4 py-2 text-sm font-medium ${tab === value ? "border-[#4B3FE0] text-[#4B3FE0]" : "border-transparent text-zinc-500"}`}
             onClick={() => { setTab(value); clearPreview(); }}>
             {value === "designed" ? "Designed" : "Saved"}
           </button>
@@ -186,17 +186,17 @@ function LibraryContent() {
           <button type="button" className="underline" onClick={() => { setError(null); setReload((n) => n + 1); }}>Retry</button>
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1">
-        <nav aria-label="Section categories" className="w-36 shrink-0 overflow-y-auto border-r border-zinc-200 p-2">
+      <nav aria-label="Section categories" className="flex max-h-36 shrink-0 flex-wrap gap-1.5 overflow-y-auto border-b border-[#E8E7E3] p-3">
           {SECTION_CATEGORIES.map((entry) => (
             <button key={entry} type="button" aria-current={!searching && category === entry ? "true" : undefined}
               onClick={() => { setCategory(entry); setQuery(""); clearPreview(); }}
-              className={`my-0.5 flex w-full items-center justify-between gap-1 rounded-lg px-2 py-2 text-left text-xs ${!searching && category === entry ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}>
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${!searching && category === entry ? "border-[#121212] bg-[#121212] text-white" : "border-[#E8E7E3] text-zinc-600 hover:bg-[#F7F7F5]"}`}>
               <span>{entry}</span>
               <span className="tabular-nums opacity-60">{entry === "Blank" ? ROW_LAYOUT_IDS.length : designsForCategory(source, entry).length}</span>
             </button>
           ))}
         </nav>
+      <div className="flex min-h-0 flex-1">
         <div id="library-designs" role="tabpanel" aria-labelledby={`library-tab-${tab}`}
           className="min-w-0 flex-1 overflow-y-auto p-3" onMouseLeave={clearPreview}>
           <p role="status" className="mb-3 text-xs text-zinc-500">
@@ -215,7 +215,7 @@ function LibraryContent() {
                 {ROW_LAYOUTS[layout].label}
               </button>
             )) : designs.map((design) => (
-              <article key={design.id} className={`group relative overflow-hidden rounded-lg border border-zinc-200 bg-white transition hover:border-zinc-400 focus-within:ring-2 focus-within:ring-blue-600 ${view === "list" ? "flex flex-wrap" : ""}`}
+              <article key={design.id} className={`group relative overflow-hidden rounded-lg border border-zinc-200 bg-white transition hover:border-zinc-400 focus-within:ring-2 focus-within:ring-[#4B3FE0] ${view === "list" ? "flex flex-wrap" : ""}`}
                 onMouseEnter={() => setPreview(design)} onMouseLeave={clearPreview}>
                 <div inert aria-hidden="true" className={`pointer-events-none ${view === "list" ? "w-32 shrink-0" : "w-full"}`}>
                   <DesignThumbnail design={design} theme={theme} />
@@ -227,7 +227,7 @@ function LibraryContent() {
                 <button type="button" aria-label={`Insert ${design.name}`}
                   onFocus={() => setPreview(design)} onBlur={clearPreview}
                   onClick={() => insertItem(buildDesignItem(design))}
-                  className="absolute inset-0 z-10 cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600" />
+                  className="absolute inset-0 z-10 cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#4B3FE0]" />
                 <button type="button" aria-label={`Enlarge ${design.name}`}
                   onClick={() => { clearPreview(); setZoom(design); }}
                   className="absolute top-1 right-1 z-20 rounded-md border border-zinc-200 bg-white/95 p-1.5 text-zinc-600 shadow-sm hover:text-zinc-950">
