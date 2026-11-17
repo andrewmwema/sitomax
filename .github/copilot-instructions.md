@@ -1,4 +1,4 @@
-# Copilot instructions: white-label website platform
+# Copilot instructions: SitoMax
 
 Read this before every task. It describes what we are building and the rules every change must follow.
 
@@ -47,7 +47,7 @@ templates/                niche template JSON (plumber, salon, restaurant...)
 - `lib/supabase/admin.ts` (service role key) may be used ONLY in server code, and only for: the public site renderer, the form-submit endpoint, the analytics beacon, super-admin actions, and AI reservations/accounting in `lib/ai/usage.ts` after authenticated account-access checks. Never import it into a client component.
 
 ## Multi-tenant routing rules
-- `ROOT_DOMAIN` env var (e.g. `myagency.com`; `localhost:3000` in dev).
+- `ROOT_DOMAIN` env var (e.g. `sitomax.com`; `localhost:3000` in dev).
 - Host = root domain or `www` → the agency's own app and marketing site.
 - Host = `{subdomain}.ROOT_DOMAIN` → rewrite to `/s/{subdomain}/{path}`.
 - Any other host → treat it as a custom domain and rewrite to `/s/{host}/{path}`.
@@ -72,9 +72,9 @@ templates/                niche template JSON (plumber, salon, restaurant...)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=        # server only
-ROOT_DOMAIN=localhost:3000
-NEXT_PUBLIC_ROOT_DOMAIN=localhost:3000
-NEXT_PUBLIC_AGENCY_NAME=My Agency
+ROOT_DOMAIN=sitomax.com
+NEXT_PUBLIC_ROOT_DOMAIN=sitomax.com
+NEXT_PUBLIC_AGENCY_NAME=SitoMax
 VERCEL_API_TOKEN=                 # server only
 VERCEL_PROJECT_ID=
 VERCEL_TEAM_ID=                   # optional

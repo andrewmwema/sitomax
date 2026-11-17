@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { AiSiteWizard } from "@/components/dashboard/ai-site-wizard";
 import { businessSchema, emptyBusiness } from "@/lib/business";
+import { brand } from "@/lib/brand";
 
 export const maxDuration = 300;
 
@@ -23,6 +24,6 @@ export default async function RegenerateSitePage({ params }: { params: Promise<{
       <p className="mt-2 text-sm text-zinc-600">Create a new draft direction without changing your published pages.</p></header>
     <AiSiteWizard accounts={[]} existingSite={{ id: site.id, accountId: site.account_id, name: site.name ?? "",
       business: businessSchema.parse({ ...emptyBusiness, ...site.business }) }}
-      rootDomain={process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost:3000"} />
+      rootDomain={brand.rootDomain} />
   </section>;
 }

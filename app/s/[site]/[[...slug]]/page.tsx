@@ -8,7 +8,7 @@ import { TenantFontHints } from "@/components/tenant-font-hints";
 import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import { TenantTracking } from "@/components/tenant-tracking";
 import { localBusinessJsonLd, parseSiteSeo, publicPageSeo } from "@/lib/seo-public";
-import { rootSeoSchema } from "@/lib/seo";
+import { absoluteImage, rootSeoSchema } from "@/lib/seo";
 import { createClient } from "@/lib/supabase/server";
 import {
   getSiteByHost,
@@ -92,12 +92,17 @@ export async function generateMetadata({
     noindex: true,
   } : page.seo;
   const seo = publicPageSeo(site, { ...page, seo: previewSeo });
+  const tenantIcon = typeof site.theme?.logoUrl === "string"
+    ? absoluteImage(site.theme.logoUrl, seo.canonical)
+    : undefined;
 
   return {
+    metadataBase: new URL(seo.canonical),
     title: seo.title, description: seo.description,
     alternates: { canonical: seo.canonical },
-    openGraph: { type: "website", title: seo.title, description: seo.description, url: seo.canonical, ...(seo.image ? { images: [seo.image] } : {}) },
+    openGraph: { type: "website", siteName: site.name || site.subdomain, title: seo.title, description: seo.description, url: seo.canonical, ...(seo.image ? { images: [seo.image] } : {}) },
     twitter: { card: seo.image ? "summary_large_image" : "summary", title: seo.title, description: seo.description, ...(seo.image ? { images: [seo.image] } : {}) },
+    icons: { icon: tenantIcon ?? "/globe.svg" },
     robots: { index: !loaded.isPreview && !seo.noindex, follow: true },
     ...(seo.verification ? { verification: { google: seo.verification } } : {}),
   };

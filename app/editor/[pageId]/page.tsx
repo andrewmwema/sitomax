@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { z } from "zod";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { brand } from "@/lib/brand";
 import { PageEditor } from "@/components/editor/page-editor";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { businessSchema, emptyBusiness } from "@/lib/business";
@@ -91,7 +92,7 @@ async function EditorLoader({
 
   // Preview always uses the subdomain URL: auth cookies are scoped to the
   // root domain, so they are sent to subdomains but never custom domains.
-  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost:3000";
+  const root = brand.rootDomain;
   const protocol = root.includes("localhost") ? "http" : "https";
   const path = data.slug ? `/${data.slug}` : "/";
   const previewUrl = `${protocol}://${site.subdomain}.${root}${path}?preview=1`;

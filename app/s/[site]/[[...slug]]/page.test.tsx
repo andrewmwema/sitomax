@@ -39,10 +39,12 @@ describe("tenant analytics eligibility", () => {
     it("uses canonical, social, verification and noindex settings", async () => {
       const metadata = await generateMetadata({ params: Promise.resolve({ site: "client", slug: ["about"] }), searchParams: Promise.resolve({}) });
       expect(metadata).toMatchObject({
+        metadataBase: new URL("https://example.com/about"),
         title: "Search title", description: "Search description",
         alternates: { canonical: "https://example.com/about" },
-        openGraph: { title: "Search title", images: ["https://example.com/share.jpg"] },
+        openGraph: { siteName: "Example", title: "Search title", images: ["https://example.com/share.jpg"] },
         twitter: { card: "summary_large_image" },
+        icons: { icon: "/globe.svg" },
         verification: { google: "verify123" }, robots: { index: false },
       });
     });

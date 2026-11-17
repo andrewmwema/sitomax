@@ -13,15 +13,16 @@
 
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { brand } from "@/lib/brand";
 export { getSiteUrl } from "@/lib/site-url";
 
 function rootDomain(): string {
-  return process.env.ROOT_DOMAIN ?? "localhost:3000";
+  return process.env.ROOT_DOMAIN ?? brand.rootDomain;
 }
 
 /**
  * Public URL of a site: verified custom domain first, subdomain otherwise.
- * Uses NEXT_PUBLIC_ROOT_DOMAIN so it also works in Client Components.
+ * Uses the centralized brand domain so it also works in Client Components.
  */
 /**
  * Returns the tenant key for a hostname, or null when the host is the

@@ -8,7 +8,7 @@ import { SiteGrid } from "@/components/dashboard/site-grid";
 import type { SiteCardSite } from "@/components/dashboard/site-card";
 import { AiUsageCards } from "@/components/dashboard/ai-usage-cards";
 
-type SiteRow = Omit<SiteCardSite, "accountName" | "placeholderCount" | "pages"> & {
+type SiteRow = Omit<SiteCardSite, "accountName" | "canManageDomains" | "placeholderCount" | "pages"> & {
   account_id: string;
   account: { name: string } | null;
   pages: { id: string; slug: string; published_at: string | null; draft_data: unknown }[];
@@ -32,6 +32,7 @@ async function Overview() {
   const sites = (data ?? []) as unknown as SiteRow[];
   const cards: SiteCardSite[] = sites.map((site) => ({
     ...site, accountName: site.account?.name ?? null,
+    canManageDomains: isAdmin || Boolean(memberships?.some((member) => member.account_id === site.account_id)),
     pages: site.pages.map(({ id, slug, published_at }) => ({ id, slug, published_at })),
     placeholderCount: site.pages.reduce((total, page) => {
       if (!page.draft_data || typeof page.draft_data !== "object") return total;

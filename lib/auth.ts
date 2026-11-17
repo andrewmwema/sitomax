@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { brand } from "@/lib/brand";
 
 /**
  * Requires a signed-in user; redirects to /login otherwise.
@@ -46,10 +47,7 @@ export async function requireSuperAdmin() {
  */
 export async function getRequestOrigin(): Promise<string> {
   const headerStore = await headers();
-  const host =
-    headerStore.get("host") ??
-    process.env.NEXT_PUBLIC_ROOT_DOMAIN ??
-    "localhost:3000";
+  const host = headerStore.get("host") ?? brand.rootDomain;
   const protocol =
     headerStore.get("x-forwarded-proto") ??
     (host.includes("localhost") ? "http" : "https");

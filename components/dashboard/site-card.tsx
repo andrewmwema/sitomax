@@ -8,6 +8,7 @@ import { ArrowUpRight, Pencil } from "lucide-react";
 export type SiteCardSite = {
   id: string; name: string | null; subdomain: string; custom_domain: string | null; domain_verified: boolean;
   accountName: string | null;
+  canManageDomains: boolean;
   pages: { id: string; slug: string; published_at: string | null }[];
   placeholderCount: number;
 };
@@ -42,8 +43,11 @@ export function SiteCard({ site }: { site: SiteCardSite }) {
       </div></div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#F0EFEA] pt-4">
         <span className="text-xs text-[#6B6A66]">{site.accountName ? `${site.accountName} · ` : ""}{site.placeholderCount} {site.placeholderCount === 1 ? "section with placeholders" : "sections with placeholders"}</span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href={`/dashboard/sites/${site.id}`} className="platform-button">Pages</Link>
+          {site.canManageDomains ? <Link href={`/dashboard/sites/${site.id}/domains`} className="platform-button">
+            {site.custom_domain ? "Domains" : "Connect domain"}
+          </Link> : null}
           {homePage ? <Link href={`/editor/${homePage.id}`} className="platform-button platform-button-primary"><Pencil size={12} />Edit</Link> :
             <span className="text-xs text-[#6B6A66]">No pages yet</span>}
         </div>

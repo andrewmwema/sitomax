@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { idleState, type ActionState } from "@/lib/form-state";
 import type { AgencySettings } from "@/lib/agency";
+import { brand } from "@/lib/brand";
 
 const inputClasses =
   "rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none";
@@ -85,7 +86,7 @@ export function AgencySettingsForm({
           type="email"
           name="support_email"
           defaultValue={settings.supportEmail ?? ""}
-          placeholder="support@youragency.com"
+          placeholder={brand.supportEmail}
           className={inputClasses}
         />
       </label>

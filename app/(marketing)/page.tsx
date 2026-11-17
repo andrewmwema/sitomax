@@ -1,16 +1,15 @@
 import Link from "next/link";
+import { brand } from "@/lib/brand";
 
 /**
  * Agency marketing site, served on the root domain.
  */
 export default function MarketingHomePage() {
-  const agencyName = process.env.NEXT_PUBLIC_AGENCY_NAME ?? "My Agency";
-
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-24 text-center">
-      <h1 className="text-4xl font-semibold tracking-tight">{agencyName}</h1>
+      <h1 className="text-4xl font-semibold tracking-tight">{brand.name}</h1>
       <p className="max-w-md text-lg text-zinc-600 dark:text-zinc-400">
-        Beautiful websites for your business, built and managed for you.
+        {brand.tagline}
       </p>
       <Link
         href="/login"

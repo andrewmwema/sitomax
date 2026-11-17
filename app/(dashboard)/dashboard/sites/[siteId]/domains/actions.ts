@@ -10,6 +10,7 @@ import { conflictingRecords, DnsLookupError, inspectDns } from "@/lib/domains/dn
 import { providerIdSchema } from "@/lib/domains/providers";
 import { checkAndSaveDomain, DomainCheckError, domainSiteColumns, expiredDomainIssue } from "@/lib/domains/check";
 import { DomainEmailError, instructionEmail, notifyDomainLive, sendDomainEmail } from "@/lib/domains/email";
+import { brand } from "@/lib/brand";
 
 const columns = domainSiteColumns;
 
@@ -124,7 +125,7 @@ export async function connectSiteDomain(siteId: string, input: string, providerI
   const provider = providerIdSchema.safeParse(providerId);
   if (!provider.success) return state(site, "Choose a DNS provider.");
   const domain = parsed.data;
-  const root = (process.env.ROOT_DOMAIN ?? "localhost:3000").toLowerCase().replace(/:\d+$/, "");
+  const root = (process.env.ROOT_DOMAIN ?? brand.rootDomain).toLowerCase().replace(/:\d+$/, "");
   if (domain === root || domain.endsWith(`.${root}`) || domain === "vercel.app" || domain.endsWith(".vercel.app")) {
     return state(site, "Use your own domain, not a platform address.");
   }

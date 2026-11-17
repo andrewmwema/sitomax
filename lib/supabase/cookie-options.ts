@@ -1,3 +1,5 @@
+import { brand } from "@/lib/brand";
+
 /**
  * Auth cookies are scoped to the root domain INCLUDING subdomains
  * (domain=.ROOT_DOMAIN), so the tenant renderer on {sub}.ROOT_DOMAIN can
@@ -5,10 +7,7 @@
  * Custom domains can never receive these cookies.
  */
 export function authCookieOptions() {
-  const root =
-    process.env.NEXT_PUBLIC_ROOT_DOMAIN ??
-    process.env.ROOT_DOMAIN ??
-    "localhost:3000";
+  const root = process.env.ROOT_DOMAIN ?? brand.rootDomain;
   return {
     domain: `.${root.replace(/:\d+$/, "")}`,
     path: "/",

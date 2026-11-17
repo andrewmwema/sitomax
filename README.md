@@ -1,4 +1,6 @@
-# white-label-multi-tenant-website-platform
+# SitoMax
+
+Websites that work as hard as you do.
 
 ## Platform appearance
 
@@ -62,7 +64,10 @@ applicable consent requirements.
 
 ## Custom domains
 
-Account owners and the agency can open a site's **Domains** tab. Configure
+Account owners and the agency can click **Connect domain** directly on a site's
+dashboard card (**Domains** if a domain is already attached). Alternatively,
+click **Pages** on the card, then the **Domains** tab. **Edit** opens the page
+editor, not site settings. Editors cannot manage domains. Configure
 `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID` and, for team projects, `VERCEL_TEAM_ID`
 on the server. The token must have permission to manage that project's domains;
 never use a `NEXT_PUBLIC_` variable for it. Apply `0017_domain_wizard.sql`
@@ -98,7 +103,7 @@ when the migration is applied. Both hostnames must pass ownership and DNS checks
 before the custom domain becomes the live site URL.
 
 Optional email: set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to a verified
-agency sender (for example `Agency <websites@youragency.com>`). Connected domains
+agency sender (for example `SitoMax <support@sitomax.com>`). Connected domains
 notify account owners; delivery failures are logged and retried by later jobs
 with a short database claim and provider idempotency key. Existing live domains
 are marked notified by the migration to avoid retroactive emails. Without an

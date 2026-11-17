@@ -1,4 +1,4 @@
-# Build plan: v1 (paste each prompt into Copilot Chat)
+# SitoMax build plan: v1 (paste each prompt into Copilot Chat)
 
 **How to use this:**
 1. Put this file at `docs/BUILD_PLAN.md` and `copilot-instructions.md` at `.github/copilot-instructions.md` in your repo.
@@ -515,9 +515,9 @@ Integrate Entri Connect (entri.com) for one-click DNS setup:
 ## Phase 9: Go live on Vercel
 
 **Do these yourself:**
-1. Push the repo to GitHub, then import it in Vercel. Add every env var from `.env.local` (with `ROOT_DOMAIN=yourplatform.com`).
-2. In Vercel → Domains, add `yourplatform.com` and the wildcard `*.yourplatform.com`. Wildcards need Vercel nameservers, so point your domain's nameservers to Vercel.
-3. In Supabase → Authentication → URL Configuration, set the Site URL to `https://yourplatform.com` and add `https://yourplatform.com/**` as a redirect URL.
+1. Push the repo to GitHub, then import it in Vercel. Add every env var from `.env.local` (with `ROOT_DOMAIN=sitomax.com`).
+2. In Vercel → Domains, add `sitomax.com` and the wildcard `*.sitomax.com`. Wildcards need Vercel nameservers, so point your domain's nameservers to Vercel.
+3. In Supabase → Authentication → URL Configuration, set the Site URL to `https://sitomax.com` and add `https://sitomax.com/**` as a redirect URL.
 
 **Prompt (final review):**
 ```

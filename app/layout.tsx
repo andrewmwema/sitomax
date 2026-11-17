@@ -1,10 +1,30 @@
 import type { Metadata } from "next";
+import { brand } from "@/lib/brand";
 import "./globals.css";
 import "./platform.css";
 
+const siteUrl = new URL(`${brand.rootDomain.includes("localhost") ? "http" : "https"}://${brand.rootDomain}`);
+
 export const metadata: Metadata = {
-  title: process.env.NEXT_PUBLIC_AGENCY_NAME ?? "My Agency",
-  description: "Websites built and managed for your business.",
+  metadataBase: siteUrl,
+  title: brand.name,
+  description: brand.tagline,
+  openGraph: {
+    type: "website",
+    title: brand.name,
+    description: brand.tagline,
+    siteName: brand.name,
+    url: siteUrl,
+  },
+  twitter: {
+    card: "summary",
+    title: brand.name,
+    description: brand.tagline,
+  },
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

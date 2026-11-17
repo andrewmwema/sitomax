@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { brand } from "@/lib/brand";
 
 export type AgencySettings = {
   name: string;
@@ -7,7 +8,6 @@ export type AgencySettings = {
   supportEmail: string | null;
 };
 
-const FALLBACK_NAME = process.env.NEXT_PUBLIC_AGENCY_NAME ?? "My Agency";
 const FALLBACK_PRIMARY_COLOR = "#4f46e5";
 
 /**
@@ -22,10 +22,14 @@ export async function getAgencySettings(): Promise<AgencySettings> {
     .eq("id", 1)
     .maybeSingle();
 
+  const savedName = data?.name?.trim();
+  const savedSupportEmail = data?.support_email?.trim();
   return {
-    name: data?.name ?? FALLBACK_NAME,
+    name: savedName && savedName !== "My Agency" ? savedName : brand.name,
     logoUrl: data?.logo_url ?? null,
     primaryColor: data?.primary_color ?? FALLBACK_PRIMARY_COLOR,
-    supportEmail: data?.support_email ?? null,
+    supportEmail: savedSupportEmail && savedSupportEmail !== "support@example.com"
+      ? savedSupportEmail
+      : brand.supportEmail,
   };
 }

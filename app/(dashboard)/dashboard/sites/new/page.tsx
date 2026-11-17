@@ -4,6 +4,7 @@ import { instantiateTemplate } from "@/templates/instantiate";
 import { templates } from "@/templates";
 import { NewSiteWizard } from "@/components/dashboard/new-site-wizard";
 import type { SectionDesign } from "@/lib/sections/catalog";
+import { brand } from "@/lib/brand";
 
 export default async function NewSitePage() {
   const { supabase } = await requireSuperAdmin();
@@ -29,7 +30,7 @@ export default async function NewSitePage() {
       <span><span className="block font-semibold">Build with AI</span><span className="mt-1 block text-sm text-zinc-600">Start with your business, not a template. Review and publish when you are ready.</span></span>
       <span aria-hidden="true">&rarr;</span>
     </Link>
-    {accounts?.length ? <NewSiteWizard accounts={accounts} choices={choices} rootDomain={process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost:3000"} /> :
+    {accounts?.length ? <NewSiteWizard accounts={accounts} choices={choices} rootDomain={brand.rootDomain} /> :
       <p className="rounded-xl border bg-white p-6 text-sm">Create a <Link className="underline" href="/dashboard/clients">client account</Link> first.</p>}
   </section>;
 }
