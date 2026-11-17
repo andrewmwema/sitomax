@@ -111,3 +111,29 @@ Incomplete connections stay saved so **Retry connection** can finish setup.
 Remove an existing domain before replacing it. Removal detaches both hostnames
 before clearing the saved domain; retry if only part of the removal succeeds.
 Removing a domain does not delete DNS records at the domain provider.
+
+### Agency-assisted domain setup
+
+Apply `0018_domain_requests.sql` manually after `0017`. In the domain wizard,
+account owners can choose **Have us connect it for you**, select their provider,
+and invite the agency's configured **support email** using limited delegated
+access. Configure that address under Dashboard → Settings first; the form is
+disabled when it is missing. No registrar credentials are collected. GoDaddy
+folder restrictions, Namecheap DNS sharing, Cloudflare's domain-scoped Domain
+DNS role and Squarespace domain-manager access are explained in the guide.
+If a provider cannot safely limit access, use self-service DNS instead.
+
+Owners can create and read requests for every site in their own account,
+regardless of who submitted them. Editors cannot create or view requests.
+These rules are enforced by RLS; owners cannot change request statuses or notes.
+An open request for the same site/domain cannot be submitted twice.
+
+The agency's **Domain requests** sidebar entry lists requests with client-visible
+status and notes updates. Only super admins can update them. Marking **Done**
+emails current account owners using the existing Resend settings. Failed
+completion emails stay pending for the secret-authenticated 15-minute domain
+job to retry. Missing email configuration is reported to the admin after saving
+the status. Completion status does not bypass DNS verification or set a site's
+`domain_verified` flag. Clients can refresh the status on their domain page and
+should revoke delegated access after setup. Never put passwords, recovery codes,
+API keys or transfer codes in update notes.

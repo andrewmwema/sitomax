@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { customDomainSchema, type DomainSite } from "@/lib/domains";
 import { checkAndSaveDomain, domainSiteColumns } from "@/lib/domains/check";
 import { notifyDomainLive } from "@/lib/domains/email";
+import { notifyDomainRequestDone } from "@/lib/domains/request-email";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,8 +50,24 @@ export async function GET(request: Request) {
     if (failed) break;
   }
   if (process.env.RESEND_API_KEY) {
+    let afterRequestId = "00000000-0000-0000-0000-000000000000";
+    while (Date.now() - started < 255_000) {
+      const requests = await admin.from("domain_requests").select("id").eq("status", "done")
+        .is("notification_sent_at", null).gt("id", afterRequestId).order("id").limit(20);
+      if (requests.error) { failed++; console.error("Could not load domain request notifications"); break; }
+      if (!requests.data?.length) break;
+      for (const request of requests.data) {
+        try { await notifyDomainRequestDone(request.id); }
+        catch (error) {
+          failed++;
+          console.error("Domain request notification failed", { requestId: request.id, error: error instanceof Error ? error.message : "Unknown error" });
+        }
+        afterRequestId = request.id;
+        if (Date.now() - started >= 255_000) break;
+      }
+    }
     let afterId = "";
-    while (Date.now() - started < 270_000) {
+    while (Date.now() - started < 280_000) {
       const emails = await admin.from("sites").select("id").eq("domain_verified", true)
         .not("custom_domain", "is", null).is("domain_notification_sent_at", null)
         .gt("id", afterId || "00000000-0000-0000-0000-000000000000").order("id").limit(20);
@@ -60,7 +77,7 @@ export async function GET(request: Request) {
         try { await notifyDomainLive(site.id); }
         catch (error) { failed++; console.error("Domain notification failed", { siteId: site.id, error: error instanceof Error ? error.message : "Unknown error" }); }
         afterId = site.id;
-        if (Date.now() - started >= 270_000) break;
+        if (Date.now() - started >= 280_000) break;
       }
     }
   }

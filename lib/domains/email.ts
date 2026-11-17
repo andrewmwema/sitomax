@@ -52,6 +52,17 @@ export function instructionEmail(domain: string, providerId: string, records: Dn
   ].join("\n");
 }
 
+export async function getAccountOwnerEmails(admin: ReturnType<typeof createAdminClient>, accountId: string): Promise<string[]> {
+  const members = await admin.from("account_members").select("user_id").eq("account_id", accountId).eq("role", "owner");
+  if (members.error || !members.data?.length) throw new DomainEmailError("No account owner could be found for the domain email.");
+  const profiles = await admin.from("profiles").select("email").in("id", members.data.map((member) => member.user_id));
+  if (profiles.error) throw new DomainEmailError("Could not load domain email recipients.");
+  const recipients = [...new Set((profiles.data ?? []).map((profile) => profile.email))]
+    .filter((email): email is string => z.email().safeParse(email).success).sort();
+  if (!recipients.length || recipients.length > 50) throw new DomainEmailError("Check the account owners' email addresses before sending.");
+  return recipients;
+}
+
 export async function notifyDomainLive(siteId: string): Promise<void> {
   if (!process.env.RESEND_API_KEY) return;
   const admin = createAdminClient();
@@ -65,13 +76,7 @@ export async function notifyDomainLive(siteId: string): Promise<void> {
   const site = claimed.data;
   if (!site) return;
   try {
-    const members = await admin.from("account_members").select("user_id").eq("account_id", site.account_id).eq("role", "owner");
-    if (members.error || !members.data?.length) throw new DomainEmailError("No account owner could be found for the domain email.");
-    const profiles = await admin.from("profiles").select("email").in("id", members.data.map((member) => member.user_id));
-    if (profiles.error) throw new DomainEmailError("Could not load domain email recipients.");
-    const recipients = [...new Set((profiles.data ?? []).map((profile) => profile.email))]
-      .filter((email): email is string => z.email().safeParse(email).success).sort();
-    if (!recipients.length || recipients.length > 50) throw new DomainEmailError("Check the account owners' email addresses before sending.");
+    const recipients = await getAccountOwnerEmails(admin, site.account_id);
     const text = `Your domain is live\n\nhttps://${site.custom_domain} is now connected to your website.\nThe www address redirects to your root domain.`;
     await sendDomainEmail(recipients, "Your domain is live", text,
       `domain-live:${site.id}:${site.domain_pending_since}:${recipients.join(",")}`);

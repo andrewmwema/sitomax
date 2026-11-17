@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, Copy, ExternalLink, Globe, LoaderCircle, Mail } from "lucide-react";
 import { customDomainSchema, domainChecksExpired, type DomainSettingsState, type DnsRecord } from "@/lib/domains";
 import { domainProviders, getProvider } from "@/lib/domains/providers";
+import type { DomainAssistanceData } from "@/lib/domains/requests";
+import { DomainAssistance } from "./domain-assistance";
 import {
   checkSiteDomain, connectSiteDomain, emailDomainInstructions, inspectSiteDomain, removeSiteDomain,
 } from "@/app/(dashboard)/dashboard/sites/[siteId]/domains/actions";
@@ -11,7 +13,9 @@ import {
 const steps = ["Enter domain", "Choose provider", "Update DNS", "Go live"];
 const control = "w-full rounded-lg border border-[#E8E7E3] bg-white px-3 py-2 text-sm";
 
-export function DomainSettings({ siteId, initial }: { siteId: string; initial: DomainSettingsState }) {
+export function DomainSettings({ siteId, initial, assistance }: {
+  siteId: string; initial: DomainSettingsState; assistance?: DomainAssistanceData;
+}) {
   const [state, setState] = useState(initial);
   const [domain, setDomain] = useState(initial.site?.custom_domain ?? "");
   const [providerId, setProviderId] = useState(initial.site?.domain_provider ?? initial.inspection?.providerId ?? "other");
@@ -85,6 +89,7 @@ export function DomainSettings({ siteId, initial }: { siteId: string; initial: D
       {current ? <span className={`rounded-full px-3 py-1 text-xs font-medium ${status === "Connected" ? "bg-green-50 text-green-800" :
         status === "Needs attention" ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-800"}`}>{status}</span> : null}
     </header>
+    {assistance ? <DomainAssistance siteId={siteId} domain={current ?? domain} providerId={providerId} data={assistance} /> : null}
     <ol aria-label="Connection progress" className="grid grid-cols-2 gap-3 border-y border-[#E8E7E3] py-4 sm:grid-cols-4">
       {steps.map((label, index) => <li key={label} aria-current={step === index + 1 ? "step" : undefined}
         className={`flex items-center gap-2 text-xs ${step === index + 1 ? "font-semibold text-[#4B3FE0]" : "text-zinc-500"}`}>
