@@ -4,6 +4,7 @@ import type { DomainSite } from "@/lib/domains";
 const mocks = vi.hoisted(() => ({
   site: vi.fn(), rpc: vi.fn(), admin: vi.fn(), update: vi.fn(), saved: vi.fn(), conflict: vi.fn(),
   ensure: vi.fn(), connection: vi.fn(), remove: vi.fn(), revalidate: vi.fn(),
+  inspect: vi.fn(), notify: vi.fn(), send: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: {
   from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.site }) }) }),
@@ -15,18 +16,27 @@ vi.mock("@/lib/vercel/domains", async (original) => {
   return { ...actual, ensureDomain: mocks.ensure, getDomainConnection: mocks.connection, removeDomain: mocks.remove };
 });
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
+vi.mock("@/lib/domains/dns", async (original) => {
+  const actual = await original<typeof import("@/lib/domains/dns")>();
+  return { ...actual, inspectDns: mocks.inspect };
+});
+vi.mock("@/lib/domains/email", async (original) => {
+  const actual = await original<typeof import("@/lib/domains/email")>();
+  return { ...actual, notifyDomainLive: mocks.notify, sendDomainEmail: mocks.send };
+});
 import { DomainApiError } from "@/lib/vercel/domains";
-import { checkSiteDomain, connectSiteDomain, loadDomainSettings, removeSiteDomain } from "./actions";
+import { checkSiteDomain, connectSiteDomain, emailDomainInstructions, inspectSiteDomain, loadDomainSettings, removeSiteDomain } from "./actions";
 
 const id = "00000000-0000-4000-8000-000000000001";
-const site: DomainSite = { id, name: "Client", subdomain: "client", custom_domain: null, domain_verified: false };
+const site: DomainSite = { id, name: "Client", subdomain: "client", custom_domain: null, domain_verified: false,
+  domain_provider: null, domain_pending_since: new Date().toISOString(), domain_check_stopped_at: null };
 const connectedSite = { ...site, custom_domain: "example.com" };
 const connection = { status: "Connected", records: [], issue: "" };
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.site.mockResolvedValue({ data: { ...site, account_id: id }, error: null });
-  mocks.rpc.mockImplementation(async (name) => ({ data: name === "is_account_owner", error: null }));
+  mocks.rpc.mockImplementation(async (name) => ({ data: name === "is_account_owner" || name === "consume_domain_action", error: null }));
   mocks.conflict.mockResolvedValue({ data: [], error: null });
   mocks.saved.mockResolvedValue({ data: connectedSite, error: null });
   mocks.update.mockImplementation(() => {
@@ -39,6 +49,12 @@ beforeEach(() => {
   mocks.connection.mockResolvedValue(connection);
   mocks.ensure.mockResolvedValue(undefined);
   mocks.remove.mockResolvedValue(undefined);
+  mocks.inspect.mockImplementation(async (domain, consume) => {
+    await consume();
+    return { domain, providerId: "godaddy", nameservers: ["ns1.domaincontrol.com"], records: [] };
+  });
+  mocks.notify.mockResolvedValue(undefined);
+  mocks.send.mockResolvedValue(undefined);
 });
 function existingDomain() {
   mocks.site.mockResolvedValue({ data: { ...connectedSite, account_id: id }, error: null });
@@ -50,6 +66,7 @@ describe("domain action permissions", () => {
     for (const result of [
       await loadDomainSettings(id), await connectSiteDomain(id, "example.com"),
       await checkSiteDomain(id), await removeSiteDomain(id),
+      await inspectSiteDomain(id, "example.com"), await emailDomainInstructions(id, "web@example.com", "godaddy"),
     ]) expect(result.error).toContain("Only account owners");
     expect(mocks.admin).not.toHaveBeenCalled();
     expect(mocks.ensure).not.toHaveBeenCalled();
@@ -58,7 +75,7 @@ describe("domain action permissions", () => {
   });
 
   it("allows super admins without membership and fails closed on permission lookup errors", async () => {
-    mocks.rpc.mockImplementation(async (name) => ({ data: name === "is_super_admin", error: null }));
+    mocks.rpc.mockImplementation(async (name) => ({ data: name === "is_super_admin" || name === "consume_domain_action", error: null }));
     expect((await connectSiteDomain(id, "example.com")).error).toBe("");
     mocks.rpc.mockResolvedValue({ data: true, error: { message: "database unavailable" } });
     expect((await checkSiteDomain(id)).error).toContain("permissions");
@@ -90,14 +107,16 @@ describe("domain actions", () => {
 
   it("reserves the normalized domain, attaches its redirect and saves verified status", async () => {
     mocks.saved.mockResolvedValueOnce({ data: connectedSite, error: null })
+      .mockResolvedValueOnce({ data: { ...connectedSite, domain_provider: "godaddy" }, error: null })
       .mockResolvedValueOnce({ data: { ...connectedSite, domain_verified: true }, error: null });
-    const result = await connectSiteDomain(id, " HTTPS://WWW.Example.COM/ ");
+    const result = await connectSiteDomain(id, " HTTPS://WWW.Example.COM/ ", "godaddy");
     expect(result.error).toBe("");
     expect(result.site?.domain_verified).toBe(true);
     expect(mocks.update.mock.calls.map(([fields]) => fields)).toEqual([
-      { custom_domain: "example.com", domain_verified: false }, { domain_verified: true },
+      { custom_domain: "example.com", domain_verified: false }, { domain_provider: "godaddy" }, { domain_verified: true },
     ]);
     expect(mocks.ensure.mock.calls).toEqual([["example.com"], ["www.example.com", "example.com"]]);
+    expect(mocks.notify).toHaveBeenCalledWith(id);
     expect(mocks.revalidate).toHaveBeenCalledWith(`/dashboard/sites/${id}/domains`);
   });
 
@@ -130,7 +149,8 @@ describe("domain actions", () => {
     mocks.connection.mockRejectedValue(new DomainApiError(503, "unavailable"));
     mocks.update.mockClear();
     expect((await checkSiteDomain(id)).error).toBeTruthy();
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledWith({ domain_last_checked_at: expect.any(String) });
+    expect(mocks.update).not.toHaveBeenCalledWith({ domain_verified: false });
   });
 
   it("clears domain settings only after both remote removals and surfaces partial failures", async () => {
@@ -148,5 +168,33 @@ describe("domain actions", () => {
       ["www.example.com"], ["example.com"], ["www.example.com"], ["example.com"],
     ]);
     expect(mocks.update).toHaveBeenCalledWith({ custom_domain: null, domain_verified: false });
+  });
+
+  it("limits DNS lookups before resolving and validates instruction recipients and providers", async () => {
+    expect((await inspectSiteDomain(id, "example.com/path")).error).toBeTruthy();
+    expect(mocks.inspect).not.toHaveBeenCalled();
+    mocks.rpc.mockImplementation(async (name) => ({ data: name === "is_account_owner", error: null }));
+    expect((await inspectSiteDomain(id, "example.com")).error).toContain("20 per minute");
+    existingDomain();
+    expect((await emailDomainInstructions(id, "not-an-email", "godaddy")).error).toBeTruthy();
+    expect((await emailDomainInstructions(id, "web@example.com", "untrusted")).error).toBeTruthy();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  it("sends regenerated instructions, not client-supplied records, and stops expired automatic checks", async () => {
+    existingDomain();
+    mocks.connection.mockResolvedValue({ ...connection, records: [
+      { type: "A", name: "example.com", value: "192.0.2.1" },
+      { type: "CNAME", name: "www.example.com", value: "target.example.net" },
+    ] });
+    expect((await emailDomainInstructions(id, "web@example.com", "godaddy")).success).toBe("Instructions sent.");
+    expect(mocks.send).toHaveBeenCalledWith(["web@example.com"], "Connect example.com",
+      expect.stringContaining("192.0.2.1"), expect.any(String));
+    mocks.connection.mockClear();
+    mocks.site.mockResolvedValue({ data: { ...connectedSite, account_id: id,
+      domain_pending_since: new Date(Date.now() - 15 * 86_400_000).toISOString() }, error: null });
+    expect((await checkSiteDomain(id, true)).connection?.status).toBe("Needs attention");
+    expect(mocks.connection).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ domain_check_stopped_at: expect.any(String) }));
   });
 });

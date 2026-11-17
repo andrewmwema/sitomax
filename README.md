@@ -65,17 +65,47 @@ applicable consent requirements.
 Account owners and the agency can open a site's **Domains** tab. Configure
 `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID` and, for team projects, `VERCEL_TEAM_ID`
 on the server. The token must have permission to manage that project's domains;
-never use a `NEXT_PUBLIC_` variable for it. No additional migration is needed
-for this feature: existing unique `sites.custom_domain` and protected
-`sites.domain_verified` columns are used.
+never use a `NEXT_PUBLIC_` variable for it. Apply `0017_domain_wizard.sql`
+manually after the preceding migrations. It adds protected connection tracking
+and a private, database-enforced rolling request limit.
 
 Enter a domain such as `example.com` (a leading `www` is treated as its alias).
 The platform attaches both hostnames, with a permanent redirect from `www`
 to the root. The DNS table uses the hosting API's preferred A and CNAME values,
 plus any required TXT ownership challenges; no shared IP or target is hard-coded.
-Click **Check again** after updating DNS. Both hostnames must pass ownership
-and DNS checks before the custom domain becomes the live site URL. DNS changes
-can take up to 48 hours.
+The guided wizard detects the DNS host from its nameservers (not necessarily
+the registrar), lets you override it, and shows provider-specific instructions.
+Unknown or shared nameservers can be selected manually. Provider logos, links,
+instructions and optional `videoUrl` fields live in `lib/domains/providers.ts`;
+add a trusted HTTPS video URL there to enable its help-video link.
+
+Existing A and CNAME records are compared with the recommended values. The
+warnings identify conflicting website records only; do not remove MX or
+unrelated records. DNS lookups run on the server and each query counts toward
+a rolling maximum of 20 per minute per signed-in user, shared across instances.
+Missing DNS records are normal; timeouts and lookup failures are reported.
+
+Click **I've updated my DNS** to start the waiting view. Checks run every
+30 seconds while the wizard is visible, without overlapping, and stop on
+connection, expiry or unmount. Hidden tabs pause foreground checks.
+`vercel.json` also schedules `/api/cron/domains` every 15 minutes. Set a random
+`CRON_SECRET` (at least 16 characters) on the server; the job fails closed without
+its bearer header. The hosting plan must support this frequency. Pending checks
+are paginated, oldest-first, and large batches resume on subsequent runs.
+After 14 days automatic checks stop and show **Needs attention**; explicit
+manual checks still work. Existing pending domains start their 14-day window
+when the migration is applied. Both hostnames must pass ownership and DNS checks
+before the custom domain becomes the live site URL.
+
+Optional email: set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to a verified
+agency sender (for example `Agency <websites@youragency.com>`). Connected domains
+notify account owners; delivery failures are logged and retried by later jobs
+with a short database claim and provider idempotency key. Existing live domains
+are marked notified by the migration to avoid retroactive emails. Without an
+API key, live notifications are skipped. The **Send these instructions to my
+web person** form sends server-generated steps and current DNS records to a
+validated address, limited to three sends per minute per user. Missing email
+configuration is shown explicitly for this on-demand action.
 
 Incomplete connections stay saved so **Retry connection** can finish setup.
 Remove an existing domain before replacing it. Removal detaches both hostnames

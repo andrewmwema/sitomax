@@ -4,12 +4,18 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { customDomainSchema, type DomainSettingsState, type DomainSite } from "@/lib/domains";
+import { customDomainSchema, domainChecksExpired, type DnsInspection, type DomainSettingsState, type DomainSite } from "@/lib/domains";
 import { DomainApiError, ensureDomain, getDomainConnection, removeDomain } from "@/lib/vercel/domains";
+import { conflictingRecords, DnsLookupError, inspectDns } from "@/lib/domains/dns";
+import { providerIdSchema } from "@/lib/domains/providers";
+import { checkAndSaveDomain, DomainCheckError, domainSiteColumns, expiredDomainIssue } from "@/lib/domains/check";
+import { DomainEmailError, instructionEmail, notifyDomainLive, sendDomainEmail } from "@/lib/domains/email";
 
-const columns = "id, name, subdomain, custom_domain, domain_verified";
+const columns = domainSiteColumns;
 
-async function domainAccess(siteId: string): Promise<{ site: DomainSite } | { error: string }> {
+async function domainAccess(siteId: string): Promise<
+  { site: DomainSite; supabase: Awaited<ReturnType<typeof requireUser>>["supabase"] } | { error: string }
+> {
   if (!z.uuid().safeParse(siteId).success) return { error: "Invalid site." };
   const { supabase } = await requireUser();
   const { data: site, error } = await supabase.from("sites")
@@ -24,7 +30,9 @@ async function domainAccess(siteId: string): Promise<{ site: DomainSite } | { er
   return { site: {
     id: site.id, name: site.name, subdomain: site.subdomain,
     custom_domain: site.custom_domain, domain_verified: site.domain_verified,
-  } };
+    domain_provider: site.domain_provider, domain_pending_since: site.domain_pending_since,
+    domain_check_stopped_at: site.domain_check_stopped_at,
+  } satisfies DomainSite, supabase };
 }
 
 function state(site: DomainSite | null, error = "", success = ""): DomainSettingsState {
@@ -32,6 +40,7 @@ function state(site: DomainSite | null, error = "", success = ""): DomainSetting
 }
 
 function serviceError(error: unknown): string {
+  if (error instanceof DnsLookupError || error instanceof DomainEmailError || error instanceof DomainCheckError) return error.message;
   if (!(error instanceof DomainApiError)) throw error;
   if (error.code === "not_configured" || error.status === 401 || error.status === 403) {
     return "Domain connections are not available. Ask your agency to check the hosting configuration.";
@@ -51,11 +60,45 @@ function refresh(site: DomainSite) {
   if (site.custom_domain) revalidatePath(`/s/${site.custom_domain}`, "layout");
 }
 
-async function connectionState(site: DomainSite, verify = false): Promise<DomainSettingsState> {
+async function connectionState(site: DomainSite, manual = false): Promise<DomainSettingsState> {
   const result = state(site);
   if (!site.custom_domain) return result;
-  result.connection = await getDomainConnection(site.custom_domain, verify);
+  if (!manual && domainChecksExpired(site)) {
+    result.connection = { status: "Needs attention", records: [], issue: expiredDomainIssue };
+    return result;
+  }
+  result.connection = await getDomainConnection(site.custom_domain);
   return result;
+}
+
+async function consumeAction(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], kind: "dns" | "email") {
+  const { data, error } = await supabase.rpc("consume_domain_action", { p_kind: kind, p_cost: 1 });
+  if (error) throw new DnsLookupError("Could not check the request limit. Ask your agency to apply the domain wizard migration.");
+  if (data !== true) throw new DnsLookupError(kind === "dns"
+    ? "DNS lookup limit reached (20 per minute). Please wait a minute and try again."
+    : "Email limit reached (3 per minute). Please wait a minute and try again.");
+}
+
+async function withInspection(result: DomainSettingsState, supabase: Awaited<ReturnType<typeof requireUser>>["supabase"]) {
+  if (!result.site?.custom_domain) return result;
+  try {
+    result.inspection = await inspectDns(result.site.custom_domain, () => consumeAction(supabase, "dns"));
+    result.conflicts = conflictingRecords(result.inspection, result.connection?.acceptableRecords ?? result.connection?.records ?? []);
+  } catch (error) {
+    if (!(error instanceof DnsLookupError)) throw error;
+    result.error = [result.error, error.message].filter(Boolean).join(" ");
+  }
+  return result;
+}
+
+export async function inspectSiteDomain(siteId: string, input: string): Promise<{ inspection?: DnsInspection; error: string }> {
+  const access = await domainAccess(siteId);
+  if ("error" in access) return { error: access.error };
+  const parsed = customDomainSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    return { inspection: await inspectDns(parsed.data, () => consumeAction(access.supabase, "dns")), error: "" };
+  } catch (error) { return { error: serviceError(error) }; }
 }
 
 export async function loadDomainSettings(siteId: string): Promise<DomainSettingsState> {
@@ -66,18 +109,20 @@ export async function loadDomainSettings(siteId: string): Promise<DomainSettings
     if (result.connection?.status === "Connected" && !access.site.domain_verified) {
       result.connection = { ...result.connection, status: "Pending", issue: "DNS is ready. Click Check again to activate this domain." };
     }
-    return result;
+    return domainChecksExpired(access.site) ? result : await withInspection(result, access.supabase);
   } catch (error) {
     return state(access.site, serviceError(error));
   }
 }
 
-export async function connectSiteDomain(siteId: string, input: string): Promise<DomainSettingsState> {
+export async function connectSiteDomain(siteId: string, input: string, providerId = "other"): Promise<DomainSettingsState> {
   const access = await domainAccess(siteId);
   if ("error" in access) return state(null, access.error);
   let site = access.site;
   const parsed = customDomainSchema.safeParse(input);
   if (!parsed.success) return state(site, parsed.error.issues[0].message);
+  const provider = providerIdSchema.safeParse(providerId);
+  if (!provider.success) return state(site, "Choose a DNS provider.");
   const domain = parsed.data;
   const root = (process.env.ROOT_DOMAIN ?? "localhost:3000").toLowerCase().replace(/:\d+$/, "");
   if (domain === root || domain.endsWith(`.${root}`) || domain === "vercel.app" || domain.endsWith(".vercel.app")) {
@@ -101,10 +146,14 @@ export async function connectSiteDomain(siteId: string, input: string): Promise<
     site = saved.data;
     refresh(site);
   }
+  const providerSaved = await admin.from("sites").update({ domain_provider: provider.data })
+    .eq("id", site.id).eq("custom_domain", domain).select(columns).maybeSingle();
+  if (providerSaved.error || !providerSaved.data) return state(site, "Could not save your DNS provider. Refresh and try again.");
+  site = providerSaved.data;
   try {
     await ensureDomain(domain);
     await ensureDomain(`www.${domain}`, domain);
-    const result = await connectionState(site);
+    const result = await connectionState(site, true);
     const verified = result.connection?.status === "Connected";
     const saved = await admin.from("sites").update({ domain_verified: verified })
       .eq("id", site.id).eq("custom_domain", domain).select(columns).maybeSingle();
@@ -112,30 +161,50 @@ export async function connectSiteDomain(siteId: string, input: string): Promise<
     result.site = saved.data;
     result.success = verified ? "Your domain is connected." : "Domain added. Update your DNS records below.";
     refresh(saved.data);
-    return result;
+    try { if (verified) await notifyDomainLive(site.id); }
+    catch (error) { result.error = serviceError(error); }
+    return await withInspection(result, access.supabase);
   } catch (error) {
     return state(site, `${serviceError(error)} Your domain is saved; retry the connection to finish setup.`);
   }
 }
 
-export async function checkSiteDomain(siteId: string): Promise<DomainSettingsState> {
+export async function checkSiteDomain(siteId: string, automatic = false): Promise<DomainSettingsState> {
   const access = await domainAccess(siteId);
   if ("error" in access) return state(null, access.error);
   const { site } = access;
   if (!site.custom_domain) return state(site, "Connect a domain first.");
+  if (!z.boolean().safeParse(automatic).success) return state(site, "Invalid check.");
   try {
-    const result = await connectionState(site, true);
-    const saved = await createAdminClient().from("sites")
-      .update({ domain_verified: result.connection?.status === "Connected" })
-      .eq("id", site.id).eq("custom_domain", site.custom_domain).select(columns).maybeSingle();
-    if (saved.error || !saved.data) return { ...result, error: "Could not save the domain status. Refresh and try again." };
-    result.site = saved.data;
+    const checked = await checkAndSaveDomain(site, automatic);
+    const result = { ...state(checked.site), connection: checked.connection };
     result.success = result.connection?.status === "Connected" ? "Your domain is connected." : "Checked. DNS changes may still be propagating.";
-    refresh(saved.data);
-    return result;
+    if (site.domain_verified !== checked.site.domain_verified) refresh(checked.site);
+    try { if (checked.site.domain_verified) await notifyDomainLive(site.id); }
+    catch (error) { result.error = serviceError(error); }
+    return automatic && domainChecksExpired(checked.site) ? result : await withInspection(result, access.supabase);
   } catch (error) {
     return state(site, serviceError(error));
   }
+}
+
+export async function emailDomainInstructions(siteId: string, email: string, providerId: string): Promise<{ error: string; success: string }> {
+  const access = await domainAccess(siteId);
+  if ("error" in access) return { error: access.error, success: "" };
+  const parsed = z.object({ email: z.email().max(254), providerId: providerIdSchema }).safeParse({ email, providerId });
+  if (!parsed.success) return { error: "Enter a valid email address and DNS provider.", success: "" };
+  if (!access.site.custom_domain) return { error: "Connect a domain first.", success: "" };
+  try {
+    await consumeAction(access.supabase, "email");
+    const connection = await getDomainConnection(access.site.custom_domain);
+    if (!connection.records.some((record) => record.type === "A") || !connection.records.some((record) => record.type === "CNAME")) {
+      return { error: "DNS instructions are incomplete. Retry the connection first.", success: "" };
+    }
+    const text = instructionEmail(access.site.custom_domain, parsed.data.providerId, connection.records);
+    await sendDomainEmail([parsed.data.email], `Connect ${access.site.custom_domain}`, text,
+      `instructions:${siteId}:${parsed.data.email}:${Math.floor(Date.now() / 60_000)}:${text}`);
+    return { error: "", success: "Instructions sent." };
+  } catch (error) { return { error: serviceError(error), success: "" }; }
 }
 
 export async function removeSiteDomain(siteId: string): Promise<DomainSettingsState> {

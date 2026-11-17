@@ -102,12 +102,13 @@ describe("domain API", () => {
 describe("DNS instructions and connection status", () => {
   it("uses preferred API records, not fixed targets, and requires both hostnames to be ready", async () => {
     const result = await getDomainConnection("example.com", true);
-    expect(result).toEqual({ status: "Connected", issue: "", records: [
+    expect(result).toMatchObject({ status: "Connected", issue: "", records: [
       { type: "A", name: "example.com", value: "192.0.2.1" },
       { type: "A", name: "example.com", value: "192.0.2.3" },
       { type: "CNAME", name: "www.example.com", value: "preferred.example.net" },
     ] });
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/verify?teamId=team+1"))).toHaveLength(2);
+    expect(result.acceptableRecords).toContainEqual({ type: "A", name: "example.com", value: "192.0.2.2" });
   });
 
   it("keeps TXT challenges visible after a pending verification and deduplicates them", async () => {

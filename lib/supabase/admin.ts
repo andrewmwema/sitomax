@@ -11,6 +11,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  * - the analytics beacon
  * - super-admin actions
  * - domain-setting actions, after authenticated site-owner or super-admin checks
+ * - secret-authenticated domain cron checks and domain email delivery
  * - server-only AI reservations and accounting, after authenticated account checks
  *
  * Never import this from a client component.

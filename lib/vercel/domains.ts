@@ -166,6 +166,14 @@ export async function getDomainConnection(domain: string, verify = false): Promi
   return {
     status: connected ? "Connected" : incomplete || wrongTarget || verified ? "Needs attention" : "Pending",
     records,
+    acceptableRecords: [
+      ...[rootConfig, wwwConfig].flatMap((config, index) => [
+        ...config.recommendedIPv4.flatMap((record) => record.value.map((value): DnsRecord => ({
+          type: "A", name: names[index], value,
+        }))),
+        ...config.recommendedCNAME.map((record): DnsRecord => ({ type: "CNAME", name: names[index], value: record.value })),
+      ]),
+    ],
     issue: incomplete ? "Connection setup is incomplete. Retry the connection to finish setup." :
       wrongTarget ? "A hostname points to a different destination. Contact your agency." :
       !verified ? "Ownership verification is pending. Add any TXT records below, then check again." :
