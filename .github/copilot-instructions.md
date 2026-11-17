@@ -44,7 +44,7 @@ templates/                niche template JSON (plumber, salon, restaurant...)
   - owner: edit sites, manage domain, view forms and analytics, invite editors
   - editor: edit sites only
 - **All access control lives in Postgres RLS.** Never rely only on hiding UI.
-- `lib/supabase/admin.ts` (service role key) may be used ONLY in server code, and only for: the public site renderer, the form-submit endpoint, the analytics beacon, and super-admin actions. Never import it into a client component.
+- `lib/supabase/admin.ts` (service role key) may be used ONLY in server code, and only for: the public site renderer, the form-submit endpoint, the analytics beacon, super-admin actions, and AI reservations/accounting in `lib/ai/usage.ts` after authenticated account-access checks. Never import it into a client component.
 
 ## Multi-tenant routing rules
 - `ROOT_DOMAIN` env var (e.g. `myagency.com`; `localhost:3000` in dev).

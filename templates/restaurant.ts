@@ -10,5 +10,5 @@ export const restaurantTemplate = createTemplate({
     { title: "Before you visit", icon: "calendar", text: "<p>Check opening times, table availability and any dietary needs with the team.</p>", image: "/samples/home-exterior.jpg", imageAlt: "Sample welcoming exterior" },
   ] },
   about: { design: "about-two-column", heading: "Good company is always on the menu", text: "<p>{{businessName}} is a local restaurant in {{city}}. Our story is about the people who gather, the conversations that unfold and the small details of a shared meal.</p><p>Get in touch to ask about our current menu, opening times or your next visit.</p>" },
-  gallery: "gallery-featured-project", cta: "cta-image-background", contact: "contact-visit-enquire",
+  cta: "cta-image-background", contact: "contact-visit-enquire",
 });

@@ -23,7 +23,7 @@ export type ServicesProps = {
   heading: string;
   text?: RichText;
   services: ServiceItem[];
-  variant: "grid" | "bordered" | "image-cards" | "image-rows" | "list" | "tabs";
+  variant: "grid" | "bordered" | "image-cards" | "image-rows" | "list" | "tabs" | "tabs-vertical" | "tabs-simple";
 };
 
 function ServiceImage({ service, className = "" }: { service: ServiceItem; className?: string }) {
@@ -75,6 +75,8 @@ export const Services: ComponentConfig<ServicesProps> = {
         { label: "Alternating image rows", value: "image-rows" },
         { label: "Icon list", value: "list" },
         { label: "Tabs", value: "tabs" },
+        { label: "Vertical tabs", value: "tabs-vertical" },
+        { label: "Text tabs", value: "tabs-simple" },
       ],
     },
   },
@@ -146,18 +148,19 @@ export const Services: ComponentConfig<ServicesProps> = {
       );
     }
 
-    if (variant === "tabs") {
+    if (variant === "tabs" || variant === "tabs-vertical" || variant === "tabs-simple") {
       return (
         <Section>
           {intro}
           <div className="mt-[var(--section-gap)]">
             <Tabs
               label={typeof heading === "string" ? heading : "Our services"}
+              vertical={variant === "tabs-vertical"}
               items={services.map((service) => ({
                 label: service.title,
                 content: (
-                  <div className="grid items-center gap-7 md:grid-cols-2 md:gap-12">
-                    <ServiceImage service={service} />
+                  <div className={`grid items-center gap-7 md:gap-12 ${variant === "tabs-simple" ? "" : "md:grid-cols-2"}`}>
+                    {variant !== "tabs-simple" ? <ServiceImage service={service} /> : null}
                     <div className="flex min-w-0 flex-col gap-4">
                       <IconTile name={service.icon} />
                       <Heading level={3} style={{ fontSize: "clamp(1.5rem, 2.4vw, 2rem)" }}>

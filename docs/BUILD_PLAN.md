@@ -367,6 +367,9 @@ duplicate, move, and delete actions are disabled to preserve row presets.
 ```
 Add designs to the catalog for the new categories, same quality rules as Phase 4b Prompt E: Text blocks ×3, Tabs ×2, Portfolio ×3, Video ×3, Promotion ×3, Social ×2, Events ×2, Restaurant menu ×3, Coming soon ×4 (with countdown and email signup), Full page ×4 (complete one-page layouts combining existing designs).
 ```
+Added so far: Framed introduction, Editorial split and Accent statement;
+Vertical image tabs and Simple text tabs; Editorial project rows, Project cards
+and Featured work. The other categories in Prompt D are not yet implemented.
 **Check:** insert a section from the library and watch the thumbnail match your site's colors. Right-click a heading, change its color and font, set it as an anchor, and hide it on mobile. Use Ctrl+K to add a pricing section. Undo everything.
 
 ---
@@ -381,6 +384,13 @@ Add templates:
 3. "New site" wizard (super admin): choose client → choose template (cards with preview) → enter business info + subdomain (validate availability and format) → create the site and pages with placeholders replaced, and drafts already published.
 ```
 **Check:** create a plumber site in under a minute and open it on its subdomain.
+
+The agency can create a site from the Sites dashboard. The wizard checks
+subdomain availability and creates the site and four published pages atomically.
+Apply `supabase/migrations/0010_create_template_site.sql` after migration 0009.
+The new pages omit sample testimonials, team members, statistics and opening
+hours; sample photos should still be replaced. Contact forms use the existing
+form contract, whose submission endpoint is not yet implemented.
 
 ---
 
@@ -486,7 +496,7 @@ Upgrade the domain settings page into a guided "Connect your domain" wizard:
 ```
 Add a "Have us connect it for you" option in the domain wizard:
 1. The client clicks it and sees provider-specific instructions for giving us SAFE delegated access (never their password): GoDaddy "Delegate Access", Namecheap "Share Access", Cloudflare "Invite member" with DNS-only permission, Squarespace "Add a domain manager", and for others "Add us as a user". Show our agency support email from agency_settings as the address to invite.
-2. Table domain_requests (migration 0010; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
+2. Table domain_requests (migration 0012; I run it by hand): id, site_id, domain, provider, status ('requested' | 'in_progress' | 'done' | 'needs_info'), notes, created_by, created_at. RLS: account members can create and read their own; super admin can read and update all.
 3. Super admin dashboard: "Domain requests" list with status updates; the client sees the status on their domain page and gets an email when it is done.
 4. Never store registrar passwords or ask for them anywhere in the UI. Show a note: "We will never ask for your password."
 ```
@@ -530,13 +540,53 @@ You can run this any time after Phase 5. It doesn't depend on domains or going l
 Read .github/copilot-instructions.md. Add the AI foundation:
 1. Install @anthropic-ai/sdk. Create lib/ai/client.ts (import "server-only"; reads ANTHROPIC_API_KEY; never imported by client components).
    Models (constants in lib/ai/models.ts so they are easy to change): "claude-sonnet-5-5" for site generation and large rewrites, "claude-haiku-5-5" for small edits.
-2. Migration supabase/migrations/0006_ai_usage.sql (I run it by hand in the SQL Editor):
+2. Migration supabase/migrations/0011_ai_usage.sql (I run it by hand in the SQL Editor; 0006 is already used):
    - ai_usage: id, account_id, user_id, site_id, action ('generate_site' | 'edit_section' | 'rewrite_text'), model, input_tokens, output_tokens, cache_read_tokens, cost_usd numeric, created_at. RLS: account owners can read their own rows; super admin reads all; inserts only server-side with the admin client.
    - ai_limits: account_id pk, monthly_site_generations int default 1, monthly_edits int default 50, extra_credits int default 0. RLS: owners read their own; only super admin can update.
 3. lib/ai/usage.ts: checkLimit(accountId, action) before every AI call and recordUsage(...) after, computing cost_usd from token counts (prices in a config object). Super admin has no limits.
 4. Rate limit: max 10 AI requests per minute per user.
 5. Dashboard: an "AI usage" card per client (used / limit this month), and for super admin a page with total AI cost per client per month.
 ```
+
+Implemented foundation:
+- Apply `supabase/migrations/0011_ai_usage.sql` after 0010. It seeds limits for
+  existing accounts and initializes defaults for new ones. Owners can read
+  account usage/limits; editors cannot read billing. Only the agency can edit
+  limits; usage writes and reservations are service-role-only.
+- All future AI features must use `requestAi` in `lib/ai/client.ts`, never call
+  the SDK directly. It validates input, checks authenticated account/site access,
+  reserves quota, makes one non-streaming request, then records actual tokens.
+  Model IDs are in `lib/ai/models.ts`; agency-supplied USD-per-million rates are
+  in `lib/ai/pricing.ts`. No model availability or provider rates are assumed
+  verified. Unknown models, cache prices or incomplete cache breakdowns fail
+  closed. Haiku uses the higher input AND output rates strictly above 100K prompt
+  tokens; caching is disabled for Haiku because no cache rates were supplied.
+- Set `ANTHROPIC_API_KEY` server-side. No key or SDK is exposed to client
+  components. No live AI request is made by the dashboard or these tests.
+- Included quotas reset at UTC calendar-month boundaries. Both edit actions
+  share the monthly edit allowance. Credits belong to an account, never expire,
+  and cost 10 per generation or 1 per edit/rewrite after the included allowance.
+  Agency requests are recorded but do not consume client quotas or credits.
+  The rolling 10-request/60-second per-user safety rate limit applies across all
+  accounts, including agency requests and failed provider attempts.
+- Quota/credit reservations use Postgres locks, not process-local counters.
+  Confirmed provider rejections release quota and refund credits. Network
+  timeouts and uncertain server failures keep their reservations held because
+  generation may already have been billed. Successful ledger writes are
+  idempotent. Accounting failures keep the reservation held and
+  surface its request ID; numeric usage counters are logged without prompts or
+  credentials so the agency can reconcile with `recordUsage` after recovery.
+  Do not simply refund a completed, billed request. A process killed mid-call
+  also leaves a pending reservation: verify provider billing before finalizing
+  it via the service-only `finish_ai_request` function. Pending reservations do
+  not expire automatically, avoiding unmetered retries.
+- Sites shows account usage cards (owners and agency only). Agency **AI costs**
+  selects a UTC month and aggregates recorded costs by client inside Postgres.
+  Usage is assigned to the request's reservation month. Costs exclude pending
+  requests until reconciled. These are estimates based on configured rates,
+  not invoice totals or credit-pack prices.
+- The AI generator and editor commands remain future work; this foundation
+  exposes the metered server entry point but does not add generation buttons.
 
 **Prompt B: "Build my site with AI" generator**
 ```

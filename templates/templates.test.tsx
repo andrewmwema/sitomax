@@ -9,6 +9,8 @@ import { plumberTemplate } from "./plumber";
 import { salonTemplate } from "./salon";
 import { restaurantTemplate } from "./restaurant";
 import { generalBusinessTemplate } from "./general-business";
+import { instantiateTemplate } from "./instantiate";
+import { siteCreationSchema, subdomainSchema } from "@/lib/site-creation";
 
 const templates = [plumberTemplate, salonTemplate, restaurantTemplate, generalBusinessTemplate];
 
@@ -50,5 +52,39 @@ describe("catalog-based website templates", () => {
     const preset = sectionCatalog.find((entry) => entry.id === "services-image-cards")!;
     expect(home.props.design).not.toBe(preset.props.design);
     expect(home.props.design).not.toBe(services.props.design);
+  });
+
+  it("instantiates every page without sample claims and safely escapes rich-text values", () => {
+    const values = {
+      businessName: "Smith & <Co>", phone: "+1 555 123 4567", city: "Oak <Town>",
+      services: 'repairs & <script>alert("x")</script>', email: "hello@example.com", address: "42 Main St",
+    };
+    for (const template of templates) {
+      const before = JSON.stringify(template);
+      const pages = instantiateTemplate(template, values);
+      expect(pages).toHaveLength(4);
+      for (const page of pages) {
+        expect(findUnreplacedPlaceholders(page.data), `${template.key}/${page.slug}`).toEqual([]);
+        const html = renderToStaticMarkup(createElement(Render, {
+          config: puckConfig, data: page.data as PuckPageData,
+          metadata: { theme: template.theme }, fieldTransforms: { richtext: ({ value }) => value },
+        }));
+        expect(html).not.toContain("<script>");
+        expect(html).toContain("Smith &amp; &lt;Co&gt;");
+      }
+      expect(JSON.stringify(template)).toBe(before);
+    }
+  });
+
+  it("validates the subdomain, business input and template choice", () => {
+    expect(subdomainSchema.parse(" My-Site ")).toBe("my-site");
+    for (const subdomain of ["www", "-name", "a--b", "two.parts", "x".repeat(64)]) {
+      expect(subdomainSchema.safeParse(subdomain).success).toBe(false);
+    }
+    const valid = { accountId: "00000000-0000-4000-8000-000000000001", template: "plumber",
+      subdomain: "acme", businessName: "Acme", phone: "+1 555 123 4567", city: "Oak", services: "repairs", email: "a@example.com", address: "42 Main" };
+    expect(siteCreationSchema.safeParse(valid).success).toBe(true);
+    expect(siteCreationSchema.safeParse({ ...valid, phone: "---" }).success).toBe(false);
+    expect(siteCreationSchema.safeParse({ ...valid, template: "unknown" }).success).toBe(false);
   });
 });

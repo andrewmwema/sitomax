@@ -1,6 +1,8 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { SiteCard, type SiteCardSite } from "@/components/dashboard/site-card";
+import { AiUsageCards } from "@/components/dashboard/ai-usage-cards";
 
 type SiteRow = SiteCardSite & {
   account: { id: string; name: string } | null;
@@ -21,6 +23,9 @@ export default function SitesPage() {
       </header>
       <Suspense fallback={<SitesSkeleton />}>
         <SitesList />
+      </Suspense>
+      <Suspense fallback={<p role="status" className="text-sm text-zinc-500">Loading AI usage...</p>}>
+        <AiUsageCards />
       </Suspense>
     </section>
   );
@@ -59,16 +64,18 @@ async function SitesList() {
   // Without generated DB types, supabase-js infers to-one joins (account)
   // as arrays; at runtime they are single objects, so cast through unknown.
   const sites = (data ?? []) as unknown as SiteRow[];
+  const createLink = profile?.is_super_admin ? <Link href="/dashboard/sites/new" className="inline-flex w-fit rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Create site</Link> : null;
 
   if (sites.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center">
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center">
         <p className="font-medium text-zinc-900">No sites yet</p>
         <p className="mt-1 text-sm text-zinc-600">
           {profile?.is_super_admin
             ? "Create a client account, then add a site for them."
             : "Your websites will appear here once they are set up."}
         </p>
+        {createLink}
       </div>
     );
   }
@@ -97,6 +104,7 @@ async function SitesList() {
 
   return (
     <div className="flex flex-col gap-10">
+      {createLink}
       {[...groups.entries()].map(([accountId, group]) => (
         <div key={accountId}>
           <h2 className="mb-3 text-sm font-semibold tracking-wide text-zinc-500 uppercase">

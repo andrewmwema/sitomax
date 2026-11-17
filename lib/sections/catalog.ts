@@ -754,6 +754,85 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ animation: "fade" }),
     },
   }),
+  design({
+    id: "text-framed-introduction",
+    blockType: "TextSection",
+    category: "Text blocks",
+    name: "Framed introduction",
+    props: {
+      eyebrow: "A thoughtful approach",
+      heading: "Good work begins with listening",
+      text: "<p>Every project is different. We take the time to understand your priorities, explain your options and help you decide what comes next.</p><p>Expect a clear plan, careful attention to detail and a team that keeps you informed along the way.</p>",
+      variant: "framed", design: shellDesign(),
+    },
+  }),
+  design({
+    id: "text-editorial-split",
+    blockType: "TextSection",
+    category: "Text blocks",
+    name: "Editorial split",
+    props: {
+      eyebrow: "How we work",
+      heading: "The details make the difference",
+      text: "<p>We believe a great experience is built on small, consistent choices: returning calls, arriving prepared and treating your space with care.</p><p>From the first conversation to the final walkthrough, we make the process straightforward and keep the decisions in your hands.</p>",
+      variant: "editorial", design: shellDesign(),
+    },
+  }),
+  design({
+    id: "text-accent-statement",
+    blockType: "TextSection",
+    category: "Text blocks",
+    name: "Accent statement",
+    props: {
+      eyebrow: "Our promise",
+      heading: "Clear advice. Careful work.",
+      text: "<p>We bring a practical approach and a personal touch to every project. Share what matters to you and we will help you find a way forward that feels right.</p>",
+      variant: "accent", design: shellDesign({ animation: "fade" }),
+    },
+  }),
+  design({
+    id: "tabs-vertical-explorer",
+    blockType: "Services",
+    category: "Tabs",
+    name: "Vertical image tabs",
+    props: {
+      eyebrow: "Explore your options", heading: "A closer look at what we do",
+      text: "<p>Choose an area to see how we can help.</p>",
+      services: [
+        { icon: "ruler", title: "Planning", text: "<p>Talk through your ideas and explore a practical plan for your space.</p>", image: "/samples/team-at-work.jpg", imageAlt: "Sample team discussing a project" },
+        { icon: "wrench", title: "Improvements", text: "<p>Bring the plan to life with thoughtful work and attention to detail.</p>", image: "/samples/tools.jpg", imageAlt: "Sample tools ready for a project" },
+        { icon: "sparkles", title: "Finishing touches", text: "<p>Review the details together and make sure everything is ready to enjoy.</p>", image: "/samples/home-interior.jpg", imageAlt: "Sample of a finished interior" },
+      ],
+      variant: "tabs-vertical", design: shellDesign(),
+    },
+  }),
+  design({
+    id: "tabs-text-explorer",
+    blockType: "Services",
+    category: "Tabs",
+    name: "Simple text tabs",
+    props: {
+      eyebrow: "Getting started", heading: "A clear path from idea to completion",
+      text: "<p>Explore each part of the process at your own pace.</p>",
+      services: sampleSteps.map((step) => ({
+        ...step, image: "/samples/team-at-work.jpg", imageAlt: "Sample team planning a project",
+      })),
+      variant: "tabs-simple", design: shellDesign(),
+    },
+  }),
+  ...([
+    ["portfolio-editorial-rows", "Editorial project rows", "portfolio-rows"],
+    ["portfolio-project-cards", "Project cards", "portfolio-cards"],
+    ["portfolio-featured-work", "Featured work", "portfolio-feature"],
+  ] as const).map(([id, name, variant]) => design({
+    id, name, blockType: "Gallery", category: "Portfolio",
+    props: {
+      eyebrow: "Selected work", heading: "Projects made with care",
+      text: "A few examples of the spaces and details that inspire our work.",
+      images: sampleWork.slice(0, 3), columns: "3", variant,
+      design: shellDesign({ anchorId: "portfolio" }),
+    },
+  })),
 
   // ----------------------------------------------------- Testimonials
   design({

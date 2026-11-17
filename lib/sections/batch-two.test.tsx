@@ -10,7 +10,7 @@ import { sectionCatalog } from "./catalog";
 import { findUnreplacedPlaceholders } from "./placeholders";
 
 const designs = sectionCatalog.filter((design) =>
-  design.blockType === "Services" || design.blockType === "Stats",
+  (design.blockType === "Services" && design.category === "Services") || design.blockType === "Stats",
 );
 
 function dataFor(blockType: string, props: Record<string, unknown>): PuckPageData {

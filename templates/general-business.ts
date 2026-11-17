@@ -10,5 +10,5 @@ export const generalBusinessTemplate = createTemplate({
     { title: "Consider the details", icon: "sparkles", text: "<p>Talk through the finishing touches and what happens next.</p>", image: "/samples/home-interior.jpg", imageAlt: "Sample finished interior" },
   ] },
   about: { design: "about-image-right", heading: "Local people. A considered approach.", text: "<p>{{businessName}} is based in {{city}}. We are here to listen, share a practical perspective and help you find a useful next step.</p><p>Good work starts with a good conversation. Tell us what you have in mind.</p>" },
-  gallery: "gallery-masonry", cta: "cta-split-form", contact: "contact-form-split",
+  cta: "cta-split-form", contact: "contact-form-split",
 });

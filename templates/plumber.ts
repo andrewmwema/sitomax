@@ -10,5 +10,5 @@ export const plumberTemplate = createTemplate({
     { title: "Project planning", icon: "ruler", text: "<p>Start with your ideas and work out what your property needs next.</p>", image: "/samples/team-at-work.jpg", imageAlt: "Sample team discussing a project" },
   ] },
   about: { design: "about-image-right", heading: "A local approach to everyday work", text: "<p>{{businessName}} is based in {{city}}. We believe good work starts with listening, explaining the options and taking care over the details.</p><p>Tell us about your property and the changes you have in mind.</p>" },
-  gallery: "gallery-grid", cta: "cta-dark-band", contact: "contact-form-split",
+  cta: "cta-dark-band", contact: "contact-form-split",
 });

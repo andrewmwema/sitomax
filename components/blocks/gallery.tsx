@@ -11,7 +11,7 @@ export type GalleryProps = {
   heading: string;
   images: { url: string; alt: string; caption?: string }[];
   columns: "2" | "3" | "4";
-  variant: "grid" | "masonry" | "featured";
+  variant: "grid" | "masonry" | "featured" | "portfolio-rows" | "portfolio-cards" | "portfolio-feature";
   text?: string;
 };
 
@@ -64,6 +64,9 @@ export const Gallery: ComponentConfig<GalleryProps> = {
         { label: "Grid", value: "grid" },
         { label: "Masonry", value: "masonry" },
         { label: "Featured project", value: "featured" },
+        { label: "Portfolio rows", value: "portfolio-rows" },
+        { label: "Portfolio cards", value: "portfolio-cards" },
+        { label: "Portfolio feature", value: "portfolio-feature" },
       ],
     },
   },
@@ -83,7 +86,31 @@ export const Gallery: ComponentConfig<GalleryProps> = {
         {heading ? <Heading level={2}>{heading}</Heading> : null}
         {text ? <p className="max-w-[55ch]" style={{ color: "var(--color-muted)" }}>{text}</p> : null}
       </div>
-      {variant === "featured" ? (
+      {variant === "portfolio-rows" ? (
+        <div className="mt-[var(--section-gap)] flex flex-col gap-10 md:gap-16">
+          {images.map((image, i) => <figure key={i} className="grid items-center gap-6 md:grid-cols-2 md:gap-12">
+            {image.url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={image.url} alt={image.alt} loading="lazy"
+                className={`aspect-[4/3] w-full rounded-[var(--radius-lg)] object-cover ${i % 2 ? "md:order-2" : ""}`} />
+            ) : <div className="aspect-[4/3] rounded-[var(--radius-lg)] bg-[var(--color-soft-bg)]" />}
+            <figcaption className="border-t py-5" style={{ borderColor: "var(--color-border)" }}>
+              <span className="text-sm" style={{ color: "var(--color-muted)" }}>{String(i + 1).padStart(2, "0")}</span>
+              <p className="mt-3 text-xl font-semibold" style={{ fontFamily: "var(--font-heading)" }}>{image.caption}</p>
+            </figcaption>
+          </figure>)}
+        </div>
+      ) : variant === "portfolio-cards" || variant === "portfolio-feature" ? (
+        <div className={`mt-[var(--section-gap)] grid gap-6 sm:grid-cols-2 ${variant === "portfolio-cards" ? "lg:grid-cols-3" : ""}`}>
+          {images.map((image, i) => <figure key={i} className={`min-w-0 ${variant === "portfolio-feature" && i === 0 ? "sm:col-span-2" : ""}`}>
+            {image.url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={image.url} alt={image.alt} loading="lazy" className={`w-full rounded-[var(--radius-lg)] object-cover ${variant === "portfolio-feature" && i === 0 ? "aspect-[16/9]" : "aspect-[4/3]"}`} />
+            ) : <div className="aspect-[4/3] rounded-[var(--radius-lg)] bg-[var(--color-soft-bg)]" />}
+            {image.caption ? <figcaption className="border-b py-4 text-base font-semibold" style={{ borderColor: "var(--color-border)" }}>{image.caption}</figcaption> : null}
+          </figure>)}
+        </div>
+      ) : variant === "featured" ? (
         <div className="mt-[var(--section-gap)] grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {images.map((image, i) => (
             <figure key={i} className={`relative isolate min-h-52 overflow-hidden rounded-[var(--radius-lg)] ${i === 0 ? "sm:col-span-2 lg:row-span-2" : "aspect-[4/3]"}`}>

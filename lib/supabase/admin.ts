@@ -10,6 +10,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  * - the form-submit endpoint
  * - the analytics beacon
  * - super-admin actions
+ * - server-only AI reservations and accounting, after authenticated account checks
  *
  * Never import this from a client component.
  */

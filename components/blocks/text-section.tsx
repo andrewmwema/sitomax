@@ -19,6 +19,9 @@ export type TextSectionVariant =
   | "callout"
   | "pull-quote"
   | "article"
+  | "framed"
+  | "editorial"
+  | "accent"
   | "cta";
 
 export type TextSectionProps = {
@@ -81,6 +84,9 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
         { label: "With callout box", value: "callout" },
         { label: "With pull quote", value: "pull-quote" },
         { label: "Long-form article", value: "article" },
+        { label: "Framed introduction", value: "framed" },
+        { label: "Editorial split", value: "editorial" },
+        { label: "Accent statement", value: "accent" },
         { label: "Heading, text + button", value: "cta" },
       ],
     },
@@ -176,6 +182,46 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
   }) => {
     const layout: TextSectionVariant =
       variant ?? (align === "center" ? "centered" : "standard");
+
+    if (layout === "framed") {
+      return (
+        <Section background="soft">
+          <div className="mx-auto max-w-[52rem] border p-7 sm:p-12 lg:p-16"
+            style={{ borderColor: "var(--color-border)", borderRadius: "var(--radius-lg)", backgroundColor: "var(--color-bg)" }}>
+            <div className="flex flex-col gap-5">
+              <SectionHeader eyebrow={eyebrow} heading={heading} />
+              <RichTextContent value={text} className="w-full" />
+            </div>
+          </div>
+        </Section>
+      );
+    }
+
+    if (layout === "editorial") {
+      return (
+        <Section>
+          <div className="grid gap-8 border-t pt-8 md:grid-cols-[1fr_1.25fr] md:gap-16"
+            style={{ borderColor: "var(--color-border)" }}>
+            <div className="flex flex-col gap-4"><SectionHeader eyebrow={eyebrow} heading={heading} /></div>
+            <RichTextContent value={text} className="w-full !max-w-none" />
+          </div>
+        </Section>
+      );
+    }
+
+    if (layout === "accent") {
+      return (
+        <Section background="soft">
+          <div className="mx-auto max-w-[55rem] border-l-4 pl-6 sm:pl-10"
+            style={{ borderColor: "var(--color-primary)" }}>
+            <div className="flex flex-col gap-5">
+              <SectionHeader eyebrow={eyebrow} heading={heading} />
+              <RichTextContent value={text} className="w-full" />
+            </div>
+          </div>
+        </Section>
+      );
+    }
 
     /* --------------------------------------------- Centered intro */
     if (layout === "intro") {
