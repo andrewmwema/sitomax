@@ -6,6 +6,7 @@ import { Render } from "@puckeditor/core/rsc";
 import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { TenantFontHints } from "@/components/tenant-font-hints";
+import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import { createClient } from "@/lib/supabase/server";
 import {
   getSiteByHost,
@@ -37,14 +38,15 @@ type PageSeo = {
  * True when the current visitor may see drafts of this page: RLS only
  * returns the row to members of the site's account or the super admin.
  */
-const canPreviewPage = cache(async (pageId: string): Promise<boolean> => {
+const checkPageAccess = cache(async (pageId: string): Promise<{ allowed: boolean; failed: boolean }> => {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("pages")
     .select("id")
     .eq("id", pageId)
     .maybeSingle();
-  return Boolean(data);
+  if (error) console.error("Could not check page access:", error.message);
+  return { allowed: Boolean(data), failed: Boolean(error) };
 });
 
 async function loadPage(
@@ -68,7 +70,7 @@ async function loadPage(
   if (!page) return null;
 
   const isPreview =
-    preview === "1" && page.draft_data != null && (await canPreviewPage(page.id));
+    preview === "1" && page.draft_data != null && (await checkPageAccess(page.id)).allowed;
   const data = isPreview ? page.draft_data : page.published_data;
   if (!data) return null;
 
@@ -100,12 +102,16 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   const loaded = await loadPage(params, searchParams);
   if (!loaded) notFound();
 
-  const { site, data, isPreview } = loaded;
+  const { site, page, data, isPreview } = loaded;
+  const { preview } = await searchParams;
+  const access = preview !== "1" ? await checkPageAccess(page.id) : null;
+  const track = access !== null && !access.allowed && !access.failed;
   const theme = ((isPreview ? site.draft_theme ?? site.theme : site.theme) ?? {}) as SiteTheme;
 
   return (
     <>
       <TenantFontHints />
+      {track ? <AnalyticsBeacon key={page.id} /> : null}
       {isPreview ? (
         <div className="fixed right-4 bottom-4 z-50 rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-lg">
           Preview — showing unpublished draft

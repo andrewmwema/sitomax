@@ -70,6 +70,7 @@ async function SiteDetail({
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           {canGenerate ? <Link href={`/dashboard/sites/${siteId}/generate`} className="mb-5 inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Build with AI</Link> : null}
+          {canGenerate ? <Link href={`/dashboard/analytics?site=${encodeURIComponent(siteId)}`} className="mb-5 ml-2 inline-flex rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium">View analytics</Link> : null}
           <p className="text-sm text-zinc-500">
             <Link href="/dashboard" className="hover:underline">
               Sites
