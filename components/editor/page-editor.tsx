@@ -19,7 +19,7 @@ import {
   type Plugin,
 } from "@puckeditor/core";
 import { Bookmark, FileText, Layers, LayoutGrid, Palette, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BusinessInfo } from "@/components/dashboard/business-info";
 import type { Business } from "@/lib/business";
 import { puckConfig } from "@/lib/puck/config";
@@ -132,7 +132,7 @@ function SeoTool() {
     onSelectPage={async (nextPageId) => {
       if (nextPageId === pageId || persistence.busy !== null) return;
       if (persistence.dirty && !(await persistence.save())) return;
-      router.push(`/editor/${nextPageId}`);
+      router.push(`/editor/${nextPageId}?panel=seo`, { scroll: false });
     }} />;
 }
 
@@ -430,6 +430,10 @@ export function PageEditor({
   business: Business;
   siteSeo: SiteSeo;
 }) {
+  const searchParams = useSearchParams();
+  const initialUi = useMemo(() => searchParams.get("panel") === "seo"
+    ? { plugin: { current: "seo" }, leftSideBarVisible: true }
+    : undefined, [searchParams]);
   const [showGenerationWarnings, setShowGenerationWarnings] = useState(true);
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
   const [themePanelOpen, setThemePanelOpen] = useState(false);
@@ -544,6 +548,7 @@ export function PageEditor({
             <Puck
               config={config}
               data={data}
+              ui={initialUi}
               metadata={{ theme }}
               overrides={overrides}
               plugins={editorPlugins}
