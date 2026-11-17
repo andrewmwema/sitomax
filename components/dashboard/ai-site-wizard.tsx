@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { generationInputSchema, type GenerationInput } from "@/lib/ai/site-input";
+import { createGenerationInputSchema, type GenerationInput } from "@/lib/ai/site-input";
 import type { Business } from "@/lib/business";
 
 const fieldClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
@@ -13,12 +13,14 @@ const eventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("result"), siteId: z.uuid(), pageId: z.uuid(), warnings: z.array(z.string()) }),
 ]);
 
-export function AiSiteWizard({ accounts, existingSite, rootDomain }: {
+export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubdomain }: {
   accounts: { id: string; name: string }[];
   existingSite?: { id: string; accountId: string; name: string; business: Business };
   rootDomain: string;
+  marketingSubdomain: string;
 }) {
   const router = useRouter();
+  const generationInputSchema = createGenerationInputSchema(marketingSubdomain);
   const [values, setValues] = useState<GenerationInput>({
     accountId: existingSite?.accountId ?? "", siteId: existingSite?.id, subdomain: existingSite ? undefined : "",
     businessName: existingSite?.business.businessName || existingSite?.name || "",

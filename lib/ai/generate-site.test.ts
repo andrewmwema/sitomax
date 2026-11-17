@@ -16,6 +16,7 @@ vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGenerati
 import { buildGeneratedSite, safeDefaultSection } from "./generate-site";
 import { aiCatalog, blockFields, blockSchemas, GENERATION_TOOLS, planSchema } from "./site-schemas";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
+import { brand } from "@/lib/brand";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
@@ -148,6 +149,9 @@ describe("catalog site generation", () => {
   it("denies editors and unconfirmed replacement before any quota or provider work", async () => {
     await expect(buildGeneratedSite({ ...input, confirmReplace: false })).rejects.toThrow();
     await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "new-site" })).rejects.toThrow("Only account owners");
+    await expect(buildGeneratedSite({
+      ...input, siteId: undefined, subdomain: brand.marketingSiteSubdomain,
+    })).rejects.toThrow("Only account owners");
     mocks.rpc.mockResolvedValue({ data: false, error: null });
     await expect(buildGeneratedSite(input)).rejects.toThrow("Only account owners");
     expect(mocks.begin).not.toHaveBeenCalled(); expect(mocks.request).not.toHaveBeenCalled();

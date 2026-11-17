@@ -7,6 +7,7 @@ import { getMonthlyAiCosts } from "@/lib/ai/reporting";
 import { SiteGrid } from "@/components/dashboard/site-grid";
 import type { SiteCardSite } from "@/components/dashboard/site-card";
 import { AiUsageCards } from "@/components/dashboard/ai-usage-cards";
+import { brand } from "@/lib/brand";
 
 type SiteRow = Omit<SiteCardSite, "accountName" | "canManageDomains" | "placeholderCount" | "pages"> & {
   account_id: string;
@@ -82,7 +83,7 @@ async function Overview() {
         {metric.detail ? <p className="mt-1 text-[11px] text-[#6B6A66]">{metric.detail}</p> : null}
       </div>)}
     </section>
-    <SiteGrid sites={cards} />
+    <SiteGrid sites={cards} marketingSubdomain={brand.marketingSiteSubdomain} />
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
       {canSeeReporting ? <section className="platform-panel overflow-hidden">
         <div className="flex items-center justify-between border-b border-[#EFEEEA] px-6 py-5"><div><h2 className="text-[15px] font-semibold">Recent leads</h2><p className="mt-1 text-xs text-[#6B6A66]">The latest conversations from your sites.</p></div><Link href="/dashboard/forms" className="inline-flex items-center gap-1 text-xs font-medium text-[#55534E] hover:text-[#121212]">View all<ArrowUpRight size={13} /></Link></div>

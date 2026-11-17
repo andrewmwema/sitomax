@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { checkSubdomain, createSite } from "@/app/(dashboard)/dashboard/sites/new/actions";
-import { siteCreationSchema, subdomainSchema, type SiteCreationInput } from "@/lib/site-creation";
+import { createSiteCreationSchema, createSubdomainSchema, type SiteCreationInput } from "@/lib/site-creation";
 import type { SectionDesign } from "@/lib/sections/catalog";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { DesignThumbnail } from "@/components/editor/design-thumbnail";
@@ -16,10 +16,12 @@ const initial: FormValues = {
 };
 const inputClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
 
-export function NewSiteWizard({ accounts, choices, rootDomain }: {
-  accounts: { id: string; name: string }[]; choices: Choice[]; rootDomain: string;
+export function NewSiteWizard({ accounts, choices, rootDomain, marketingSubdomain }: {
+  accounts: { id: string; name: string }[]; choices: Choice[]; rootDomain: string; marketingSubdomain: string;
 }) {
   const router = useRouter();
+  const subdomainSchema = useMemo(() => createSubdomainSchema(marketingSubdomain), [marketingSubdomain]);
+  const siteCreationSchema = useMemo(() => createSiteCreationSchema(marketingSubdomain), [marketingSubdomain]);
   const [values, setValues] = useState(initial);
   const [step, setStep] = useState(0);
   const [availability, setAvailability] = useState<{ available: boolean; message: string } | null>(null);
@@ -43,7 +45,7 @@ export function NewSiteWizard({ accounts, choices, rootDomain }: {
       });
     }, 350);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [values.subdomain, checkAttempt]);
+  }, [values.subdomain, checkAttempt, subdomainSchema]);
   const submit = () => {
     const parsed = siteCreationSchema.safeParse(values);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your site details."); return; }

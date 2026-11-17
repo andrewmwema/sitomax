@@ -90,12 +90,8 @@ async function EditorLoader({
     };
   });
 
-  // Preview always uses the subdomain URL: auth cookies are scoped to the
-  // root domain, so they are sent to subdomains but never custom domains.
-  const root = brand.rootDomain;
-  const protocol = root.includes("localhost") ? "http" : "https";
   const path = data.slug ? `/${data.slug}` : "/";
-  const previewUrl = `${protocol}://${site.subdomain}.${root}${path}?preview=1`;
+  const previewUrl = `${brand.appUrl}/s/${site.subdomain}${path}?preview=1`;
   const generated = z.object({
     root: z.object({ props: z.object({ generationWarnings: z.array(z.string()).optional() }).optional() }).optional(),
   }).safeParse(data.draft_data);

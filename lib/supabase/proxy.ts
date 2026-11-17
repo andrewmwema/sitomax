@@ -47,6 +47,15 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/dashboard" : "/login";
+    url.search = "";
+    const redirectResponse = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
+  }
+
   if (!user && isProtectedPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

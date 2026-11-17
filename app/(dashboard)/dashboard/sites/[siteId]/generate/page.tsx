@@ -24,6 +24,6 @@ export default async function RegenerateSitePage({ params }: { params: Promise<{
       <p className="mt-2 text-sm text-zinc-600">Create a new draft direction without changing your published pages.</p></header>
     <AiSiteWizard accounts={[]} existingSite={{ id: site.id, accountId: site.account_id, name: site.name ?? "",
       business: businessSchema.parse({ ...emptyBusiness, ...site.business }) }}
-      rootDomain={brand.rootDomain} />
+      rootDomain={brand.rootDomain} marketingSubdomain={brand.marketingSiteSubdomain} />
   </section>;
 }

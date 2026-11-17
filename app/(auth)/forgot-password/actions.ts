@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getRequestOrigin } from "@/lib/auth";
+import { brand } from "@/lib/brand";
 
 export type ForgotPasswordState =
   | { status: "idle" }
@@ -30,11 +30,10 @@ export async function sendPasswordReset(
   }
 
   const { email } = parsed.data;
-  const origin = await getRequestOrigin();
   const supabase = await createClient();
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=/set-password`,
+    redirectTo: `${brand.appUrl}/auth/callback?next=/set-password`,
   });
 
   if (error?.code === "over_email_send_rate_limit") {

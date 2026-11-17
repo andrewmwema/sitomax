@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DnsRecord } from "@/lib/domains";
 import { getProvider } from "./providers";
+import { brand } from "@/lib/brand";
 
 export class DomainEmailError extends Error {}
 
@@ -77,7 +78,7 @@ export async function notifyDomainLive(siteId: string): Promise<void> {
   if (!site) return;
   try {
     const recipients = await getAccountOwnerEmails(admin, site.account_id);
-    const text = `Your domain is live\n\nhttps://${site.custom_domain} is now connected to your website.\nThe www address redirects to your root domain.`;
+    const text = `Your domain is live\n\nhttps://${site.custom_domain} is now connected to your website.\nThe www address redirects to your root domain.\n\nManage your site: ${brand.appUrl}/dashboard/sites/${site.id}/domains`;
     await sendDomainEmail(recipients, "Your domain is live", text,
       `domain-live:${site.id}:${site.domain_pending_since}:${recipients.join(",")}`);
     const saved = await admin.from("sites").update({

@@ -30,7 +30,8 @@ export default async function NewSitePage() {
       <span><span className="block font-semibold">Build with AI</span><span className="mt-1 block text-sm text-zinc-600">Start with your business, not a template. Review and publish when you are ready.</span></span>
       <span aria-hidden="true">&rarr;</span>
     </Link>
-    {accounts?.length ? <NewSiteWizard accounts={accounts} choices={choices} rootDomain={brand.rootDomain} /> :
+    {accounts?.length ? <NewSiteWizard accounts={accounts} choices={choices} rootDomain={brand.rootDomain}
+      marketingSubdomain={brand.marketingSiteSubdomain} /> :
       <p className="rounded-xl border bg-white p-6 text-sm">Create a <Link className="underline" href="/dashboard/clients">client account</Link> first.</p>}
   </section>;
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { brand } from "@/lib/brand";
 
 const mocks = vi.hoisted(() => ({ authorize: vi.fn(), lookup: vi.fn(), rpc: vi.fn(), admin: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireSuperAdmin: mocks.authorize }));
@@ -42,11 +43,16 @@ describe("site wizard actions", () => {
   });
   it("rejects invalid input, missing clients and duplicate subdomains", async () => {
     expect(await createSite({ ...input, subdomain: "www" })).toMatchObject({ status: "error" });
+    expect(await createSite({ ...input, subdomain: "api" })).toMatchObject({ status: "error" });
     expect(mocks.admin).not.toHaveBeenCalled();
     mocks.lookup.mockResolvedValueOnce({ data: null, error: null });
     expect(await createSite(input)).toMatchObject({ status: "error" });
     expect(mocks.admin).not.toHaveBeenCalled();
     mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "23505" } });
     expect(await createSite(input)).toMatchObject({ status: "error", message: expect.stringContaining("already in use") });
+  });
+  it("allows the super admin to create the configured marketing tenant", async () => {
+    expect(await createSite({ ...input, subdomain: brand.marketingSiteSubdomain })).toMatchObject({ status: "success" });
+    expect(mocks.rpc.mock.calls[0][1].p_subdomain).toBe(brand.marketingSiteSubdomain);
   });
 });

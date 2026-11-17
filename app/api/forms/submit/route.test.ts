@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ site: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/tenant", () => ({
-  getTenantKeyFromHost: (host: string) => host === "agency.test" ? null : host,
+  getTenantKeyFromHost: (host: string) => host === "agency.test" ? "sitomax" : host,
   getSiteByHost: mocks.site,
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: mocks.rpc }) }));
@@ -33,6 +33,15 @@ describe("form submission endpoint", () => {
     expect(args).toMatchObject({ p_site_id: "site-1", p_form_name: "contact", p_path: "/contact", p_data: { Name: "Alex", Email: "a@example.test" } });
     expect(args.p_ip_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(args)).not.toContain("203.0.113.10");
+  });
+  it("uses the marketing tenant for submissions posted to the root domain", async () => {
+    const req = new Request("https://agency.test/api/forms/submit", {
+      method: "POST",
+      headers: { host: "agency.test", "x-forwarded-for": "203.0.113.10" },
+      body: new URLSearchParams(valid),
+    });
+    expect((await POST(req)).status).toBe(200);
+    expect(mocks.site).toHaveBeenCalledWith("sitomax");
   });
   it("drops honeypot submissions without touching the database", async () => {
     expect((await POST(request({ ...valid, _website: "spam" }))).status).toBe(200);

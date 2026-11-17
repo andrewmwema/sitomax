@@ -2,6 +2,10 @@
 
 Websites that work as hard as you do.
 
+The platform runs at `app.sitomax.com`; the apex domain serves the configured
+marketing tenant, and client sites use subdomains or verified custom domains.
+See [docs/HOSTING.md](./docs/HOSTING.md) for host routing and environment setup.
+
 ## Platform appearance
 
 The dashboard, authentication screens and editor share the warm neutral,

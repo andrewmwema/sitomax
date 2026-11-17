@@ -5,7 +5,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ from: () => ({ insert: mocks.insert }) }),
 }));
 vi.mock("@/lib/tenant", () => ({
-  getTenantKeyFromHost: (host: string) => host === "agency.test" ? null : host,
+  getTenantKeyFromHost: (host: string) => host === "agency.test" ? "sitomax" : host,
   getSiteByHost: mocks.site,
 }));
 import { POST } from "./route";
@@ -44,6 +44,16 @@ describe("analytics beacon", () => {
     mocks.site.mockResolvedValue({ id: "site-2" });
     await POST(request(body));
     expect(mocks.insert.mock.calls[3][0].visitor_hash).not.toBe(row.visitor_hash);
+  });
+
+  it("uses the marketing tenant for analytics posted to the root domain", async () => {
+    const req = new Request("https://agency.test/api/analytics", {
+      method: "POST",
+      headers: { host: "agency.test", "x-forwarded-for": "203.0.113.10" },
+      body: JSON.stringify({ path: "/", referrer: "" }),
+    });
+    expect((await POST(req)).status).toBe(204);
+    expect(mocks.site).toHaveBeenCalledWith("sitomax");
   });
 
   it("rejects malformed or cross-origin input and fails closed without a salt or IP", async () => {

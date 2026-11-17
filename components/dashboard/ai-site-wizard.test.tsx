@@ -24,7 +24,7 @@ async function setInput(label: string, value: string) {
   });
 }
 async function review() {
-  await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={site} rootDomain="localhost:3000" />));
+  await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={site} rootDomain="localhost:3000" marketingSubdomain="sitomax" />));
   await setInput("Business type", "Plumber"); await setInput("City / area", "Nairobi");
   await act(async () => {
     const input = container.querySelector<HTMLInputElement>("#ai-services")!;
@@ -37,7 +37,7 @@ async function review() {
 describe("AI site wizard", () => {
   it("prefills previously saved business information", async () => {
     const business = { ...emptyBusiness, businessName: "Example", businessType: "Plumber", city: "York", services: ["Repairs"], tone: "Friendly" };
-    await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={{ ...site, business }} rootDomain="localhost:3000" />));
+    await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={{ ...site, business }} rootDomain="localhost:3000" marketingSubdomain="sitomax" />));
     const field = [...container.querySelectorAll("label")].find((item) => item.textContent?.startsWith("Tone of voice"))!.querySelector("input")!;
     expect(field.value).toBe("Friendly");
     expect(container.textContent).toContain("Repairs");

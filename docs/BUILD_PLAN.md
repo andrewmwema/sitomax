@@ -515,9 +515,9 @@ Integrate Entri Connect (entri.com) for one-click DNS setup:
 ## Phase 9: Go live on Vercel
 
 **Do these yourself:**
-1. Push the repo to GitHub, then import it in Vercel. Add every env var from `.env.local` (with `ROOT_DOMAIN=sitomax.com`).
-2. In Vercel → Domains, add `sitomax.com` and the wildcard `*.sitomax.com`. Wildcards need Vercel nameservers, so point your domain's nameservers to Vercel.
-3. In Supabase → Authentication → URL Configuration, set the Site URL to `https://sitomax.com` and add `https://sitomax.com/**` as a redirect URL.
+1. Push the repo to GitHub, then import it in Vercel. Set `ROOT_DOMAIN=sitomax.com`, `NEXT_PUBLIC_ROOT_DOMAIN=sitomax.com`, `NEXT_PUBLIC_APP_URL=https://app.sitomax.com`, and `MARKETING_SITE_SUBDOMAIN=sitomax`.
+2. In Vercel → Domains, add `sitomax.com`, `app.sitomax.com`, `www.sitomax.com` and the wildcard `*.sitomax.com`. Configure DNS so the apex serves the marketing site, `app` serves the platform, and tenant subdomains reach the app.
+3. In Supabase → Authentication → URL Configuration, set the Site URL to `https://app.sitomax.com` and add `https://app.sitomax.com/**` as a redirect URL.
 
 **Prompt (final review):**
 ```

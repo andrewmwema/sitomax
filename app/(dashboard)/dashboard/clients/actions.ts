@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSuperAdmin, getRequestOrigin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionState } from "@/lib/form-state";
+import { brand } from "@/lib/brand";
 
 const createAccountSchema = z.object({
   name: z
@@ -74,7 +75,6 @@ export async function inviteOwner(
 
   const { accountId, email } = parsed.data;
   const admin = createAdminClient();
-  const origin = await getRequestOrigin();
 
   let userId: string;
   let invited = false;
@@ -82,7 +82,7 @@ export async function inviteOwner(
   const { data: inviteData, error: inviteError } =
     await admin.auth.admin.inviteUserByEmail(email, {
       // Invited users land on /set-password to choose their password.
-      redirectTo: `${origin}/auth/callback?next=/set-password`,
+      redirectTo: `${brand.appUrl}/auth/callback?next=/set-password`,
     });
 
   if (inviteError) {

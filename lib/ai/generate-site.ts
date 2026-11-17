@@ -8,13 +8,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { puckConfig } from "@/lib/puck/config";
 import { sanitizePuckData } from "@/lib/richtext";
 import { businessSchema } from "@/lib/business";
+import { isReservedForAccountSite } from "@/lib/reserved-subdomains";
 import { contrastRatio } from "@/lib/theme/presets";
 import { requestAi } from "./client";
 import { beginSiteGeneration, finishSiteGeneration } from "./usage";
-import { generationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
+import { createGenerationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
 import { aiCatalog, blockFields, blockSchemas, defaultSection, GENERATION_TOOLS, planSchema, type SitePlan } from "./site-schemas";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
+import { brand } from "@/lib/brand";
 
 export class SiteGenerationError extends Error {}
 
@@ -31,6 +33,9 @@ async function authorize(input: GenerationInput) {
   ]);
   if (adminError || ownerError) throw new SiteGenerationError("Could not verify generation permissions.");
   if (!admin && (!owner || !input.siteId)) throw new SiteGenerationError("Only account owners or the agency can generate a site.");
+  if (!input.siteId && input.subdomain && isReservedForAccountSite(input.subdomain, Boolean(admin))) {
+    throw new SiteGenerationError("This subdomain is reserved.");
+  }
   if (input.siteId) {
     const { data: site, error } = await supabase.from("sites").select("id")
       .eq("id", input.siteId).eq("account_id", input.accountId).maybeSingle();
@@ -101,7 +106,7 @@ export function safeDefaultSection(designId: string) {
 export async function buildGeneratedSite(
   raw: unknown, emit: (event: GenerationProgress) => void = () => {},
 ): Promise<GenerationResult> {
-  const input = generationInputSchema.parse(raw);
+  const input = createGenerationInputSchema(brand.marketingSiteSubdomain).parse(raw);
   const { supabase, isAdmin } = await authorize(input);
   if (!process.env.ANTHROPIC_API_KEY) throw new SiteGenerationError("AI is not configured. Ask your agency to enable it.");
   let generationId: string;

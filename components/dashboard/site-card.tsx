@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getSiteUrl } from "@/lib/site-url";
+import { brand } from "@/lib/brand";
 import { ArrowUpRight, Pencil } from "lucide-react";
 
 export type SiteCardSite = {
@@ -13,8 +14,8 @@ export type SiteCardSite = {
   placeholderCount: number;
 };
 
-export function SiteCard({ site }: { site: SiteCardSite }) {
-  const url = getSiteUrl(site);
+export function SiteCard({ site, marketingSubdomain }: { site: SiteCardSite; marketingSubdomain: string }) {
+  const url = getSiteUrl(site, marketingSubdomain);
   const homePage = site.pages.find((page) => page.slug === "") ?? site.pages[0] ?? null;
   const live = Boolean(site.pages.find((page) => page.slug === "")?.published_at);
   const ref = useRef<HTMLDivElement>(null);
@@ -25,7 +26,7 @@ export function SiteCard({ site }: { site: SiteCardSite }) {
     observer.observe(ref.current);
     return () => observer.disconnect();
   }, []);
-  const preview = `${url.replace(/\/$/, "")}${homePage?.slug ? `/${homePage.slug}` : ""}?preview=1`;
+  const preview = `${brand.appUrl}/s/${site.subdomain}${homePage?.slug ? `/${homePage.slug}` : ""}?preview=1`;
   return <article className="platform-panel platform-site-card overflow-hidden">
     <div ref={ref} className="platform-site-preview relative overflow-hidden bg-[#EFEEEA]">
       {homePage && width > 0 ? <iframe title={`Preview of ${site.name || site.subdomain}`} src={preview} loading="lazy"

@@ -3,14 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { siteCreationSchema, subdomainSchema } from "@/lib/site-creation";
+import { createSiteCreationSchema, createSubdomainSchema } from "@/lib/site-creation";
 import { findUnreplacedPlaceholders } from "@/lib/sections/placeholders";
 import { instantiateTemplate } from "@/templates/instantiate";
 import { templates } from "@/templates";
+import { brand } from "@/lib/brand";
 
 export async function checkSubdomain(raw: unknown) {
   const { supabase } = await requireSuperAdmin();
-  const parsed = subdomainSchema.safeParse(raw);
+  const parsed = createSubdomainSchema(brand.marketingSiteSubdomain).safeParse(raw);
   if (!parsed.success) return { available: false, message: parsed.error.issues[0]?.message ?? "Invalid subdomain." };
   const { data, error } = await supabase.from("sites").select("id").eq("subdomain", parsed.data).maybeSingle();
   if (error) {
@@ -22,7 +23,7 @@ export async function checkSubdomain(raw: unknown) {
 
 export async function createSite(raw: unknown): Promise<{ status: "success"; siteId: string } | { status: "error"; message: string }> {
   const { supabase } = await requireSuperAdmin();
-  const parsed = siteCreationSchema.safeParse(raw);
+  const parsed = createSiteCreationSchema(brand.marketingSiteSubdomain).safeParse(raw);
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Invalid site information." };
   const input = parsed.data;
   const { data: account, error: accountError } = await supabase.from("accounts").select("id").eq("id", input.accountId).maybeSingle();

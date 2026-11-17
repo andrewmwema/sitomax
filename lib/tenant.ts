@@ -2,7 +2,7 @@
  * Tenant resolution from the request hostname.
  *
  * Routing rules:
- * - Host = ROOT_DOMAIN or www.ROOT_DOMAIN -> agency app (no tenant).
+ * - Host = ROOT_DOMAIN or www.ROOT_DOMAIN -> marketing tenant.
  * - Host = {subdomain}.ROOT_DOMAIN        -> tenant key is the subdomain.
  * - Any other host                        -> tenant key is the full host
  *                                            (a custom domain).
@@ -16,28 +16,25 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { brand } from "@/lib/brand";
 export { getSiteUrl } from "@/lib/site-url";
 
-function rootDomain(): string {
+export function getRootDomain(): string {
   return process.env.ROOT_DOMAIN ?? brand.rootDomain;
 }
 
 /**
- * Public URL of a site: verified custom domain first, subdomain otherwise.
- * Uses the centralized brand domain so it also works in Client Components.
- */
-/**
- * Returns the tenant key for a hostname, or null when the host is the
- * agency's own root domain (marketing site + dashboard).
+ * Returns the tenant key for a hostname. The apex and www hosts resolve to
+ * the configured marketing tenant; app hosts are routed before this helper.
  */
 export function getTenantKeyFromHost(host: string): string | null {
-  const root = rootDomain();
-  const normalizedHost = host.toLowerCase();
+  const root = getRootDomain().toLowerCase();
+  const rootHost = root.replace(/:\d+$/, "");
+  const normalizedHost = host.toLowerCase().replace(/:\d+$/, "");
 
-  if (normalizedHost === root || normalizedHost === `www.${root}`) {
-    return null;
+  if (normalizedHost === rootHost || normalizedHost === `www.${rootHost}`) {
+    return brand.marketingSiteSubdomain;
   }
 
-  if (normalizedHost.endsWith(`.${root}`)) {
-    return normalizedHost.slice(0, -(root.length + 1));
+  if (normalizedHost.endsWith(`.${rootHost}`)) {
+    return normalizedHost.slice(0, -(rootHost.length + 1));
   }
 
   // Anything else is treated as a custom domain.

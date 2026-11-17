@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { brand } from "@/lib/brand";
 
 /**
  * Auth callback for password reset and invite emails.
@@ -8,13 +9,14 @@ import { createClient } from "@/lib/supabase/server";
  * then redirects into the app.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl;
+  const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
 
   const nextParam = searchParams.get("next") ?? "/dashboard";
-  const next = nextParam.startsWith("/") ? nextParam : "/dashboard";
+  const candidate = new URL(nextParam, brand.appUrl);
+  const next = candidate.origin === new URL(brand.appUrl).origin ? candidate : new URL("/dashboard", brand.appUrl);
 
   const supabase = await createClient();
 
@@ -31,8 +33,10 @@ export async function GET(request: NextRequest) {
   }
 
   if (authenticated) {
-    return NextResponse.redirect(`${origin}${next}`);
+    return NextResponse.redirect(next);
   }
 
-  return NextResponse.redirect(`${origin}/login?error=link`);
+  const login = new URL("/login", brand.appUrl);
+  login.searchParams.set("error", "link");
+  return NextResponse.redirect(login);
 }

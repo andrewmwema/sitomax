@@ -3,7 +3,7 @@ import { brand } from "@/lib/brand";
 import "./globals.css";
 import "./platform.css";
 
-const siteUrl = new URL(`${brand.rootDomain.includes("localhost") ? "http" : "https"}://${brand.rootDomain}`);
+const siteUrl = new URL(brand.appUrl);
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,

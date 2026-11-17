@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { SiteCard, type SiteCardSite } from "./site-card";
 
-export function SiteGrid({ sites }: { sites: SiteCardSite[] }) {
+export function SiteGrid({ sites, marketingSubdomain }: { sites: SiteCardSite[]; marketingSubdomain: string }) {
   const [filter, setFilter] = useState<"All" | "Live" | "Drafts">("All");
   const visible = sites.filter((site) => {
     const live = Boolean(site.pages.find((page) => page.slug === "")?.published_at);
@@ -16,7 +16,8 @@ export function SiteGrid({ sites }: { sites: SiteCardSite[] }) {
           className={`rounded-lg px-3.5 py-2 text-xs ${filter === value ? "bg-white font-medium shadow-sm" : "text-[#5F5E5A]"}`}>{value}</button>)}
       </div>
     </div>
-    {visible.length ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((site) => <SiteCard key={site.id} site={site} />)}</div>
+    {visible.length ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((site) =>
+      <SiteCard key={site.id} site={site} marketingSubdomain={marketingSubdomain} />)}</div>
       : <p className="rounded-[14px] border border-dashed border-[#E8E7E3] bg-white p-8 text-sm text-[#6B6A66]">{sites.length ? "No sites match this filter." : "No sites yet."}</p>}
   </section>;
 }

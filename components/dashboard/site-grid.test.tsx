@@ -11,7 +11,7 @@ describe("dashboard site filters", () => {
     const container = document.createElement("div"); document.body.append(container);
     const root = createRoot(container);
     const base = { custom_domain: null, domain_verified: false, accountName: null, placeholderCount: 0, canManageDomains: false };
-    await act(async () => root.render(<SiteGrid sites={[
+    await act(async () => root.render(<SiteGrid marketingSubdomain="sitomax" sites={[
       { ...base, id: "1", subdomain: "live", name: "Live site", canManageDomains: true, pages: [{ id: "p1", slug: "", published_at: "2026-01-01" }] },
       { ...base, id: "2", subdomain: "draft", name: "Draft site", pages: [{ id: "p2", slug: "", published_at: null }] },
     ]} />));
@@ -34,7 +34,7 @@ describe("dashboard site filters", () => {
     vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
     const container = document.createElement("div"); document.body.append(container);
     const root = createRoot(container);
-    await act(async () => root.render(<SiteGrid sites={[{
+    await act(async () => root.render(<SiteGrid marketingSubdomain="sitomax" sites={[{
       id: "1", subdomain: "live", name: "Live site", custom_domain: "example.com",
       domain_verified: false, accountName: null, placeholderCount: 0, canManageDomains: true, pages: [],
     }]} />));

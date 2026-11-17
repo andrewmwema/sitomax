@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { brand } from "@/lib/brand";
 
 /**
  * Requires a signed-in user; redirects to /login otherwise.
@@ -39,17 +37,4 @@ export async function requireSuperAdmin() {
   }
 
   return { supabase, user };
-}
-
-/**
- * The origin of the current request (protocol + host), for building
- * absolute URLs in Server Actions (e.g. auth email redirects).
- */
-export async function getRequestOrigin(): Promise<string> {
-  const headerStore = await headers();
-  const host = headerStore.get("host") ?? brand.rootDomain;
-  const protocol =
-    headerStore.get("x-forwarded-proto") ??
-    (host.includes("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
 }

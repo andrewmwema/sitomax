@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DomainEmailError, getAccountOwnerEmails, sendDomainEmail } from "./email";
+import { brand } from "@/lib/brand";
 
 export async function notifyDomainRequestDone(requestId: string): Promise<void> {
   if (!process.env.RESEND_API_KEY) throw new DomainEmailError("Completion emails are not configured. Ask your agency to enable domain emails.");
@@ -19,7 +20,7 @@ export async function notifyDomainRequestDone(requestId: string): Promise<void> 
     if (site.error || !site.data) throw new DomainEmailError("Could not load the account for the completion email.");
     const recipients = await getAccountOwnerEmails(admin, site.data.account_id);
     await sendDomainEmail(recipients, "Your domain setup request is complete",
-      `Our team has completed your setup request for ${request.domain}.\n\nOpen your site's Domains tab to review connection status. DNS changes can take up to 48 hours.\n\nYou can now revoke our delegated access at your domain provider. We will never ask for your password.`,
+      `Our team has completed your setup request for ${request.domain}.\n\nReview connection status: ${brand.appUrl}/dashboard/sites/${request.site_id}/domains\n\nDNS changes can take up to 48 hours. You can now revoke our delegated access at your domain provider. We will never ask for your password.`,
       `domain-request:${request.id}:${request.done_at}:${recipients.join(",")}`);
     const saved = await admin.from("domain_requests").update({
       notification_sent_at: new Date().toISOString(), notification_claimed_at: null,
