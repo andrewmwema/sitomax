@@ -37,8 +37,24 @@ describe("site and page SEO", () => {
       content: [{ type: "Section", props: { content: [{ type: "Heading", props: { level: "h1", text: "Heading" } },
         { type: "Gallery", props: { images: [{ url: "/photo.jpg", alt: "" }] } }] } }] }, "Page", seo);
     expect(result.issues).toEqual(["Images missing alt text"]);
-    expect(result.score).toBe(83);
+    expect(result.score).toBe(86);
     expect(seoChecklist({ content: [] }, "", seo).issues).toContain("Page is hidden from search engines");
+  });
+  it("scores each page's own headings, alt text and unreplaced placeholders", () => {
+    const settings = siteSeoSchema.parse({});
+    const clean = seoChecklist({
+      root: { props: { seoTitle: "Page", description: "Description", socialImage: "/share.jpg" } },
+      content: [{ type: "Hero", props: { id: "hero", heading: "Welcome" } }],
+    }, "Page", settings);
+    const incomplete = seoChecklist({
+      root: { props: { seoTitle: "Page", description: "Description", socialImage: "/share.jpg" } },
+      content: [{ type: "Gallery", props: { id: "gallery", images: [{ url: "/photo.jpg", alt: "" }], heading: "[Add a heading]" } }],
+    }, "Page", settings);
+    expect(clean.score).toBe(100);
+    expect(incomplete.issues).toContain("Images missing alt text");
+    expect(incomplete.issues).toContain("Page has no H1 heading");
+    expect(incomplete.issues).toContain("Unreplaced placeholders");
+    expect(incomplete.checks.find((check) => check.key === "placeholders")?.targetId).toBe("gallery");
   });
   it("uses the exact 60- and 160-character limits", () => {
     const data = (title: string, description: string) => ({

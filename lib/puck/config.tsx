@@ -3,12 +3,14 @@ import type {
   ComponentConfig,
   DefaultComponentProps,
   WithPuckProps,
+  CustomField,
 } from "@puckeditor/core";
 import { buildThemeStyle, themeFonts, type SiteTheme } from "@/lib/theme/presets";
 import { googleFontsUrl } from "@/lib/theme/fonts";
 import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
 import { SectionShell } from "@/components/blocks/ui/SectionShell";
 import { PhotoCredits } from "@/components/blocks/ui/photo-credits";
+import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { Hero, type HeroProps } from "@/components/blocks/hero";
 import { TextSection, type TextSectionProps } from "@/components/blocks/text-section";
 import { ImageWithText, type ImageWithTextProps } from "@/components/blocks/image-with-text";
@@ -106,6 +108,16 @@ export type RootProps = {
 };
 
 export type PuckConfig = Config<Components, RootProps>;
+
+function socialImageRootField(): CustomField<string | undefined> {
+  return {
+    type: "custom",
+    label: "Social share image",
+    render: ({ value, onChange, readOnly }) => (
+      <ImageUploadField value={value ?? ""} onChange={onChange} readOnly={readOnly} />
+    ),
+  };
+}
 
 /**
  * Wraps a block's render in SectionShell, which applies the shared
@@ -222,7 +234,7 @@ export const puckConfig: PuckConfig = {
         label: "SEO description",
         placeholder: "Shown in search engine results.",
       },
-      socialImage: { type: "text", label: "Social share image URL (optional)" },
+      socialImage: socialImageRootField(),
       indexing: { type: "radio", label: "Search visibility", options: [
         { label: "Site default", value: "inherit" }, { label: "Index", value: "index" }, { label: "Hide", value: "noindex" },
       ] },

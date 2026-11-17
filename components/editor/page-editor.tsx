@@ -55,10 +55,18 @@ import { useDraftPersistence } from "./use-draft-persistence";
 import { EditorCommands, VersionHistory } from "./editor-commands";
 import { EditorAiProvider } from "./editor-ai";
 import { useEditorAi } from "./editor-ai-context";
+import { SeoPanel } from "@/components/editor/seo-panel";
+import type { SeoPageSummary } from "@/components/editor/seo-panel";
+import type { SiteSeo } from "@/lib/seo";
+import { canonicalUrl } from "@/lib/seo-public";
 
 type EditorUi = {
   pageId: string;
   siteId: string;
+  siteSeo: SiteSeo;
+  seoPages: SeoPageSummary[];
+  pageTitle: string;
+  publicUrl: string;
   previewUrl: string;
   openThemePanel: () => void;
   business: Business;
@@ -115,15 +123,17 @@ function ThemeTool() {
 }
 
 function SeoTool() {
-  const getPuck = useGetPuck();
-  const { setTab } = useInteractions();
-  return <div className="p-4"><h2 className="text-sm font-semibold">Page SEO</h2>
-    <p className="my-3 text-xs text-zinc-500">Edit the SEO title, description, social image and search visibility in page settings. Publish to apply changes.</p>
-    <button type="button" className="rounded-lg bg-[#121212] px-3 py-2 text-xs text-white" onClick={() => {
-      setTab("content");
-      getPuck().dispatch({ type: "setUi", ui: { itemSelector: null, rightSideBarVisible: true } });
-    }}>Open page settings</button>
-  </div>;
+  const { siteId, siteSeo, pageId, seoPages, pageTitle, publicUrl } = useEditorUi();
+  const persistence = usePersistence();
+  const router = useRouter();
+  return <SeoPanel siteId={siteId} pageId={pageId} siteSeo={siteSeo} pages={seoPages}
+    pageTitle={pageTitle} publicUrl={publicUrl} isSwitching={persistence.busy !== null}
+    switchError={persistence.error}
+    onSelectPage={async (nextPageId) => {
+      if (nextPageId === pageId || persistence.busy !== null) return;
+      if (persistence.dirty && !(await persistence.save())) return;
+      router.push(`/editor/${nextPageId}`);
+    }} />;
 }
 
 function AiTool() {
@@ -403,18 +413,22 @@ export function PageEditor({
   isSuperAdmin,
   userId,
   sitePages,
+  seoPages,
   generationWarnings = [],
   business,
+  siteSeo,
 }: {
   page: { id: string; slug: string; title: string | null };
-  site: { id: string; account_id: string; name: string | null; subdomain: string; theme: SiteTheme | null };
+  site: { id: string; account_id: string; name: string | null; subdomain: string; custom_domain: string | null; domain_verified: boolean; theme: SiteTheme | null };
   initialData: Record<string, unknown>;
   previewUrl: string;
   isSuperAdmin: boolean;
   userId: string;
   sitePages: EditorPageLink[];
+  seoPages: SeoPageSummary[];
   generationWarnings?: string[];
   business: Business;
+  siteSeo: SiteSeo;
 }) {
   const [showGenerationWarnings, setShowGenerationWarnings] = useState(true);
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
@@ -441,12 +455,18 @@ export function PageEditor({
   const editorUi = useMemo<EditorUi>(
     () => ({
       pageId: page.id,
+      seoPages,
+      pageTitle: page.title || page.slug || "Home",
+      publicUrl: canonicalUrl({
+        subdomain: site.subdomain, custom_domain: site.custom_domain, domain_verified: site.domain_verified,
+      }, page.slug),
       previewUrl,
       openThemePanel: () => setThemePanelOpen(true),
       siteId: site.id,
+      siteSeo,
       business,
     }),
-    [page.id, previewUrl, site.id, business],
+    [page.id, page.title, page.slug, previewUrl, site.id, site.subdomain, site.custom_domain, site.domain_verified, siteSeo, seoPages, business],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(

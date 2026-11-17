@@ -21,7 +21,7 @@ export function parsePageSeo(value: unknown) {
   return result.data;
 }
 
-export function canonicalUrl(site: TenantSite, slug: string) {
+export function canonicalUrl(site: Pick<TenantSite, "subdomain" | "custom_domain" | "domain_verified">, slug: string) {
   const path = slug ? `/${slug.split("/").map(encodeURIComponent).join("/")}` : "/";
   return `${getSiteUrl(site)}${path}`;
 }

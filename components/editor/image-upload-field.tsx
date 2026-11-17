@@ -20,10 +20,12 @@ export function ImageUploadField({
   value,
   onChange,
   readOnly,
+  allowUrl = true,
 }: {
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
+  allowUrl?: boolean;
 }) {
   const editorSite = useContext(EditorSiteContext);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,14 +98,14 @@ export function ImageUploadField({
           e.target.value = "";
         }}
       />
-      <input
+      {allowUrl ? <input
         type="text"
         value={value ?? ""}
         disabled={readOnly}
         placeholder="…or paste an image URL"
         onChange={(e) => onChange(e.target.value)}
         className="rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs disabled:opacity-50"
-      />
+      /> : null}
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   );

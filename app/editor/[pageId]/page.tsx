@@ -5,6 +5,9 @@ import { requireUser } from "@/lib/auth";
 import { PageEditor } from "@/components/editor/page-editor";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { businessSchema, emptyBusiness } from "@/lib/business";
+import { siteSeoSchema } from "@/lib/seo";
+import { seoChecklist } from "@/lib/seo-checklist";
+import type { SeoPageSummary } from "@/components/editor/seo-panel";
 
 /**
  * Full-screen visual editor for a page.
@@ -32,9 +35,12 @@ type EditorSite = {
   account_id: string;
   name: string | null;
   subdomain: string;
+  custom_domain: string | null;
+  domain_verified: boolean;
   theme: SiteTheme | null;
   draft_theme: SiteTheme | null;
   business: unknown;
+  seo: unknown;
 };
 
 async function EditorLoader({
@@ -49,7 +55,7 @@ async function EditorLoader({
     supabase
       .from("pages")
       .select(
-        "id, slug, title, seo, draft_data, site:sites(id, account_id, name, subdomain, theme, draft_theme, business)",
+        "id, slug, title, seo, draft_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, business, seo)",
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -67,9 +73,21 @@ async function EditorLoader({
 
   // supabase-js types to-one joins as arrays without generated DB types.
   const site = data.site as unknown as EditorSite;
+  const siteSeo = siteSeoSchema.parse(site.seo);
   const { data: sitePages, error: pagesError } = await supabase.from("pages")
-    .select("id, slug, title").eq("site_id", site.id).order("sort_order");
+    .select("id, slug, title, draft_data, seo").eq("site_id", site.id).order("sort_order");
   if (pagesError) throw new Error("Unable to load site pages", { cause: pagesError });
+  const seoPages: SeoPageSummary[] = (sitePages ?? []).map((page) => {
+    const { checks, score } = seoChecklist(page.draft_data, page.title, siteSeo, page.seo);
+    return {
+      id: page.id,
+      slug: page.slug,
+      title: page.title,
+      score,
+      hidden: !checks.find((check) => check.key === "indexing")?.complete,
+      hasPlaceholders: !checks.find((check) => check.key === "placeholders")?.complete,
+    };
+  });
 
   // Preview always uses the subdomain URL: auth cookies are scoped to the
   // root domain, so they are sent to subdomains but never custom domains.
@@ -98,12 +116,14 @@ async function EditorLoader({
       key={data.id}
       page={{ id: data.id, slug: data.slug, title: data.title }}
       site={{ ...site, theme: site.draft_theme ?? site.theme }}
+      siteSeo={siteSeo}
       business={businessSchema.parse({ ...emptyBusiness, ...(site.business as object) })}
       initialData={initialData}
       previewUrl={previewUrl}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
       userId={user.id}
-      sitePages={sitePages ?? []}
+      sitePages={(sitePages ?? []).map(({ id, slug, title }) => ({ id, slug, title }))}
+      seoPages={seoPages}
       generationWarnings={generated.data?.root?.props?.generationWarnings ?? []}
     />
   );
