@@ -89,7 +89,7 @@ async function SiteDetail({
             {url.replace(/^https?:\/\//, "")}
           </a>
         </div>
-        <BusinessInfo siteId={site.id} initialBusiness={businessSchema.parse({ ...emptyBusiness, ...site.business })} />
+        <div id="business-info"><BusinessInfo siteId={site.id} initialBusiness={businessSchema.parse({ ...emptyBusiness, ...site.business })} /></div>
         <a
           href={url}
           target="_blank"
@@ -100,6 +100,10 @@ async function SiteDetail({
         </a>
       </header>
 
+      <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm">
+        <span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">Pages</span>
+        <Link href={`/dashboard/sites/${siteId}/seo`} className="pb-3 hover:underline">SEO</Link>
+      </nav>
       <div>
         <h2 className="mb-3 text-sm font-semibold tracking-wide text-zinc-500 uppercase">
           Pages

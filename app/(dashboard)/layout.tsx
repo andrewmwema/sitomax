@@ -31,14 +31,16 @@ export default function DashboardLayout({
 async function DashboardShell({ children }: { children: React.ReactNode }) {
   const { supabase, user } = await requireUser();
 
-  const [{ data: profile }, settings] = await Promise.all([
+  const [{ data: profile }, settings, unread] = await Promise.all([
     supabase
       .from("profiles")
       .select("email, full_name, is_super_admin")
       .eq("id", user.id)
       .maybeSingle(),
     getAgencySettings(),
+    supabase.from("form_submissions").select("id", { count: "exact", head: true }).eq("is_read", false),
   ]);
+  if (unread.error) console.error("Could not load unread submissions:", unread.error.message);
 
   return (
     <div
@@ -53,6 +55,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         isSuperAdmin={profile?.is_super_admin ?? false}
         userEmail={profile?.email ?? user.email ?? ""}
         userName={profile?.full_name ?? ""}
+        unreadCount={unread.error ? null : unread.count ?? 0}
         signOutAction={signOut}
       />
       <main className="min-w-0 flex-1">

@@ -49,7 +49,7 @@ async function EditorLoader({
     supabase
       .from("pages")
       .select(
-        "id, slug, title, draft_data, site:sites(id, account_id, name, subdomain, theme, draft_theme, business)",
+        "id, slug, title, seo, draft_data, site:sites(id, account_id, name, subdomain, theme, draft_theme, business)",
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -80,6 +80,18 @@ async function EditorLoader({
   const generated = z.object({
     root: z.object({ props: z.object({ generationWarnings: z.array(z.string()).optional() }).optional() }).optional(),
   }).safeParse(data.draft_data);
+  const savedSeo = z.object({
+    image: z.string().optional(), noindex: z.boolean().nullable().optional(),
+  }).safeParse(data.seo).data;
+  const draft = z.object({ root: z.object({ props: z.record(z.string(), z.unknown()).optional() }).passthrough().optional() })
+    .passthrough().parse(data.draft_data);
+  const draftProps = draft.root?.props ?? {};
+  const initialData = { ...draft, root: { ...draft.root, props: {
+    ...(savedSeo?.image !== undefined && draftProps.socialImage === undefined ? { socialImage: savedSeo.image } : {}),
+    ...(savedSeo?.noindex !== undefined && draftProps.indexing === undefined
+      ? { indexing: savedSeo.noindex === null ? "inherit" : savedSeo.noindex ? "noindex" : "index" } : {}),
+    ...draftProps,
+  } } };
 
   return (
     <PageEditor
@@ -87,7 +99,7 @@ async function EditorLoader({
       page={{ id: data.id, slug: data.slug, title: data.title }}
       site={{ ...site, theme: site.draft_theme ?? site.theme }}
       business={businessSchema.parse({ ...emptyBusiness, ...(site.business as object) })}
-      initialData={data.draft_data as Record<string, unknown>}
+      initialData={initialData}
       previewUrl={previewUrl}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
       userId={user.id}

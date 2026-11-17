@@ -19,9 +19,9 @@ const groups = [
   ] },
 ];
 
-export function Sidebar({ agencyName, logoUrl, isSuperAdmin, userEmail, userName, signOutAction }: {
+export function Sidebar({ agencyName, logoUrl, isSuperAdmin, userEmail, userName, signOutAction, unreadCount }: {
   agencyName: string; logoUrl: string | null; isSuperAdmin: boolean; userEmail: string; userName: string;
-  signOutAction: () => Promise<void>;
+  signOutAction: () => Promise<void>; unreadCount: number | null;
 }) {
   const pathname = usePathname();
   const [search, setSearch] = useState("");
@@ -59,6 +59,9 @@ export function Sidebar({ agencyName, logoUrl, isSuperAdmin, userEmail, userName
           return <Link key={item.href} href={item.href} title={item.label} aria-current={active ? "page" : undefined}
             className={`flex min-h-10 items-center gap-3 rounded-[10px] px-3 text-sm transition ${active ? "bg-white font-medium text-[#121212] shadow-[0_1px_2px_rgba(18,18,18,0.06),0_0_0_1px_#E8E7E3]" : "text-[#3D3C39] hover:bg-[#EFEEEA]"}`}>
             <item.icon size={18} strokeWidth={1.8} /><span className="hidden md:block">{item.label}</span>
+            {item.href === "/dashboard/forms" && unreadCount !== 0 ? <span
+              aria-label={unreadCount === null ? "Unread count unavailable" : `${unreadCount} unread submissions`}
+              className="ml-auto rounded-full bg-[#EFEDFF] px-1.5 py-0.5 text-xs font-semibold text-[#4B3FE0]">{unreadCount === null ? "!" : unreadCount}</span> : null}
           </Link>;
         })}
       </div>)}

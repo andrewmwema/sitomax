@@ -31,6 +31,13 @@ beforeEach(() => {
   mocks.profile.mockResolvedValue({ data: { is_super_admin: false } });
 });
 describe("editor persistence", () => {
+  it("publishes SEO fields without exposing draft metadata early", async () => {
+    const data = { root: { props: { title: "Page", seoTitle: "Search title", description: "Search description", socialImage: "/share.jpg", indexing: "noindex" } }, content: [] };
+    expect(await savePageDraft(PAGE, data)).toMatchObject({ status: "success" });
+    expect(mocks.update.mock.calls[0][0]).not.toHaveProperty("seo");
+    expect(await publishPage(PAGE, data)).toMatchObject({ status: "success" });
+    expect(mocks.update.mock.calls[1][0].seo).toMatchObject({ title: "Search title", description: "Search description", image: "/share.jpg", noindex: true });
+  });
   it("keeps generated SEO draft-only during autosave and applies it on explicit publish", async () => {
     mocks.load.mockResolvedValue({ data: { id: PAGE, title: "Published page", seo: {
       title: "Published SEO", description: "Published description", image: "/existing-social-image.jpg",

@@ -27,3 +27,26 @@ Draft previews and signed-in site members are excluded when their session is
 available on the tenant host. Dashboard cookies cannot be sent to unrelated
 custom domains, so a logged-in editor visiting a custom domain directly cannot
 be identified and may be counted as a visitor.
+
+## Contact submissions
+
+Apply `0015_form_submissions.sql` after the preceding migrations. Published
+tenant forms save submissions for account owners and the agency under
+Dashboard → Forms. The endpoint requires a trusted proxy to overwrite
+`x-forwarded-for` (as on Vercel); requests without a valid client IP fail
+closed. It limits each IP to 10 submissions per site per 10 minutes, storing
+only a keyed hash; expired rate-limit entries are removed on later submissions
+after one day. Email notifications are not yet configured.
+
+## SEO toolkit
+
+Apply `0016_seo.sql` after the preceding migrations. Site members can open
+the SEO tab on a site to manage social sharing, indexing defaults, tracking
+IDs and redirects; page-specific settings live in the editor and become live
+on publish. Structured data uses the existing business profile. Redirect
+lookups are cached for up to 30 seconds, and browsers may retain 301 redirects
+longer. The configured Supabase public storage origin is optimized by
+`next/image`; other external image hosts remain unoptimized so existing image
+URLs continue to work. Google Analytics and Meta Pixel load only when their IDs
+are configured and never in preview; site operators are responsible for any
+applicable consent requirements.

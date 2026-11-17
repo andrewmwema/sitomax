@@ -118,7 +118,7 @@ function SeoTool() {
   const getPuck = useGetPuck();
   const { setTab } = useInteractions();
   return <div className="p-4"><h2 className="text-sm font-semibold">Page SEO</h2>
-    <p className="my-3 text-xs text-zinc-500">Edit the page title and description in the inspector.</p>
+    <p className="my-3 text-xs text-zinc-500">Edit the SEO title, description, social image and search visibility in page settings. Publish to apply changes.</p>
     <button type="button" className="rounded-lg bg-[#121212] px-3 py-2 text-xs text-white" onClick={() => {
       setTab("content");
       getPuck().dispatch({ type: "setUi", ui: { itemSelector: null, rightSideBarVisible: true } });

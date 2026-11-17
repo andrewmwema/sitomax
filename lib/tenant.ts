@@ -52,6 +52,8 @@ export type TenantSite = {
   domain_verified: boolean;
   theme: Record<string, unknown>;
   draft_theme?: Record<string, unknown> | null;
+  business: Record<string, unknown>;
+  seo: Record<string, unknown>;
 };
 
 export type TenantPage = {
@@ -66,7 +68,7 @@ export type TenantPage = {
 };
 
 const SITE_COLUMNS =
-  "id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme";
+  "id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, business, seo";
 
 /**
  * Resolves the tenant key from the /s/[site] segment to a site row.
@@ -113,3 +115,15 @@ export const getSitePage = cache(
     return (data as TenantPage | null) ?? null;
   },
 );
+
+export async function getPublishedSitePages(siteId: string): Promise<Pick<TenantPage, "slug" | "seo" | "published_at">[]> {
+  const supabase = createAdminClient();
+  const pages: Pick<TenantPage, "slug" | "seo" | "published_at">[] = [];
+  while (true) {
+    const { data, error } = await supabase.from("pages").select("slug, seo, published_at")
+      .eq("site_id", siteId).not("published_data", "is", null).order("slug").range(pages.length, pages.length + 499);
+    if (error) throw new Error("Could not load published pages.", { cause: error });
+    if (!data?.length) return pages;
+    pages.push(...data);
+  }
+}

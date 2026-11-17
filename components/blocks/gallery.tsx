@@ -4,6 +4,7 @@ import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
+import { SiteImage } from "./ui/site-image";
 
 export type GalleryProps = {
   design?: BlockDesign;
@@ -90,8 +91,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
         <div className="mt-[var(--section-gap)] flex flex-col gap-10 md:gap-16">
           {images.map((image, i) => <figure key={i} className="grid items-center gap-6 md:grid-cols-2 md:gap-12">
             {image.url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={image.url} alt={image.alt} loading="lazy"
+              <SiteImage src={image.url} alt={image.alt}
                 className={`aspect-[4/3] w-full rounded-[var(--radius-lg)] object-cover ${i % 2 ? "md:order-2" : ""}`} />
             ) : <div className="aspect-[4/3] rounded-[var(--radius-lg)] bg-[var(--color-soft-bg)]" />}
             <figcaption className="border-t py-5" style={{ borderColor: "var(--color-border)" }}>
@@ -104,8 +104,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
         <div className={`mt-[var(--section-gap)] grid gap-6 sm:grid-cols-2 ${variant === "portfolio-cards" ? "lg:grid-cols-3" : ""}`}>
           {images.map((image, i) => <figure key={i} className={`min-w-0 ${variant === "portfolio-feature" && i === 0 ? "sm:col-span-2" : ""}`}>
             {image.url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={image.url} alt={image.alt} loading="lazy" className={`w-full rounded-[var(--radius-lg)] object-cover ${variant === "portfolio-feature" && i === 0 ? "aspect-[16/9]" : "aspect-[4/3]"}`} />
+              <SiteImage src={image.url} alt={image.alt} className={`w-full rounded-[var(--radius-lg)] object-cover ${variant === "portfolio-feature" && i === 0 ? "aspect-[16/9]" : "aspect-[4/3]"}`} />
             ) : <div className="aspect-[4/3] rounded-[var(--radius-lg)] bg-[var(--color-soft-bg)]" />}
             {image.caption ? <figcaption className="border-b py-4 text-base font-semibold" style={{ borderColor: "var(--color-border)" }}>{image.caption}</figcaption> : null}
           </figure>)}
@@ -115,8 +114,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
           {images.map((image, i) => (
             <figure key={i} className={`relative isolate min-h-52 overflow-hidden rounded-[var(--radius-lg)] ${i === 0 ? "sm:col-span-2 lg:row-span-2" : "aspect-[4/3]"}`}>
               {image.url ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={image.url} alt={image.alt} loading="lazy" className="h-full w-full object-cover" />
+                <SiteImage src={image.url} alt={image.alt} className="h-full w-full object-cover" style={{ height: "100%" }} />
               ) : <div className="h-full min-h-64 bg-[var(--color-soft-bg)]" />}
               {image.caption ? <figcaption className="absolute inset-x-0 bottom-0 px-6 pb-5 pt-16 text-lg font-semibold" style={{ color: "white", background: "linear-gradient(transparent, rgba(0,0,0,0.75))" }}>{image.caption}</figcaption> : null}
             </figure>
@@ -127,11 +125,9 @@ export const Gallery: ComponentConfig<GalleryProps> = {
           {images.map((image, i) => (
             <figure key={i} className="mb-[var(--detail-gap)] break-inside-avoid">
               {image.url ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
+                <SiteImage
                   src={image.url}
                   alt={image.alt}
-                  loading="lazy"
                   className="w-full object-cover"
                   style={{ borderRadius: "var(--radius-lg)", aspectRatio: i % 2 ? "4/5" : "4/3" }}
                 />
@@ -154,11 +150,9 @@ export const Gallery: ComponentConfig<GalleryProps> = {
           {images.map((image, i) => (
             <figure key={i}>
               {image.url ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
+                <SiteImage
                   src={image.url}
                   alt={image.alt}
-                  loading="lazy"
                   className="aspect-square w-full object-cover"
                   style={{ borderRadius: "var(--radius-lg)" }}
                 />

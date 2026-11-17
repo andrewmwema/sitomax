@@ -3,6 +3,7 @@ import { designField, imageField } from "@/lib/puck/fields";
 import { JUSTIFY, oneOf, safeAlign, safeHref, type Align } from "@/lib/layout/guardrails";
 import { safeMediaUrl, type BlockDesign } from "@/lib/sections/design";
 import { ElementPlaceholder, RADIUS, WIDTH_OPTIONS, type RadiusChoice } from "./shared";
+import { SiteImage } from "../ui/site-image";
 
 type Aspect = "auto" | "1/1" | "4/3" | "3/2" | "16/9" | "3/4";
 
@@ -83,11 +84,9 @@ export const ImageElement: ComponentConfig<ImageElementProps> = {
     const ratio = oneOf(aspect, ["auto", "1/1", "4/3", "3/2", "16/9", "3/4"], "4/3");
     const widthPct = oneOf(width, ["100", "75", "50", "25"], "100");
     const image = url ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <SiteImage
         src={url}
         alt={alt || ""}
-        loading="lazy"
         className="block h-auto w-full"
         style={{
           aspectRatio: ratio === "auto" ? undefined : ratio,

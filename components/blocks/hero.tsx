@@ -10,6 +10,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { BlockIcon } from "./ui/icon";
+import { FormSubmission } from "./ui/form-submission";
 
 export type HeroStat = { value: string; label: string };
 
@@ -399,12 +400,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                 "--btn-outline": "var(--color-border)",
               } as CSSProperties}
             >
-              {/* Submission handling is wired to /api/forms/submit. */}
-              <form
-                method="post"
-                action="/api/forms/submit"
-                className="flex flex-col gap-4"
-              >
+              <FormSubmission className="flex flex-col gap-4">
                 <input type="hidden" name="_form_name" value={formName || "quote"} />
                 {/* Honeypot field for spam bots: humans never see it. */}
                 <input
@@ -447,7 +443,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                 >
                   {submitText || "Send"}
                 </button>
-              </form>
+              </FormSubmission>
             </Card>
           </Container>
         </Section>

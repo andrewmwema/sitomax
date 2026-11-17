@@ -6,14 +6,14 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.access }) }) }) }),
 }));
 vi.mock("@/lib/tenant", () => ({
-  getSiteByHost: async () => ({ id: "site", theme: {} }),
-  getSitePage: async () => ({ id: "page", draft_data: { content: [] }, published_data: { content: [] } }),
+  getSiteByHost: async () => ({ id: "site", name: "Example", subdomain: "client", custom_domain: "example.com", domain_verified: true, theme: {}, business: {}, seo: { socialImage: "/share.jpg", googleVerification: "verify123" } }),
+  getSitePage: async () => ({ id: "page", slug: "about", title: "About", seo: { title: "Search title", description: "Search description", noindex: true }, draft_data: { content: [] }, published_data: { content: [] } }),
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: {} }));
 vi.mock("@puckeditor/core/rsc", () => ({ Render: () => null }));
 vi.mock("@/components/tenant-font-hints", () => ({ TenantFontHints: () => null }));
 import { AnalyticsBeacon } from "@/components/analytics-beacon";
-import TenantSitePage from "./page";
+import TenantSitePage, { generateMetadata } from "./page";
 
 beforeEach(() => {
   mocks.access.mockReset();
@@ -33,6 +33,25 @@ describe("tenant analytics eligibility", () => {
     expect(await hasBeacon()).toBe(true);
     mocks.access.mockResolvedValue({ data: { id: "page" }, error: null });
     expect(await hasBeacon()).toBe(false);
+  });
+
+  describe("tenant metadata", () => {
+    it("uses canonical, social, verification and noindex settings", async () => {
+      const metadata = await generateMetadata({ params: Promise.resolve({ site: "client", slug: ["about"] }), searchParams: Promise.resolve({}) });
+      expect(metadata).toMatchObject({
+        title: "Search title", description: "Search description",
+        alternates: { canonical: "https://example.com/about" },
+        openGraph: { title: "Search title", images: ["https://example.com/share.jpg"] },
+        twitter: { card: "summary_large_image" },
+        verification: { google: "verify123" }, robots: { index: false },
+      });
+    });
+    it("does not render third-party tracking on preview requests", async () => {
+      mocks.access.mockResolvedValue({ data: { id: "page" }, error: null });
+      const result = await TenantSitePage({ params: Promise.resolve({ site: "client" }), searchParams: Promise.resolve({ preview: "1" }) });
+      const children = Children.toArray(result.props.children);
+      expect(children.some((child) => isValidElement(child) && typeof child.type === "function" && child.type.name === "TenantTracking")).toBe(false);
+    });
   });
   it("never tracks preview URLs, even when preview access is denied", async () => {
     expect(await hasBeacon("1")).toBe(false);

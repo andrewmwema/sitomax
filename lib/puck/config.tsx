@@ -99,7 +99,10 @@ type Components = {
 
 export type RootProps = {
   title?: string;
+  seoTitle?: string;
   description?: string;
+  socialImage?: string;
+  indexing?: "inherit" | "index" | "noindex";
 };
 
 export type PuckConfig = Config<Components, RootProps>;
@@ -213,15 +216,23 @@ export const puckConfig: PuckConfig = {
   root: {
     fields: {
       title: { type: "text", label: "Page title" },
+      seoTitle: { type: "text", label: "SEO title (optional)" },
       description: {
         type: "textarea",
         label: "SEO description",
         placeholder: "Shown in search engine results.",
       },
+      socialImage: { type: "text", label: "Social share image URL (optional)" },
+      indexing: { type: "radio", label: "Search visibility", options: [
+        { label: "Site default", value: "inherit" }, { label: "Index", value: "index" }, { label: "Hide", value: "noindex" },
+      ] },
     },
     defaultProps: {
       title: "",
+      seoTitle: "",
       description: "",
+      socialImage: "",
+      indexing: "inherit",
     },
     render: ({ children, puck }) => {
       const theme = (puck.metadata?.theme ?? {}) as SiteTheme;

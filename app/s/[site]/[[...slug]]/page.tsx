@@ -1,12 +1,14 @@
 import { cache } from "react";
 import type { Metadata } from "next";
-import { z } from "zod";
 import { notFound } from "next/navigation";
 import { Render } from "@puckeditor/core/rsc";
 import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { TenantFontHints } from "@/components/tenant-font-hints";
 import { AnalyticsBeacon } from "@/components/analytics-beacon";
+import { TenantTracking } from "@/components/tenant-tracking";
+import { localBusinessJsonLd, parseSiteSeo, publicPageSeo } from "@/lib/seo-public";
+import { rootSeoSchema } from "@/lib/seo";
 import { createClient } from "@/lib/supabase/server";
 import {
   getSiteByHost,
@@ -28,11 +30,6 @@ import {
  */
 
 type Props = PageProps<"/s/[site]/[[...slug]]">;
-
-type PageSeo = {
-  title?: string;
-  description?: string;
-};
 
 /**
  * True when the current visitor may see drafts of this page: RLS only
@@ -85,16 +82,24 @@ export async function generateMetadata({
   if (!loaded) return {};
 
   const { site, page } = loaded;
-  const preview = loaded.isPreview ? z.object({
-    root: z.object({ props: z.object({ title: z.string().optional(), description: z.string().optional() }).optional() }).optional(),
-  }).safeParse(loaded.data).data?.root?.props : undefined;
-  const seo = (preview ?? page.seo ?? {}) as PageSeo;
-  const title = seo.title || page.title || site.name || site.subdomain;
+  const root = loaded.data.root;
+  const preview = loaded.isPreview && root && typeof root === "object" && "props" in root
+    ? rootSeoSchema.safeParse(root.props) : null;
+  const previewSeo = preview?.success ? {
+    title: preview.data.seoTitle || preview.data.title,
+    description: preview.data.description,
+    image: preview.data.socialImage,
+    noindex: true,
+  } : page.seo;
+  const seo = publicPageSeo(site, { ...page, seo: previewSeo });
 
   return {
-    title,
-    description: seo.description || undefined,
-    ...(loaded.isPreview ? { robots: { index: false } } : {}),
+    title: seo.title, description: seo.description,
+    alternates: { canonical: seo.canonical },
+    openGraph: { type: "website", title: seo.title, description: seo.description, url: seo.canonical, ...(seo.image ? { images: [seo.image] } : {}) },
+    twitter: { card: seo.image ? "summary_large_image" : "summary", title: seo.title, description: seo.description, ...(seo.image ? { images: [seo.image] } : {}) },
+    robots: { index: !loaded.isPreview && !seo.noindex, follow: true },
+    ...(seo.verification ? { verification: { google: seo.verification } } : {}),
   };
 }
 
@@ -107,10 +112,14 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   const access = preview !== "1" ? await checkPageAccess(page.id) : null;
   const track = access !== null && !access.allowed && !access.failed;
   const theme = ((isPreview ? site.draft_theme ?? site.theme : site.theme) ?? {}) as SiteTheme;
+  const seo = parseSiteSeo(site);
+  const jsonLd = JSON.stringify(localBusinessJsonLd(site)).replace(/</g, "\\u003c");
 
   return (
     <>
       <TenantFontHints />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      {preview !== "1" ? <TenantTracking seo={seo} /> : null}
       {track ? <AnalyticsBeacon key={page.id} /> : null}
       {isPreview ? (
         <div className="fixed right-4 bottom-4 z-50 rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-lg">

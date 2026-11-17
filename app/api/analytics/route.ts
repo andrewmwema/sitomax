@@ -3,24 +3,7 @@ import { isIP } from "node:net";
 import { beaconSchema, deviceFromUserAgent, referrerOrigin } from "@/lib/analytics";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSiteByHost, getTenantKeyFromHost } from "@/lib/tenant";
-
-async function readBody(request: Request): Promise<string | null> {
-  if (!request.body) return "";
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder();
-  let bytes = 0;
-  let result = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) return result + decoder.decode();
-    bytes += value.byteLength;
-    if (bytes > 8192) {
-      await reader.cancel();
-      return null;
-    }
-    result += decoder.decode(value, { stream: true });
-  }
-}
+import { readTextBody } from "@/lib/request-body";
 
 export async function POST(request: Request) {
   const host = request.headers.get("host") ?? "";
@@ -29,8 +12,7 @@ export async function POST(request: Request) {
 
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return new Response(null, { status: 403 });
-  if (Number(request.headers.get("content-length")) > 8192) return new Response(null, { status: 413 });
-  const text = await readBody(request);
+  const text = await readTextBody(request, 8192);
   if (text === null) return new Response(null, { status: 413 });
   let input: unknown;
   try {

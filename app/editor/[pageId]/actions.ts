@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/form-state";
 import { sanitizePuckData } from "@/lib/richtext";
 import { themeSchema } from "@/lib/theme/schema";
+import { rootSeoSchema } from "@/lib/seo";
 import {
   EMBED_MAX_LENGTH,
   collectEmbeds,
@@ -24,16 +25,6 @@ const puckDataSchema = z.looseObject({
   }),
 });
 
-type PuckDataInput = z.infer<typeof puckDataSchema>;
-
-function rootProps(data: PuckDataInput): { title?: string; description?: string } {
-  const props = (data.root.props ?? {}) as Record<string, unknown>;
-  return {
-    title: typeof props.title === "string" ? props.title : undefined,
-    description: typeof props.description === "string" ? props.description : undefined,
-  };
-}
-
 /**
  * Loads the page (via RLS) and applies the update. Also syncs the page
  * title and SEO from the Puck root fields into pages.title/pages.seo on
@@ -49,6 +40,8 @@ async function updatePage(
   if (!parsedId.success || !parsedData.success) {
     return { status: "error", message: "Invalid page data." };
   }
+  const parsedRoot = rootSeoSchema.safeParse(parsedData.data.root.props ?? {});
+  if (!parsedRoot.success) return { status: "error", message: "Invalid page SEO settings." };
 
   const { supabase, user } = await requireUser();
 
@@ -90,10 +83,13 @@ async function updatePage(
     }
   }
 
-  const root = rootProps(parsedData.data);
+  const root = parsedRoot.data;
   const seo = { ...(page.seo as Record<string, unknown>) };
-  if (root.title !== undefined) seo.title = root.title;
+  if (root.seoTitle !== undefined) seo.title = root.seoTitle;
+  else if (root.title !== undefined) seo.title = root.title;
   if (root.description !== undefined) seo.description = root.description;
+  if (root.socialImage !== undefined) seo.image = root.socialImage;
+  if (root.indexing !== undefined) seo.noindex = root.indexing === "inherit" ? null : root.indexing === "noindex";
 
   // Rich text props are client-authored HTML: sanitize before storing so
   // malicious markup never reaches site visitors or other editors.

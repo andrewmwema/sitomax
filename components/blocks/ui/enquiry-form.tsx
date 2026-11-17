@@ -1,4 +1,5 @@
 import type { ArrayField } from "@puckeditor/core";
+import { FormSubmission } from "./form-submission";
 
 export type EnquiryField = {
   label: string;
@@ -41,7 +42,7 @@ export function EnquiryForm({ formName, submitText, fields, note }: {
   note?: string;
 }) {
   return (
-    <form method="post" action="/api/forms/submit" className="flex flex-col gap-5">
+    <FormSubmission className="flex flex-col gap-5">
       <input type="hidden" name="_form_name" value={formName} />
       <input type="text" name="_website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
       {fields.map((field, i) => (
@@ -60,6 +61,6 @@ export function EnquiryForm({ formName, submitText, fields, note }: {
         {submitText}
       </button>
       {note ? <p className="text-sm" style={{ color: "var(--color-muted)" }}>{note}</p> : null}
-    </form>
+    </FormSubmission>
   );
 }
