@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Siteloom – Site editor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Inter+Tight:wght@500;600;700&amp;family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#4B3FE0}a:hover{color:#3427C2}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; background: #EDECE8; color: #121212; font-family: Inter, system-ui, sans-serif; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; overflow: hidden">
+
+<!-- Top bar -->
+<header style="flex: 0 0 auto; min-height: 56px; box-sizing: border-box; background: #FFFFFF; border-bottom: 1px solid #E8E7E3; padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px">
+<div style="flex: 1 1 280px; display: flex; align-items: center; gap: 8px; min-width: 0">
+<a href="#dashboard" aria-label="Back to dashboard" style="width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #3D3C39"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></a>
+<span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 7px; background: #1B2433; color: #E9C77B; display: flex; align-items: center; justify-content: center; font-family: 'Inter Tight', sans-serif; font-weight: 700; font-size: 12px">LS</span>
+<strong style="font-size: 14px; font-weight: 600; white-space: nowrap">Lone Star Roofing</strong>
+<span aria-hidden="true" style="color: #C9C7C1">/</span>
+<button type="button" style="display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: #F4F3F0; font: inherit; font-weight: 500; cursor: pointer">Home<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+</div>
+
+<div style="flex: 0 1 auto; display: flex; align-items: center; gap: 8px">
+<div role="group" aria-label="Preview device" style="display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: #F1F0EC">
+<button type="button" aria-label="Desktop" aria-pressed="true" style="width: 36px; height: 32px; border: 0; border-radius: 8px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(18,18,18,0.1); color: #121212; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg></button>
+<button type="button" aria-label="Tablet" aria-pressed="false" style="width: 36px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #5F5E5A; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="2" width="14" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></button>
+<button type="button" aria-label="Mobile" aria-pressed="false" style="width: 36px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #5F5E5A; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></button>
+</div>
+<button type="button" style="min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; font: inherit; color: #5F5E5A; cursor: pointer">100%</button>
+</div>
+
+<div style="flex: 1 1 280px; display: flex; align-items: center; justify-content: flex-end; gap: 6px">
+<span style="display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; font-size: 12px; color: #6B6A66"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#12A15E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>Saved</span>
+<button type="button" aria-label="Undo" style="width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path></svg></button>
+<button type="button" aria-label="Redo" style="width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: #A8A7A2; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"></path><path d="M20 9H9a5 5 0 0 0 0 10h3"></path></svg></button>
+<button type="button" aria-label="Version history" style="width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l3 2"></path></svg></button>
+<span aria-hidden="true" style="width: 1px; height: 20px; background: #E8E7E3; margin: 0 4px"></span>
+<a href="#preview" style="display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 9px; border: 1px solid #E2E1DC; color: #121212; font-weight: 500; text-decoration: none">Preview</a>
+<a href="#publish" style="display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 9px; background: #121212; color: #FFFFFF; font-weight: 600; text-decoration: none">Publish<span aria-hidden="true" style="width: 1px; height: 16px; background: #3A3A3A"></span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"></path></svg></a>
+</div>
+</header>
+
+<div style="flex: 1 1 auto; min-height: 0; display: flex">
+
+<!-- Icon rail -->
+<nav aria-label="Editor tools" style="flex: 0 0 68px; background: #FFFFFF; border-right: 1px solid #E8E7E3; padding: 10px 6px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 4px">
+<button type="button" aria-pressed="true" style="width: 56px; min-height: 52px; border: 0; border-radius: 10px; background: #EFEDFF; color: #3427C2; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>Add</button>
+<button type="button" aria-pressed="false" style="width: 56px; min-height: 52px; border: 0; border-radius: 10px; background: transparent; color: #5F5E5A; font: inherit; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5"></path><path d="m3 17 9 5 9-5"></path></svg>Layers</button>
+<button type="button" aria-pressed="false" style="width: 56px; min-height: 52px; border: 0; border-radius: 10px; background: transparent; color: #5F5E5A; font: inherit; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>Pages</button>
+<button type="button" aria-pressed="false" style="width: 56px; min-height: 52px; border: 0; border-radius: 10px; background: transparent; color: #5F5E5A; font: inherit; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 0 0 0 20c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2a5.5 5.5 0 0 0 5.5-5.5C22 6 17.5 2 12 2z"></path></svg>Theme</button>
+<button type="button" aria-pressed="false" style="width: 56px; min-height: 52px; border: 0; border-radius: 10px; background: transparent; color: #5F5E5A; font: inherit; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></svg>AI</button>
+<button type="button" aria-pressed="false" style="width: 56px; min-height: 52px; border: 0; border-radius: 10px; background: transparent; color: #5F5E5A; font: inherit; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>SEO</button>
+</nav>
+
+<!-- Section library -->
+<aside aria-label="Add section" style="flex: 0 0 300px; background: #FFFFFF; border-right: 1px solid #E8E7E3; display: flex; flex-direction: column; min-height: 0">
+<div style="padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #F1F0EC">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<h2 style="margin: 0; font-family: 'Inter Tight', Inter, sans-serif; font-size: 15px; font-weight: 600">Add section</h2>
+<span style="font-size: 12px; color: #6B6A66">58 designs</span>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 1px solid #E8E7E3; border-radius: 9px; background: #FAFAF8; color: #6B6A66">
+<svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search designs</span>
+<input type="search" placeholder="Search designs" style="flex: 1 1 auto; min-width: 0; border: 0; background: transparent; font: inherit; color: #121212; outline-offset: 2px">
+</label>
+<div role="group" aria-label="Categories" style="display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" aria-pressed="true" style="min-height: 30px; padding: 0 11px; border: 0; border-radius: 999px; background: #121212; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer">Hero</button>
+<button type="button" aria-pressed="false" style="min-height: 30px; padding: 0 11px; border: 1px solid #E8E7E3; border-radius: 999px; background: #FFFFFF; color: #3D3C39; font: inherit; font-size: 12px; cursor: pointer">Services</button>
+<button type="button" aria-pressed="false" style="min-height: 30px; padding: 0 11px; border: 1px solid #E8E7E3; border-radius: 999px; background: #FFFFFF; color: #3D3C39; font: inherit; font-size: 12px; cursor: pointer">About</button>
+<button type="button" aria-pressed="false" style="min-height: 30px; padding: 0 11px; border: 1px solid #E8E7E3; border-radius: 999px; background: #FFFFFF; color: #3D3C39; font: inherit; font-size: 12px; cursor: pointer">Text</button>
+<button type="button" aria-pressed="false" style="min-height: 30px; padding: 0 11px; border: 1px solid #E8E7E3; border-radius: 999px; background: #FFFFFF; color: #3D3C39; font: inherit; font-size: 12px; cursor: pointer">Pricing</button>
+<button type="button" aria-pressed="false" style="min-height: 30px; padding: 0 11px; border: 1px solid #E8E7E3; border-radius: 999px; background: #FFFFFF; color: #3D3C39; font: inherit; font-size: 12px; cursor: pointer">Reviews</button>
+<button type="button" aria-pressed="false" style="min-height: 30px; padding: 0 11px; border: 1px solid #E8E7E3; border-radius: 999px; background: #FFFFFF; color: #3D3C39; font: inherit; font-size: 12px; cursor: pointer">Contact</button>
+<button type="button" aria-pressed="false" style="min-height: 30px; padding: 0 11px; border: 1px solid #E8E7E3; border-radius: 999px; background: #FFFFFF; color: #3D3C39; font: inherit; font-size: 12px; cursor: pointer">More ▾</button>
+</div>
+</div>
+<div style="flex: 1 1 auto; overflow-y: auto; padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 14px">
+<p style="margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6B6A66"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01"></path><path d="M11 12h1v4h1"></path></svg>Previews use your brand colors and fonts</p>
+
+<button type="button" style="display: block; width: 100%; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer">
+<span style="display: block; position: relative; height: 128px; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 2px {{accent}}">
+<img src="/_blob/cb4b51236afe9d482f3a8f83d1e1552d" alt="" style="width: 100%; height: 128px; object-fit: cover; display: block">
+<span aria-hidden="true" style="position: absolute; inset: 0; background: rgba(12,16,24,0.5); display: flex; flex-direction: column; justify-content: center; padding: 0 16px; gap: 4px">
+<span style="font-family: Fraunces, Georgia, serif; font-size: 15px; color: #FFFFFF; line-height: 1.15">Roofs built for Texas weather</span>
+<span style="width: 54px; height: 12px; border-radius: 3px; background: #D7A746"></span>
+</span>
+</span>
+<span style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px"><span style="font-weight: 500">Photo with overlay</span><span style="color: #3427C2; font-weight: 600">In use</span></span>
+</button>
+
+<button type="button" style="display: block; width: 100%; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer">
+<span style="display: flex; height: 128px; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px #E8E7E3; background: #F6F3EC">
+<span aria-hidden="true" style="flex: 1 1 55%; padding: 0 12px 0 16px; display: flex; flex-direction: column; justify-content: center; gap: 5px">
+<span style="font-family: Fraunces, Georgia, serif; font-size: 13px; color: #1B2433; line-height: 1.2">Quality roofs, done right</span>
+<span style="width: 80%; height: 4px; border-radius: 2px; background: #D9D5CA"></span>
+<span style="width: 60%; height: 4px; border-radius: 2px; background: #D9D5CA"></span>
+<span style="width: 46px; height: 11px; margin-top: 3px; border-radius: 3px; background: #1B2433"></span>
+</span>
+<img src="/_blob/280100f42e75c0a2a14f9da1358735e2" alt="" style="flex: 1 1 45%; width: 45%; height: 128px; object-fit: cover; display: block">
+</span>
+<span style="display: block; margin-top: 8px; font-size: 12px; font-weight: 500">Split with image</span>
+</button>
+
+<button type="button" style="display: block; width: 100%; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer">
+<span style="display: flex; height: 128px; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px #E8E7E3; background: #1B2433; align-items: center; gap: 12px; padding: 0 14px; box-sizing: border-box">
+<span aria-hidden="true" style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 5px">
+<span style="font-family: Fraunces, Georgia, serif; font-size: 13px; color: #FFFFFF; line-height: 1.2">Tell us about your roof</span>
+<span style="width: 70%; height: 4px; border-radius: 2px; background: #3A4659"></span>
+<span style="width: 50%; height: 4px; border-radius: 2px; background: #3A4659"></span>
+</span>
+<span aria-hidden="true" style="flex: 0 0 96px; height: 92px; border-radius: 6px; background: #FFFFFF; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px">
+<span style="height: 12px; border-radius: 3px; background: #EFEEEA"></span>
+<span style="height: 12px; border-radius: 3px; background: #EFEEEA"></span>
+<span style="height: 12px; border-radius: 3px; background: #EFEEEA"></span>
+<span style="height: 14px; border-radius: 3px; background: #D7A746"></span>
+</span>
+</span>
+<span style="display: block; margin-top: 8px; font-size: 12px; font-weight: 500">With lead form</span>
+</button>
+
+<button type="button" style="display: block; width: 100%; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer">
+<span style="display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; height: 128px; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px #E8E7E3; background: #FFFFFF">
+<span aria-hidden="true" style="padding: 2px 8px; border-radius: 999px; background: #F1EFE8; font-size: 8px; color: #5F5E5A">[4.9] rating</span>
+<span aria-hidden="true" style="font-family: Fraunces, Georgia, serif; font-size: 14px; color: #1B2433">Five-star roofing, right next door</span>
+<span aria-hidden="true" style="display: flex; gap: 6px"><span style="width: 46px; height: 11px; border-radius: 3px; background: #1B2433"></span><span style="width: 46px; height: 11px; border-radius: 3px; box-shadow: inset 0 0 0 1px #C9C7C1"></span></span>
+</span>
+<span style="display: block; margin-top: 8px; font-size: 12px; font-weight: 500">Centered with badge</span>
+</button>
+</div>
+</aside>
+
+<!-- Canvas -->
+<main aria-label="Page canvas" style="flex: 1 1 auto; min-width: 0; position: relative; padding: 24px 28px; box-sizing: border-box; overflow: hidden">
+<div style="max-width: 980px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(18,18,18,0.06), 0 12px 32px rgba(18,18,18,0.08); overflow: hidden">
+
+<!-- Site nav -->
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 32px; background: #1B2433; color: #FFFFFF">
+<span style="font-family: Fraunces, Georgia, serif; font-size: 18px; font-weight: 600">Lone Star Roofing</span>
+<span style="display: flex; align-items: center; gap: 20px; font-size: 12px; color: #D5DAE3">Services<span>Storm damage</span><span>About</span><span style="padding: 7px 14px; border-radius: 4px; background: #D7A746; color: #1B2433; font-weight: 600">Free inspection</span></span>
+</div>
+
+<!-- Selected hero -->
+<div style="position: relative; height: 380px; outline: 2px solid {{accent}}; outline-offset: -2px">
+<img src="/_blob/cb4b51236afe9d482f3a8f83d1e1552d" alt="Lone Star Roofing hero photo of a stone and siding home" style="width: 100%; height: 380px; object-fit: cover; display: block">
+<div style="position: absolute; inset: 0; background: rgba(14,20,30,0.55); display: flex; flex-direction: column; justify-content: center; padding: 0 56px; gap: 14px">
+<span style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E9C77B">Storm damage specialists · Austin, TX</span>
+<span style="max-width: 520px; font-family: Fraunces, Georgia, serif; font-size: 44px; font-weight: 500; line-height: 1.05; color: #FFFFFF; letter-spacing: -0.5px">Roofs built for Texas weather.</span>
+<span style="max-width: 460px; font-size: 14px; color: #E2E6EC">Free inspections, insurance claim help and roofs installed by our own licensed crews since [year].</span>
+<span style="display: flex; gap: 10px; margin-top: 6px"><span style="padding: 11px 18px; border-radius: 4px; background: #D7A746; color: #1B2433; font-size: 13px; font-weight: 600">Book a free inspection</span><span style="padding: 11px 18px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.7); color: #FFFFFF; font-size: 13px; font-weight: 600">Our work</span></span>
+</div>
+<span style="position: absolute; top: 0; left: 0; padding: 4px 10px; border-radius: 0 0 8px 0; background: {{accent}}; color: #FFFFFF; font-size: 11px; font-weight: 600">Hero · Photo with overlay</span>
+<div role="toolbar" aria-label="Section actions" style="position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 10px; background: #FFFFFF; box-shadow: 0 6px 20px rgba(18,18,18,0.18)">
+<button type="button" aria-label="Move section up" style="width: 32px; height: 32px; border: 0; border-radius: 7px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+<button type="button" aria-label="Move section down" style="width: 32px; height: 32px; border: 0; border-radius: 7px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button type="button" aria-label="Duplicate section" style="width: 32px; height: 32px; border: 0; border-radius: 7px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg></button>
+<button type="button" style="display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: #EFEDFF; color: #3427C2; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></svg>Ask AI</button>
+<button type="button" aria-label="More section actions" style="width: 32px; height: 32px; border: 0; border-radius: 7px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></button>
+</div>
+</div>
+
+<!-- Insert point -->
+<div style="position: relative; height: 0">
+<button type="button" style="position: absolute; left: 50%; top: -15px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: #121212; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 500; box-shadow: 0 4px 12px rgba(18,18,18,0.2); cursor: pointer; z-index: 2"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>Add section</button>
+</div>
+
+<!-- Next section peek -->
+<div style="padding: 48px 56px 64px; background: #FFFFFF">
+<span style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #8A6424">What we do</span>
+<p style="margin: 8px 0 0; font-family: Fraunces, Georgia, serif; font-size: 28px; color: #1B2433">Every roof, from one leak to a full replacement.</p>
+<div style="margin-top: 24px; display: flex; gap: 16px">
+<span style="flex: 1 1 0; height: 92px; border-radius: 6px; box-shadow: inset 0 0 0 1px #E8E7E3"></span>
+<span style="flex: 1 1 0; height: 92px; border-radius: 6px; box-shadow: inset 0 0 0 1px #E8E7E3"></span>
+<span style="flex: 1 1 0; height: 92px; border-radius: 6px; box-shadow: inset 0 0 0 1px #E8E7E3"></span>
+</div>
+</div>
+</div>
+
+<!-- AI command bar -->
+<div style="position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(620px, calc(100% - 48px)); background: #FFFFFF; border-radius: 14px; box-shadow: 0 0 0 1px #E8E7E3, 0 16px 40px rgba(18,18,18,0.16); padding: 10px 10px 10px 14px; box-sizing: border-box">
+<label style="display: flex; align-items: center; gap: 10px">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4B3FE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></svg>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Ask AI to change the selected section</span>
+<input type="text" placeholder="Ask AI to change this section…" style="flex: 1 1 auto; min-width: 0; min-height: 36px; border: 0; font: inherit; font-size: 14px; color: #121212; background: transparent">
+<button type="button" aria-label="Send" style="width: 36px; height: 36px; border: 0; border-radius: 10px; background: #121212; color: #FFFFFF; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path></svg></button>
+</label>
+<div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" style="min-height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: #F4F3F0; font: inherit; font-size: 12px; color: #3D3C39; cursor: pointer">More upscale</button>
+<button type="button" style="min-height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: #F4F3F0; font: inherit; font-size: 12px; color: #3D3C39; cursor: pointer">Shorter copy</button>
+<button type="button" style="min-height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: #F4F3F0; font: inherit; font-size: 12px; color: #3D3C39; cursor: pointer">Add a trust row</button>
+<button type="button" style="min-height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: #F4F3F0; font: inherit; font-size: 12px; color: #3D3C39; cursor: pointer">Improve for SEO</button>
+</div>
+</div>
+</main>
+
+<!-- Inspector -->
+<aside aria-label="Section settings" style="flex: 0 0 312px; background: #FFFFFF; border-left: 1px solid #E8E7E3; display: flex; flex-direction: column; min-height: 0">
+<div style="padding: 14px 18px 0">
+<p style="margin: 0; font-size: 12px; color: #6B6A66">Home <span aria-hidden="true">›</span> <span style="color: #121212; font-weight: 600">Hero</span></p>
+<div role="tablist" aria-label="Settings" style="margin-top: 12px; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: #F1F0EC">
+<button type="button" role="tab" aria-selected="true" style="flex: 1 1 0; min-height: 32px; border: 0; border-radius: 8px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(18,18,18,0.1); font: inherit; font-size: 12px; font-weight: 600; color: #121212; cursor: pointer">Content</button>
+<button type="button" role="tab" aria-selected="false" style="flex: 1 1 0; min-height: 32px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 12px; color: #5F5E5A; cursor: pointer">Design</button>
+<button type="button" role="tab" aria-selected="false" style="flex: 1 1 0; min-height: 32px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 12px; color: #5F5E5A; cursor: pointer">Motion</button>
+</div>
+</div>
+<div style="flex: 1 1 auto; overflow-y: auto; padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 18px">
+
+<div>
+<p style="margin: 0 0 8px; font-size: 12px; font-weight: 600">Layout</p>
+<div role="group" aria-label="Hero layout" style="display: flex; gap: 8px">
+<button type="button" aria-label="Photo with overlay" aria-pressed="true" style="flex: 1 1 0; height: 52px; border: 0; border-radius: 8px; background: #2B3444; box-shadow: 0 0 0 2px {{accent}}; cursor: pointer; padding: 10px; box-sizing: border-box"><span aria-hidden="true" style="display: block; width: 60%; height: 5px; border-radius: 2px; background: #FFFFFF"></span></button>
+<button type="button" aria-label="Split with image" aria-pressed="false" style="flex: 1 1 0; height: 52px; border: 0; border-radius: 8px; background: #F4F3F0; box-shadow: 0 0 0 1px #E8E7E3; cursor: pointer; display: flex; gap: 6px; padding: 8px; box-sizing: border-box"><span aria-hidden="true" style="flex: 1 1 0; display: flex; flex-direction: column; gap: 4px; justify-content: center"><span style="height: 4px; border-radius: 2px; background: #6B6A66"></span><span style="height: 4px; width: 70%; border-radius: 2px; background: #C9C7C1"></span></span><span aria-hidden="true" style="flex: 1 1 0; border-radius: 4px; background: #C9C7C1"></span></button>
+<button type="button" aria-label="Centered" aria-pressed="false" style="flex: 1 1 0; height: 52px; border: 0; border-radius: 8px; background: #F4F3F0; box-shadow: 0 0 0 1px #E8E7E3; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px"><span aria-hidden="true" style="width: 60%; height: 4px; border-radius: 2px; background: #6B6A66"></span><span aria-hidden="true" style="width: 40%; height: 4px; border-radius: 2px; background: #C9C7C1"></span></button>
+</div>
+</div>
+
+<label style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; font-weight: 600">Eyebrow</span>
+<input type="text" value="Storm damage specialists · Austin, TX" style="min-height: 38px; padding: 0 12px; border: 1px solid #E2E1DC; border-radius: 9px; font: inherit; color: #121212">
+</label>
+
+<label style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; font-weight: 600">Heading</span>
+<input type="text" value="Roofs built for Texas weather." style="min-height: 38px; padding: 0 12px; border: 1px solid #E2E1DC; border-radius: 9px; font: inherit; color: #121212">
+</label>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; font-weight: 600">Text</span>
+<div style="border: 1px solid #E2E1DC; border-radius: 9px; overflow: hidden">
+<div role="toolbar" aria-label="Text formatting" style="display: flex; gap: 2px; padding: 4px; border-bottom: 1px solid #F1F0EC; background: #FAFAF8">
+<button type="button" aria-label="Bold" style="width: 30px; height: 28px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-weight: 700; cursor: pointer">B</button>
+<button type="button" aria-label="Italic" style="width: 30px; height: 28px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-style: italic; cursor: pointer">I</button>
+<button type="button" aria-label="Underline" style="width: 30px; height: 28px; border: 0; border-radius: 6px; background: transparent; font: inherit; text-decoration: underline; cursor: pointer">U</button>
+<button type="button" aria-label="Link" style="width: 30px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"></path></svg></button>
+<button type="button" aria-label="Bulleted list" style="width: 30px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: #3D3C39; cursor: pointer"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11"></path><path d="M9 12h11"></path><path d="M9 18h11"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle></svg></button>
+</div>
+<p style="margin: 0; padding: 10px 12px; font-size: 13px; color: #3D3C39">Free inspections, insurance claim help and roofs installed by our own licensed crews since <mark style="background: #FFF1C9; color: #6B4E00; padding: 0 2px; border-radius: 3px">[year]</mark>.</p>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 600">Buttons</span>
+<div style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 1px solid #E2E1DC; border-radius: 9px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 3px; background: #D7A746"></span><span style="flex: 1 1 auto">Book a free inspection</span><span style="font-size: 12px; color: #6B6A66">/contact</span></div>
+<div style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 1px solid #E2E1DC; border-radius: 9px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 3px; box-shadow: inset 0 0 0 1.5px #6B6A66"></span><span style="flex: 1 1 auto">Our work</span><span style="font-size: 12px; color: #6B6A66">/projects</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 600">Background photo</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<img src="/_blob/cb4b51236afe9d482f3a8f83d1e1552d" alt="Current background photo" style="width: 64px; height: 44px; object-fit: cover; border-radius: 7px; display: block">
+<span style="flex: 1 1 auto; font-size: 12px; color: #5F5E5A">Overlay 55%</span>
+<button type="button" style="min-height: 32px; padding: 0 10px; border: 1px solid #E2E1DC; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer">Replace</button>
+</div>
+</div>
+</div>
+</aside>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#4B3FE0","options":["#4B3FE0","#0F766E","#C2410C","#121212"]},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return { accent: this.props.accent ?? '#4B3FE0' };
+}
+}
+</script>
+</body>
+</html>
