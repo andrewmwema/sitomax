@@ -1,10 +1,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { buildGeneratedSite, SiteGenerationError } from "@/lib/ai/generate-site";
+import { buildGeneratedSite, retryGeneratedPage, SiteGenerationError } from "@/lib/ai/generate-site";
 import { AiProviderError, aiErrorMessage } from "@/lib/ai/provider-error";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 /** The streamed transport and Server Action share exactly the same pipeline. */
 export async function POST(request: Request) {
@@ -23,6 +23,13 @@ export async function POST(request: Request) {
         if (!disconnected) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       };
       try {
+        const retry = z.strictObject({ retryId: z.uuid() }).safeParse(raw);
+        if (retry.success) {
+          const page = await retryGeneratedPage(retry.data.retryId, (progress) => send({ type: "progress", ...progress }), requestId);
+          revalidatePath("/dashboard");
+          send({ type: "retry", page });
+          return;
+        }
         const result = await buildGeneratedSite(raw, (progress) => send({ type: "progress", ...progress }), requestId);
         revalidatePath("/dashboard");
         revalidatePath(`/dashboard/sites/${result.siteId}`);

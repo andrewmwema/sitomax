@@ -4,7 +4,7 @@ import { createContext, useContext } from "react";
 import type { DeviceId } from "@/lib/sections/design";
 
 export type InspectorTab = "content" | "style" | "animation" | "spacing";
-export type EditorPageLink = { id: string; slug: string; title: string | null; nav_label?: string | null };
+export type EditorPageLink = { id: string; slug: string; title: string | null; nav_label?: string | null; hide_from_menu?: boolean; ai_pending_build?: boolean };
 export type InteractionUi = {
   pageId: string;
   accountId: string;

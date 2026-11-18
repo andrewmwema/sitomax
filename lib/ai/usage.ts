@@ -47,20 +47,54 @@ export async function checkLimit(
   return { id: z.uuid().parse(id), model };
 }
 
-export async function beginSiteGeneration(accountId: string, siteId?: string): Promise<string> {
+export async function beginSiteGeneration(accountId: string, siteId?: string, pageCount?: number): Promise<string> {
   const parsed = z.object({ accountId: z.uuid(), siteId: z.uuid().optional() }).parse({ accountId, siteId });
   const user = await authorizeAccount(parsed.accountId);
-  const { data, error } = await createAdminClient().rpc("begin_ai_site_generation", {
+  const { data, error } = await createAdminClient().rpc(pageCount === undefined ? "begin_ai_site_generation" : "begin_selected_ai_generation", {
     p_user_id: user.id, p_account_id: parsed.accountId, p_site_id: parsed.siteId ?? null,
     p_model: modelForAction("generate_site"),
+    ...(pageCount === undefined ? {} : { p_page_count: z.number().int().min(1).max(10).parse(pageCount) }),
   });
   if (error) {
     if (error.code === "P0001" || error.code === "42501") throw new Error(error.message);
     throw new Error("Could not reserve a site generation.", { cause: error });
   }
+
   return z.uuid().parse(data);
 }
 
+export async function stageSelectedGeneration(accountId: string, siteId: string, generationId: string, pages: unknown) {
+  const user = await authorizeAccount(accountId);
+  const { data, error } = await createAdminClient().from("ai_requests").update({ selected_page_result: pages })
+    .eq("id", generationId).eq("user_id", user.id).eq("account_id", accountId).eq("site_id", siteId)
+    .eq("status", "pending").eq("is_generation", true).is("generation_id", null).is("selected_page_result", null)
+    .select("id").single();
+  if (error || !data) throw new Error("Could not finalize the generation reservation.", { cause: error });
+}
+
+export async function claimPageRetry(retryId: string) {
+  const { supabase, user } = await requireUser();
+  const { data: visible, error: accessError } = await supabase.rpc("can_retry_ai_page", { p_retry_id: retryId });
+  if (accessError || visible !== true) throw new Error("This retry is not available.", { cause: accessError });
+  const { data, error } = await createAdminClient().rpc("claim_ai_page_retry", { p_retry_id: retryId, p_user_id: user.id });
+  if (error) throw new Error(error.code === "P0001" ? error.message : "This retry is not available.", { cause: error });
+  return z.object({ leaseId: z.uuid(), pageId: z.uuid(), siteId: z.uuid(), accountId: z.uuid(), slug: z.string(), spec: z.unknown() }).parse(data);
+}
+
+export async function finishPageRetry(retryId: string, leaseId: string, data?: unknown) {
+  const { supabase, user } = await requireUser();
+  const { data: visible, error: accessError } = await supabase.rpc("can_retry_ai_page", { p_retry_id: retryId });
+  if (accessError || visible !== true) throw new Error("This retry is no longer available.", { cause: accessError });
+  if (data !== undefined) {
+    const staged = await createAdminClient().from("ai_requests").update({ selected_page_result: data })
+      .eq("id", leaseId).eq("user_id", user.id).eq("status", "pending").eq("is_generation", true)
+      .not("generation_id", "is", null).select("id").single();
+    if (staged.error) throw new Error("Could not finalize the retry reservation.", { cause: staged.error });
+  }
+  const { error, data: saved } = await supabase.rpc("finish_ai_page_retry", { p_retry_id: retryId, p_lease_id: leaseId });
+  if (error) throw new Error("Could not complete the page retry.", { cause: error });
+  return saved === true;
+}
 export async function finishSiteGeneration(id: string, success: boolean, siteId?: string): Promise<void> {
   const { error } = await createAdminClient().rpc("finish_ai_site_generation", {
     p_generation_id: z.uuid().parse(id), p_success: success,

@@ -35,14 +35,14 @@ function generationBrief(input: GenerationInput) {
   return {
     businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
     difference: input.difference, style: input.style, styleDirection: input.styleDirection, fontDirection: input.fontDirection,
-    designDescription: input.designDescription, desiredPages: input.desiredPages, desiredSections: input.desiredSections,
+    designDescription: input.designDescription, desiredPages: input.desiredPages, desiredSections: input.desiredSections, pageDetails: input.pageDetails,
     primaryColor: input.primaryColor, secondaryColor: input.secondaryColor, phone: input.phone, email: input.email,
     address: input.address, tone: input.tone, openingHours: input.openingHours, description: input.description,
   };
 }
 
 export async function writeCustomPage(
-  call: SiteToolCall, input: GenerationInput, trace: SiteToolTrace, plan: Plan,
+  call: SiteToolCall, input: GenerationInput, trace: SiteToolTrace, plan: Pick<Plan, "style" | "colors" | "fonts">,
   page: Plan["pages"][number], label: string, emit: (event: GenerationProgress) => void, warnings = new Set<string>(),
 ) {
   const brief = generationBrief(input);

@@ -7,42 +7,27 @@ import { puckConfig } from "@/lib/puck/config";
 import { sanitizePuckData } from "@/lib/richtext";
 import { businessSchema } from "@/lib/business";
 import { isReservedForAccountSite } from "@/lib/reserved-subdomains";
-import { contrastRatio } from "@/lib/theme/presets";
+import { contrastRatio, DEFAULT_COLORS, type SiteTheme } from "@/lib/theme/presets";
 import { CURATED_FONTS } from "@/lib/theme/fonts";
 import { requestAi } from "./client";
 import { AiProviderError } from "./provider-error";
-import { beginSiteGeneration, finishSiteGeneration } from "./usage";
-import { createGenerationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
-import { defaultSection, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
+import { beginSiteGeneration, claimPageRetry, finishPageRetry, finishSiteGeneration, stageSelectedGeneration } from "./usage";
+import { createGenerationInputSchema, type GenerationInput, type GenerationOutcome, type GenerationProgress, type GenerationResult } from "./site-input";
+import { catalogPageSections, defaultSection, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
 import { fillPage, runSiteTool, validationMessage, type SiteToolCall } from "./site-tool";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
 import { CUSTOM_LAYOUT_CONTRACT, customSystemPrompt } from "./custom-layout";
 import { CustomSiteError, customSiteMaxTokens, planCustomSite, writeCustomPage } from "./custom-site";
 import { brand } from "@/lib/brand";
-import { defaultMenuLabel, pageMenuLinks } from "@/lib/page-navigation";
+import { defaultMenuLabel, menuLabelSchema, pageMenuLinks } from "@/lib/page-navigation";
 import { reviewGeneratedPage } from "./site-quality";
+import { fallbackPageSeo, normalizeSelectedPages, requestedSectionsForPage, selectedPageBriefs } from "./selected-pages";
+import { isEmptyPage } from "@/lib/editor/empty-page";
+import { themeSchema } from "@/lib/theme/schema";
 
 export class SiteGenerationError extends Error {
   constructor(message: string, readonly validationIssues?: CustomSiteError["issues"]) { super(message); }
-}
-
-const desiredSectionTerms: Record<GenerationInput["desiredSections"][number], RegExp> = {
-  gallery: /gallery|portfolio/i,
-  testimonials: /testimonial|review/i,
-  faq: /\bfaq\b|question/i,
-  pricing: /pricing|price/i,
-  team: /\bteam\b|staff/i,
-  process: /process|step/i,
-  logos: /logo|partner/i,
-};
-
-function requireDesiredSections(sections: unknown[], input: GenerationInput, ctx: z.RefinementCtx) {
-  const descriptions = sections.map((section) => typeof section === "string" ? section
-    : section && typeof section === "object" && "blockType" in section ? String(section.blockType) : "");
-  for (const desired of input.desiredSections) if (!descriptions.some((description) => desiredSectionTerms[desired].test(description))) {
-    ctx.addIssue({ code: "custom", path: ["pages"], message: `Include the requested ${desired} section.` });
-  }
 }
 
 async function authorize(input: GenerationInput) {
@@ -60,26 +45,27 @@ async function authorize(input: GenerationInput) {
   if (!input.siteId && input.subdomain && isReservedForAccountSite(input.subdomain, Boolean(admin), account.is_internal === true)) {
     throw new SiteGenerationError("This subdomain is reserved.");
   }
+  let existingTheme: SiteTheme | undefined;
   if (input.siteId) {
-    const { data: site, error } = await supabase.from("sites").select("id")
+    const { data: site, error } = await supabase.from("sites").select("id, theme, draft_theme")
       .eq("id", input.siteId).eq("account_id", input.accountId).maybeSingle();
     if (error || !site) throw new SiteGenerationError("This site is unavailable to your account.");
+    existingTheme = themeSchema.parse(site.draft_theme ?? site.theme ?? {});
   } else {
     const { data, error } = await supabase.from("sites").select("id").eq("subdomain", input.subdomain!).maybeSingle();
     if (error) throw new SiteGenerationError("Could not check the subdomain.");
     if (data) throw new SiteGenerationError("This subdomain is already in use.");
   }
-  return { supabase, user, isAdmin: Boolean(admin) };
+  return { supabase, userId: user.id, isAdmin: Boolean(admin), existingTheme };
 }
 
 function planValidator(input: GenerationInput) {
-  return planSchema.superRefine((plan, ctx) => {
+  const selected = new Set(input.desiredPages);
+  return z.preprocess((value) => {
+    if (!value || typeof value !== "object" || !("pages" in value) || !Array.isArray(value.pages)) return value;
+    return { ...value, pages: value.pages.filter((page) => page && typeof page.slug === "string" && selected.has(page.slug)) };
+  }, planSchema.superRefine((plan, ctx) => {
     if (input.style !== "auto" && plan.style !== input.style) ctx.addIssue({ code: "custom", path: ["style"], message: "Respect the requested style." });
-    const slugs = plan.pages.map(({ slug }) => slug);
-    if (slugs.length !== input.desiredPages.length || input.desiredPages.some((slug) => !slugs.includes(slug))) {
-      ctx.addIssue({ code: "custom", path: ["pages"], message: "Include each requested page exactly once and omit unselected pages." });
-    }
-    requireDesiredSections(plan.pages.flatMap(({ sections }) => sections), input, ctx);
     if (input.fontDirection !== "auto") {
       const headingCategory = CURATED_FONTS.find(({ name }) => name === plan.fonts.heading)?.category;
       if (input.fontDirection === "serif" && headingCategory !== "Serif") {
@@ -92,17 +78,102 @@ function planValidator(input: GenerationInput) {
     }
     const bg = plan.colors.background, fg = plan.colors.text;
     if (contrastRatio(bg, fg) < 4.5) ctx.addIssue({ code: "custom", path: ["colors"], message: "Body text/background contrast must be at least 4.5:1." });
-  });
+  }));
 }
+
+type CustomPlan = Awaited<ReturnType<typeof planCustomSite>>;
+type BuildPage =
+  | { mode: "custom"; page: CustomPlan["pages"][number]; plan: Pick<CustomPlan, "style" | "colors" | "fonts"> }
+  | { mode: "catalog"; page: SitePlan["pages"][number] };
+type RetrySpec = { input: GenerationInput; build: BuildPage; theme: SiteTheme; menu: { slug: string; nav_label: string }[] };
+
+function providerCall(input: GenerationInput, generationId: string, requestId: string, deadline = Date.now() + 620_000): SiteToolCall {
+  return async (tool, messages) => {
+    if (Date.now() >= deadline) throw new SiteGenerationError("This run reached its time limit. Retry the remaining pages for free.");
+    return requestAi({
+    accountId: input.accountId, siteId: input.siteId, action: "generate_site", generationId, correlationId: requestId,
+    system: input.generationMode === "custom" ? customSystemPrompt() : SITE_SYSTEM_PROMPT, cacheTtl: "5m",
+    tools: [tool], toolName: tool.name,
+    maxTokens: input.generationMode === "custom" ? customSiteMaxTokens(tool.name) : tool.name === "plan_site" ? 7000 : 16000,
+    ...(input.generationMode === "custom" ? { customGeneration: true } : {}),
+    messages,
+    });
+  };
+}
+
+function businessProfile(input: GenerationInput) {
+  const { businessName, businessType, city, services, difference, tone, phone, email, address, openingHours } = input;
+  return businessSchema.parse({ businessName, businessType, city, services, difference, tone, phone, email, address, openingHours });
+}
+
+async function buildSelectedPage(spec: RetrySpec, call: SiteToolCall, trace: { generationId: string; requestId: string; contract: string },
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], assetSiteId: string, emit: (event: GenerationProgress) => void) {
+  const { input, build, theme, menu } = spec;
+  const { page } = build;
+  const brief = selectedPageBriefs(input).find(({ slug }) => slug === page.slug);
+  const label = brief?.label ?? defaultMenuLabel(page.slug);
+  const warnings = new Set<string>();
+  const business = businessProfile(input);
+  let content: { type: string; props: Record<string, unknown> }[];
+  if (build.mode === "custom") {
+    content = await writeCustomPage(call, input, trace, build.plan, build.page, label, emit, warnings);
+  } else {
+    const { slots, schema, task, tool } = pageFillContract(build.page);
+    const parsed = await fillPage(call, tool, schema, `${task}\nPAGE PURPOSE: ${JSON.stringify(brief?.purpose ?? "")}\nBUSINESS DATA:\n${JSON.stringify({
+      ...business, description: input.description, styleDirection: input.styleDirection, designDescription: input.designDescription,
+      sitePages: menu,
+    })}`);
+    if (!parsed.success) throw new SiteGenerationError(`Page ${label} failed validation after repair.`);
+    content = slots.map(({ key, designId, imageField }) => {
+      const item = defaultSection(designId);
+      if (imageField) item.props[imageField] = "";
+      item.props = { ...item.props, ...parsed.data.sections[key] };
+      return item;
+    });
+  }
+  const nav = { type: "Navigation", props: {
+    ...puckConfig.components.Navigation.defaultProps, id: `Navigation-${crypto.randomUUID()}`, businessName: input.businessName,
+    links: pageMenuLinks(menu), buttonLink: menu.some(({ slug }) => slug === "contact") ? "/contact"
+      : content.some(({ type }) => type === "ContactForm") ? "#contact" : "",
+  } };
+  const resolve = createPhotoResolver(warnings, { supabase, accountId: input.accountId, siteId: assetSiteId });
+  for (const section of content) section.props.photoCredits = await fillSectionPhotos(section.type, section.props, resolve);
+  const seo = page.seo ?? fallbackPageSeo(label, input.businessName);
+  const draft = sanitizePuckData({
+    root: { props: { title: page.title, seoTitle: seo.title.trim(), description: seo.description.trim() } },
+    content: [nav, ...content],
+  });
+  const review = reviewGeneratedPage(draft.content, { pages: menu, slug: page.slug, business, theme });
+  if (review.content.filter(({ type }) => type !== "Navigation").length < 2 || !draft.root.props.seoTitle || !draft.root.props.description) {
+    throw new SiteGenerationError(`${label} did not pass the final page checks.`);
+  }
+  return { ...draft, content: review.content, root: { props: { ...draft.root.props, generationWarnings: [...review.notes, ...warnings] } } };
+}
+
+const savedPagesSchema = z.array(z.object({
+  slug: z.string(), pageId: z.uuid().nullable(), built: z.boolean(), conflict: z.boolean().optional(),
+  retryId: z.uuid().nullish(),
+}));
 
 export async function buildGeneratedSite(
   raw: unknown, emit: (event: GenerationProgress) => void = () => {}, requestId: string = crypto.randomUUID(),
 ): Promise<GenerationResult> {
   const input = createGenerationInputSchema(brand.marketingSiteSubdomain, true).parse(raw);
-  const { supabase, isAdmin } = await authorize(input);
+  const { supabase, userId, isAdmin, existingTheme } = await authorize(input);
+  const existing = input.siteId ? await supabase.from("pages").select("id, slug, title, nav_label, draft_data, published_data")
+    .eq("site_id", input.siteId).order("sort_order") : null;
+  if (existing?.error) throw new SiteGenerationError("Could not check the existing pages.");
+  const current = existing?.data ?? [];
+  if (!input.confirmReplace && current.some((page) => input.desiredPages.includes(page.slug) &&
+    (!isEmptyPage(page.draft_data) || (page.published_data && !isEmptyPage(page.published_data))))) {
+    throw new SiteGenerationError("Confirm that the selected drafts with content can be replaced.");
+  }
+  if (current.some((page) => input.pageDetails?.some(({ slug }) => slug === page.slug))) {
+    throw new SiteGenerationError("A custom page address is already in use.");
+  }
   if (!process.env.ANTHROPIC_API_KEY) throw new SiteGenerationError("AI is not configured. Ask your agency to enable it.");
   let generationId: string;
-  try { generationId = await beginSiteGeneration(input.accountId, input.siteId); }
+  try { generationId = await beginSiteGeneration(input.accountId, input.siteId, input.desiredPages.length); }
   catch (cause) {
     throw new SiteGenerationError(cause instanceof Error ? cause.message : "Could not reserve a site generation.");
   }
@@ -116,39 +187,26 @@ export async function buildGeneratedSite(
     generationMode: input.generationMode, styleDirection: input.styleDirection, fontDirection: input.fontDirection,
     designDescription: input.designDescription, desiredPages: input.desiredPages, desiredSections: input.desiredSections,
   });
-  const businessProfile = businessSchema.parse({
-    businessName: input.businessName, businessType: input.businessType, city: input.city,
-    services: input.services, difference: input.difference, tone: input.tone,
-    phone: input.phone, email: input.email, address: input.address, openingHours: input.openingHours,
-  });
-  const call: SiteToolCall = (tool, messages) => requestAi({
-      accountId: input.accountId, siteId: input.siteId, action: "generate_site", generationId, correlationId: requestId,
-      system: input.generationMode === "custom" ? customSystemPrompt() : SITE_SYSTEM_PROMPT, cacheTtl: "5m",
-      tools: [tool], toolName: tool.name,
-      maxTokens: input.generationMode === "custom" ? customSiteMaxTokens(tool.name) : tool.name === "plan_site" ? 7000 : 16000,
-      ...(input.generationMode === "custom" ? { customGeneration: true } : {}),
-      messages,
-  });
+  const call = providerCall(input, generationId, requestId);
   const prompt = (task: string) => `${task}\nBUSINESS DATA:\n${business}`;
   try {
     emit({ message: "Planning your site…" });
-    let planPages: { slug: typeof PAGE_SLUGS[number]; title: string; sections: unknown[]; seo?: SitePlan["seo"]["home"] }[];
+    let planPages: BuildPage[];
     let planStyle: "classic" | "modern";
     let planColors: SitePlan["colors"];
     let planFonts: SitePlan["fonts"];
-    let planSeo: SitePlan["seo"] | undefined;
     const customPlan = input.generationMode === "custom" ? await planCustomSite(call, input, trace) : undefined;
     if (customPlan) {
-      planPages = customPlan.pages;
+      planPages = customPlan.pages.map((page) => ({ mode: "custom", page, plan: customPlan }));
       planStyle = customPlan.style;
       planColors = customPlan.colors;
       planFonts = customPlan.fonts;
       if (customPlan.contrastAdjusted) warnings.add("Theme text color was adjusted to meet WCAG AA contrast.");
     } else {
       const validator = planValidator(input);
-      const task = `Plan the selected pages for this site. Use the user's desired section types where appropriate. Return only the selected pages, with Home required.\nDESIGN PREFERENCES:\n${JSON.stringify({
+      const task = `Plan the selected pages for this site, each with its own seo title and description. Use the user's desired section types on the most appropriate page.\nDESIGN PREFERENCES:\n${JSON.stringify({
         styleDirection: input.styleDirection, fontDirection: input.fontDirection, designDescription: input.designDescription,
-        desiredPages: input.desiredPages, desiredSections: input.desiredSections,
+        desiredPages: selectedPageBriefs(input), desiredSections: input.desiredSections,
       })}`;
       let { result } = await runSiteTool(call, PLAN_SITE_TOOL, validator, [{ role: "user", content: prompt(task) }]);
       if (!result.success) {
@@ -157,100 +215,116 @@ export async function buildGeneratedSite(
         }], true));
       }
       if (!result.success) throw new SiteGenerationError("The site plan was invalid twice. No drafts were changed. Please contact your agency.");
-      planPages = result.data.pages;
+      const proposed = result.data;
+      planPages = normalizeSelectedPages(input, proposed.pages, ({ slug, label }) => ({ slug, title: label, sections: [] }))
+        .map((page) => ({ mode: "catalog", page: { ...page,
+          seo: page.seo ?? (slugSeoKey(page.slug) ? proposed.seo?.[slugSeoKey(page.slug)!] : undefined)
+            ?? fallbackPageSeo(page.title, input.businessName),
+          sections: catalogPageSections(proposed.style, page.sections, requestedSectionsForPage(input, page.slug),
+            input.desiredPages.filter((slug) => slug !== page.slug).flatMap((slug) => requestedSectionsForPage(input, slug))),
+        } }));
       planStyle = result.data.style;
       planColors = result.data.colors;
       planFonts = result.data.fonts;
-      planSeo = result.data.seo;
     }
-    planPages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
-    const menuPages = planPages.map(({ slug }) => ({ slug, nav_label: defaultMenuLabel(slug) }));
+    const briefs = selectedPageBriefs(input);
+    const menuPages = [...briefs.map(({ slug, label }) => ({
+      slug, nav_label: current.find((page) => page.slug === slug)?.nav_label
+        ?? menuLabelSchema.safeParse(label.split(/\s+/).slice(0, 2).join(" ").slice(0, 40)).data ?? defaultMenuLabel(slug),
+    })), ...current.filter(({ slug }) => !input.desiredPages.includes(slug)).map(({ slug, nav_label }) => ({ slug, nav_label }))];
     if (input.primaryColor) planColors.primary = input.primaryColor;
     if (input.secondaryColor) planColors.secondary = input.secondaryColor;
-    const pages = [];
-    for (const page of planPages) {
-      const label = { "": "Home", about: "About", services: "Services", contact: "Contact" }[page.slug];
-      let content: { type: string; props: Record<string, unknown> }[];
-      if (customPlan) {
-        const plannedPage = customPlan.pages.find(({ slug }) => slug === page.slug)!;
-        const colors = new Set<string>();
-        content = await writeCustomPage(call, input, trace, customPlan, plannedPage, label, emit, colors);
-        for (const warning of colors) warnings.add(`${label}: ${warning}`);
-      } else {
-        emit({ message: `Writing ${label}…` });
-        const { slots, schema, task, tool } = pageFillContract(page as SitePlan["pages"][number]);
-        const parsed = await fillPage(call, tool, schema, prompt(task));
-        if (!parsed.success) throw new SiteGenerationError(`Page ${label} failed validation after repair. No drafts were changed.`);
-        content = slots.map(({ key, designId, imageField }) => {
-          const item = defaultSection(designId);
-          if (imageField) item.props[imageField] = "";
-          item.props = { ...item.props, ...parsed.data.sections[key] };
-          return item;
-        });
-      }
-      const seo = page.seo ?? planSeo?.[page.slug || "home"];
-      if (!seo) throw new SiteGenerationError("A page was missing its search preview. No drafts were changed.");
-      const navigation: { type: string; props: Record<string, unknown> } = {
-        type: "Navigation",
-        props: { ...puckConfig.components.Navigation.defaultProps, id: `Navigation-${crypto.randomUUID()}`,
-          businessName: input.businessName, links: pageMenuLinks(menuPages),
-          buttonLink: input.desiredPages.includes("contact") ? "/contact" : content.some(({ type }) => type === "ContactForm") ? "#contact" : "" },
-      };
-      pages.push({ slug: page.slug, title: page.title, nav_label: defaultMenuLabel(page.slug),
-        data: { root: { props: { title: page.title, seoTitle: seo.title, description: seo.description } }, content: [navigation, ...content] } });
-    }
-    emit({ message: "Finding photos…" });
     const assetSiteId = input.siteId ?? crypto.randomUUID();
-    const resolve = createPhotoResolver(warnings, { supabase, accountId: input.accountId, siteId: assetSiteId });
-    const enrichedPages = [];
-    const reviewNotes = new Set<string>();
-    const theme = { style: planStyle, colors: planColors, headingFont: planFonts.heading, bodyFont: planFonts.body };
-    for (const page of pages) {
-      for (const section of page.data.content) if (section.type !== "Navigation") {
-        section.props.photoCredits = await fillSectionPhotos(section.type, section.props, resolve);
+    const theme = existingTheme ?? { style: planStyle, colors: planColors, headingFont: planFonts.heading, bodyFont: planFonts.body };
+    const writes: {
+      slug: string; title: string; label: string; nav_label: string; expectedId?: string; expectedDraft: unknown;
+      data: Awaited<ReturnType<typeof buildSelectedPage>> | null; spec: RetrySpec;
+    }[] = [];
+    for (const build of planPages) {
+      const { slug, title } = build.page;
+      const label = briefs.find((brief) => brief.slug === slug)!.label;
+      const menu = menuPages.map(({ slug, nav_label }) => ({ slug, nav_label: nav_label ?? defaultMenuLabel(slug) }));
+      if (build.mode === "custom" && existingTheme) {
+        build.plan = { ...build.plan, colors: { ...DEFAULT_COLORS, ...existingTheme.colors } };
       }
-      const data = sanitizePuckData(page.data);
-      const review = reviewGeneratedPage(data.content, { pages: menuPages, slug: page.slug, business: businessProfile, theme });
-      review.notes.forEach((note) => reviewNotes.add(note));
-      enrichedPages.push({ ...page, data: { ...data, content: review.content, root: { props: { ...data.root.props, generationWarnings: review.notes } } } });
+      const spec = { input, build, theme, menu };
+      let data: Awaited<ReturnType<typeof buildSelectedPage>> | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        emit({ message: `${attempt ? "Retrying" : "Writing"} ${label}…` });
+        try {
+          data = await buildSelectedPage(spec, call, trace, supabase, assetSiteId, emit);
+          data.root.props.generationWarnings.forEach((note) => warnings.add(note));
+          break;
+        } catch (error) {
+          console.warn("AI selected page attempt failed", { requestId, generationId, slug, attempt: attempt + 1,
+            type: error instanceof Error ? error.name : "Unknown" });
+        }
+      }
+      emit({ message: data ? `Writing ${label}… ✓` : `${label}: Not built — retry` });
+      const previous = current.find((page) => page.slug === slug);
+      writes.push({ slug, title, label, nav_label: menu.find((page) => page.slug === slug)!.nav_label,
+        expectedId: previous?.id, expectedDraft: previous?.draft_data, data, spec });
     }
-    for (const page of enrichedPages) page.data.root.props.generationWarnings.push(...warnings);
+    const payload = writes.map(({ slug, title, nav_label, expectedId, expectedDraft, data, spec }) =>
+      ({ slug, title, nav_label, expectedId, expectedDraft, data, ...(data ? {} : { retrySpec: spec }) }));
     emit({ message: "Saving unpublished drafts…" });
-    let siteId = input.siteId;
-    let pageId: string;
-    if (siteId) {
-      const { data, error } = await supabase.rpc("replace_ai_site_drafts_with_business", { p_site_id: siteId, p_theme: theme, p_pages: enrichedPages, p_business: businessProfile });
-      if (error) throw new SiteGenerationError("Could not confirm the draft save. Check your drafts and contact your agency before retrying.");
-      pageId = z.uuid().parse(data);
-    } else {
-      if (!isAdmin) throw new SiteGenerationError("Only the agency can create a site.");
-      const { data, error } = await createAdminClient().rpc("create_ai_site_with_business", {
+    if (!input.siteId && !isAdmin) throw new SiteGenerationError("Only the agency can create a site.");
+    if (input.siteId) await stageSelectedGeneration(input.accountId, assetSiteId, generationId, payload);
+    const saved = input.siteId
+      ? await supabase.rpc("save_selected_ai_drafts", { p_generation_id: generationId })
+      : await createAdminClient().rpc("create_selected_ai_site", {
         p_account_id: input.accountId, p_name: input.businessName, p_subdomain: input.subdomain!,
-        p_theme: theme, p_pages: enrichedPages, p_business: businessProfile, p_site_id: assetSiteId,
+        p_theme: theme, p_pages: payload, p_business: businessProfile(input), p_site_id: assetSiteId,
+        p_generation_id: generationId, p_user_id: userId,
       });
-      if (error) throw new SiteGenerationError(error.code === "23505" ? "This subdomain was just taken. No site was saved; contact your agency before retrying." : "Could not save the generated site. Contact your agency before retrying.");
-      const saved = z.array(z.object({ site_id: z.uuid(), page_id: z.uuid() })).length(1).parse(data)[0];
-      siteId = saved.site_id;
-      pageId = saved.page_id;
-    }
-    await finishSiteGeneration(generationId, true, siteId);
-    return { siteId, pageId, warnings: [...warnings, ...reviewNotes] };
+    if (saved.error) throw new SiteGenerationError("Could not save the selected drafts. Check your drafts before retrying.");
+    const rows = savedPagesSchema.parse(saved.data);
+    const pages: GenerationOutcome[] = rows.map((row) => ({
+      slug: row.slug, label: writes.find(({ slug }) => slug === row.slug)!.label, built: row.built,
+      pageId: row.pageId ?? undefined, retryId: row.retryId ?? undefined,
+    }));
+    const pageId = pages.find((page) => page.built)?.pageId ?? pages.find((page) => page.pageId)?.pageId;
+    if (!pageId) throw new SiteGenerationError("Selected drafts changed while generating. No drafts were overwritten.");
+    return { siteId: assetSiteId, pageId, warnings: [...warnings], pages };
   } catch (cause) {
     try { await finishSiteGeneration(generationId, false); }
     catch (accountingError) {
       console.error("AI generation finalization failed", { requestId, generationId });
       throw accountingError;
     }
+
     if (cause instanceof SiteGenerationError) throw cause;
     if (cause instanceof CustomSiteError) throw new SiteGenerationError(cause.message, isAdmin ? cause.issues : undefined);
-    // Log a reference, never prompts, business information or provider errors.
     console.error("AI site generation failed", { requestId, generationId });
     const message = `Generation stopped. Check your drafts and contact your agency with reference ${generationId} before retrying.`;
-    if (cause instanceof AiProviderError) {
-      throw new AiProviderError(input.generationMode === "custom" && (cause.details.status === 429 || (cause.details.status ?? 0) >= 500)
-        ? "The AI service is temporarily unavailable. No drafts were changed."
-        : message, cause.details);
-    }
+    if (cause instanceof AiProviderError) throw new AiProviderError(message, cause.details);
     throw new SiteGenerationError(message);
   }
 }
+
+function slugSeoKey(slug: string): "home" | "about" | "services" | "contact" | undefined {
+      return slug === "" ? "home" : slug === "about" || slug === "services" || slug === "contact" ? slug : undefined;
+    }
+
+    export async function retryGeneratedPage(rawId: unknown, emit: (event: GenerationProgress) => void, requestId: string): Promise<GenerationOutcome> {
+      const retryId = z.uuid().parse(rawId);
+      const { supabase } = await requireUser();
+      const job = await claimPageRetry(retryId).catch((cause) => {
+        throw new SiteGenerationError(cause instanceof Error ? cause.message : "This retry is not available.");
+      });
+      const spec = job.spec as RetrySpec;
+      const { build, theme, menu } = spec;
+      const input = { ...spec.input, accountId: job.accountId, siteId: job.siteId };
+      const label = selectedPageBriefs(input).find(({ slug }) => slug === job.slug)?.label ?? defaultMenuLabel(job.slug);
+      const trace = { requestId, generationId: job.leaseId, contract: CUSTOM_LAYOUT_CONTRACT };
+      let data: Awaited<ReturnType<typeof buildSelectedPage>> | undefined;
+      try {
+        if (build.page.slug !== job.slug) throw new Error("Page address changed.");
+        emit({ message: `Writing ${label}…` });
+        data = await buildSelectedPage({ input, build, theme, menu }, providerCall(input, job.leaseId, requestId), trace, supabase, job.siteId, emit);
+      } catch (error) {
+        console.warn("AI page retry failed", { requestId, pageId: job.pageId, type: error instanceof Error ? error.name : "Unknown" });
+      }
+      const built = await finishPageRetry(retryId, job.leaseId, data);
+      return { slug: job.slug, label, pageId: job.pageId, built, retryId: built ? undefined : retryId };
+    }

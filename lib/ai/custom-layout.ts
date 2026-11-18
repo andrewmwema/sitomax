@@ -10,12 +10,12 @@ import { escapeHtml, sanitizeRichText } from "@/lib/richtext";
 import { CURATED_FONTS, CURATED_FONT_NAMES } from "@/lib/theme/fonts";
 import { SPACING_SCALE } from "@/lib/layout/spacing";
 import { ICON_NAMES } from "@/components/blocks/ui/icon";
-import { DESIRED_SECTION_TYPES, GENERATION_PAGE_SLUGS, type GenerationInput } from "./site-input";
+import { DESIRED_SECTION_TYPES, type GenerationInput } from "./site-input";
+import { fallbackPageSeo, requestedSectionsForPage, selectedPageBriefs } from "./selected-pages";
 
 export const CUSTOM_LAYOUT_CONTRACT = "custom-layout-v3";
 const LIMIT = { depth: 5, elements: 60, sections: 10, rows: 4, columns: 4, perColumn: 8, goal: 160, title: 80, seoTitle: 59, seoDescription: 159 } as const;
-const pageNames = { "": "Home", about: "About", services: "Services", contact: "Contact" } as const;
-const pageKey = (slug: keyof typeof pageNames) => slug || "home";
+const pageKey = (slug: string) => slug || "home";
 
 const link = z.string().max(500).refine(
   (value) => !value || /^(?:\/(?!\/)|#|https?:\/\/|mailto:|tel:)/i.test(value),
@@ -84,13 +84,14 @@ const sansFonts = fontsIn("Sans-serif");
 
 const planRules = `Return only selected keys in pages; use "home" for Home. Give each page 2–${LIMIT.sections} ordered sections (aim for 2–4); each section has a kind and a goal of up to ${LIMIT.goal} characters. Put requested kinds on the most appropriate page. Use a footer last. Page title: up to ${LIMIT.title} characters; SEO title: ${LIMIT.seoTitle}, SEO description: ${LIMIT.seoDescription}. Use six-digit hex colors and text/background contrast of at least 4.5:1.`;
 
-export function customPlanContract(input: Pick<GenerationInput, "style" | "fontDirection" | "desiredPages" | "desiredSections"> & { businessName?: string }) {
+export function customPlanContract(input: Pick<GenerationInput, "style" | "fontDirection" | "desiredPages" | "desiredSections" | "pageDetails"> & { businessName?: string }) {
   const page = z.object({
     title: z.string(),
     sections: z.array(sectionGoal),
     seo: seoSchema,
   });
-  const slugs = GENERATION_PAGE_SLUGS.filter((slug) => input.desiredPages.includes(slug));
+  const selection = { ...input, businessName: input.businessName ?? "this business" };
+  const briefs = selectedPageBriefs(selection);
   const wire = z.strictObject({
     style: input.style === "auto" ? z.enum(["classic", "modern"]) : z.literal(input.style),
     colors: z.strictObject({ primary: color, secondary: color, background: color, text: color }),
@@ -98,43 +99,33 @@ export function customPlanContract(input: Pick<GenerationInput, "style" | "fontD
       heading: z.enum(input.fontDirection === "serif" ? serifFonts : input.fontDirection === "sans" ? sansFonts : CURATED_FONT_NAMES),
       body: z.enum(input.fontDirection === "sans" ? sansFonts : CURATED_FONT_NAMES),
     }),
-    pages: z.object(Object.fromEntries(slugs.map((slug) => [pageKey(slug), page]))),
+    pages: z.object(Object.fromEntries(briefs.map(({ slug }) => [pageKey(slug), page.optional()]))),
   });
   const schema = wire.transform((plan) => {
-    const pages = slugs.map((slug) => {
-      const { sections, title, seo } = plan.pages[pageKey(slug)];
-      const label = boundedCopy(title, LIMIT.title) || pageNames[slug];
-      return { slug, title: label, sections: sections.slice(0, LIMIT.sections).map(({ kind, goal }) => ({
+    const pages = briefs.map(({ slug, label, purpose }) => {
+      const { sections, title, seo } = plan.pages[pageKey(slug)] ?? { sections: [], title: "", seo: fallbackPageSeo(label, selection.businessName) };
+      return { slug, title: boundedCopy(title, LIMIT.title) || label, purpose, sections: sections.slice(0, LIMIT.sections).map(({ kind, goal }) => ({
         kind, goal: boundedCopy(goal, LIMIT.goal),
       })), seo: {
         title: boundedCopy(seo.title || `${label} | ${input.businessName ?? "Website"}`, LIMIT.seoTitle) || label.slice(0, LIMIT.seoTitle),
         description: boundedCopy(seo.description, LIMIT.seoDescription) || `Learn more about ${input.businessName ?? "this business"}.`.slice(0, LIMIT.seoDescription),
       } };
     });
-    const home = pages[0];
     const placeholder = (kind: z.infer<typeof sectionGoal>["kind"]) => ({
       kind, goal: `Create the ${kind} section from supplied facts. Use bracketed placeholders for missing information.`,
     });
     for (const entry of pages) {
-      if (!entry.sections.some(({ kind }) => kind !== "footer")) {
-        entry.sections.splice(0, entry.sections.length, placeholder(entry.slug ? "content" : "hero"), placeholder("footer"));
+      const requested = requestedSectionsForPage(selection, entry.slug);
+      const body = entry.sections.filter(({ kind }) => kind !== "footer" &&
+        !pages.some((other) => other.slug !== entry.slug && requestedSectionsForPage(selection, other.slug).some((item) => item === kind)));
+      for (const kind of requested) if (!body.some((section) => section.kind === kind)) body.push(placeholder(kind));
+      if (!body.length) body.unshift(placeholder(entry.slug === "contact" ? "contact" : entry.slug ? "content" : "hero"));
+      while (body.length >= LIMIT.sections) {
+        const index = body.findLastIndex(({ kind }) => !requested.some((item) => item === kind) ||
+          body.findIndex((section) => section.kind === kind) !== body.findLastIndex((section) => section.kind === kind));
+        body.splice(index, 1);
       }
-    }
-    const requestedHome = new Set<string>(input.desiredSections.filter((kind) =>
-      !pages.slice(1).some(({ sections }) => sections.some((section) => section.kind === kind))));
-    for (const kind of input.desiredSections) if (requestedHome.has(kind) && !home.sections.some((section) => section.kind === kind)) {
-      if (home.sections.length === LIMIT.sections) {
-        const index = home.sections.findLastIndex((section, index, sections) =>
-          (section.kind !== "footer" || index !== sections.length - 1) &&
-          (!requestedHome.has(section.kind) || sections.findIndex(({ kind }) => kind === section.kind) < index));
-        home.sections.splice(index, 1);
-      }
-      home.sections.splice(home.sections.at(-1)?.kind === "footer" ? home.sections.length - 1 : home.sections.length, 0, placeholder(kind));
-    }
-    for (const entry of pages) {
-      const footer = entry.sections.findIndex(({ kind }) => kind === "footer");
-      if (footer !== -1) entry.sections.push(...entry.sections.splice(footer, 1));
-      else if (entry.sections.length < LIMIT.sections) entry.sections.push(placeholder("footer"));
+      entry.sections = [...body, placeholder("footer")];
       entry.sections = entry.sections.map((section) => section.goal ? section : placeholder(section.kind));
     }
     const text = readableText(plan.colors.text, plan.colors.background);
@@ -214,7 +205,7 @@ export function buildCustomSections(sections: GeneratedSection[], theme: SitePla
   }));
 }
 
-export function customSectionTask(page: { slug: SitePlan["pages"][number]["slug"]; title: string; sections: z.infer<typeof sectionGoal>[] }, index: number, input: {
+export function customSectionTask(page: { slug: string; title: string; purpose?: string; sections: z.infer<typeof sectionGoal>[] }, index: number, input: {
   businessName: string;
   businessType: string;
   city: string;
@@ -232,7 +223,7 @@ export function customSectionTask(page: { slug: SitePlan["pages"][number]["slug"
   desiredPages: readonly string[];
 }, theme: Pick<SitePlan, "style" | "colors" | "fonts">) {
   return `Generate only section ${index + 1} of this page. The section property must be a JSON object, not a string containing JSON. Header, footer and contact details are managed by the site; do not generate menus or write contact values in section copy. Use real Button elements (ghost for inline links), never "label: href" text. The first section of each page may use one H1; use H2–H4 elsewhere.
-PAGE PLAN:\n${JSON.stringify({ slug: page.slug, title: page.title, sectionGoals: page.sections, current: page.sections[index], theme })}
+PAGE PLAN:\n${JSON.stringify({ slug: page.slug, title: page.title, purpose: page.purpose, sectionGoals: page.sections, current: page.sections[index], theme })}
 BUSINESS FACTS:\n${JSON.stringify(input)}
 Use concise and accessible copy. Buttons may link only to selected site pages, anchors, the supplied phone/email, or supplied URLs. Never imply stock imagery depicts this business.`;
 }
@@ -257,6 +248,7 @@ export function customPlanTask(input: {
   designDescription: string;
   desiredPages: readonly string[];
   desiredSections: readonly string[];
+  pageDetails?: GenerationInput["pageDetails"];
   primaryColor: string;
   secondaryColor: string;
   phone: string;

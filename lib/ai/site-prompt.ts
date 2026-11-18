@@ -13,7 +13,7 @@ staff identities, partners, pricing, opening hours, completed projects or guaran
 Use clearly marked placeholders, e.g. [Add a real customer review], [Add verified credentials].
 Do not present stock photographs as actual staff, premises, customers or completed work.
 Prefer Hero, Services, About/Text, FAQ and Contact designs when proof is unavailable.
-Plan only the pages explicitly requested in the task (Home slug "" is required; supported pages are About, Services and Contact).
+Plan only the requested pages. Preserve each supplied slug exactly and use each page's purpose to guide copy.
 Choose catalog design IDs verbatim, respect the chosen Classic/Modern style, vary layouts and end pages with a clear next step.
 Include a Footer design on each generated page. Navigation will be added automatically.
 Keep SEO titles strictly under 60 characters and descriptions strictly under 160.

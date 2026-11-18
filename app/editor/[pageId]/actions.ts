@@ -138,16 +138,18 @@ export async function savePageDraft(pageId: string, data: unknown): Promise<Acti
   return updatePage(pageId, data, false);
 }
 
-export async function savePageMenuLabel(pageId: string, label: string): Promise<ActionState> {
-  const parsed = z.object({ pageId: z.uuid(), label: menuLabelSchema }).safeParse({ pageId, label });
+export async function savePageMenuLabel(pageId: string, label: string, hidden?: boolean): Promise<ActionState> {
+  const parsed = z.object({ pageId: z.uuid(), label: menuLabelSchema, hidden: z.boolean().optional() }).safeParse({ pageId, label, hidden });
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Invalid menu label." };
   const { supabase } = await requireUser();
-  const { data, error } = await supabase.from("pages").update({ nav_label: parsed.data.label }).eq("id", parsed.data.pageId).select("id");
+  const { data, error } = await supabase.from("pages").update({
+    nav_label: parsed.data.label, ...(parsed.data.hidden === undefined ? {} : { hide_from_menu: parsed.data.hidden }),
+  }).eq("id", parsed.data.pageId).select("id");
   if (error || !data?.length) {
     console.error("Could not save page menu label", { code: error?.code });
     return { status: "error", message: "Could not save the menu label." };
   }
-  return { status: "success", message: "Menu label saved." };
+  return { status: "success", message: "Menu settings saved." };
 }
 
 export async function saveAiEdit(pageId: string, data: unknown, raw: unknown): Promise<ActionState> {

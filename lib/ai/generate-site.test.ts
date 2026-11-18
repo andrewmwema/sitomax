@@ -2,30 +2,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Field } from "@puckeditor/core";
 import { z } from "zod";
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), lookup: vi.fn(), request: vi.fn(), begin: vi.fn(), finish: vi.fn(), admin: vi.fn(), photoLibrary: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), lookup: vi.fn(), existing: vi.fn(), request: vi.fn(), begin: vi.fn(),
+  finish: vi.fn(), claim: vi.fn(), finishRetry: vi.fn(), admin: vi.fn(), photoLibrary: vi.fn() }));
 vi.mock("@/lib/photos", () => ({ createPhotoLibrary: mocks.photoLibrary }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({
   user: { id: "authenticated-user" },
   supabase: { rpc: mocks.rpc, from: () => {
-    const query = { select: () => query, eq: () => query, maybeSingle: mocks.lookup };
+    const query = { select: () => query, eq: () => query, maybeSingle: mocks.lookup, order: mocks.existing };
     return query;
   } },
 }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
-vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGeneration: mocks.finish }));
-import { buildGeneratedSite } from "./generate-site";
+vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGeneration: mocks.finish,
+  stageSelectedGeneration: (_account: string, site: string, generation: string, pages: unknown) =>
+    mocks.rpc("apply_selected_ai_pages", { p_site_id: site, p_generation_id: generation, p_pages: pages }),
+  claimPageRetry: mocks.claim, finishPageRetry: mocks.finishRetry }));
+import { buildGeneratedSite, retryGeneratedPage } from "./generate-site";
 import { aiCatalog, blockFields, blockSchemas, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
 import { strictTool } from "./strict-tool";
 import { customSystemPrompt } from "./custom-layout";
 import type { GenerationInput } from "./site-input";
+import { createGenerationInputSchema, extraPageCredits, slugFromPageName } from "./site-input";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
 const pageId = "00000000-0000-4000-8000-000000000003";
 const generationId = "00000000-0000-4000-8000-000000000004";
+const retryId = "00000000-0000-4000-8000-000000000007";
 const input = { accountId, siteId, businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi",
   services: ["Repairs"], difference: "", style: "modern", primaryColor: "", secondaryColor: "",
   phone: "", email: "", address: "", description: "", confirmReplace: true };
@@ -57,6 +63,12 @@ function section(designId: string) {
 const message = (name: string, value: unknown) => ({ stop_reason: "tool_use", content: [
   { type: "tool_use", id: "toolu_test", name, input: value },
 ] });
+function savedRows(_name: string, args: { p_pages: { slug: string; data: unknown }[] }) {
+  return { data: args.p_pages.map(({ slug, data }, index) => ({
+    slug, pageId: index ? `00000000-0000-4000-8001-${String(index).padStart(12, "0")}` : pageId,
+    built: Boolean(data), retryId: data ? null : retryId,
+  })), error: null };
+}
 function answer(request: { toolName: string; messages: { content: string }[] }) {
   if (request.toolName === "plan_site") return message("plan_site", structuredClone(plan));
   const page = JSON.parse(request.messages[0].content.split("\n")[1]) as {
@@ -68,7 +80,10 @@ function answer(request: { toolName: string; messages: { content: string }[] }) 
 }
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv("ANTHROPIC_API_KEY", "local-test-not-a-key"); vi.stubEnv("PIXABAY_API_KEY", "");
-  mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin" ? false : name === "is_account_owner" ? true : pageId, error: null }));
+  mocks.rpc.mockImplementation(async (name: string) => name === "save_selected_ai_drafts"
+    ? savedRows(name, mocks.rpc.mock.calls.find(([rpc]) => rpc === "apply_selected_ai_pages")![1])
+    : ({ data: name === "is_super_admin" ? false : name === "is_account_owner" ? true : null, error: null }));
+  mocks.existing.mockResolvedValue({ data: [], error: null });
   mocks.lookup.mockResolvedValue({ data: { id: siteId }, error: null });
   mocks.begin.mockResolvedValue(generationId); mocks.finish.mockResolvedValue(undefined);
   mocks.request.mockImplementation(answer);
@@ -78,26 +93,51 @@ beforeEach(() => {
 });
 
 describe("catalog site generation", () => {
+  it("drops extra proposals and fills a missing custom page in user-selected order", async () => {
+    mocks.request.mockResolvedValueOnce(message("plan_site", { ...plan, pages: [
+      { ...plan.pages[0], slug: "pricing" }, { slug: "unexpected", sections: [{ designId: "not-a-design" }] },
+    ] }));
+    const result = await buildGeneratedSite({ ...input, desiredPages: ["service-areas", "pricing"],
+      pageDetails: [{ slug: "service-areas", name: "Service areas", purpose: "Cities we serve" }], desiredSections: ["pricing"] });
+    expect(result.pages).toMatchObject([{ slug: "service-areas", built: true }, { slug: "pricing", built: true }]);
+    const requests = mocks.request.mock.calls.slice(1).map(([request]) => JSON.parse(request.messages[0].content.split("\n")[1]));
+    expect(requests[0]).toMatchObject({ slug: "service-areas", title: "Service areas" });
+    expect(mocks.request.mock.calls[1][0].messages[0].content).toContain('PAGE PURPOSE: "Cities we serve"');
+    expect(Object.values(requests[1].sections)).toContainEqual(expect.objectContaining({ blockType: "Pricing" }));
+    expect(Object.values(requests[0].sections)).not.toContainEqual(expect.objectContaining({ blockType: "Pricing" }));
+  });
+
+  it("validates custom addresses and charges only for pages beyond six", () => {
+    const schema = createGenerationInputSchema();
+    const slug = slugFromPageName("Café Service Areas");
+    const detail = { slug, name: "Café Service Areas", purpose: "Cities we serve" };
+    expect(slug).toBe("cafe-service-areas");
+    expect(schema.safeParse({ ...input, desiredPages: [slug], pageDetails: [detail] }).success).toBe(true);
+    expect(schema.safeParse({ ...input, desiredPages: [slug, slug], pageDetails: [detail] }).success).toBe(false);
+    expect(schema.safeParse({ ...input, desiredPages: ["dashboard"] }).success).toBe(false);
+    expect(schema.safeParse({ ...input, siteId: undefined, subdomain: "local-plumbing", desiredPages: [slug] }).success).toBe(false);
+    expect([6, 7, 10].map(extraPageCredits)).toEqual([0, 2, 8]);
+  });
   it("uses a strict plan and non-strict fills with a shared cached prompt, sanitizes and saves only drafts", async () => {
     const progress: string[] = [];
     const result = await buildGeneratedSite(input, ({ message }) => progress.push(message));
     expect(result).toMatchObject({ siteId, pageId });
-    expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId);
+    expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId, 4);
     expect(mocks.request).toHaveBeenCalledTimes(5);
     for (const [request] of mocks.request.mock.calls) expect(request).toMatchObject({
       generationId, action: "generate_site", tools: [{ name: request.toolName, strict: request.toolName === "plan_site" }],
       cacheTtl: "5m", system: SITE_SYSTEM_PROMPT,
     });
     expect(mocks.request.mock.calls.map(([request]) => request.toolName)).toEqual(["plan_site", ...Array(4).fill("fill_page")]);
-    const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1];
+    const save = mocks.rpc.mock.calls.find(([name]) => name === "apply_selected_ai_pages")![1];
     expect(save.p_pages).toHaveLength(4);
     expect(JSON.stringify(save.p_pages)).not.toMatch(/onclick|<script>|bad\(\)/);
     expect(save).not.toHaveProperty("published_data");
     expect(save.p_pages[0].data.content[0].props.businessName).toBe("Local Plumbing");
-    expect(save.p_business).toMatchObject({ businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi", services: ["Repairs"] });
-    expect(progress).toEqual(["Planning your site…", "Writing Home…", "Writing About…", "Writing Services…",
-      "Writing Contact…", "Finding photos…", "Saving unpublished drafts…"]);
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
+    expect(save).not.toHaveProperty("p_theme");
+    expect(progress).toEqual(["Planning your site…", "Writing Home…", "Writing Home… ✓", "Writing About…", "Writing About… ✓",
+      "Writing Services…", "Writing Services… ✓", "Writing Contact…", "Writing Contact… ✓", "Saving unpublished drafts…"]);
+    expect(save.p_generation_id).toBe(generationId);
     expect(mocks.admin).not.toHaveBeenCalled();
   });
   it("repairs a plan once with the Zod errors, never accepting unknown catalog IDs or long SEO", async () => {
@@ -114,27 +154,29 @@ describe("catalog site generation", () => {
     mismatch.pages[0].sections[0].blockType = footer.blockType;
     expect(planSchema.safeParse(mismatch).success).toBe(false);
   });
-  it("waits for the previous page before starting the next and stops after a provider failure", async () => {
+  it("waits for the previous page before starting the next and preserves successful pages after a failure", async () => {
     let release!: () => void;
     const barrier = new Promise<void>((resolve) => { release = resolve; });
     mocks.request.mockImplementation(async (request) => {
       if (request.toolName === "plan_site") return answer(request);
-      if (request.messages[0].content.includes('"slug":"about"')) throw new Error("Page failed");
+      if (JSON.parse(request.messages[0].content.split("\n")[1]).slug === "about") throw new Error("Page failed");
       await barrier; return answer(request);
     });
     const pending = buildGeneratedSite(input);
     await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
     expect(mocks.finish).not.toHaveBeenCalled();
     release();
-    await expect(pending).rejects.toThrow("Generation stopped");
-    expect(mocks.request).toHaveBeenCalledTimes(3);
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
+    await expect(pending).resolves.toMatchObject({ pages: [
+      { slug: "", built: true }, { slug: "about", built: false, retryId }, { slug: "services", built: true }, { slug: "contact", built: true },
+    ] });
+    expect(mocks.request).toHaveBeenCalledTimes(6);
+    expect(mocks.finish).not.toHaveBeenCalled();
   });
   it("repairs invalid props once in the same conversation and saves only corrected content", async () => {
     let originalTurn: object[] = [];
     mocks.request.mockImplementation((request) => {
       const response = answer(request);
-      if (request.toolName !== "fill_page" || !request.messages[0].content.includes('"slug":"about"')) return response;
+      if (request.toolName !== "fill_page" || JSON.parse(request.messages[0].content.split("\n")[1]).slug !== "about") return response;
       if (request.messages.length === 1) {
         const page = response.content[0].input as { sections: { section_1: Record<string, unknown> } };
         page.sections.section_1.heading = 123;
@@ -151,7 +193,7 @@ describe("catalog site generation", () => {
     });
     await buildGeneratedSite(input);
     expect(mocks.request).toHaveBeenCalledTimes(6);
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
+    expect(mocks.finish).not.toHaveBeenCalled();
     for (const repairAttempt of [false, true]) {
       expect(console.info).toHaveBeenCalledWith("AI site tool call", {
         tool: "fill_page", strict: false, schemaBytes: expect.any(Number), stop_reason: "tool_use",
@@ -160,7 +202,7 @@ describe("catalog site generation", () => {
     }
     expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toMatch(/private reasoning|Local Plumbing/);
   });
-  it("stops after the second invalid page response without saving any drafts", async () => {
+  it("automatically retries a failed page, then allows a free retry without regenerating the others", async () => {
     mocks.request.mockImplementation((request) => {
       if (request.toolName === "plan_site") return answer(request);
       const { slug, sections } = JSON.parse(request.messages[0].content.split("\n")[1]);
@@ -169,12 +211,21 @@ describe("catalog site generation", () => {
           ...(slug === "about" && key === "section_1" ? { heading: 123 } : {}) }])) });
     });
     const progress: string[] = [];
-    await expect(buildGeneratedSite(input, ({ message }) => progress.push(message)))
-      .rejects.toThrow("Page About failed validation after repair. No drafts were changed.");
-    expect(mocks.request).toHaveBeenCalledTimes(4);
-    expect(progress).toEqual(["Planning your site…", "Writing Home…", "Writing About…"]);
-    expect(mocks.rpc.mock.calls.some(([name]) => name === "replace_ai_site_drafts_with_business")).toBe(false);
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
+    const result = await buildGeneratedSite(input, ({ message }) => progress.push(message));
+    expect(result.pages[1]).toMatchObject({ slug: "about", built: false, retryId });
+    expect(mocks.request).toHaveBeenCalledTimes(8);
+    expect(progress).toContain("Retrying About…");
+    const retryPageId = result.pages[1].pageId;
+    const save = mocks.rpc.mock.calls.find(([name]) => name === "apply_selected_ai_pages")![1];
+    expect(save.p_pages[1]).toMatchObject({ slug: "about", data: null, retrySpec: expect.any(Object) });
+    mocks.claim.mockResolvedValue({ accountId, siteId, pageId: retryPageId, leaseId: retryId, slug: "about", spec: save.p_pages[1].retrySpec });
+    mocks.finishRetry.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    await expect(retryGeneratedPage(retryId, vi.fn(), retryId)).resolves.toMatchObject({ retryId, built: false });
+    mocks.request.mockImplementation(answer);
+    await expect(retryGeneratedPage(retryId, vi.fn(), retryId)).resolves.toMatchObject({ slug: "about", built: true });
+    expect(mocks.begin).toHaveBeenCalledTimes(1);
+    expect(mocks.finishRetry).toHaveBeenLastCalledWith(retryId, retryId, expect.objectContaining({ content: expect.any(Array) }));
+    expect(mocks.rpc.mock.calls.filter(([name]) => name === "apply_selected_ai_pages")).toHaveLength(1);
   });
   it("asks for the expected tool again without inventing a tool ID for a text-only reply", async () => {
     mocks.request.mockImplementationOnce(answer).mockResolvedValueOnce({
@@ -188,6 +239,7 @@ describe("catalog site generation", () => {
     ]);
   });
   it("denies editors and unconfirmed replacement before any quota or provider work", async () => {
+    mocks.existing.mockResolvedValueOnce({ data: [{ slug: "", draft_data: { content: [{ type: "Hero" }] } }], error: null });
     await expect(buildGeneratedSite({ ...input, confirmReplace: false })).rejects.toThrow();
     await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "new-site" })).rejects.toThrow("Only account owners");
     await expect(buildGeneratedSite({
@@ -206,7 +258,7 @@ describe("catalog site generation", () => {
     mocks.request.mockImplementation((request) => {
       if (request.toolName === "plan_site") return message("plan_site", photoPlan);
       const response = answer(request);
-      if (request.messages[0].content.includes('"slug":""')) {
+      if (JSON.parse(request.messages[0].content.split("\n")[1]).slug === "") {
         (response.content[0].input as { sections: { section_1: Record<string, unknown> } }).sections.section_1.backgroundImage = "plumbing tools";
       }
       return response;
@@ -218,20 +270,20 @@ describe("catalog site generation", () => {
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
     mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: false }, error: null })
       .mockResolvedValue({ data: null, error: null });
-    const create = vi.fn().mockResolvedValue({ data: [{ site_id: futureSiteId, page_id: pageId }], error: null });
+    const create = vi.fn(savedRows);
     mocks.admin.mockReturnValue({ rpc: create });
     await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "local-plumbing" })).resolves.toMatchObject({ siteId: futureSiteId, pageId });
-    expect(create).toHaveBeenCalledWith("create_ai_site_with_business", expect.objectContaining({
+    expect(create).toHaveBeenCalledWith("create_selected_ai_site", expect.objectContaining({
       p_account_id: accountId, p_subdomain: "local-plumbing", p_site_id: futureSiteId,
     }));
     expect(mocks.photoLibrary).toHaveBeenCalledWith(expect.anything(), accountId);
     expect(selectPhoto).toHaveBeenCalledExactlyOnceWith({
       siteId: futureSiteId, query: "plumbing tools", orientation: "horizontal", photoId: 42,
     });
-    expect(create.mock.calls[0][1].p_pages[0].data.content[1].props).toMatchObject({
+    expect(create.mock.calls[0][1].p_pages[0].data).toMatchObject({ content: expect.arrayContaining([expect.objectContaining({ props: expect.objectContaining({
       backgroundImage: `https://storage.example/site-assets/${futureSiteId}/pixabay-42.jpg`, photoCredits: [],
-    });
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, futureSiteId);
+    }) })]) });
+    expect(mocks.finish).not.toHaveBeenCalled();
     for (const [request] of mocks.request.mock.calls) expect(request.messages[0].content).not.toContain(accountId);
     random.mockRestore();
   });
@@ -245,16 +297,16 @@ describe("catalog site generation", () => {
 
     mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: true }, error: null })
       .mockResolvedValueOnce({ data: null, error: null });
-    const create = vi.fn().mockResolvedValue({ data: [{ site_id: siteId, page_id: pageId }], error: null });
+    const create = vi.fn(savedRows);
     mocks.admin.mockReturnValue({ rpc: create });
-    await expect(buildGeneratedSite(marketing)).resolves.toMatchObject({ siteId, pageId });
-    expect(create).toHaveBeenCalledWith("create_ai_site_with_business", expect.objectContaining({ p_subdomain: brand.marketingSiteSubdomain }));
+    await expect(buildGeneratedSite(marketing)).resolves.toMatchObject({ pageId });
+    expect(create).toHaveBeenCalledWith("create_selected_ai_site", expect.objectContaining({ p_subdomain: brand.marketingSiteSubdomain }));
   });
   it("stops after two invalid plans without saving; finalizes already-billed work without free retries", async () => {
     mocks.request.mockResolvedValue(message("plan_site", { style: "invented" }));
     await expect(buildGeneratedSite(input)).rejects.toThrow("invalid twice");
     expect(mocks.request).toHaveBeenCalledTimes(2);
-    expect(mocks.rpc.mock.calls.some(([name]) => name === "replace_ai_site_drafts_with_business")).toBe(false);
+    expect(mocks.rpc.mock.calls.some(([name]) => name === "apply_selected_ai_pages")).toBe(false);
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
   it("builds strict content contracts directly from all catalog block fields", () => {
@@ -347,7 +399,7 @@ describe("custom site generation", () => {
       styleDirection: "organic", fontDirection: "serif", designDescription: "Warm natural materials.",
     }, ({ message }) => progress.push(message), requestId);
     expect(result).toMatchObject({ siteId, pageId });
-    expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId);
+    expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId, desiredPages.length);
     expect(mocks.request.mock.calls.map(([request]) => request.toolName))
       .toEqual(["plan_custom_site", ...Array(desiredPages.filter((slug) => slug !== "contact").length + extras.length).fill("fill_custom_section")]);
     for (const [request] of mocks.request.mock.calls) {
@@ -356,9 +408,9 @@ describe("custom site generation", () => {
         cacheTtl: "5m", system: customSystemPrompt(), generationId, correlationId: requestId,
       });
     }
-    const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1];
+    const save = mocks.rpc.mock.calls.find(([name]) => name === "apply_selected_ai_pages")![1];
     expect(save.p_pages.map((page: { slug: string }) => page.slug)).toEqual(desiredPages);
-    expect(save.p_pages[0].data.content).toHaveLength(3 + extras.length);
+    expect(save.p_pages[0].data.content.length).toBeGreaterThanOrEqual(3);
     expect(save.p_pages[0]).toMatchObject({ nav_label: "Home", data: { root: { props: { title: "Home", seoTitle: seo.title, description: seo.description } } } });
     expect(save.p_pages[0].data.content.at(-1)).toMatchObject({ type: "Footer" });
     if (desiredPages.includes("contact")) {
@@ -371,11 +423,11 @@ describe("custom site generation", () => {
       props: { columns: { type: string; props: { content: { type: string }[] } }[] };
     }[];
     expect(rows[0].props.columns[0].props.content[0].type).toBe("Heading");
-    expect(save.p_theme).toMatchObject({ style: "modern", headingFont: "Lora", bodyFont: "Inter" });
+    expect(save).not.toHaveProperty("p_theme");
     expect(progress[0]).toBe("Planning your site…");
     expect(progress.some((entry) => entry.startsWith("Designing Home"))).toBe(true);
-    expect(progress.slice(-2)).toEqual(["Finding photos…", "Saving unpublished drafts…"]);
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
+    expect(progress.at(-1)).toBe("Saving unpublished drafts…");
+    expect(mocks.finish).not.toHaveBeenCalled();
   });
 
   it("repairs a plan with the original brief, actual tool ID and actionable issue; logs no generated values", async () => {
@@ -402,7 +454,7 @@ describe("custom site generation", () => {
     expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain("PRIVATE GENERATED VALUE");
   });
 
-  it("does not save any drafts when a later page still fails after one repair", async () => {
+  it("saves the earlier custom draft when a later page still fails after its automatic retry", async () => {
     const good = generatedSection("Welcome");
     const invalid = structuredClone(good);
     invalid.rows[0].columns[0].elements = [{ type: "Heading", text: "Malformed", level: "h9", align: "left" }];
@@ -410,14 +462,16 @@ describe("custom site generation", () => {
       .mockResolvedValueOnce(message("fill_custom_section", { section: good }))
       .mockResolvedValueOnce(message("fill_custom_section", { section: invalid }))
       .mockResolvedValueOnce(message("fill_custom_section", { section: invalid }));
+    mocks.request.mockResolvedValue(message("fill_custom_section", { section: invalid }));
     await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: ["", "services"] }))
-      .rejects.toMatchObject({ message: expect.stringContaining("Services section 1 failed validation"), validationIssues: undefined });
-    expect(mocks.request).toHaveBeenCalledTimes(4);
+      .resolves.toMatchObject({ pages: [{ slug: "", built: true }, { slug: "services", built: false, retryId }] });
+    expect(mocks.request).toHaveBeenCalledTimes(6);
     expect(mocks.request.mock.calls[3][0].messages[2].content[0]).toMatchObject({
       type: "tool_result", content: expect.stringContaining("section.rows.0.columns.0.elements.0.level (invalid_value)"),
     });
-    expect(mocks.rpc).not.toHaveBeenCalledWith("replace_ai_site_drafts_with_business", expect.anything());
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
+    expect(mocks.rpc).toHaveBeenCalledWith("apply_selected_ai_pages", expect.objectContaining({ p_pages: [
+      expect.objectContaining({ slug: "", data: expect.any(Object) }), expect.objectContaining({ slug: "services", data: null }),
+    ] }));
   });
 
   it("distinguishes truncation and never echoes a partial tool call back to the provider", async () => {

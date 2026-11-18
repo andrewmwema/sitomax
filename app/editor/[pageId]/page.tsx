@@ -75,7 +75,7 @@ async function EditorLoader({
   // supabase-js types to-one joins as arrays without generated DB types.
   const site = data.site as unknown as EditorSite;
   const siteSeo = siteSeoSchema.parse(site.seo);
-  const listed = await supabase.from("pages").select("id, slug, title, nav_label, draft_data, seo")
+  const listed = await supabase.from("pages").select("id, slug, title, nav_label, hide_from_menu, ai_pending_build, draft_data, seo")
     .eq("site_id", site.id).order("sort_order").order("slug");
   const menuLabelsReady = listed.error?.code !== "42703";
   if (!menuLabelsReady) console.warn("Page menu labels migration is not applied; the editor is using labels from slugs.");
@@ -124,7 +124,9 @@ async function EditorLoader({
       isSuperAdmin={Boolean(profile?.is_super_admin)}
       userId={user.id}
       sitePages={(sitePages ?? []).map((page) => ({ id: page.id, slug: page.slug, title: page.title,
-        nav_label: "nav_label" in page && typeof page.nav_label === "string" ? page.nav_label : null }))}
+        nav_label: "nav_label" in page && typeof page.nav_label === "string" ? page.nav_label : null,
+        hide_from_menu: "hide_from_menu" in page && page.hide_from_menu === true,
+        ai_pending_build: "ai_pending_build" in page && page.ai_pending_build === true }))}
       seoPages={seoPages}
       generationWarnings={generated.data?.root?.props?.generationWarnings ?? []}
     />

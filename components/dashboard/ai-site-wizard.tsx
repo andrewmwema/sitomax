@@ -4,13 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { createGenerationInputSchema, type GenerationInput } from "@/lib/ai/site-input";
-import { DESIRED_SECTION_TYPES, GENERATION_PAGE_SLUGS } from "@/lib/ai/site-input";
+import { DESIRED_SECTION_TYPES, GENERATION_PAGE_SLUGS, PRESET_PAGES, MAX_GENERATION_PAGES, extraPageCredits,
+  generationOutcomeSchema, pageDetailsSchema, slugFromPageName, type GenerationResult } from "@/lib/ai/site-input";
 import type { Business } from "@/lib/business";
 
 const fieldClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
-const pageLabels: Record<(typeof GENERATION_PAGE_SLUGS)[number], string> = {
-  "": "Home", about: "About", services: "Services", contact: "Contact",
-};
 const sectionLabels: Record<(typeof DESIRED_SECTION_TYPES)[number], string> = {
   gallery: "Gallery", testimonials: "Testimonials", faq: "FAQ", pricing: "Pricing",
   team: "Team", process: "Process", logos: "Partner logos",
@@ -19,14 +17,17 @@ const eventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("progress"), message: z.string() }),
   z.object({ type: z.literal("error"), message: z.string(),
     issues: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])), code: z.string(), message: z.string() })).max(5).optional() }),
-  z.object({ type: z.literal("result"), siteId: z.uuid(), pageId: z.uuid(), warnings: z.array(z.string()) }),
+  z.object({ type: z.literal("result"), siteId: z.uuid(), pageId: z.uuid(), warnings: z.array(z.string()), pages: z.array(generationOutcomeSchema) }),
+  z.object({ type: z.literal("retry"), page: generationOutcomeSchema }),
 ]);
 
-export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubdomain }: {
+export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], rootDomain, marketingSubdomain, unlimited = true }: {
   accounts: { id: string; name: string; is_internal?: boolean }[];
-  existingSite?: { id: string; accountId: string; name: string; business: Business };
+  existingSite?: { id: string; accountId: string; name: string; business: Business; pages?: { slug: string; label: string; empty: boolean }[] };
   rootDomain: string;
   marketingSubdomain: string;
+  unlimited?: boolean;
+  pendingRetries?: GenerationResult["pages"];
 }) {
   const router = useRouter();
   const [values, setValues] = useState<GenerationInput>({
@@ -36,7 +37,8 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
     services: existingSite?.business.services ?? [], difference: existingSite?.business.difference ?? "",
     tone: existingSite?.business.tone ?? "", openingHours: existingSite?.business.openingHours ?? "",
     style: "auto", generationMode: "catalog", styleDirection: "auto", fontDirection: "auto",
-    designDescription: "", desiredPages: [...GENERATION_PAGE_SLUGS], desiredSections: [],
+    designDescription: "", desiredPages: existingSite ? (existingSite.pages ?? []).filter(({ empty }) => empty).slice(0, MAX_GENERATION_PAGES).map(({ slug }) => slug)
+      : [...GENERATION_PAGE_SLUGS], desiredSections: [],
     primaryColor: "", secondaryColor: "", phone: existingSite?.business.phone ?? "",
     email: existingSite?.business.email ?? "", address: existingSite?.business.address ?? "", description: "", confirmReplace: false,
   });
@@ -48,7 +50,15 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
   const [error, setError] = useState("");
   const [issues, setIssues] = useState<NonNullable<Extract<z.infer<typeof eventSchema>, { type: "error" }>["issues"]>>([]);
   const [messages, setMessages] = useState<string[]>([]);
-  const [result, setResult] = useState<{ pageId: string; warnings: string[] } | null>(null);
+  const [result, setResult] = useState<GenerationResult | null>(null);
+  const [custom, setCustom] = useState<{ name: string; purpose: string; slug: string } | null>(null);
+  const choices = [
+    ...(existingSite?.pages ?? []),
+    ...PRESET_PAGES.filter(([slug]) => !existingSite?.pages?.some((page) => page.slug === slug))
+      .map(([slug, label]) => ({ slug, label, empty: true })),
+    ...(values.pageDetails ?? []).map(({ slug, name }) => ({ slug, label: name, empty: true })),
+  ];
+  const needsConfirmation = existingSite?.pages?.some(({ slug, empty }) => !empty && values.desiredPages.includes(slug));
   const set = <K extends keyof GenerationInput>(key: K, value: GenerationInput[K]) => {
     setValues((previous) => ({ ...previous, [key]: value })); setError("");
   };
@@ -57,13 +67,14 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
     if (tag && values.services.length < 20 && !values.services.includes(tag)) set("services", [...values.services, tag]);
     setService("");
   };
-  const generate = async () => {
+  const generate = async (retryId?: string) => {
     const parsed = generationInputSchema.safeParse(values);
-    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your details."); return; }
-    setBusy(true); setError(""); setIssues([]); setMessages(["Planning your site…"]);
+    if (!retryId && !parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your details."); return; }
+    if (!retryId && needsConfirmation && !values.confirmReplace) { setError("Confirm that the selected drafts can be replaced."); return; }
+    setBusy(true); setError(""); setIssues([]); setMessages([retryId ? "Retrying page…" : "Planning your site…"]);
     let requestId: string | null = null;
     try {
-      const response = await fetch("/api/ai/generate-site", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed.data) });
+      const response = await fetch("/api/ai/generate-site", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(retryId ? { retryId } : parsed.data) });
       requestId = response.headers.get("X-Request-ID");
       if (!response.ok || !response.body) throw new Error("Could not start generation. Check your connection and sign-in.");
       const reader = response.body.getReader(), decoder = new TextDecoder();
@@ -75,7 +86,10 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
         if (event.type === "result") {
           complete = true;
           setResult(event);
-          router.push(`/editor/${event.pageId}`);
+        }
+        if (event.type === "retry") {
+          complete = true;
+          setResult((current) => current && ({ ...current, pages: current.pages.map((page) => page.retryId === retryId ? event.page : page) }));
         }
       };
       try {
@@ -99,10 +113,17 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
     } finally { setBusy(false); }
   };
   if (result) return <div className="platform-panel p-6">
-    <h2 className="text-xl font-semibold">Your drafts are ready</h2>
+    <h2 className="text-xl font-semibold">Page generation summary</h2>
     <p className="mt-2 text-sm text-zinc-600">Nothing has been published. Review every page, placeholder and photo before publishing.</p>
     {result.warnings.length ? <ul role="status" className="my-4 list-disc space-y-2 pl-5 text-sm text-amber-900">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
-    <button className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white" onClick={() => router.push(`/editor/${result.pageId}`)}>Open editor</button>
+    <ul className="mt-4 space-y-3">{result.pages.map((page) => <li key={page.slug} className="flex flex-wrap items-center gap-3 text-sm">
+      <span>{page.label}: {page.built ? "Built ✓" : "Not built ✗"}</span>
+      {page.built && page.pageId ? <button type="button" className="underline" onClick={() => router.push(`/editor/${page.pageId}`)}>Open editor</button> : null}
+      {!page.built && page.retryId ? <button type="button" disabled={busy} className="underline disabled:opacity-40"
+        onClick={() => void generate(page.retryId)}>Retry (free)</button> : null}
+    </li>)}</ul>
+    {busy ? <p role="status" className="mt-4 text-sm">{messages.at(-1)}</p> : null}
+    {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
   </div>;
   return <form className="platform-panel p-5 sm:p-8" onSubmit={(event) => {
     event.preventDefault();
@@ -112,6 +133,10 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
       setError(""); setStep(1);
     } else void generate();
   }}>
+    {existingSite && pendingRetries.length ? <button type="button" className="mb-4 text-sm underline"
+      onClick={() => setResult({ siteId: existingSite.id, pageId: pendingRetries[0].pageId!, warnings: [], pages: pendingRetries })}>
+      Review unfinished pages and retry for free
+    </button> : null}
     <ol className="mb-6 flex gap-4 text-xs font-medium text-zinc-500" aria-label="AI setup steps">
       {["Business details", "Style & review"].map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={step === index ? "text-zinc-900" : ""}>{index + 1}. {label}</li>)}
     </ol>
@@ -174,15 +199,56 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
         <fieldset className="sm:col-span-2">
           <legend className="text-sm font-medium">Pages</legend>
           <div className="mt-2 flex flex-wrap gap-3">
-            {GENERATION_PAGE_SLUGS.map((slug) => <label key={slug} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={values.desiredPages.includes(slug)} disabled={!slug}
-                onChange={(event) => set("desiredPages", event.target.checked
-                  ? [...values.desiredPages, slug]
-                  : values.desiredPages.filter((page) => page !== slug))} />
-              {pageLabels[slug]}
+            {choices.map(({ slug, label, empty }) => <label key={slug} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={values.desiredPages.includes(slug)}
+                disabled={(!existingSite && !slug) || (!values.desiredPages.includes(slug) && values.desiredPages.length >= MAX_GENERATION_PAGES)}
+                onChange={(event) => {
+                  if (event.target.checked) set("desiredPages", [...values.desiredPages, slug]);
+                  else setValues((previous) => ({ ...previous, desiredPages: previous.desiredPages.filter((page) => page !== slug),
+                    pageDetails: previous.pageDetails?.filter((page) => page.slug !== slug) }));
+                }} />
+              {label}{!empty ? " — Rebuild (replaces draft)" : ""}
             </label>)}
           </div>
-          <p className="mt-1 text-xs text-zinc-500">Home is required. Unselected pages on an existing site are left unchanged.</p>
+          <p className="mt-2 text-xs text-zinc-500">{existingSite ? "Unselected drafts are left unchanged." : "Home is required."}
+            {" "}Select up to 10 pages. {values.desiredPages.length ? `Estimated time: ${Math.min(5, values.desiredPages.length)}–${Math.min(12, values.desiredPages.length * 2 + 1)} minutes. Unfinished pages can be retried for free.` : ""}</p>
+          {custom ? <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <label className="text-sm">Name<input className={fieldClass} value={custom.name} maxLength={80}
+              onChange={(event) => setCustom({ ...custom, name: event.target.value,
+                slug: custom.slug === slugFromPageName(custom.name) ? slugFromPageName(event.target.value) : custom.slug })} /></label>
+            <label className="text-sm">Purpose<input className={fieldClass} value={custom.purpose} maxLength={180}
+              onChange={(event) => setCustom({ ...custom, purpose: event.target.value })} /></label>
+            <label className="text-sm">URL slug<input className={fieldClass} value={custom.slug} maxLength={60}
+              onChange={(event) => setCustom({ ...custom, slug: event.target.value })} /></label>
+            <button type="button" className="platform-button" onClick={() => {
+              const parsed = pageDetailsSchema.safeParse(custom);
+              if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check the custom page details."); return; }
+              if (choices.some(({ slug }) => slug === parsed.data.slug)) { setError("This page address is already in use."); return; }
+              if (values.desiredPages.length >= MAX_GENERATION_PAGES) { setError("Select up to 10 pages."); return; }
+              setValues((previous) => ({ ...previous, desiredPages: [...previous.desiredPages, parsed.data.slug],
+                pageDetails: [...(previous.pageDetails ?? []), parsed.data] }));
+              setCustom(null); setError("");
+            }}>Add page</button>
+            <button type="button" className="platform-button" onClick={() => setCustom(null)}>Cancel</button>
+          </div> : <button type="button" className="platform-button mt-2" disabled={values.desiredPages.length >= MAX_GENERATION_PAGES}
+            onClick={() => setCustom({ name: "", purpose: "", slug: "" })}>+ Add custom page</button>}
+          {values.desiredPages.length > 1 ? <ol aria-label="Page order" className="mt-3 space-y-1 text-xs">
+            {values.desiredPages.map((slug, index) => {
+              const label = choices.find((page) => page.slug === slug)?.label ?? slug;
+              const move = (offset: number) => {
+                const next = [...values.desiredPages];
+                [next[index], next[index + offset]] = [next[index + offset], next[index]];
+                set("desiredPages", next);
+              };
+              return <li key={slug} className="flex items-center gap-2">
+                <span>{index + 1}. {label}</span>
+                <button type="button" aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => move(-1)}>↑</button>
+                <button type="button" aria-label={`Move ${label} down`} disabled={index === values.desiredPages.length - 1} onClick={() => move(1)}>↓</button>
+              </li>;
+            })}
+          </ol> : null}
+          <p className="mt-2 text-sm">{unlimited ? "Agency: unlimited credits."
+            : `Cost: one generation (10 shared credits if your allowance is used up)${extraPageCredits(values.desiredPages.length) ? ` + ${extraPageCredits(values.desiredPages.length)} shared credits for extra pages` : ""}. Failed-page retries are free.`}</p>
         </fieldset>
         <fieldset className="sm:col-span-2">
           <legend className="text-sm font-medium">Include these sections (optional)</legend>
@@ -237,11 +303,11 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
           <input required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={63} className={`${fieldClass} mt-2`} value={values.subdomain}
             onChange={(event) => set("subdomain", event.target.value.toLowerCase())} autoCapitalize="none" spellCheck={false} />
           <span className="mt-1 block text-xs font-normal text-zinc-500">.{rootDomain} &mdash; availability is checked before generation and when saving.</span>
-        </label> : <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm sm:col-span-2">
+        </label> : needsConfirmation ? <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm sm:col-span-2">
           <input type="checkbox" required className="mt-1" checked={values.confirmReplace} onChange={(event) => set("confirmReplace", event.target.checked)} />
-          <span>This will replace your current unpublished changes. You can restore them from version history.</span>
-        </label>}
-        <p className="text-xs leading-relaxed text-zinc-600 sm:col-span-2">Selected pages will be saved as drafts, never published automatically. One generation uses your monthly allowance, or 10 shared credits after that. Completed AI work is metered even if saving fails. Missing facts use placeholders; stock photos are credited. Business details are sent to the agency&apos;s AI provider. Review all copy before publishing. Forms are not yet connected.</p>
+          <span>Only selected drafts will be replaced. Published content is unchanged. You can restore drafts from version history.</span>
+        </label> : null}
+        <p className="text-xs leading-relaxed text-zinc-600 sm:col-span-2">Selected pages will be saved as drafts, never published automatically. Completed AI work is metered even if saving fails. Missing facts use placeholders. Review all copy before publishing.</p>
       </>}
     </fieldset>
     {busy ? <div role="status" aria-live="polite" className="mt-6 rounded-xl bg-zinc-50 p-4 text-sm">

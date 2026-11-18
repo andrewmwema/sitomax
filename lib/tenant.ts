@@ -128,8 +128,8 @@ export async function getPublishedSitePages(siteId: string): Promise<Pick<Tenant
 
 export async function getTenantMenuPages(siteId: string, preview: boolean) {
   const supabase = createAdminClient();
-  const query = supabase.from("pages").select("slug, nav_label").eq("site_id", siteId).order("sort_order").order("slug");
-  const result = await (preview ? query : query.not("published_data", "is", null));
+  const query = supabase.from("pages").select("slug, nav_label").eq("site_id", siteId).eq("hide_from_menu", false).order("sort_order").order("slug");
+  const result = await (preview ? query.eq("ai_pending_build", false) : query.not("published_data", "is", null));
   if (result.error?.code === "42703") {
     console.warn("Page menu labels migration is not applied; using labels from slugs.");
     const legacyQuery = supabase.from("pages").select("slug").eq("site_id", siteId).order("sort_order").order("slug");

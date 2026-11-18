@@ -89,7 +89,7 @@ async function SiteDetail({
         </div>
         <div className="flex flex-wrap gap-2">
           {canGenerate ? <Link href={`/dashboard/analytics?site=${encodeURIComponent(siteId)}`} className="platform-button">View analytics</Link> : null}
-          {canGenerate ? <Link href={`/dashboard/sites/${siteId}/generate`} className="platform-button platform-button-ai">Build with AI</Link> : null}
+          {canGenerate ? <Link href={`/dashboard/sites/${siteId}/generate`} className="platform-button platform-button-ai">Build pages with AI</Link> : null}
           <a
             href={url}
             target="_blank"

@@ -11,7 +11,8 @@ import { emptyBusiness } from "@/lib/business";
 import { createGenerationInputSchema } from "@/lib/ai/site-input";
 
 let container: HTMLDivElement, root: Root;
-const site = { id: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000002", name: "Local Plumbing", business: emptyBusiness };
+const site = { id: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000002", name: "Local Plumbing",
+  business: emptyBusiness, pages: [{ slug: "", label: "Home", empty: false }, { slug: "about", label: "About", empty: true }] };
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.stubGlobal("fetch", mocks.fetch);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -63,7 +64,7 @@ describe("AI site wizard", () => {
     expect(container.querySelector("#ai-design-guidance-count")?.textContent).toContain("5,001 / 5,000");
     expect(container.querySelector("#ai-design-guidance-error")?.textContent).toContain("1 character over the 5,000-character limit");
     expect(container.querySelector<HTMLTextAreaElement>("#ai-design-guidance")?.value).toBe(guidance);
-    await act(async () => { container.querySelector<HTMLButtonElement>("button[type=button]")!.click(); });
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Back")!.click(); });
     expect(container.querySelector("#ai-design-guidance")).toBeNull();
     const continueButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Continue")!;
     await act(async () => continueButton.click());
@@ -81,31 +82,36 @@ describe("AI site wizard", () => {
     expect(field.value).toBe("Friendly");
     expect(container.textContent).toContain("Repairs");
   });
-  it("requires explicit draft replacement confirmation, decodes chunked UTF-8 progress and opens the editor with review warnings", async () => {
+  it("requires confirmation only for selected rebuilds and shows a summary before opening the editor", async () => {
     await review();
-    expect(container.textContent).toContain("This will replace your current unpublished changes. You can restore them from version history.");
+    const home = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Home — Rebuild"))!.querySelector("input")!;
+    expect(home.checked).toBe(false);
+    await act(async () => home.click());
+    expect(container.textContent).toContain("Only selected drafts will be replaced");
     await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     expect(mocks.fetch).not.toHaveBeenCalled();
-    expect(container.querySelector("[role=alert]")?.textContent).toContain("Confirm replacement");
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("Confirm that the selected drafts");
     await act(async () => { container.querySelector<HTMLInputElement>("input[type=checkbox][required]")!.click(); });
     const bytes = new TextEncoder().encode(`${JSON.stringify({ type: "progress", message: "Designing Home…" })}\n${JSON.stringify({
       type: "result", siteId: site.id, pageId: site.accountId, warnings: ["Image placeholders were used."],
+      pages: [{ slug: "about", label: "About", built: true, pageId: site.accountId }],
     })}\n`);
     const split = bytes.indexOf(0xe2) + 1;
-    mocks.fetch.mockResolvedValue({ ok: true, body: new ReadableStream({
+    mocks.fetch.mockResolvedValue({ ok: true, headers: new Headers(), body: new ReadableStream({
       start(controller) { controller.enqueue(bytes.slice(0, split)); controller.enqueue(bytes.slice(split)); controller.close(); },
     }) });
     await act(async () => {
       container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      await vi.waitFor(() => expect(mocks.push).toHaveBeenCalledWith(`/editor/${site.accountId}`));
     });
+    expect(mocks.push).not.toHaveBeenCalled();
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Open editor")!.click());
+    expect(mocks.push).toHaveBeenCalledWith(`/editor/${site.accountId}`);
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({ siteId: site.id, confirmReplace: true, services: ["Drain repairs"] });
     expect(container.textContent).toContain("Image placeholders were used.");
   });
   it("surfaces an interrupted stream without claiming success or redirecting", async () => {
     await review();
-    await act(async () => { container.querySelector<HTMLInputElement>("input[type=checkbox][required]")!.click(); });
-    mocks.fetch.mockResolvedValue({ ok: true, body: new ReadableStream({ start(controller) { controller.close(); } }) });
+    mocks.fetch.mockResolvedValue({ ok: true, headers: new Headers(), body: new ReadableStream({ start(controller) { controller.close(); } }) });
     vi.spyOn(console, "error").mockImplementation(() => {});
     await act(async () => {
       container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

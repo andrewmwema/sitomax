@@ -126,6 +126,15 @@ values. Production logs use the request reference and record the received type
 or length instead of generated text. Only super admins see validation issues in
 the wizard.
 
+Apply [`0026_selected_ai_pages.sql`](supabase/migrations/0026_selected_ai_pages.sql)
+before deploying the page picker. Both AI modes build only the selected pages,
+in the chosen order. One generation covers up to six pages; pages seven
+through ten cost two shared credits each. Super admins are unlimited.
+Successful drafts are saved even when another page fails. Retry unfinished
+pages for free from the summary or by reopening **Build pages with AI**.
+Unticked drafts and published content are not replaced. Use **Hide from site
+menu** in Page settings to remove a page from navigation without unpublishing it.
+
 ## Analytics
 
 Apply `0014_analytics_reporting.sql` after the preceding migrations and set

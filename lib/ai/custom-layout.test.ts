@@ -39,6 +39,19 @@ const section = {
 };
 
 describe("custom AI layout schemas", () => {
+  it("adds a missing custom page, discards unselected pages and routes pricing to its own page", () => {
+    const { schema } = customPlanContract({ style: "auto", fontDirection: "auto", desiredPages: ["service-areas", "pricing"],
+      desiredSections: ["pricing"], pageDetails: [{ slug: "service-areas", name: "Service areas", purpose: "Cities we serve" }] });
+    const page = { title: "Pricing", seo: { title: "Pricing", description: "See options." }, sections: [{ kind: "pricing", goal: "Explain options" }] };
+    const result = schema.parse({ style: "modern", fonts: { heading: "Inter", body: "Inter" },
+      colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
+      pages: { pricing: page, unexpected: page } });
+    expect(result.pages).toMatchObject([
+      { slug: "service-areas", title: "Service areas", purpose: "Cities we serve", sections: [{ kind: "content" }, { kind: "footer" }] },
+      { slug: "pricing", sections: [{ kind: "pricing" }, { kind: "footer" }] },
+    ]);
+  });
+
   it("uses the selected pages, explicit style and font direction in the strict wire contract", () => {
     const { tool, schema } = customPlanContract({
       style: "modern", fontDirection: "serif", desiredPages: [""], desiredSections: ["faq"],
@@ -47,7 +60,7 @@ describe("custom AI layout schemas", () => {
     expect(tool.input_schema).toMatchObject({ properties: {
       style: { const: "modern" },
       fonts: { properties: { heading: { enum: expect.arrayContaining(["Lora"]) } } },
-      pages: { required: ["home"], additionalProperties: false },
+      pages: { properties: { home: expect.any(Object) }, additionalProperties: false },
     } });
     const plan = {
       style: "modern", fonts: { heading: "Lora", body: "Inter" },
@@ -56,7 +69,7 @@ describe("custom AI layout schemas", () => {
         sections: [{ kind: "faq", goal: "What to expect" }, { kind: "footer", goal: "Contact details" }] } },
     };
     expect(schema.safeParse(plan).success).toBe(true);
-    expect(schema.safeParse({ ...plan, pages: {} }).success).toBe(false);
+    expect(schema.parse({ ...plan, pages: {} }).pages[0]).toMatchObject({ slug: "", seo: expect.any(Object) });
     const normalized = schema.parse({ ...plan, colors: { ...plan.colors, text: "#aaaaaa" }, pages: {
       home: { ...plan.pages.home, sections: [], title: "x".repeat(90) }, about: plan.pages.home,
     } });
@@ -64,7 +77,7 @@ describe("custom AI layout schemas", () => {
     expect(normalized.contrastAdjusted).toBe(true);
     expect(normalized.pages.map(({ slug }) => slug)).toEqual([""]);
     expect(normalized.pages[0].title).toHaveLength(80);
-    expect(normalized.pages[0].sections.map(({ kind }) => kind)).toEqual(["hero", "faq", "footer"]);
+    expect(normalized.pages[0].sections.map(({ kind }) => kind)).toEqual(["faq", "footer"]);
   });
 
   it("builds validated layouts from existing Puck primitives and assigns server IDs", () => {

@@ -77,18 +77,15 @@ export const planSchema = z.strictObject({
   colors: z.strictObject({ primary: color, secondary: color, background: color, text: color }),
   fonts: z.strictObject({ heading: z.enum(CURATED_FONT_NAMES), body: z.enum(CURATED_FONT_NAMES) }),
   pages: z.array(z.strictObject({
-    slug: z.enum(PAGE_SLUGS),
+    slug: z.string().max(60),
     title: z.string().min(1).max(80),
     sections: z.array(z.strictObject({
       blockType: z.enum(blockTypes), designId: z.enum(designIds),
     })).min(2).max(7),
-  })).min(1).max(PAGE_SLUGS.length),
-  seo: z.strictObject({ home: seoSchema, about: seoSchema, services: seoSchema, contact: seoSchema }),
+    seo: seoSchema.optional(),
+  })).max(16),
+  seo: z.strictObject({ home: seoSchema, about: seoSchema, services: seoSchema, contact: seoSchema }).optional(),
 }).superRefine((plan, ctx) => {
-  const slugs = plan.pages.map((page) => page.slug);
-  if (new Set(slugs).size !== slugs.length || !slugs.includes("")) {
-    ctx.addIssue({ code: "custom", path: ["pages"], message: "Include Home and list each selected page exactly once." });
-  }
   plan.pages.forEach((page, pageIndex) => page.sections.forEach(({ blockType, designId }, sectionIndex) => {
     const design = catalogById.get(designId);
     if (design?.blockType !== blockType || !design.styles.includes(plan.style)) {
@@ -100,7 +97,33 @@ export const planSchema = z.strictObject({
 export type SitePlan = z.infer<typeof planSchema>;
 type PlannedPage = SitePlan["pages"][number];
 
-export const PLAN_SITE_TOOL = strictTool("plan_site", "Return the site plan, without section props.", planSchema);
+export const PLAN_SITE_TOOL = strictTool("plan_site", "Return the selected pages, each with its own seo, without section props.", planSchema);
+
+const catalogSectionType: Record<string, string> = { faq: "Faq", gallery: "Gallery", pricing: "Pricing", team: "Team",
+  testimonials: "Testimonials", process: "Process", logos: "Logos" };
+
+export function catalogPageSections(style: SitePlan["style"], page: PlannedPage["sections"], desired: string[], elsewhere: string[] = []) {
+  const entries = [...page];
+  const pick = (type: string) => {
+    const design = aiCatalog.find((item) => item.blockType === type && item.styles.includes(style));
+    return design ? { blockType: design.blockType, designId: design.id } : undefined;
+  };
+  const requested = desired.map((kind) => pick(catalogSectionType[kind])).filter((entry) => entry !== undefined);
+  const excluded = new Set(elsewhere.map((kind) => catalogSectionType[kind]));
+  const body = entries.filter(({ blockType }) => blockType !== "Footer" && !excluded.has(blockType));
+  if (!body.length) {
+    const fallback = pick("TextSection");
+    if (fallback) body.push(fallback);
+  }
+  for (const section of requested) if (!body.some(({ blockType }) => blockType === section.blockType)) body.push(section);
+  const footer = entries.find(({ blockType }) => blockType === "Footer") ?? pick("Footer");
+  const required = new Set(requested.map(({ blockType }) => blockType));
+  while (body.length > (footer ? 6 : 7)) {
+    const index = body.findLastIndex(({ blockType }) => !required.has(blockType) || body.findIndex((entry) => entry.blockType === blockType) !== body.findLastIndex((entry) => entry.blockType === blockType));
+    body.splice(index, 1);
+  }
+  return footer ? [...body, footer] : body;
+}
 
 const fillPropsByType = new Map(blockTypes.map((blockType) => {
   const imageField = Object.entries(blockFields(blockType)).find(([, field]) => isImageField(field))?.[0];

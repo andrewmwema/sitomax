@@ -165,9 +165,10 @@ function MenuLabelSettings({ page }: { page?: EditorPageLink }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState(page?.nav_label ?? defaultMenuLabel(page?.slug ?? ""));
+  const [hidden, setHidden] = useState(page?.hide_from_menu ?? false);
   if (!page) return null;
   return <form className="mt-4 border-t border-zinc-200 pt-4" action={async (formData) => {
-    const result = await savePageMenuLabel(page.id, String(formData.get("menuLabel") ?? ""));
+    const result = await savePageMenuLabel(page.id, String(formData.get("menuLabel") ?? ""), hidden);
     if (result.status !== "idle") setMessage(result.message);
     if (result.status === "success") router.refresh();
   }}>
@@ -176,7 +177,10 @@ function MenuLabelSettings({ page }: { page?: EditorPageLink }) {
       <input name="menuLabel" value={label} onChange={(event) => setLabel(event.currentTarget.value)} maxLength={40} required
         className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm" />
     </label>
-    <button type="submit" className="platform-button mt-2">Save menu label</button>
+    <label className="mt-2 flex items-center gap-2 text-xs">
+      <input type="checkbox" checked={hidden} onChange={(event) => setHidden(event.currentTarget.checked)} />Hide from site menus
+    </label>
+    <button type="submit" className="platform-button mt-2">Save menu settings</button>
     <p role="status" className="mt-1 text-xs">{message}</p>
   </form>;
 }
@@ -626,7 +630,7 @@ export function PageEditor({
               config={config}
               data={data}
               ui={initialUi}
-              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages), contacts: siteContacts(business) } }}
+              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) } }}
               overrides={overrides}
               plugins={editorPlugins}
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}
