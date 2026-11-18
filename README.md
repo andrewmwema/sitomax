@@ -6,6 +6,10 @@ The platform runs at `app.sitomax.com`; the apex domain serves the configured
 marketing tenant, and client sites use subdomains or verified custom domains.
 See [docs/HOSTING.md](./docs/HOSTING.md) for host routing and environment setup.
 
+Use Node.js 22.x locally and in Vercel. The npm override pins jsdom to 26.1.0
+so the server-side rich-text sanitizer can load without requiring the ESM-only
+`@exodus/bytes` package.
+
 ## Platform appearance
 
 The dashboard, authentication screens and editor share the warm neutral,
