@@ -5,6 +5,15 @@ import {
   type SanitizableConfig,
 } from "./richtext";
 
+it("drops orphaned image credits before saving while retaining credits for current backgrounds", () => {
+  const url = "https://images.unsplash.com/current";
+  const data = { content: [{ type: "Hero", props: {
+    design: { background: { images: [url] } }, image: "/storage/new.jpg",
+    photoCredits: [{ url }, { url: "https://images.unsplash.com/replaced" }],
+  } }] };
+  expect(sanitizePuckData(data).content[0].props.photoCredits).toEqual([{ url }]);
+});
+
 describe("sanitizeRichText", () => {
   it("preserves toolbar heading and bounded indentation but drops arbitrary layout styles", () => {
     expect(sanitizeRichText('<h1 style="margin-left: 32px; position: fixed">Title</h1>'))

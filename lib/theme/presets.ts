@@ -26,6 +26,7 @@ export type SiteTheme = {
     text?: string;
   };
   logoUrl?: string;
+  logoAlt?: string;
 };
 
 export const DEFAULT_COLORS = {

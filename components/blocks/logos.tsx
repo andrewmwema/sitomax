@@ -12,7 +12,7 @@ export type LogosProps = {
   heading: string;
   text: string;
   variant: "strip" | "grid";
-  logos: { name: string; image: string }[];
+  logos: { name: string; image: string; imageAlt?: string }[];
 };
 
 export const Logos: ComponentConfig<LogosProps> = {
@@ -26,7 +26,8 @@ export const Logos: ComponentConfig<LogosProps> = {
     logos: {
       type: "array", label: "Partner logos", getItemSummary: (item) => item.name || "Partner",
       defaultItemProps: { name: "[Partner name]", image: "" },
-      arrayFields: { name: { type: "text", label: "Partner name / image alt text" }, image: imageField("Logo (optional)") },
+      arrayFields: { name: { type: "text", label: "Partner name" }, image: imageField("Logo (optional)"),
+        imageAlt: { type: "text", label: "Image alt text (defaults to partner name)" } },
     },
   },
   defaultProps: {
@@ -49,7 +50,7 @@ export const Logos: ComponentConfig<LogosProps> = {
               style={variant === "grid" ? { background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)" } : { borderBlock: "1px solid var(--color-border)" }}>
               {logo.image ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={logo.image} alt={logo.name} loading="lazy" className="h-14 w-full max-w-40 object-contain" />
+                <img src={logo.image} alt={logo.imageAlt ?? logo.name} loading="lazy" className="h-14 w-full max-w-40 object-contain" />
               ) : (
                 <span className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-lg font-semibold sm:text-xl" style={{ fontFamily: i % 2 ? "var(--font-body)" : "var(--font-heading)" }}>
                   <BlockIcon name={["leaf", "building", "sun", "gem"][i % 4]} size={23} />

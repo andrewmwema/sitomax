@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { EditorSiteContext, ImageUploadField } from "@/components/editor/image-upload-field";
 import type { SiteSeo } from "@/lib/seo";
 import { addRedirect, deleteRedirect, saveSeo } from "@/app/(dashboard)/dashboard/sites/[siteId]/seo/actions";
 
@@ -14,9 +15,15 @@ function Feedback({ state }: { state: typeof initial }) {
 
 export function SeoSettings({ siteId, seo }: { siteId: string; seo: SiteSeo }) {
   const [state, action, pending] = useActionState(saveSeo.bind(null, siteId), initial);
+  const [socialImage, setSocialImage] = useState(seo.socialImage ?? "");
   return <form action={action} className="platform-panel space-y-5 p-6">
     <h2 className="font-semibold">Site SEO settings</h2>
-    <label className="block text-sm">Default social share image URL<input className={control} name="socialImage" defaultValue={seo.socialImage} /></label>
+    <div className="text-sm"><p className="mb-2">Default social share image</p>
+      <EditorSiteContext.Provider value={{ siteId }}>
+        <ImageUploadField value={socialImage} onChange={setSocialImage} readOnly={pending} />
+      </EditorSiteContext.Provider>
+      <input type="hidden" name="socialImage" value={socialImage} />
+    </div>
     <label className="block text-sm">Google Search Console verification code<input className={control} name="googleVerification" defaultValue={seo.googleVerification} />
       <span className="mt-1 block text-xs text-zinc-500">Paste the verification content value, not the full meta tag.</span></label>
     <label className="block text-sm">Google Analytics measurement ID<input className={control} name="googleAnalyticsId" defaultValue={seo.googleAnalyticsId} placeholder="G-XXXXXXXXXX" />

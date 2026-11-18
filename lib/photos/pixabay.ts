@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import { PhotoError, type PhotoProvider, type StockPhoto } from "./types";
+import { PhotoError, photoSearchSchema, type PhotoProvider, type StockPhoto } from "./types";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const imageUrl = z.url().refine((value) => {
@@ -75,12 +75,14 @@ export const pixabay: PhotoProvider = {
     if (!key) throw new PhotoError("Photo search is not configured.");
     return createHash("sha256").update(key).digest("hex");
   },
-  async search({ query, orientation }) {
+  async search(raw) {
+    const { query, orientation, page } = photoSearchSchema.parse(raw);
     const key = process.env.PIXABAY_API_KEY;
     if (!key) throw new PhotoError("Photo search is not configured.");
     const url = new URL("https://pixabay.com/api/");
     url.search = new URLSearchParams({
-      key, q: query, image_type: "photo", safesearch: "true", orientation, per_page: "20",
+      key, q: query, image_type: "photo", safesearch: "true",
+      orientation: orientation === "square" ? "all" : orientation, per_page: "20", page: String(page),
     }).toString();
     let response: Response;
     try {
@@ -90,9 +92,9 @@ export const pixabay: PhotoProvider = {
     }
     if (response.status === 429) throw new PhotoError("Photo search is busy. Please wait a minute and retry.");
     if (!response.ok) throw new PhotoError("Photo search failed. Please retry.");
-    const parsed = z.object({ hits: z.array(hitSchema) }).safeParse(await response.json());
+    const parsed = z.object({ hits: z.array(hitSchema), totalHits: z.number().int().nonnegative() }).safeParse(await response.json());
     if (!parsed.success) throw new PhotoError("Photo search returned invalid results.");
-    return parsed.data.hits.map((hit) => ({
+    const photos = parsed.data.hits.filter((hit) => orientation !== "square" || hit.imageWidth === hit.imageHeight).map((hit) => ({
       id: hit.id, previewUrl: hit.webformatURL, alt: `Stock photograph: ${hit.tags}`,
       width: hit.imageWidth, height: hit.imageHeight,
       downloadUrls: [...new Set([
@@ -100,6 +102,7 @@ export const pixabay: PhotoProvider = {
         ...(hit.fullHDURL ? [hit.fullHDURL] : []), hit.largeImageURL,
       ])],
     }));
+    return { photos, hasMore: page * 20 < Math.min(parsed.data.totalHits, 500) };
   },
   download: downloadImage,
 };

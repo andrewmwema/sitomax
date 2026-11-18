@@ -2,6 +2,7 @@ import DOMPurify from "isomorphic-dompurify";
 import type { Field } from "@puckeditor/core";
 import { puckConfig } from "@/lib/puck/config";
 import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
+import { cleanPhotoCredits } from "@/lib/editor/media";
 
 /**
  * Rich text (from Puck's TipTap field) is stored as HTML inside
@@ -223,6 +224,9 @@ function sanitizeItem(item: unknown, config: SanitizableConfig): void {
   const { type, props } = item as { type?: unknown; props?: unknown };
   if (typeof type !== "string") return;
   sanitizeFields(props, config.components?.[type]?.fields, config);
+  if (props && typeof props === "object" && !Array.isArray(props)) {
+    Object.assign(props, cleanPhotoCredits(props as Record<string, unknown>));
+  }
 }
 
 function sanitizeContent(content: unknown, config: SanitizableConfig): void {

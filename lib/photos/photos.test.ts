@@ -20,7 +20,7 @@ const hit = {
   imageWidth: 4000, imageHeight: 3000, imageSize: 4000000,
 };
 const jpeg = () => new Response(new Uint8Array([0xff, 0xd8, 0xff, 1, 2]), { headers: { "content-type": "image/jpeg" } });
-const search = (hits: object[] = [hit]) => new Response(JSON.stringify({ hits }), { headers: { "content-type": "application/json" } });
+const search = (hits: object[] = [hit], totalHits = hits.length) => new Response(JSON.stringify({ hits, totalHits }), { headers: { "content-type": "application/json" } });
 function client() {
   const supabase = createClient("https://storage.example", "public-test-key", { auth: { persistSession: false } });
   vi.spyOn(supabase.auth, "getSession").mockResolvedValue({ data: { session: {
@@ -44,6 +44,19 @@ beforeEach(() => {
 });
 
 describe("stock photo provider boundary", () => {
+  it("separates cached pages and filters square results without sending an unsupported provider orientation", async () => {
+    mocks.fetch.mockImplementation(async () => search([hit,
+      { ...hit, id: 43, imageWidth: 2000, imageHeight: 2000 },
+      { ...hit, id: 44, imageWidth: 2100, imageHeight: 2000 }], 40));
+    const library = createPhotoLibrary(client(), accountId);
+    const first = await library.searchPage({ query: "tools", orientation: "square", page: 1 });
+    expect(first.photos.map((photo) => photo.id)).toEqual([43]);
+    expect(first.hasMore).toBe(true);
+    expect((await library.searchPage({ query: "tools", orientation: "square", page: 2 })).hasMore).toBe(false);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    const url = mocks.fetch.mock.calls[1][0] as URL;
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({ page: "2", orientation: "all" });
+  });
   it("caches normalized queries for 24 hours and applies safe filters with a global allowance on misses", async () => {
     mocks.fetch.mockResolvedValue(search());
     const library = createPhotoLibrary(client(), accountId);
@@ -58,19 +71,20 @@ describe("stock photo provider boundary", () => {
   });
   it("downloads the largest allowed file and saves only our Storage URL under the site folder", async () => {
     mocks.fetch.mockResolvedValueOnce(search()).mockResolvedValueOnce(jpeg());
-    const result = await createPhotoLibrary(client(), accountId).select({ query: "tools", photoId: 42, siteId });
+    const result = await createPhotoLibrary(client(), accountId).select({ query: "tools", photoId: 42, siteId, alt: "Workshop tools" });
     expect(mocks.fetch.mock.calls[1][0]).toBe(hit.imageURL);
     expect(mocks.upload).toHaveBeenCalledWith(`${siteId}/pixabay-42.jpg`, expect.any(Uint8Array), expect.objectContaining({
-      contentType: "image/jpeg", upsert: false,
+      contentType: "image/jpeg", upsert: false, metadata: { alt: "Workshop tools" },
     }));
     expect(result.url).toBe(`https://storage.example/storage/v1/object/public/site-assets/${siteId}/pixabay-42.jpg`);
     expect(result.url).not.toContain("pixabay.com");
+    expect(result.alt).toBe("Workshop tools");
   });
   it("uses the largest public size when full API access is unavailable and ignores oversized originals", async () => {
     mocks.fetch.mockResolvedValueOnce(search([{ ...hit, imageURL: undefined, fullHDURL: undefined }]));
-    expect((await pixabay.search({ query: "tools", orientation: "all" }))[0].downloadUrls[0]).toBe(hit.largeImageURL);
+    expect((await pixabay.search({ query: "tools", orientation: "all" })).photos[0].downloadUrls[0]).toBe(hit.largeImageURL);
     mocks.fetch.mockResolvedValueOnce(search([{ ...hit, imageSize: 30 * 1024 * 1024 }]));
-    expect((await pixabay.search({ query: "tools", orientation: "all" }))[0].downloadUrls[0]).toBe(hit.fullHDURL);
+    expect((await pixabay.search({ query: "tools", orientation: "all" })).photos[0].downloadUrls[0]).toBe(hit.fullHDURL);
   });
   it("fails closed on rate limits, missing keys and missing photos without a download or upload", async () => {
     const library = createPhotoLibrary(client(), accountId);

@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
   mocks.lookup.mockResolvedValue({ data: { account_id: accountId }, error: null });
-  mocks.library.mockReturnValue({ search: mocks.search, select: mocks.select });
+  mocks.library.mockReturnValue({ searchPage: async (raw: unknown) => ({ photos: await mocks.search(raw), hasMore: false }), select: mocks.select });
 });
 describe("editor stock photo actions", () => {
   it("checks site RLS access before searching or selecting", async () => {
@@ -26,7 +26,7 @@ describe("editor stock photo actions", () => {
   it("returns provider attribution with previews but never exposes download URLs", async () => {
     mocks.search.mockResolvedValue([{ id: 42, previewUrl: "https://cdn.pixabay.com/preview.jpg", alt: "Tools", downloadUrls: ["private-download"] }]);
     expect(await searchStockPhotos({ siteId, query: "tools" })).toEqual({ status: "success",
-      source: { name: "Pixabay", url: "https://pixabay.com/" }, photos: [
+      source: { name: "Pixabay", url: "https://pixabay.com/" }, hasMore: false, photos: [
         { id: 42, previewUrl: "https://cdn.pixabay.com/preview.jpg", alt: "Tools" },
       ] });
     expect(mocks.library).toHaveBeenCalledWith(expect.anything(), accountId);
@@ -35,7 +35,7 @@ describe("editor stock photo actions", () => {
     mocks.select.mockResolvedValue({ url: "https://storage.example/42.jpg", alt: "Tools" });
     expect(await selectStockPhoto({ siteId, query: "TOOLS", photoId: 42, url: "http://127.0.0.1" }))
       .toMatchObject({ status: "success", url: "https://storage.example/42.jpg" });
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({ siteId, query: "tools", orientation: "all", photoId: 42 });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({ siteId, query: "tools", orientation: "all", page: 1, photoId: 42 });
     expect(await selectStockPhoto({ siteId, query: "tools", photoId: -1 })).toMatchObject({ status: "error" });
   });
   it("shows expected failures and withholds raw request or credential-bearing errors", async () => {

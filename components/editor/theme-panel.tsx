@@ -308,6 +308,7 @@ export function ThemePanel({
           <ImageUploadField
             value={theme.logoUrl ?? ""}
             onChange={(logoUrl) => onChange({ ...theme, logoUrl })}
+            onSelect={(image) => onChange({ ...theme, logoUrl: image.url, logoAlt: image.alt })}
           />
         </section>
 

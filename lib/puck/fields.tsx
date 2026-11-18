@@ -1,6 +1,6 @@
 import type { CustomField, RichtextField } from "@puckeditor/core";
 import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
-import { ImageUploadField } from "@/components/editor/image-upload-field";
+import { PuckImageField } from "@/components/editor/puck-image-field";
 import { IconPickerField } from "@/components/editor/icon-picker-field";
 import { DesignField } from "@/components/editor/design-field";
 import { RichTextToolbar } from "@/components/editor/rich-text-toolbar";
@@ -15,8 +15,8 @@ export function imageField(label: string): CustomField<string> & { aiKind: "imag
     type: "custom",
     aiKind: "image",
     label,
-    render: ({ value, onChange, readOnly }) => (
-      <ImageUploadField value={value} onChange={onChange} readOnly={readOnly} />
+    render: ({ name, value, onChange, readOnly }) => (
+      <PuckImageField name={name} value={value} onChange={onChange} readOnly={readOnly} />
     ),
   };
 }

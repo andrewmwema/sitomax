@@ -120,7 +120,7 @@ export function SeoPanel({ siteId, pageId, pageTitle, publicUrl, siteSeo, pages 
       </label>
       <div id="seo-social-image" className="flex flex-col gap-1 text-xs font-medium">
         <span>Social share image</span>
-        <ImageUploadField allowUrl={false} value={image} onChange={(value) => update("socialImage", value)} />
+        <ImageUploadField value={image} onChange={(value) => update("socialImage", value)} />
       </div>
       <fieldset id="seo-indexing" className="flex flex-col gap-2 text-xs">
         <legend className="font-medium">Search visibility</legend>

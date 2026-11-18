@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { idleState, type ActionState } from "@/lib/form-state";
 import type { AgencySettings } from "@/lib/agency";
 import { brand } from "@/lib/brand";
@@ -16,6 +17,7 @@ export function AgencySettingsForm({
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
   const [state, formAction, pending] = useActionState(action, idleState);
+  const [logoUrl, setLogoUrl] = useState(settings.logoUrl ?? "");
 
   return (
     <form
@@ -38,26 +40,8 @@ export function AgencySettingsForm({
 
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-zinc-700">Logo</span>
-        <div className="flex items-center gap-4">
-          {settings.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- remote logo host is user-configured
-            <img
-              src={settings.logoUrl}
-              alt="Current logo"
-              className="size-12 rounded-lg border border-zinc-200 object-contain p-1"
-            />
-          ) : (
-            <div className="flex size-12 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-xs text-zinc-400">
-              None
-            </div>
-          )}
-          <input
-            type="file"
-            name="logo"
-            accept="image/png,image/jpeg,image/svg+xml,image/webp"
-            className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-200"
-          />
-        </div>
+        <ImageUploadField agency value={logoUrl} onChange={setLogoUrl} readOnly={pending} initialQuery={settings.name} />
+        <input type="hidden" name="logo_url" value={logoUrl} />
         <span className="text-xs text-zinc-500">
           PNG, JPEG, SVG or WebP, up to 2 MB.
         </span>

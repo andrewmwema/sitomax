@@ -537,7 +537,7 @@ export function PageEditor({
   }, []);
 
   return (
-    <EditorSiteContext.Provider value={{ siteId: site.id }}>
+    <EditorSiteContext.Provider value={{ siteId: site.id, query: business.businessType }}>
       <EditorUiContext.Provider value={editorUi}>
         <SectionLibraryContext.Provider value={sectionLibraryUi}>
           <InteractionContext.Provider value={interactionUi}>

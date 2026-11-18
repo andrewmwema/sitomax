@@ -11,7 +11,7 @@ export const photoSource = { name: provider.name, url: provider.url };
 
 export function createPhotoLibrary(supabase: SupabaseClient, accountId: string) {
   z.uuid().parse(accountId);
-  const search = async (raw: z.input<typeof photoSearchSchema>) => {
+  const searchPage = async (raw: z.input<typeof photoSearchSchema>) => {
     const input = photoSearchSchema.parse(raw);
     const keyHash = provider.cacheKey();
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -28,20 +28,23 @@ export function createPhotoLibrary(supabase: SupabaseClient, accountId: string) 
       if (error) throw new PhotoError("Could not check the photo search limit. Apply migration 0020 and retry.");
       if (allowed !== true) throw new PhotoError("Photo search is busy. Please wait a minute and retry.");
       return provider.search(input);
-    }, ["stock-photo-search-v1", provider.name, keyHash, input.query, input.orientation], { revalidate: 86400 })();
+    }, ["stock-photo-search-v3", provider.name, keyHash, input.query, input.orientation, String(input.page)], { revalidate: 86400 })();
   };
+  const search = async (raw: z.input<typeof photoSearchSchema>) => (await searchPage(raw)).photos;
   return {
     search,
-    async select(raw: z.input<typeof photoSearchSchema> & { photoId: number; siteId: string }): Promise<StoredPhoto> {
-      const { photoId, siteId } = z.object({ photoId: z.number().int().positive(), siteId: z.uuid() }).parse(raw);
+    searchPage,
+    async select(raw: z.input<typeof photoSearchSchema> & { photoId: number; siteId: string; alt?: string }): Promise<StoredPhoto> {
+      const { photoId, siteId, alt } = z.object({ photoId: z.number().int().positive(), siteId: z.uuid(), alt: z.string().max(500).optional() }).parse(raw);
       const photo = (await search(raw)).find(({ id }) => id === photoId);
       if (!photo) throw new PhotoError("That photo is no longer available. Search again.");
       const file = await provider.download(photo);
       const bucket = supabase.storage.from("site-assets");
       const path = `${siteId}/${provider.name.toLowerCase()}-${photo.id}.${file.extension}`;
-      const { error } = await bucket.upload(path, file.bytes, { contentType: file.contentType, cacheControl: "31536000", upsert: false });
+      const { error } = await bucket.upload(path, file.bytes, { contentType: file.contentType, cacheControl: "31536000",
+        metadata: { alt: alt ?? photo.alt }, upsert: false });
       if (error && error.statusCode !== "409") throw new PhotoError("The photo could not be saved to site assets. Please retry.");
-      return { url: bucket.getPublicUrl(path).data.publicUrl, alt: photo.alt };
+      return { url: bucket.getPublicUrl(path).data.publicUrl, alt: alt ?? photo.alt };
     },
   };
 }

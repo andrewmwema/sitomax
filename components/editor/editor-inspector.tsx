@@ -8,6 +8,7 @@ import { ELEMENT_TYPES } from "@/lib/layout/structure";
 import { hasPlaceholder } from "@/lib/sections/placeholders";
 import { DesignField } from "./design-field";
 import { useInteractions } from "./interaction-context";
+import { cleanPhotoCredits } from "@/lib/editor/media";
 
 const usePuck = createUsePuck();
 export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<string, ReactNode>>; isLoading: boolean }) {
@@ -28,7 +29,7 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
     if (!selectedItem || !appState.ui.itemSelector || locked) return;
     dispatch({ type: "replace", destinationIndex: appState.ui.itemSelector.index,
       destinationZone: appState.ui.itemSelector.zone ?? "root:default-zone",
-      data: { ...selectedItem, props: { ...selectedItem.props, design: next } }, recordHistory: true });
+      data: { ...selectedItem, props: cleanPhotoCredits({ ...selectedItem.props, design: next }) }, recordHistory: true });
   };
   const appearance = design.appearance?.[device] ?? {};
   const base = design.appearance?.desktop ?? {};

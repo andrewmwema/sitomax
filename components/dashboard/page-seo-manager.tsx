@@ -121,7 +121,7 @@ function PageSeoDrawer({ siteId, siteSeo, page, onClose }: {
             <span className="mt-1 block text-right text-xs text-zinc-500">{description.length}/160 characters</span>
           </label>
           <div className="text-sm font-medium"><span>Social share image</span>
-            <div className="mt-1"><ImageUploadField allowUrl value={socialImage} onChange={setSocialImage} /></div>
+            <div className="mt-1"><ImageUploadField value={socialImage} onChange={setSocialImage} /></div>
             {!socialImage && siteSeo.socialImage ? <p className="mt-1 text-xs text-zinc-500">Using the site default image.</p> : null}
           </div>
           <fieldset className="space-y-2 text-sm">

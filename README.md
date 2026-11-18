@@ -46,21 +46,36 @@ AI-created sections use stock photos when configured, otherwise image placeholde
 
 ### Stock photos
 
-Apply `0020_stock_photos.sql` after `0019` and set server-only `PIXABAY_API_KEY`
-locally and on Vercel. **Browse stock photos** in the editor image field searches
-Pixabay. Search previews carry a **Photos from Pixabay** link; selecting a photo
+Apply `0020_stock_photos.sql` and `0021_media_library.sql` after `0019` and set
+server-only `PIXABAY_API_KEY` locally and on Vercel. Every **Choose image** or
+**Replace image** control opens the shared media picker, including section
+backgrounds, nested block images, site/agency logos and SEO images.
+Its default **Stock photos** tab searches Pixabay. Previews carry a
+**Photos from Pixabay** link; selecting a photo
 downloads the largest available suitable file (up to 20 MB) into the site's
 `site-assets` folder. AI site generation and AI-added sections use the same
 provider interface in `lib/photos/`. Published pages use our Storage URLs, never
 the Pixabay preview URLs, and do not display new photo credits.
 
-Searches use safe photo results, support landscape/portrait orientation and are
+Searches use safe photo results, support landscape/portrait/square filters and are
 cached for 24 hours. Database locking enforces a shared rolling limit of
 100 uncached searches per 60 seconds across app instances. No matches or failed
 AI downloads leave placeholders with review warnings; editor failures are shown
 without changing the current image. Existing Unsplash images and their attribution
-remain unchanged; `UNSPLASH_ACCESS_KEY` is no longer needed. Full-resolution Pixabay
+remain until their image is replaced; `UNSPLASH_ACCESS_KEY` is no longer needed. Full-resolution Pixabay
 downloads require full API access; otherwise the largest returned size is used.
+
+The picker also offers drag-and-drop/browse uploads, a newest-first site media
+library with filename/alt-text search and pagination, and a server-authorized
+**Paste URL** tab for super admins only. Alt text starts from Pixabay tags or
+the upload filename and is editable before selection. Existing uploads remain
+visible; assets uploaded before metadata support have no searchable stored alt
+text. Site uploads allow JPEG, PNG, GIF, WebP and AVIF up to 50 MB (no SVG);
+agency branding uploads retain the 2 MB PNG/JPEG/SVG/WebP limit. Uploads go
+directly to Storage under its existing authenticated RLS, avoiding application
+request-body limits. The library function checks site membership or super-admin
+access before reading Storage metadata. Agency stock images use the internal
+account's folder; its library also includes the agency-only branding bucket.
 
 ### AI diagnostics
 

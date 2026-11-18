@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSuperAdmin } from "@/lib/auth";
 import type { ActionState } from "@/lib/form-state";
+import { mediaUrlSchema } from "@/lib/media";
 
 const settingsSchema = z.object({
   name: z
@@ -49,6 +50,11 @@ export async function updateAgencySettings(
   }
 
   let logoUrl: string | undefined;
+  if (formData.has("logo_url")) {
+    const selected = mediaUrlSchema.or(z.literal("")).safeParse(formData.get("logo_url"));
+    if (!selected.success) return { status: "error", message: "Use a valid HTTPS logo URL or local path." };
+    logoUrl = selected.data;
+  }
   const logo = formData.get("logo");
 
   if (logo instanceof File && logo.size > 0) {
@@ -82,7 +88,7 @@ export async function updateAgencySettings(
       name: parsed.data.name,
       primary_color: parsed.data.primary_color,
       support_email: parsed.data.support_email || null,
-      ...(logoUrl ? { logo_url: logoUrl } : {}),
+      ...(logoUrl !== undefined ? { logo_url: logoUrl || null } : {}),
     })
     .eq("id", 1);
 
