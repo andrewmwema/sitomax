@@ -3,7 +3,7 @@ import type { DomainSite } from "@/lib/domains";
 
 const mocks = vi.hoisted(() => ({
   site: vi.fn(), rpc: vi.fn(), admin: vi.fn(), update: vi.fn(), saved: vi.fn(), conflict: vi.fn(),
-  ensure: vi.fn(), connection: vi.fn(), remove: vi.fn(), revalidate: vi.fn(),
+  connection: vi.fn(), remove: vi.fn(), revalidate: vi.fn(),
   inspect: vi.fn(), notify: vi.fn(), send: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: {
@@ -13,7 +13,7 @@ vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: {
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/vercel/domains", async (original) => {
   const actual = await original<typeof import("@/lib/vercel/domains")>();
-  return { ...actual, ensureDomain: mocks.ensure, getDomainConnection: mocks.connection, removeDomain: mocks.remove };
+  return { ...actual, getDomainConnection: mocks.connection, removeDomain: mocks.remove };
 });
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("@/lib/domains/dns", async (original) => {
@@ -47,7 +47,6 @@ beforeEach(() => {
     select: () => ({ in: () => ({ neq: mocks.conflict }) }), update: mocks.update,
   }) });
   mocks.connection.mockResolvedValue(connection);
-  mocks.ensure.mockResolvedValue(undefined);
   mocks.remove.mockResolvedValue(undefined);
   mocks.inspect.mockImplementation(async (domain, consume) => {
     await consume();
@@ -69,7 +68,6 @@ describe("domain action permissions", () => {
       await inspectSiteDomain(id, "example.com"), await emailDomainInstructions(id, "web@example.com", "godaddy"),
     ]) expect(result.error).toContain("Only account owners");
     expect(mocks.admin).not.toHaveBeenCalled();
-    expect(mocks.ensure).not.toHaveBeenCalled();
     expect(mocks.connection).not.toHaveBeenCalled();
     expect(mocks.remove).not.toHaveBeenCalled();
   });
@@ -90,7 +88,7 @@ describe("domain action permissions", () => {
       expect((await connectSiteDomain("invalid", "example.com")).error).toBeTruthy();
       mocks.conflict.mockResolvedValue({ data: [{ id: "another-site" }], error: null });
       expect((await connectSiteDomain(id, "example.com")).error).toContain("another site");
-      expect(mocks.ensure).not.toHaveBeenCalled();
+      expect(mocks.connection).not.toHaveBeenCalled();
       expect(mocks.update).not.toHaveBeenCalled();
     } finally { vi.unstubAllEnvs(); }
   });
@@ -115,20 +113,19 @@ describe("domain actions", () => {
     expect(mocks.update.mock.calls.map(([fields]) => fields)).toEqual([
       { custom_domain: "example.com", domain_verified: false }, { domain_provider: "godaddy" }, { domain_verified: true },
     ]);
-    expect(mocks.ensure.mock.calls).toEqual([["example.com"], ["www.example.com", "example.com"]]);
+    expect(mocks.connection).toHaveBeenCalledWith("example.com", { verify: true, repair: true });
     expect(mocks.notify).toHaveBeenCalledWith(id);
     expect(mocks.revalidate).toHaveBeenCalledWith(`/dashboard/sites/${id}/domains`);
   });
 
   it("retains a failed setup for retry and never replaces an existing domain", async () => {
-    mocks.ensure.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new DomainApiError(503, "unavailable"));
+    mocks.connection.mockRejectedValueOnce(new DomainApiError(503, "unavailable"));
     const result = await connectSiteDomain(id, "example.com");
     expect(result.site?.custom_domain).toBe("example.com");
     expect(result.site?.domain_verified).toBe(false);
     expect(result.error).toContain("retry");
     existingDomain();
     expect((await connectSiteDomain(id, "other.com")).error).toContain("Remove the current domain");
-    mocks.ensure.mockResolvedValue(undefined);
     expect((await connectSiteDomain(id, "example.com")).error).toBe("");
     expect(mocks.update).not.toHaveBeenCalledWith({ custom_domain: null });
   });
@@ -136,7 +133,7 @@ describe("domain actions", () => {
   it("does not call hosting when reserving the domain fails", async () => {
     mocks.saved.mockResolvedValue({ data: null, error: { code: "23505" } });
     expect((await connectSiteDomain(id, "example.com")).error).toContain("Could not save");
-    expect(mocks.ensure).not.toHaveBeenCalled();
+    expect(mocks.connection).not.toHaveBeenCalled();
   });
 
   it("checks live verification and clears domain_verified when either hostname is not ready", async () => {
@@ -144,13 +141,26 @@ describe("domain actions", () => {
     mocks.connection.mockResolvedValue({ ...connection, status: "Needs attention" });
     const result = await checkSiteDomain(id);
     expect(result.connection?.status).toBe("Needs attention");
-    expect(mocks.connection).toHaveBeenCalledWith("example.com", true);
+    expect(mocks.connection).toHaveBeenCalledWith("example.com", { verify: true, repair: true });
     expect(mocks.update).toHaveBeenCalledWith({ domain_verified: false });
     mocks.connection.mockRejectedValue(new DomainApiError(503, "unavailable"));
     mocks.update.mockClear();
     expect((await checkSiteDomain(id)).error).toBeTruthy();
     expect(mocks.update).toHaveBeenCalledWith({ domain_last_checked_at: expect.any(String) });
     expect(mocks.update).not.toHaveBeenCalledWith({ domain_verified: false });
+  });
+
+  it("keeps the saved domain pending with TXT instructions if its retry finds an outside connection", async () => {
+    existingDomain();
+    const blocked = {
+      status: "Needs attention",
+      issue: "This domain is in use elsewhere. Add the exact TXT name and value from the DNS instructions.",
+      records: [{ type: "TXT", name: "_vercel.example.com", value: "verification-token" }],
+    };
+    mocks.connection.mockResolvedValue(blocked);
+    const result = await connectSiteDomain(id, "example.com");
+    expect(result).toMatchObject({ site: { custom_domain: "example.com", domain_verified: false }, connection: blocked, success: "" });
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 
   it("clears domain settings only after both remote removals and surfaces partial failures", async () => {

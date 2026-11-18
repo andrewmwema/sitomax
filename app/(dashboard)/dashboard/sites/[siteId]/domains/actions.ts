@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { customDomainSchema, domainChecksExpired, type DnsInspection, type DomainSettingsState, type DomainSite } from "@/lib/domains";
-import { DomainApiError, ensureDomain, getDomainConnection, removeDomain } from "@/lib/vercel/domains";
+import { DomainApiError, getDomainConnection, removeDomain } from "@/lib/vercel/domains";
 import { conflictingRecords, DnsLookupError, inspectDns } from "@/lib/domains/dns";
 import { providerIdSchema } from "@/lib/domains/providers";
 import { checkAndSaveDomain, DomainCheckError, domainSiteColumns, expiredDomainIssue } from "@/lib/domains/check";
@@ -61,10 +61,10 @@ function refresh(site: DomainSite) {
   if (site.custom_domain) revalidatePath(`/s/${site.custom_domain}`, "layout");
 }
 
-async function connectionState(site: DomainSite, manual = false): Promise<DomainSettingsState> {
+async function connectionState(site: DomainSite): Promise<DomainSettingsState> {
   const result = state(site);
   if (!site.custom_domain) return result;
-  if (!manual && domainChecksExpired(site)) {
+  if (domainChecksExpired(site)) {
     result.connection = { status: "Needs attention", records: [], issue: expiredDomainIssue };
     return result;
   }
@@ -152,15 +152,14 @@ export async function connectSiteDomain(siteId: string, input: string, providerI
   if (providerSaved.error || !providerSaved.data) return state(site, "Could not save your DNS provider. Refresh and try again.");
   site = providerSaved.data;
   try {
-    await ensureDomain(domain);
-    await ensureDomain(`www.${domain}`, domain);
-    const result = await connectionState(site, true);
+    const result = { ...state(site), connection: await getDomainConnection(domain, { verify: true, repair: true }) };
     const verified = result.connection?.status === "Connected";
     const saved = await admin.from("sites").update({ domain_verified: verified })
       .eq("id", site.id).eq("custom_domain", domain).select(columns).maybeSingle();
     if (saved.error || !saved.data) return { ...result, error: "Connection set up, but its status could not be saved. Check again." };
     result.site = saved.data;
-    result.success = verified ? "Your domain is connected." : "Domain added. Update your DNS records below.";
+    result.success = verified ? "Your domain is connected." :
+      result.connection.status === "Pending" ? "Update your DNS records below." : "";
     refresh(saved.data);
     try { if (verified) await notifyDomainLive(site.id); }
     catch (error) { result.error = serviceError(error); }
@@ -179,7 +178,8 @@ export async function checkSiteDomain(siteId: string, automatic = false): Promis
   try {
     const checked = await checkAndSaveDomain(site, automatic);
     const result = { ...state(checked.site), connection: checked.connection };
-    result.success = result.connection?.status === "Connected" ? "Your domain is connected." : "Checked. DNS changes may still be propagating.";
+    result.success = result.connection.status === "Connected" ? "Your domain is connected." :
+      result.connection.status === "Pending" ? "Checked. DNS changes may still be propagating." : "";
     if (site.domain_verified !== checked.site.domain_verified) refresh(checked.site);
     try { if (checked.site.domain_verified) await notifyDomainLive(site.id); }
     catch (error) { result.error = serviceError(error); }

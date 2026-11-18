@@ -23,7 +23,7 @@ export async function checkAndSaveDomain(site: DomainSite, automatic: boolean): 
     site: { ...site, domain_check_stopped_at: now },
     connection: { status: "Needs attention", records: [], issue: expiredDomainIssue },
   };
-  const connection = await getDomainConnection(domain, true);
+  const connection = await getDomainConnection(domain, { verify: true, repair: true });
   const saved = await admin.from("sites").update({
     domain_verified: connection.status === "Connected",
     ...(connection.status === "Connected" ? { domain_check_stopped_at: null } : {}),

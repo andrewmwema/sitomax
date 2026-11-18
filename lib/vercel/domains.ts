@@ -4,6 +4,9 @@ import { z } from "zod";
 import type { DomainConnection, DnsRecord } from "@/lib/domains";
 
 const API = "https://api.vercel.com";
+const verificationSchema = z.array(z.object({
+  type: z.string(), domain: z.string().min(1), value: z.string().min(1),
+}));
 const projectDomainSchema = z.object({
   name: z.string(),
   verified: z.boolean(),
@@ -11,9 +14,7 @@ const projectDomainSchema = z.object({
   redirectStatusCode: z.number().nullable().optional(),
   gitBranch: z.string().nullable().optional(),
   customEnvironmentId: z.string().nullable().optional(),
-  verification: z.array(z.object({
-    type: z.string(), domain: z.string(), value: z.string(),
-  })).optional(),
+  verification: verificationSchema.optional(),
 });
 const configSchema = z.object({
   misconfigured: z.boolean(),
@@ -22,7 +23,8 @@ const configSchema = z.object({
 });
 
 export class DomainApiError extends Error {
-  constructor(public readonly status: number, public readonly code: string) {
+  constructor(public readonly status: number, public readonly code: string,
+    public readonly verification: z.infer<typeof verificationSchema> = []) {
     super("The domain service could not complete this request.");
     this.name = "DomainApiError";
   }
@@ -63,8 +65,9 @@ async function request(path: string, method = "GET", body?: object): Promise<unk
     throw new DomainApiError(response.status, "invalid_response");
   }
   if (!response.ok) {
-    const parsed = z.object({ error: z.object({ code: z.string() }) }).safeParse(data);
-    throw new DomainApiError(response.status, parsed.success ? parsed.data.error.code : "request_failed");
+    const parsed = z.object({ error: z.object({ code: z.string(), verification: z.unknown().optional() }) }).safeParse(data);
+    throw new DomainApiError(response.status, parsed.success ? parsed.data.error.code : "request_failed",
+      verificationSchema.safeParse(parsed.success ? parsed.data.error.verification : undefined).data ?? []);
   }
   return data;
 }
@@ -75,7 +78,7 @@ function parse<T>(schema: z.ZodType<T>, data: unknown): T {
   return parsed.data;
 }
 
-export async function addDomain(domain: string, redirect?: string) {
+async function postDomain(domain: string, redirect?: string) {
   return parse(projectDomainSchema, await request(projectPath(10), "POST", {
     name: domain, ...(redirect ? { redirect, redirectStatusCode: 308 } : {}),
   }));
@@ -102,54 +105,88 @@ export async function removeDomain(domain: string): Promise<void> {
   }
 }
 
-export async function ensureDomain(domain: string, redirect?: string): Promise<void> {
+function isMissingDomain(error: unknown): error is DomainApiError {
+  return error instanceof DomainApiError && error.status === 404 &&
+    ["not_found", "domain_not_found", "project_domain_not_found", "invalid_response", "request_failed"].includes(error.code);
+}
+
+function matchesTarget(result: z.infer<typeof projectDomainSchema>, redirect?: string) {
+  return (result.redirect ?? null) === (redirect ?? null) && !result.gitBranch && !result.customEnvironmentId &&
+    (!redirect || [301, 308].includes(result.redirectStatusCode ?? 0));
+}
+
+export async function addDomain(domain: string, redirect?: string) {
   let result: z.infer<typeof projectDomainSchema>;
   try {
-    result = await addDomain(domain, redirect);
+    result = await postDomain(domain, redirect);
   } catch (error) {
-    if (!(error instanceof DomainApiError && error.status === 400 &&
-      ["domain_already_in_use", "domain_already_exists"].includes(error.code))) throw error;
-    result = await getDomain(domain);
+    if (!(error instanceof DomainApiError && [400, 409].includes(error.status) &&
+      ["domain_already_in_use", "domain_already_exists", "domain_taken"].includes(error.code))) throw error;
+    const existing = await findDomain(domain);
+    if (!existing) throw new DomainApiError(409, "domain_in_use_elsewhere", error.verification);
+    result = existing;
   }
-  if ((result.redirect ?? null) !== (redirect ?? null) || result.gitBranch || result.customEnvironmentId ||
-    (redirect && ![301, 308].includes(result.redirectStatusCode ?? 0))) {
+  if (!matchesTarget(result, redirect)) {
     throw new DomainApiError(409, "conflicting_connection");
   }
+  return result;
 }
 
 async function findDomain(domain: string) {
   try {
     return await getDomain(domain);
   } catch (error) {
-    if (error instanceof DomainApiError && error.status === 404 && error.code === "not_found") return null;
+    if (isMissingDomain(error)) return null;
     throw error;
   }
 }
 
-export async function getDomainConnection(domain: string, verify = false): Promise<DomainConnection> {
-  const names = [domain, `www.${domain}`];
-  let verificationFailed = false;
-  if (verify) {
-    await Promise.all(names.map(async (name) => {
-      try {
-        await verifyDomain(name);
-      } catch (error) {
-        // Rejected ownership challenges still need fresh DNS instructions.
-        if (!(error instanceof DomainApiError && error.status === 400)) throw error;
-        verificationFailed = true;
-      }
-    }));
+type ConnectionOptions = { verify?: boolean; repair?: boolean };
+
+async function checkHostname(name: string, redirect: string | undefined, options: ConnectionOptions) {
+  let projectDomain = await findDomain(name);
+  let conflict: DomainApiError | undefined;
+  let repaired = false;
+  async function repair() {
+    repaired = true;
+    try {
+      return await addDomain(name, redirect);
+    } catch (error) {
+      if (!(error instanceof DomainApiError && error.code === "domain_in_use_elsewhere")) throw error;
+      conflict = error;
+      return null;
+    }
   }
-  const [root, www, rootConfig, wwwConfig] = await Promise.all([
-    findDomain(domain), findDomain(`www.${domain}`), getDomainConfig(domain), getDomainConfig(`www.${domain}`),
-  ]);
+  if (!projectDomain && options.repair) projectDomain = await repair();
+  if (options.verify && projectDomain && !projectDomain.verified && matchesTarget(projectDomain, redirect)) {
+    try {
+      const verified = await verifyDomain(name);
+      projectDomain = { ...verified, verification: verified.verification ?? projectDomain.verification };
+    } catch (error) {
+      // A rejected challenge still needs DNS instructions. A detach during the check gets one repair attempt.
+      if (isMissingDomain(error)) projectDomain = options.repair && !repaired ? await repair() : null;
+      else if (!(error instanceof DomainApiError && error.status === 400)) throw error;
+    }
+  }
+  const config = await getDomainConfig(name).catch((error: unknown) => {
+    // A detached hostname may have no project DNS recommendations. Keep any TXT challenge visible.
+    if (!projectDomain && isMissingDomain(error)) return null;
+    throw error;
+  });
+  return { projectDomain, conflict, config };
+}
+
+export async function getDomainConnection(domain: string, options: ConnectionOptions = {}): Promise<DomainConnection> {
+  const names = [domain, `www.${domain}`];
+  const results = await Promise.all(names.map((name, index) => checkHostname(name, index ? domain : undefined, options)));
+  const [{ projectDomain: root, config: rootConfig }, { projectDomain: www, config: wwwConfig }] = results;
   const records: DnsRecord[] = [];
-  const ipv4 = [...rootConfig.recommendedIPv4].sort((a, b) => a.rank - b.rank)[0];
-  const cname = [...wwwConfig.recommendedCNAME].sort((a, b) => a.rank - b.rank)[0];
+  const ipv4 = [...(rootConfig?.recommendedIPv4 ?? [])].sort((a, b) => a.rank - b.rank)[0];
+  const cname = [...(wwwConfig?.recommendedCNAME ?? [])].sort((a, b) => a.rank - b.rank)[0];
   for (const value of ipv4?.value ?? []) records.push({ type: "A", name: domain, value });
   if (cname) records.push({ type: "CNAME", name: `www.${domain}`, value: cname.value });
-  for (const result of [root, www]) {
-    for (const record of result?.verification ?? []) {
+  for (const { projectDomain, conflict } of results) {
+    for (const record of (projectDomain?.verified ? [] : projectDomain?.verification ?? conflict?.verification ?? [])) {
       if (record.type === "TXT" && !records.some((item) => item.type === "TXT" &&
         item.name === record.domain && item.value === record.value)) {
         records.push({ type: "TXT", name: record.domain, value: record.value });
@@ -157,27 +194,29 @@ export async function getDomainConnection(domain: string, verify = false): Promi
     }
   }
   const incomplete = !root || !www || !ipv4?.value.length || !cname;
-  const wrongTarget = Boolean(root?.redirect || root?.gitBranch || root?.customEnvironmentId ||
-    www?.redirect !== domain || ![301, 308].includes(www?.redirectStatusCode ?? 0) ||
-    www?.gitBranch || www?.customEnvironmentId);
+  const wrongTarget = (root && !matchesTarget(root)) || (www && !matchesTarget(www, domain));
   const verified = root?.verified && www?.verified;
-  const connected = !incomplete && !wrongTarget && !verificationFailed && verified &&
-    !rootConfig.misconfigured && !wwwConfig.misconfigured;
+  const connected = !incomplete && !wrongTarget && verified &&
+    rootConfig?.misconfigured === false && wwwConfig?.misconfigured === false;
+  const inUseElsewhere = results.some(({ conflict }) => Boolean(conflict));
+  const hasTxt = records.some(({ type }) => type === "TXT");
   return {
     status: connected ? "Connected" : incomplete || wrongTarget || verified ? "Needs attention" : "Pending",
     records,
     acceptableRecords: [
-      ...[rootConfig, wwwConfig].flatMap((config, index) => [
-        ...config.recommendedIPv4.flatMap((record) => record.value.map((value): DnsRecord => ({
+      ...results.flatMap(({ config }, index) => [
+        ...(config?.recommendedIPv4 ?? []).flatMap((record) => record.value.map((value): DnsRecord => ({
           type: "A", name: names[index], value,
         }))),
-        ...config.recommendedCNAME.map((record): DnsRecord => ({ type: "CNAME", name: names[index], value: record.value })),
+        ...(config?.recommendedCNAME ?? []).map((record): DnsRecord => ({ type: "CNAME", name: names[index], value: record.value })),
       ]),
     ],
-    issue: incomplete ? "Connection setup is incomplete. Retry the connection to finish setup." :
+    issue: inUseElsewhere ? (hasTxt
+      ? "This domain is in use elsewhere. Add the exact TXT name and value from the DNS instructions at your provider, then check again. If it is still blocked, ask the current project owner to release the domain."
+      : "This domain is in use elsewhere. Ask the current project owner to release it, then retry. If a TXT ownership challenge becomes available, add its exact name and value at your DNS provider and check again.") :
+      incomplete ? "Connection setup is incomplete. Retry the connection to finish setup." :
       wrongTarget ? "A hostname points to a different destination. Contact your agency." :
-      !verified ? "Ownership verification is pending. Add any TXT records below, then check again." :
-      verificationFailed ? "Ownership could not be verified. Review the TXT records or contact your agency." :
+      !verified ? "Ownership verification is pending. Add any TXT records shown in the DNS instructions using the exact name and value, then check again." :
       !connected ? "DNS records do not yet match. Update them below, then check again." : "",
   };
 }

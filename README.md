@@ -106,6 +106,12 @@ manual checks still work. Existing pending domains start their 14-day window
 when the migration is applied. Both hostnames must pass ownership and DNS checks
 before the custom domain becomes the live site URL.
 
+**Retry connection** and scheduled checks reattach the saved domain or its
+`www` redirect if either is missing from the hosting project, then refresh the
+DNS instructions. If the domain is in use elsewhere, the wizard shows the TXT
+ownership record when one is available. If no challenge is available, ask the
+current project owner to release the domain before retrying.
+
 Optional email: set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to a verified
 agency sender (for example `SitoMax <support@sitomax.com>`). Connected domains
 notify account owners; delivery failures are logged and retried by later jobs
