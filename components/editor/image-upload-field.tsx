@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { StockPhotoPicker } from "./stock-photo-picker";
 
 /**
  * Editor context: tells Puck custom fields which site they are editing,
@@ -31,6 +32,7 @@ export function ImageUploadField({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPhotos, setShowPhotos] = useState(false);
 
   async function handleFile(file: File) {
     if (!editorSite) {
@@ -106,6 +108,14 @@ export function ImageUploadField({
         onChange={(e) => onChange(e.target.value)}
         className="rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs disabled:opacity-50"
       /> : null}
+      {editorSite && allowUrl ? <>
+        <button type="button" disabled={readOnly || uploading} onClick={() => setShowPhotos((show) => !show)}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs disabled:opacity-50">
+          {showPhotos ? "Close stock photos" : "Browse stock photos"}
+        </button>
+        {showPhotos ? <StockPhotoPicker siteId={editorSite.siteId} readOnly={readOnly || uploading}
+          onSelect={(url) => { onChange(url); setShowPhotos(false); }} /> : null}
+      </> : null}
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   );

@@ -22,7 +22,7 @@ When planning, return only matching blockType/designId pairs in section order, w
 When writing a page, fill each named section slot with only the props in that slot's schema.
 Fill required fields, including nested array item fields. Use empty strings/arrays for unused content.
 The application supplies the selected design's variant and layout controls.
-For EACH image field, return a concise Unsplash search QUERY, not a URL; use "" to omit.
+For EACH image field, return a concise stock-photo search QUERY, not a URL; use "" to omit.
 Photo queries must be generic subjects, never business names, personal names, addresses or private business details.
 Write descriptive alt text in the corresponding alt/imageAlt field, identifying stock imagery where appropriate.
 Logos and identifiable staff/client portraits must be omitted unless supplied by the user.

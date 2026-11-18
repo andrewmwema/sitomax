@@ -124,7 +124,8 @@ export async function buildGeneratedSite(
         data: { root: { props: { title: seo.title, description: seo.description } }, content: [navigation, ...content] } });
     }
     emit({ message: "Finding photos…" });
-    const resolve = createPhotoResolver(warnings);
+    const assetSiteId = input.siteId ?? crypto.randomUUID();
+    const resolve = createPhotoResolver(warnings, { supabase, accountId: input.accountId, siteId: assetSiteId });
     const enrichedPages = [];
     for (const page of pages) {
       for (const section of page.data.content) if (section.type !== "Navigation") {
@@ -147,7 +148,7 @@ export async function buildGeneratedSite(
       if (!isAdmin) throw new SiteGenerationError("Only the agency can create a site.");
       const { data, error } = await createAdminClient().rpc("create_ai_site_with_business", {
         p_account_id: input.accountId, p_name: input.businessName, p_subdomain: input.subdomain!,
-        p_theme: theme, p_pages: enrichedPages, p_business: businessProfile,
+        p_theme: theme, p_pages: enrichedPages, p_business: businessProfile, p_site_id: assetSiteId,
       });
       if (error) throw new SiteGenerationError(error.code === "23505" ? "This subdomain was just taken. No site was saved; contact your agency before retrying." : "Could not save the generated site. Contact your agency before retrying.");
       const saved = z.array(z.object({ site_id: z.uuid(), page_id: z.uuid() })).length(1).parse(data)[0];

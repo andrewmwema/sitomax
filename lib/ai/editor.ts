@@ -10,7 +10,7 @@ import { sanitizePuckData } from "@/lib/richtext";
 import { editorAiInput } from "./editor-input";
 import { requestAi } from "./client";
 import { aiCatalog, blockSchemas, blockTypes, defaultSection } from "./site-schemas";
-import { fillSectionPhotos } from "./photos";
+import { createPhotoResolver, fillSectionPhotos } from "./photos";
 
 type Fields = Record<string, Field>;
 type RecordValue = Record<string, unknown>;
@@ -176,10 +176,8 @@ export async function runEditorAi(raw: unknown) {
   const preset = defaultSection(selected.designId);
   preset.props = { ...preset.props, ...selected.props };
   const warnings = new Set<string>();
-  preset.props.photoCredits = await fillSectionPhotos(preset.type, preset.props, async (query) => {
-    if (query) warnings.add("Images use placeholders; choose photos in the editor.");
-    return null;
-  });
+  preset.props.photoCredits = await fillSectionPhotos(preset.type, preset.props,
+    createPhotoResolver(warnings, { supabase, accountId: site.account_id, siteId: site.id }));
   return { kind: "add" as const, section: sanitizePuckData({ content: [preset] }).content[0], warnings: [...warnings] };
 }
 

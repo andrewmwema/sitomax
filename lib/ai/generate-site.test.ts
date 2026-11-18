@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Field } from "@puckeditor/core";
 import { z } from "zod";
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), lookup: vi.fn(), request: vi.fn(), begin: vi.fn(), finish: vi.fn(), admin: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), lookup: vi.fn(), request: vi.fn(), begin: vi.fn(), finish: vi.fn(), admin: vi.fn(), photoLibrary: vi.fn() }));
+vi.mock("@/lib/photos", () => ({ createPhotoLibrary: mocks.photoLibrary }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({
   user: { id: "authenticated-user" },
   supabase: { rpc: mocks.rpc, from: () => {
@@ -64,11 +65,12 @@ function answer(request: { toolName: string; messages: { content: string }[] }) 
   ) });
 }
 beforeEach(() => {
-  vi.resetAllMocks(); vi.stubEnv("ANTHROPIC_API_KEY", "local-test-not-a-key"); vi.stubEnv("UNSPLASH_ACCESS_KEY", "");
+  vi.resetAllMocks(); vi.stubEnv("ANTHROPIC_API_KEY", "local-test-not-a-key"); vi.stubEnv("PIXABAY_API_KEY", "");
   mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin" ? false : name === "is_account_owner" ? true : pageId, error: null }));
   mocks.lookup.mockResolvedValue({ data: { id: siteId }, error: null });
   mocks.begin.mockResolvedValue(generationId); mocks.finish.mockResolvedValue(undefined);
   mocks.request.mockImplementation(answer);
+  mocks.photoLibrary.mockReturnValue({ search: vi.fn().mockResolvedValue([]) });
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
@@ -194,15 +196,42 @@ describe("catalog site generation", () => {
     expect(mocks.begin).not.toHaveBeenCalled(); expect(mocks.request).not.toHaveBeenCalled();
   });
   it("creates agency-built sites as unpublished drafts and links the one generation charge to the saved site", async () => {
+    const futureSiteId = "00000000-0000-4000-8000-000000000005";
+    const random = vi.spyOn(crypto, "randomUUID").mockReturnValue(futureSiteId);
+    const photoHero = aiCatalog.find((design) => design.blockType === "Hero" && design.styles.includes("modern"))!;
+    const photoPlan = structuredClone(plan);
+    photoPlan.pages[0].sections[0] = { blockType: photoHero.blockType, designId: photoHero.id };
+    mocks.request.mockImplementation((request) => {
+      if (request.toolName === "plan_site") return message("plan_site", photoPlan);
+      const response = answer(request);
+      if (request.messages[0].content.includes('"slug":""')) {
+        (response.content[0].input as { sections: { section_1: Record<string, unknown> } }).sections.section_1.backgroundImage = "plumbing tools";
+      }
+      return response;
+    });
+    const selectPhoto = vi.fn().mockImplementation(async ({ siteId: id }) => ({
+      url: `https://storage.example/site-assets/${id}/pixabay-42.jpg`, alt: "Stock photograph: tools",
+    }));
+    mocks.photoLibrary.mockReturnValue({ search: vi.fn().mockResolvedValue([{ id: 42 }]), select: selectPhoto });
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
     mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: false }, error: null })
       .mockResolvedValue({ data: null, error: null });
-    const create = vi.fn().mockResolvedValue({ data: [{ site_id: siteId, page_id: pageId }], error: null });
+    const create = vi.fn().mockResolvedValue({ data: [{ site_id: futureSiteId, page_id: pageId }], error: null });
     mocks.admin.mockReturnValue({ rpc: create });
-    await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "local-plumbing" })).resolves.toMatchObject({ siteId, pageId });
-    expect(create).toHaveBeenCalledWith("create_ai_site_with_business", expect.objectContaining({ p_account_id: accountId, p_subdomain: "local-plumbing" }));
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
+    await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "local-plumbing" })).resolves.toMatchObject({ siteId: futureSiteId, pageId });
+    expect(create).toHaveBeenCalledWith("create_ai_site_with_business", expect.objectContaining({
+      p_account_id: accountId, p_subdomain: "local-plumbing", p_site_id: futureSiteId,
+    }));
+    expect(mocks.photoLibrary).toHaveBeenCalledWith(expect.anything(), accountId);
+    expect(selectPhoto).toHaveBeenCalledExactlyOnceWith({
+      siteId: futureSiteId, query: "plumbing tools", orientation: "horizontal", photoId: 42,
+    });
+    expect(create.mock.calls[0][1].p_pages[0].data.content[1].props).toMatchObject({
+      backgroundImage: `https://storage.example/site-assets/${futureSiteId}/pixabay-42.jpg`, photoCredits: [],
+    });
+    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, futureSiteId);
     for (const [request] of mocks.request.mock.calls) expect(request.messages[0].content).not.toContain(accountId);
+    random.mockRestore();
   });
   it("reserves the marketing hostname for internal accounts before charging or generating", async () => {
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));

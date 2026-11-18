@@ -533,7 +533,7 @@ You can run this any time after Phase 5. It doesn't depend on domains or going l
 **Do this yourself first:**
 1. Create an account at platform.claude.com, add billing, and set a **monthly spend limit** (e.g. $50) so costs can never surprise you.
 2. Create an API key and add it to `.env.local` (and later to Vercel) as `ANTHROPIC_API_KEY=`. Never paste it anywhere else.
-3. Optional, for photos: create a free Unsplash developer account and add `UNSPLASH_ACCESS_KEY=`.
+3. Optional, for photos: configure a Pixabay API account and server-only `PIXABAY_API_KEY=`.
 
 **Prompt A: AI foundation, limits and credits**
 ```
@@ -598,7 +598,7 @@ Build the AI site generator using the section design catalog (lib/sections/catal
    Keep the cache marker on the shared system prompt (catalog + writing rules). Anthropic caches tools before the system prompt, so different page schemas may miss the cache.
 3. Writing rules in the system prompt: professional, specific and confident copy for a local business; no invented facts. Never invent reviews, ratings, license numbers, years in business or awards; use clearly marked placeholders like [Add a real customer review] instead. Write SEO titles under 60 characters and descriptions under 160.
 4. Validate every AI response with Zod; for an invalid page tool call, send one same-conversation error tool result with the validation details. A page that fails twice stops the generation without saving any drafts. Sanitize all rich text with the same DOMPurify rules as Phase 4b.
-5. Images: for each image field, search Unsplash with a query the AI provides (e.g. "plumber kitchen sink"), store the photo URL plus photographer credit (required by Unsplash), and set alt text. If no key is set, use placeholders.
+5. Images: search Pixabay with generic AI queries, import selected files into site-assets and save our Storage URL and stock-photo alt text. New photos do not add public credit lines; preserve existing Unsplash credits. If no key is set, use placeholders.
 6. Save everything as drafts (draft_data), never publish automatically. Stream progress to the UI with steps: "Planning your site…", "Writing Home…", "Writing Services…", "Finding photos…", then open the editor.
 7. Record usage and enforce limits from Prompt A.
 ```
@@ -607,7 +607,7 @@ Build the AI site generator using the section design catalog (lib/sections/catal
 
 - Apply `0012_ai_site_generator.sql` manually after `0011_ai_usage.sql`.
   This adds grouped accounting, draft-only themes and site-wide draft backups.
-  Set server-only `ANTHROPIC_API_KEY`; optional `UNSPLASH_ACCESS_KEY` enables
+  Set server-only `ANTHROPIC_API_KEY`; optional `PIXABAY_API_KEY` enables
   photo search. Never expose either key through a public environment variable.
 - Agency: **Sites → Create site → Build with AI** selects a client and a
   subdomain. Owners: open their site, then **Build with AI**. Editors cannot
@@ -650,16 +650,18 @@ Build the AI site generator using the section design catalog (lib/sections/catal
   `finish_ai_site_generation`; never simply refund a partly billed generation.
   New-site ledger rows are linked to the site once it is saved.
 - The UI streams progress and opens the Home editor when saved. Missing photos
-  and fallback sections produce persistent review notes in the editor. Keep the
+  produce persistent review notes in the editor. Keep the
   wizard open: there is no durable background-job queue or automatic retry.
   Interrupted sessions may leave held reservations; check drafts and provider
   billing before retrying. Both transports allow up to 300 seconds, subject to
   the hosting plan's execution limits. Long runs may time out and require agency
   reconciliation; photo work has a one-minute budget.
-- Photo search uses generic image queries, hotlinks original Unsplash URLs and
-  records each selected download. Photographer/source links include referral
-  parameters. Attribution travels in each section's `photoCredits` metadata and
-  is rendered by the shared shell, so copy/paste and saved designs keep it.
+- Apply `0020_stock_photos.sql` for the shared 100-search/60-second limit and
+  atomic creation with a preselected site UUID for imported assets. Photo search
+  uses generic queries through `lib/photos/`, safe Pixabay photo results and a
+  24-hour query/orientation cache. Selected files are downloaded into site-assets;
+  only search previews use provider URLs. The picker links to Pixabay; new public
+  pages have no credit lines. Legacy Unsplash `photoCredits` still render unchanged.
   Images get stock-photo alt text. No key, missing results or API errors leave
   placeholders; failures are disclosed. Staff portraits and partner logos are
   not substituted with stock imagery.

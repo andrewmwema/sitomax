@@ -12,6 +12,11 @@ import { runEditorAi } from "./editor";
 import { puckConfig } from "@/lib/puck/config";
 import { aiCatalog, blockFields } from "./site-schemas";
 import type { Field } from "@puckeditor/core";
+import { PhotoError } from "@/lib/photos/types";
+
+vi.mock("@/lib/photos", () => ({ createPhotoLibrary: () => ({
+  search: async () => { throw new PhotoError("Photo search is not configured."); },
+}) }));
 
 const pageId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
@@ -20,6 +25,7 @@ const message = (name: string, input: unknown) => ({ stop_reason: "tool_use", co
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv("PIXABAY_API_KEY", "");
   mocks.lookup.mockResolvedValue({ data: { id: pageId, site: { id: siteId, account_id: accountId, business: { businessName: "Example Co" } } }, error: null });
 });
 
@@ -91,7 +97,7 @@ describe("editor AI", () => {
     if (result.kind !== "add") throw new Error("Wrong result");
     expect(result.section.type).toBe("Faq");
     expect(result.section.props.contactImage).toBe("");
-    expect(result.warnings.join(" ")).toContain("placeholder");
+    expect(result.warnings.join(" ")).toContain("placeholders");
     expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({ action: "edit_section", largeRewrite: true }));
   });
 

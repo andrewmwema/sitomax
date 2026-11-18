@@ -42,7 +42,27 @@ settings or the editor's Theme panel. AI site generation saves the supplied
 business details alongside its drafts. Editor AI sends that information and
 the requested content to the configured AI provider; each attempt is metered.
 Review generated content and placeholders before accepting or publishing it.
-AI-created sections use image placeholders that can be replaced in the editor.
+AI-created sections use stock photos when configured, otherwise image placeholders.
+
+### Stock photos
+
+Apply `0020_stock_photos.sql` after `0019` and set server-only `PIXABAY_API_KEY`
+locally and on Vercel. **Browse stock photos** in the editor image field searches
+Pixabay. Search previews carry a **Photos from Pixabay** link; selecting a photo
+downloads the largest available suitable file (up to 20 MB) into the site's
+`site-assets` folder. AI site generation and AI-added sections use the same
+provider interface in `lib/photos/`. Published pages use our Storage URLs, never
+the Pixabay preview URLs, and do not display new photo credits.
+
+Searches use safe photo results, support landscape/portrait orientation and are
+cached for 24 hours. Database locking enforces a shared rolling limit of
+100 uncached searches per 60 seconds across app instances. No matches or failed
+AI downloads leave placeholders with review warnings; editor failures are shown
+without changing the current image. Existing Unsplash images and their attribution
+remain unchanged; `UNSPLASH_ACCESS_KEY` is no longer needed. Full-resolution Pixabay
+downloads require full API access; otherwise the largest returned size is used.
+
+### AI diagnostics
 
 To diagnose the provider locally with a configured API key, run
 `node scripts/test-anthropic.mjs` for a small message using the site's model.

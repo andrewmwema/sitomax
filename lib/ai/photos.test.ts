@@ -1,46 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPhotoResolver, fillSectionPhotos } from "./photos";
+import { createClient } from "@supabase/supabase-js";
 
-const fetchMock = vi.fn();
+const mocks = vi.hoisted(() => ({ search: vi.fn(), select: vi.fn() }));
+vi.mock("@/lib/photos", () => ({ createPhotoLibrary: () => mocks }));
+import { createPhotoResolver, fillSectionPhotos } from "./photos";
+import { PhotoError } from "@/lib/photos/types";
+
+const context = { supabase: createClient("https://storage.example", "public-test-key", { auth: { persistSession: false } }),
+  accountId: "account", siteId: "site" };
 beforeEach(() => {
-  vi.resetAllMocks(); vi.stubGlobal("fetch", fetchMock);
-  vi.stubEnv("UNSPLASH_ACCESS_KEY", "local-test-not-a-key");
+  vi.resetAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
+  mocks.search.mockResolvedValue([{ id: 42 }]);
+  mocks.select.mockResolvedValue({ url: "https://storage.example/site-assets/site/pixabay-42.jpg", alt: "Stock photograph: Kitchen sink" });
 });
-const photo = { urls: { regular: "https://images.unsplash.com/photo-1?ixid=original" }, alt_description: "Kitchen sink",
-  user: { name: "Photographer", links: { html: "https://unsplash.com/@photographer" } },
-  links: { html: "https://unsplash.com/photos/photo-1", download_location: "https://api.unsplash.com/photos/photo-1/download?ixid=original" } };
 describe("generator photography", () => {
-  it("searches nested image fields, hotlinks original URLs, records downloads and stores visible attribution and alt", async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ results: [photo] }) }).mockResolvedValueOnce({ ok: true });
+  it("uses stored photos for nested images, deduplicates selections and creates no public credits", async () => {
     const warnings = new Set<string>();
-    const props = { images: [{ url: "plumber kitchen sink", alt: "" }] };
-    const credits = await fillSectionPhotos("Gallery", props, createPhotoResolver(warnings));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("query=plumber+kitchen+sink");
-    expect(String(fetchMock.mock.calls[1][0])).toContain("/download?ixid=original");
-    expect(props.images[0].url).toBe(photo.urls.regular);
+    const props = { images: [{ url: "plumber kitchen sink", alt: "" }, { url: "plumber kitchen sink", alt: "" }] };
+    const credits = await fillSectionPhotos("Gallery", props, createPhotoResolver(warnings, context));
+    expect(mocks.search).toHaveBeenCalledExactlyOnceWith({ query: "plumber kitchen sink", orientation: "all" });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
+      query: "plumber kitchen sink", orientation: "all", photoId: 42, siteId: "site",
+    });
+    expect(props.images[0].url).toBe("https://storage.example/site-assets/site/pixabay-42.jpg");
     expect(props.images[0].alt).toBe("Stock photograph: Kitchen sink");
-    expect(credits[0]).toMatchObject({ photographer: "Photographer", photographerUrl: expect.stringContaining("utm_medium=referral") });
+    expect(credits).toEqual([]);
+    expect(warnings.size).toBe(0);
   });
-  it("uses placeholders without a key or on photo errors, with explicit warnings", async () => {
-    vi.stubEnv("UNSPLASH_ACCESS_KEY", "");
+  it("uses placeholders for no matches and reports failed downloads explicitly", async () => {
+    mocks.search.mockResolvedValueOnce([]);
     const warnings = new Set<string>(), props = { image: "plumbing tools", imageAlt: "" };
-    await fillSectionPhotos("ImageWithText", props, createPhotoResolver(warnings));
-    expect(props.image).toBe(""); expect(warnings.size).toBe(1); expect(fetchMock).not.toHaveBeenCalled();
-    vi.stubEnv("UNSPLASH_ACCESS_KEY", "local-test-not-a-key");
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 429 });
-    const props2 = { image: "plumbing tools", imageAlt: "" };
-    await fillSectionPhotos("ImageWithText", props2, createPhotoResolver(warnings));
-    expect(props2.image).toBe(""); expect(warnings.size).toBe(2);
+    await fillSectionPhotos("ImageWithText", props, createPhotoResolver(warnings, context));
+    expect(props.image).toBe(""); expect(warnings.size).toBe(1); expect(mocks.select).not.toHaveBeenCalled();
+    mocks.select.mockRejectedValueOnce(new PhotoError("Photo search is busy."));
+    await fillSectionPhotos("ImageWithText", { image: "other tools", imageAlt: "" }, createPhotoResolver(warnings, context));
+    expect(warnings.size).toBe(2);
+    expect([...warnings].join(" ")).toContain("Photo search is busy.");
   });
-  it("does not fetch untrusted API URLs or create stock staff endorsements", async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ results: [{ ...photo, links: { ...photo.links, download_location: "https://example.com/steal" } }] }) });
-    const warnings = new Set<string>();
-    const props = { images: [{ url: "tools", alt: "" }] };
-    expect(await fillSectionPhotos("Gallery", props, createPhotoResolver(warnings))).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await fillSectionPhotos("Team", { members: [{ image: "person", imageAlt: "" }] }, createPhotoResolver(warnings));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+  it("requests landscape hero photos but never stock portraits or logos", async () => {
+    const resolve = createPhotoResolver(new Set(), context);
+    await fillSectionPhotos("Hero", { backgroundImage: "tools" }, resolve);
+    expect(mocks.search).toHaveBeenCalledWith({ query: "tools", orientation: "horizontal" });
+    mocks.search.mockClear();
+    await fillSectionPhotos("Team", { members: [{ image: "person", imageAlt: "" }] }, resolve);
+    await fillSectionPhotos("Logos", { logos: [{ image: "logo" }] }, resolve);
+    expect(mocks.search).not.toHaveBeenCalled();
   });
 });
