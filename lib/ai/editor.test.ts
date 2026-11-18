@@ -101,6 +101,31 @@ describe("editor AI", () => {
     expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({ action: "edit_section", largeRewrite: true }));
   });
 
+  it("adds a custom section using bounded responsive layout primitives", async () => {
+    const section = {
+      background: "soft", width: "contained", rowGap: 48, design: { shadow: "soft" },
+      rows: [{ layout: "1", gap: 32, reverseOnMobile: false, columns: [{
+        surface: "none", verticalAlign: "top", gap: 16,
+        elements: [{ type: "Heading", text: "Our approach", level: "h2", align: "left" }],
+      }] }],
+    };
+    mocks.lookup.mockResolvedValue({ data: { id: pageId, site: { id: siteId, account_id: accountId,
+      business: { businessName: "Example Co" }, theme: { colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" } },
+      draft_theme: null } }, error: null });
+    mocks.request.mockResolvedValue(message("add_custom_section", { section }));
+    const result = await runEditorAi({ kind: "add", pageId, instruction: "Create a custom split section", mode: "custom" });
+    expect(result.kind).toBe("add");
+    if (result.kind !== "add") throw new Error("Wrong result");
+    expect(result.section.type).toBe("Section");
+    expect(result.section.props.id).toMatch(/^Section-/);
+    expect(result.section.props.rows).toMatchObject([{ type: "Row", props: { columns: [{ type: "Column", props: {
+      content: [{ type: "Heading", props: { text: "Our approach" } }],
+    } }] } }]);
+    expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      action: "edit_section", tools: [expect.objectContaining({ name: "add_custom_section", strict: false })],
+    }));
+  });
+
   it("does not call AI for inaccessible pages", async () => {
     mocks.lookup.mockResolvedValue({ data: null, error: null });
     await expect(runEditorAi({ kind: "text", pageId, text: "Copy", instruction: "Rewrite" })).rejects.toThrow("unavailable");

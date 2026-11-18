@@ -4,9 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { createGenerationInputSchema, type GenerationInput } from "@/lib/ai/site-input";
+import { DESIRED_SECTION_TYPES, GENERATION_PAGE_SLUGS } from "@/lib/ai/site-input";
 import type { Business } from "@/lib/business";
 
 const fieldClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
+const pageLabels: Record<(typeof GENERATION_PAGE_SLUGS)[number], string> = {
+  "": "Home", about: "About", services: "Services", contact: "Contact",
+};
+const sectionLabels: Record<(typeof DESIRED_SECTION_TYPES)[number], string> = {
+  gallery: "Gallery", testimonials: "Testimonials", faq: "FAQ", pricing: "Pricing",
+  team: "Team", process: "Process", logos: "Partner logos",
+};
 const eventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("progress"), message: z.string() }),
   z.object({ type: z.literal("error"), message: z.string() }),
@@ -26,7 +34,9 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
     businessType: existingSite?.business.businessType ?? "", city: existingSite?.business.city ?? "",
     services: existingSite?.business.services ?? [], difference: existingSite?.business.difference ?? "",
     tone: existingSite?.business.tone ?? "", openingHours: existingSite?.business.openingHours ?? "",
-    style: "auto", primaryColor: "", secondaryColor: "", phone: existingSite?.business.phone ?? "",
+    style: "auto", generationMode: "catalog", styleDirection: "auto", fontDirection: "auto",
+    designDescription: "", desiredPages: [...GENERATION_PAGE_SLUGS], desiredSections: [],
+    primaryColor: "", secondaryColor: "", phone: existingSite?.business.phone ?? "",
     email: existingSite?.business.email ?? "", address: existingSite?.business.address ?? "", description: "", confirmReplace: false,
   });
   const isInternal = accounts.some((account) => account.id === values.accountId && account.is_internal);
@@ -140,7 +150,69 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
             placeholder="Who you help, what you do and any facts you want included. Do not include private customer information." />
         </label>
       </> : <>
-        <label className="text-sm font-medium sm:col-span-2">Style preference
+        <fieldset className="sm:col-span-2">
+          <legend className="text-sm font-medium">Design approach</legend>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            {([
+              ["catalog", "SitoMax designs", "Build with the existing curated section designs."],
+              ["custom", "Original custom layout", "Compose an editable site from responsive layout blocks and elements."],
+            ] as const).map(([mode, label, description]) => (
+              <label key={mode} className={`cursor-pointer rounded-xl border p-4 ${values.generationMode === mode ? "border-zinc-900 bg-zinc-50" : "border-zinc-300"}`}>
+                <input type="radio" name="generationMode" className="mr-2" value={mode} checked={values.generationMode === mode}
+                  onChange={() => set("generationMode", mode)} />
+                <span className="font-medium">{label}</span>
+                <span className="mt-1 block pl-6 text-xs font-normal text-zinc-600">{description}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset className="sm:col-span-2">
+          <legend className="text-sm font-medium">Pages</legend>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {GENERATION_PAGE_SLUGS.map((slug) => <label key={slug} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={values.desiredPages.includes(slug)} disabled={!slug}
+                onChange={(event) => set("desiredPages", event.target.checked
+                  ? [...values.desiredPages, slug]
+                  : values.desiredPages.filter((page) => page !== slug))} />
+              {pageLabels[slug]}
+            </label>)}
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">Home is required. Unselected pages on an existing site are left unchanged.</p>
+        </fieldset>
+        <fieldset className="sm:col-span-2">
+          <legend className="text-sm font-medium">Include these sections (optional)</legend>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {DESIRED_SECTION_TYPES.map((section) => <label key={section} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={values.desiredSections.includes(section)}
+                onChange={(event) => set("desiredSections", event.target.checked
+                  ? [...values.desiredSections, section]
+                  : values.desiredSections.filter((item) => item !== section))} />
+              {sectionLabels[section]}
+            </label>)}
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">Requested sections use only information you provided; missing facts stay placeholders.</p>
+        </fieldset>
+        <label className="text-sm font-medium">Visual direction
+          <select className={`${fieldClass} mt-2`} value={values.styleDirection} onChange={(event) => {
+            const direction = z.enum(["auto", "minimal", "editorial", "bold", "organic", "premium", "playful"]).parse(event.target.value);
+            set("styleDirection", direction);
+          }}>
+            <option value="auto">Let AI choose</option><option value="minimal">Minimal</option><option value="editorial">Editorial</option>
+            <option value="bold">Bold</option><option value="organic">Organic</option><option value="premium">Premium</option><option value="playful">Playful</option>
+          </select>
+        </label>
+        <label className="text-sm font-medium">Typography
+          <select className={`${fieldClass} mt-2`} value={values.fontDirection} onChange={(event) => {
+            const direction = z.enum(["auto", "serif", "sans"]).parse(event.target.value);
+            set("fontDirection", direction);
+          }}><option value="auto">Let AI choose</option><option value="serif">Serif headings</option><option value="sans">Sans-serif</option></select>
+        </label>
+        <label className="text-sm font-medium sm:col-span-2">More design guidance (optional)
+          <textarea maxLength={800} className={`${fieldClass} mt-2`} rows={3} value={values.designDescription}
+            onChange={(event) => set("designDescription", event.target.value)}
+            placeholder="Describe a mood, layout preference, or colors. Do not include private customer information." />
+        </label>
+        <label className="text-sm font-medium sm:col-span-2">Design foundation
           <select className={`${fieldClass} mt-2`} value={values.style} onChange={(event) => {
             const style = z.enum(["classic", "modern", "auto"]).parse(event.target.value); set("style", style);
           }}><option value="auto">Let AI choose</option><option value="classic">Classic</option><option value="modern">Modern</option></select>
@@ -156,7 +228,7 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
           <input type="checkbox" required className="mt-1" checked={values.confirmReplace} onChange={(event) => set("confirmReplace", event.target.checked)} />
           <span>This will replace your current unpublished changes. You can restore them from version history.</span>
         </label>}
-        <p className="text-xs leading-relaxed text-zinc-600 sm:col-span-2">Home, About, Services and Contact will be saved as drafts, never published automatically. One generation uses your monthly allowance, or 10 shared credits after that. Completed AI work is metered even if saving fails. Missing facts use placeholders; stock photos are credited. Business details are sent to the agency&apos;s AI provider. Review all copy before publishing. Forms are not yet connected.</p>
+        <p className="text-xs leading-relaxed text-zinc-600 sm:col-span-2">Selected pages will be saved as drafts, never published automatically. One generation uses your monthly allowance, or 10 shared credits after that. Completed AI work is metered even if saving fails. Missing facts use placeholders; stock photos are credited. Business details are sent to the agency&apos;s AI provider. Review all copy before publishing. Forms are not yet connected.</p>
       </>}
     </fieldset>
     {busy ? <div role="status" aria-live="polite" className="mt-6 rounded-xl bg-zinc-50 p-4 text-sm">

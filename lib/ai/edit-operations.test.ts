@@ -5,6 +5,8 @@ import { contrastRatio } from "@/lib/theme/presets";
 import { designPatchSchema, editDesign, editTheme, readableText, themePatchSchema } from "./edit-design";
 import { applyEditOperations, sectionContext, updateEditableProps } from "./edit-operations";
 
+type NestedRow = { props: { layout?: unknown; columns: { props: { content: { props: Record<string, unknown> }[] } }[] } };
+
 const page: Data = { root: { props: { title: "Home" } }, content: [
   { type: "Hero", props: { id: "hero", heading: "Our work", backgroundImage: "/samples/tools.jpg" } },
   { type: "Footer", props: { id: "footer", businessName: "Example", email: "hello@example.com" } },
@@ -12,6 +14,34 @@ const page: Data = { root: { props: { title: "Home" } }, content: [
 const allowed = (url: string) => url === "/samples/tools.jpg";
 
 describe("editor AI operations", () => {
+  it("edits nested custom-layout props and design while keeping structure changes top-level", () => {
+    const custom: Data = { root: {}, content: [{
+      type: "Section", props: { id: "custom-section", design: {}, rows: [{
+        type: "Row", props: { id: "custom-row", layout: "1", columns: [{
+          type: "Column", props: { id: "custom-column", content: [{
+            type: "Heading", props: { id: "custom-heading", text: "Original", level: "h2", design: {} },
+          }] },
+        }] },
+      }] },
+    }] };
+    expect(sectionContext(custom, "section", "custom-section").map(({ id }) => id))
+      .toEqual(["custom-section", "custom-row", "custom-column", "custom-heading"]);
+    const result = applyEditOperations(custom, {}, "section", "custom-section", [
+      { name: "update_section_props", input: { sectionId: "custom-heading", patch: { text: "Revised" } } },
+      { name: "update_section_props", input: { sectionId: "custom-row", patch: { layout: "1-1" } } },
+      { name: "update_section_design", input: { sectionId: "custom-heading", patch: { shadow: "soft" } } },
+    ], allowed);
+    const rows = result.data.content[0].props.rows as NestedRow[];
+    expect(rows[0].props.columns[0].props.content[0].props).toMatchObject({
+      text: "Revised", design: { shadow: "soft" },
+    });
+    expect(rows[0].props.layout).toBe("1-1");
+    expect(rows[0].props.columns).toHaveLength(2);
+    expect(() => applyEditOperations(custom, {}, "section", "custom-section", [
+      { name: "move_section", input: { sectionId: "custom-row", position: "up" } },
+    ], allowed)).toThrow("top-level");
+  });
+
   it("accepts only configured fields and layout choices; rejects markup, unsafe links, and factual fields", () => {
     expect(updateEditableProps("Footer", { businessName: "Example" }, { variant: "compact" })).toEqual({ businessName: "Example", variant: "compact" });
     for (const patch of [{ unknown: "x" }, { variant: "diagonal" }, { tagline: "<script>x</script>" }, { email: "fake@example.com" }, { navigation: [{ href: "/\\invalid.example" }] }]) {

@@ -7,6 +7,7 @@ import { safeHref } from "@/lib/layout/guardrails";
 import { sectionCatalog } from "@/lib/sections/catalog";
 import { buildDesignItem } from "@/lib/sections/library";
 import { cleanPhotoCredits } from "@/lib/editor/media";
+import { fitColumns, safeRowLayout } from "@/lib/layout/structure";
 import { designPatchSchema, editDesign, editTheme, themePatchSchema } from "./edit-design";
 import type { SiteTheme } from "@/lib/theme/presets";
 import type { BlockDesign } from "@/lib/sections/design";
@@ -46,6 +47,7 @@ const linkField = /(?:href|link|url)$/i;
 const factualField = /^(?:testimonials|reviews|email|phone|address|hours|price|rating|latitude|longitude|value)$/i;
 function fieldSchema(key: string, field: Field): z.ZodType | undefined {
   if (factualField.test(key)) return;
+  if (field.type === "custom" && key === "layout") return z.enum(["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]);
   if (["text", "textarea", "richtext"].includes(field.type)) {
     if (/^(?:code|src)$/i.test(key)) return;
     return linkField.test(key) ? plain.max(2000).refine((value) =>
@@ -94,7 +96,11 @@ function mergeProps(fields: Fields, old: Props, patch: Props): Props {
 export function updateEditableProps(type: string, previous: Props, patch: unknown) {
   const fields = fieldsFor(type);
   const values = sectionPropsSchema(fields).parse(patch);
-  return mergeProps(fields, previous, values);
+  const next = mergeProps(fields, previous, values);
+  if (type === "Row" && typeof values.layout === "string") {
+    next.columns = fitColumns(next.columns, safeRowLayout(values.layout));
+  }
+  return next;
 }
 
 function readableProps(fields: Fields, props: Props): Props {
@@ -127,7 +133,9 @@ export function sectionContext(data: Data, scope: EditScope, selected?: string) 
     id: item.props.id, type: item.type, parentId, props: readableProps(fieldsFor(item.type), item.props),
     design: item.props.design,
     editableProps: Object.fromEntries(Object.entries(fieldsFor(item.type)).flatMap(([key, field]) =>
-      fieldSchema(key, field) ? [[key, field.type === "select" || field.type === "radio" ? field.options.map(({ value }) => value) : field.type]] : [])),
+      fieldSchema(key, field) ? [[key, field.type === "select" || field.type === "radio" ? field.options.map(({ value }) => value)
+        : field.type === "custom" && key === "layout" ? ["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]
+          : field.type]] : [])),
     canUseSectionTools: !parentId && !collectEmbeds(item).length,
   }));
 }
@@ -151,7 +159,7 @@ export function applyEditOperations(base: Data, theme: SiteTheme, scope: EditSco
       changes.push(`Update theme: ${[...Object.keys(patch.colors ?? {}), ...Object.keys(patch).filter((key) => key !== "colors")].join(", ")}.`);
       continue;
     }
-    if (name === "insert_section") {
+    if (name === "insert_section" || name === "insert_custom_section") {
       if (insertion) throw new Error("Add only one new section per request.");
       insertion = true;
       const index = scope === "section" ? next.content.findIndex((item) => item.props.id === selected) + 1 : next.content.length;
@@ -159,7 +167,7 @@ export function applyEditOperations(base: Data, theme: SiteTheme, scope: EditSco
       if (inserted) {
         if (typeof inserted.props.id !== "string") throw new Error("The new section has no valid ID.");
         next.content.splice(index, 0, { ...inserted, props: { ...inserted.props, id: inserted.props.id } });
-        changes.push(`Add ${inserted.type} section.`);
+        changes.push(`Add ${inserted.type === "Section" ? "custom layout" : inserted.type} section.`);
       }
       continue;
     }
@@ -174,23 +182,24 @@ export function applyEditOperations(base: Data, theme: SiteTheme, scope: EditSco
       changes.push(`Edit ${label}: ${Object.keys(patch).join(", ")}.`);
       continue;
     }
+    if (name === "update_section_design") {
+      if (collectEmbeds(item).length) throw new Error("This operation needs an in-scope component without protected embeds.");
+      const { patch } = editToolSchemas.update_section_design.parse(input);
+      const background = patch.background;
+      if ((background?.type === "image" && !background.images.every(mediaAllowed))
+        || (background?.type === "video" && ((background.video.poster && !mediaAllowed(background.video.poster))
+          || (background.video.source === "upload" && !mediaAllowed(background.video.uploadUrl))))) {
+        throw new Error("Choose media already present in the selected scope.");
+      }
+      item.props = cleanPhotoCredits({ ...item.props, design: editDesign(record(item.props.design) as BlockDesign, patch, theme, warnings) });
+      changes.push(`Style ${label}: ${Object.keys(patch).join(", ")}.`);
+      continue;
+    }
     if (parentId || (selector.zone && selector.zone !== ROOT_ZONE) || collectEmbeds(item).length) {
       throw new Error("This operation needs a top-level section without protected embeds.");
     }
     const index = selector.index;
     switch (name) {
-      case "update_section_design": {
-        const { patch } = editToolSchemas.update_section_design.parse(input);
-        const background = patch.background;
-        if ((background?.type === "image" && !background.images.every(mediaAllowed))
-          || (background?.type === "video" && ((background.video.poster && !mediaAllowed(background.video.poster))
-            || (background.video.source === "upload" && !mediaAllowed(background.video.uploadUrl))))) {
-          throw new Error("Choose media already present in the selected scope.");
-        }
-        item.props = cleanPhotoCredits({ ...item.props, design: editDesign(record(item.props.design) as BlockDesign, patch, theme, warnings) });
-        changes.push(`Style ${label}: ${Object.keys(patch).join(", ")}.`);
-        break;
-      }
       case "switch_section_design": {
         const { designId } = editToolSchemas.switch_section_design.parse(input);
         const preset = sectionCatalog.find((design) => design.id === designId && design.blockType === item.type);

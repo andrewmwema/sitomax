@@ -1,4 +1,4 @@
--- Run only against an isolated test database with migrations applied.
+-- Run only against an isolated test database with migrations through 0023 applied.
 -- Tests run as the database owner and roll back every fixture.
 begin;
 do $$
@@ -20,6 +20,7 @@ declare
   original_draft jsonb := '{"root":{},"content":[{"type":"Embed","props":{"code":"<p>Agency-approved embed</p>"}}]}';
   published jsonb := '{"root":{},"content":[]}';
   generated jsonb;
+  selected_generated jsonb;
   n int;
 begin
   insert into auth.users(id, email, raw_user_meta_data) values
@@ -108,6 +109,27 @@ begin
   assert (select draft_data from public.pages where id = old_page) = original_draft, 'Owner must be able to restore approved agency embeds too';
   assert (select published_data from public.pages where id = old_page) = published;
   assert (select count(*) from public.site_draft_versions) = 2, 'A restore is itself reversible';
+  selected_generated := jsonb_build_array(
+    (select value from jsonb_array_elements(generated) where value->>'slug' = ''),
+    (select value from jsonb_array_elements(generated) where value->>'slug' = 'about')
+  );
+  home_id := public.replace_ai_site_drafts_with_business(site_id, '{"style":"classic"}', selected_generated, '{}');
+  assert home_id = old_page, 'Selected-page generation must preserve the home page ID';
+  assert (select count(*) from public.pages where public.pages.site_id = site_id) = 4,
+    'Unselected pages on an existing site must remain intact';
+  assert (select p.draft_data->'root'->'props'->>'title' from public.pages p
+    where p.site_id = site_id and p.slug = 'about') = 'Draft title';
+  assert (select count(*) from public.site_draft_versions where public.site_draft_versions.site_id = site_id) = 3,
+    'Selected-page replacement must retain a reversible backup';
+  begin
+    perform public.replace_ai_site_drafts_with_business(site_id, '{}',
+      jsonb_build_array((select value from jsonb_array_elements(generated) where value->>'slug' = 'about')), '{}');
+    raise exception 'Expected missing Home rejection';
+  exception when raise_exception then
+    assert sqlerrm = 'Invalid generated pages.', 'Home remains mandatory for selected-page generation';
+  end;
+  assert (select count(*) from public.site_draft_versions where public.site_draft_versions.site_id = site_id) = 3,
+    'Invalid selected-page requests must not create backups';
   begin
     update public.pages set draft_data = '{"root":{},"content":[{"type":"Embed","props":{"code":"<script>new unapproved code</script>"}}]}' where id = old_page;
     raise exception 'Expected embed denial';
@@ -118,7 +140,7 @@ begin
     raise exception 'Expected invalid data denial';
   exception when raise_exception then assert sqlerrm = 'Invalid generated pages.';
   end;
-  assert (select count(*) from public.site_draft_versions) = 2, 'Invalid writes must roll back backups and page changes together';
+  assert (select count(*) from public.site_draft_versions) = 3, 'Invalid writes must roll back backups and page changes together';
   execute 'reset role';
   perform set_config('request.jwt.claim.sub', editor_id::text, true);
   execute 'set local role authenticated';
@@ -154,6 +176,12 @@ begin
   assert (select public.ai_usage.site_id from public.ai_usage where request_id = child) = created_site, 'New-site usage must link to the created site';
   assert (select count(*) from public.pages where public.pages.site_id = created_site and published_data is not null) = 0;
   assert (select draft_theme->>'style' from public.sites where id = created_site) = 'modern';
+  select result.site_id, result.page_id into created_site, home_id
+    from public.create_ai_site_with_business(account_id, 'AI selected test', 'ai-selected-isolated-test',
+      '{"style":"modern"}', selected_generated, '{}', '30000000-0000-4000-8000-000000000003') result;
+  assert (select count(*) from public.pages where public.pages.site_id = created_site) = 2,
+    'New custom-layout sites may create only the selected pages';
+  assert (select slug from public.pages where id = home_id) = '';
   update public.pages set published_data = draft_data, published_at = now() where id = home_id;
   assert (select theme->>'style' from public.sites where id = created_site) = 'modern', 'Only explicit publishing applies the pending theme';
   assert (select draft_theme from public.sites where id = created_site) is null;

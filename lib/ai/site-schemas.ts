@@ -82,11 +82,12 @@ export const planSchema = z.strictObject({
     sections: z.array(z.strictObject({
       blockType: z.enum(blockTypes), designId: z.enum(designIds),
     })).min(2).max(7),
-  })).length(4),
+  })).min(1).max(PAGE_SLUGS.length),
   seo: z.strictObject({ home: seoSchema, about: seoSchema, services: seoSchema, contact: seoSchema }),
 }).superRefine((plan, ctx) => {
-  if (new Set(plan.pages.map((page) => page.slug)).size !== 4) {
-    ctx.addIssue({ code: "custom", path: ["pages"], message: "Include Home, About, Services and Contact exactly once." });
+  const slugs = plan.pages.map((page) => page.slug);
+  if (new Set(slugs).size !== slugs.length || !slugs.includes("")) {
+    ctx.addIssue({ code: "custom", path: ["pages"], message: "Include Home and list each selected page exactly once." });
   }
   plan.pages.forEach((page, pageIndex) => page.sections.forEach(({ blockType, designId }, sectionIndex) => {
     const design = catalogById.get(designId);

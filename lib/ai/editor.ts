@@ -7,10 +7,14 @@ import { requireUser } from "@/lib/auth";
 import { businessSchema, emptyBusiness } from "@/lib/business";
 import { puckConfig } from "@/lib/puck/config";
 import { sanitizePuckData } from "@/lib/richtext";
+import type { LayoutItem } from "@/lib/layout/structure";
+import { DEFAULT_COLORS } from "@/lib/theme/presets";
+import { themeSchema } from "@/lib/theme/schema";
 import { editorAiInput } from "./editor-input";
 import { requestAi } from "./client";
 import { aiCatalog, blockSchemas, blockTypes, defaultSection } from "./site-schemas";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
+import { buildCustomSections, customSectionContract, customSystemPrompt } from "./custom-layout";
 
 type Fields = Record<string, Field>;
 type RecordValue = Record<string, unknown>;
@@ -22,6 +26,13 @@ Only return content allowed by the tool schema. Do not mention underlying vendor
 
 function isRecord(value: unknown): value is RecordValue {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeItem(item: unknown): LayoutItem {
+  const parsed = z.looseObject({ type: z.string(), props: z.looseObject({ id: z.string().min(1) }) }).parse(item);
+  const [clean] = sanitizePuckData({ content: [parsed] }).content;
+  if (!clean) throw new Error("The generated section could not be sanitized.");
+  return clean as LayoutItem;
 }
 
 function editable(fields: Fields): z.ZodObject<z.ZodRawShape> {
@@ -128,11 +139,13 @@ export async function runEditorAi(raw: unknown) {
   const input = editorAiInput.parse(raw);
   const { supabase } = await requireUser();
   const { data: page, error } = await supabase.from("pages")
-    .select("id, site:sites(id, account_id, business)").eq("id", input.pageId).maybeSingle();
+    .select("id, site:sites(id, account_id, business, theme, draft_theme)").eq("id", input.pageId).maybeSingle();
   if (error || !page) throw new Error("This page is unavailable to your account.");
-  const site = z.object({ id: z.uuid(), account_id: z.uuid(), business: z.unknown() }).parse(page.site);
+  const site = z.object({ id: z.uuid(), account_id: z.uuid(), business: z.unknown(),
+    theme: z.unknown().optional(), draft_theme: z.unknown().optional() }).parse(page.site);
   if (!isRecord(site.business)) throw new Error("Business information is invalid. Please contact your agency.");
   const business = businessSchema.parse({ ...emptyBusiness, ...site.business });
+  const theme = themeSchema.parse(site.draft_theme ?? site.theme ?? {});
   const common = { accountId: site.account_id, siteId: site.id, system: SYSTEM, maxTokens: 12000 };
 
   if (input.kind === "text") {
@@ -148,11 +161,25 @@ export async function runEditorAi(raw: unknown) {
       tools: [makeTool("edit_section", prepared.schema)], toolName: "edit_section",
       messages: [{ role: "user", content: JSON.stringify({ instruction: input.instruction, business, section: prepared.data }) }] });
     prepared.targets.forEach((target, index) => Object.assign(target.props, merge(target.fields, target.props, result.items[`item${index}`])));
-    const clean = sanitizePuckData({ content: [prepared.root] });
-    return { kind: "section" as const, section: clean.content[0] };
+    return { kind: "section" as const, section: sanitizeItem(prepared.root) };
   }
 
   const schema = insertSectionSchema;
+  if (input.mode === "custom") {
+    const { schema: customSchema, tool } = customSectionContract();
+    const result = await requestValidated(customSchema, {
+      ...common, system: customSystemPrompt(), action: "edit_section", largeRewrite: true,
+      tools: [tool], toolName: tool.name,
+      messages: [{ role: "user", content: JSON.stringify({ instruction: input.instruction, business,
+        theme, rules: "Return one original Section layout. Use only supplied facts, safe page/contact links and generic image search queries." }) }],
+    });
+    const colors = { ...DEFAULT_COLORS, ...theme.colors };
+    const [section] = buildCustomSections([result.section], colors);
+    const warnings = new Set<string>();
+    section.props.photoCredits = await fillSectionPhotos("Section", section.props,
+      createPhotoResolver(warnings, { supabase, accountId: site.account_id, siteId: site.id }));
+    return { kind: "add" as const, section: sanitizeItem(section), warnings: [...warnings] };
+  }
   const catalog = aiCatalog.map(({ id, name, category, blockType, props }) => ({ id, name, category, blockType, variant: props.variant }));
   const result = await requestValidated(schema, { ...common, action: "edit_section", largeRewrite: true,
     tools: [makeTool("add_section", schema)], toolName: "add_section",
@@ -184,7 +211,7 @@ export async function materializeInsertSection(selected: z.infer<typeof insertSe
   const warnings = new Set<string>();
   preset.props.photoCredits = await fillSectionPhotos(preset.type, preset.props,
     createPhotoResolver(warnings, storage));
-  return { section: sanitizePuckData({ content: [preset] }).content[0], warnings: [...warnings] };
+  return { section: sanitizeItem(preset), warnings: [...warnings] };
 }
 
 function plainSectionProps(props: RecordValue): RecordValue {

@@ -55,7 +55,7 @@ export async function fillSectionPhotos(
         const photo = type === "Team" || type === "Logos" ? null
           : await resolve(query, type === "Hero" ? "horizontal" : "all");
         record[key] = photo?.url ?? "";
-        const altKey = key === "url" ? "alt" : key === "image" ? "imageAlt" : `${key}Alt`;
+        const altKey = key === "url" || key === "src" ? "alt" : key === "image" ? "imageAlt" : `${key}Alt`;
         if (photo) record[altKey] = photo.alt;
         else if (altKey in fields) record[altKey] = "Image placeholder";
       } else if (field.type === "array" && Array.isArray(value)) {
@@ -64,6 +64,14 @@ export async function fillSectionPhotos(
         }
       } else if (field.type === "object" && value && typeof value === "object" && !Array.isArray(value)) {
         await walk(value as Record<string, unknown>, field.objectFields as Record<string, Field>);
+      } else if (field.type === "slot" && Array.isArray(value)) {
+        for (const child of value) {
+          if (!child || typeof child !== "object" || Array.isArray(child)) continue;
+          const item = child as { type?: unknown; props?: unknown };
+          if (typeof item.type === "string" && item.props && typeof item.props === "object" && !Array.isArray(item.props)) {
+            await walk(item.props as Record<string, unknown>, blockFields(item.type));
+          }
+        }
       }
     }
   };

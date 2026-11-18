@@ -45,4 +45,29 @@ describe("Ask AI server boundary", () => {
     mocks.request.mockResolvedValueOnce({ stop_reason: "tool_use", content: [plan, { type: "tool_use", name: "delete_section", input: { sectionId: "hero" } }] });
     await expect(runEditAssistant({ pageId, scope: "theme", instruction: "Delete the hero" })).rejects.toThrow("unsupported");
   });
+
+  it("allows Ask AI to insert a validated custom layout with generated Puck IDs", async () => {
+    const section = {
+      background: "soft", width: "contained", rowGap: 48, design: {},
+      rows: [{ layout: "1", gap: 32, reverseOnMobile: false, columns: [{
+        surface: "none", verticalAlign: "top", gap: 16,
+        elements: [{ type: "Heading", text: "Our approach", level: "h2", align: "left" }],
+      }] }],
+    };
+    mocks.request.mockResolvedValueOnce({ stop_reason: "tool_use", content: [
+      plan, { type: "tool_use", name: "insert_custom_section", input: { section } },
+    ] });
+    const result = await runEditAssistant({
+      pageId, scope: "page", instruction: "Add an original layout section",
+      sections: [{ type: "Hero", props: { id: "hero", heading: "Welcome" } }],
+    });
+    expect(mocks.request.mock.calls[0][0].tools.map((entry: { name: string }) => entry.name)).toContain("insert_custom_section");
+    expect(result.operations[0].name).toBe("insert_custom_section");
+    expect(result.inserted).toMatchObject({
+      type: "Section", props: { rows: [{ type: "Row", props: { columns: [{ type: "Column", props: {
+        content: [{ type: "Heading", props: { text: "Our approach" } }],
+      } }] } }] },
+    });
+    expect(result.inserted?.props.id).toMatch(/^Section-/);
+  });
 });

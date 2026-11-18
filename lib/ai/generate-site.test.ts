@@ -19,6 +19,7 @@ import { aiCatalog, blockFields, blockSchemas, PAGE_SLUGS, pageFillContract, PLA
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
 import { strictTool } from "./strict-tool";
+import { customSystemPrompt, PLAN_CUSTOM_SITE_TOOL } from "./custom-layout";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
@@ -305,5 +306,63 @@ describe("catalog site generation", () => {
     delete props[slot.imageField!];
     expect(slot.schema.safeParse(props).success).toBe(true);
     expect(slot.schema.safeParse({ ...props, variant: "unplanned" }).success).toBe(false);
+  });
+});
+
+describe("custom site generation", () => {
+  it("plans selected pages and generates original editable Puck layouts sequentially", async () => {
+    const desiredPages = ["", "services"] as const;
+    const customPlan = {
+      style: "modern", colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
+      fonts: { heading: "Lora", body: "Inter" },
+      pages: desiredPages.map((slug) => ({ slug, title: slug || "Home", sections: ["Gallery highlights", "Contact footer"] })),
+      seo: { home: seo, about: seo, services: seo, contact: seo },
+    };
+    const generatedSection = (heading: string) => ({
+      background: "default", width: "contained", rowGap: 48, design: {},
+      rows: [{ layout: "1", gap: 32, reverseOnMobile: false, columns: [{
+        surface: "none", verticalAlign: "top", gap: 16,
+        elements: [{ type: "Heading", text: heading, level: "h2", align: "left" }],
+      }] }],
+    });
+    let pageIndex = 0;
+    mocks.request.mockImplementation((request) => {
+      if (request.toolName === "plan_custom_site") return message("plan_custom_site", customPlan);
+      const slug = desiredPages[pageIndex++];
+      return message("fill_custom_page", {
+        slug, sections: [generatedSection("Welcome"), generatedSection("Get in touch")],
+      });
+    });
+    const progress: string[] = [];
+    const result = await buildGeneratedSite({
+      ...input, generationMode: "custom", desiredPages: [...desiredPages], desiredSections: ["gallery"],
+      styleDirection: "organic", fontDirection: "serif", designDescription: "Warm natural materials.",
+    }, ({ message }) => progress.push(message));
+    expect(result).toMatchObject({ siteId, pageId });
+    expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId);
+    expect(mocks.request).toHaveBeenCalledTimes(3);
+    expect(mocks.request.mock.calls.map(([request]) => request.toolName))
+      .toEqual(["plan_custom_site", "fill_custom_page", "fill_custom_page"]);
+    for (const [request] of mocks.request.mock.calls) {
+      expect(request).toMatchObject({
+        action: "generate_site", tools: [{ strict: request.toolName === "plan_custom_site" }],
+        cacheTtl: "5m", system: customSystemPrompt(),
+      });
+    }
+    expect(PLAN_CUSTOM_SITE_TOOL.strict).toBe(true);
+    const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1];
+    expect(save.p_pages).toHaveLength(2);
+    expect(save.p_pages.map((page: { slug: string }) => page.slug)).toEqual(["", "services"]);
+    expect(save.p_pages[0].data.content).toHaveLength(3);
+    expect(save.p_pages[0].data.content[1]).toMatchObject({ type: "Section" });
+    const rows = save.p_pages[0].data.content[1].props.rows as {
+      type: string;
+      props: { columns: { type: string; props: { content: { type: string }[] } }[] };
+    }[];
+    expect(rows[0].props.columns[0].props.content[0].type).toBe("Heading");
+    expect(save.p_theme).toMatchObject({ style: "modern", headingFont: "Lora", bodyFont: "Inter" });
+    expect(progress).toEqual(["Planning your site…", "Designing Home…", "Designing Services…",
+      "Finding photos…", "Saving unpublished drafts…"]);
+    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
   });
 });

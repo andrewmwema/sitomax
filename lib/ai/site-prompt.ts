@@ -13,9 +13,9 @@ staff identities, partners, pricing, opening hours, completed projects or guaran
 Use clearly marked placeholders, e.g. [Add a real customer review], [Add verified credentials].
 Do not present stock photographs as actual staff, premises, customers or completed work.
 Prefer Hero, Services, About/Text, FAQ and Contact designs when proof is unavailable.
-Plan four pages: Home (slug ""), About ("about"), Services ("services"), Contact ("contact").
+Plan only the pages explicitly requested in the task (Home slug "" is required; supported pages are About, Services and Contact).
 Choose catalog design IDs verbatim, respect the chosen Classic/Modern style, vary layouts and end pages with a clear next step.
-Include a Footer design on each page. Navigation will be added automatically.
+Include a Footer design on each generated page. Navigation will be added automatically.
 Keep SEO titles strictly under 60 characters and descriptions strictly under 160.
 Use ONLY the curated font names from the schema. Use six-digit hex colors with readable contrast.
 When planning, return only matching blockType/designId pairs in section order, without props.
@@ -26,7 +26,7 @@ For EACH image field, return a concise stock-photo search QUERY, not a URL; use 
 Photo queries must be generic subjects, never business names, personal names, addresses or private business details.
 Write descriptive alt text in the corresponding alt/imageAlt field, identifying stock imagery where appropriate.
 Logos and identifiable staff/client portraits must be omitted unless supplied by the user.
-Only link to /, /about, /services, /contact, valid anchors, supplied email/phone or explicit user-supplied URLs.
+Only link to selected site pages, valid anchors, supplied email/phone or explicit user-supplied URLs.
 Forms are not yet connected: include a note directing visitors to the supplied telephone/email instead.
 CATALOG (IDs, names, descriptions and layout presets):
 ${JSON.stringify(aiCatalog.map((design) => ({

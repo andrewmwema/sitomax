@@ -48,7 +48,7 @@ describe("AI site wizard", () => {
     await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(container.querySelector("[role=alert]")?.textContent).toContain("Confirm replacement");
-    await act(async () => { container.querySelector<HTMLInputElement>("input[type=checkbox]")!.click(); });
+    await act(async () => { container.querySelector<HTMLInputElement>("input[type=checkbox][required]")!.click(); });
     const bytes = new TextEncoder().encode(`${JSON.stringify({ type: "progress", message: "Designing Home…" })}\n${JSON.stringify({
       type: "result", siteId: site.id, pageId: site.accountId, warnings: ["Image placeholders were used."],
     })}\n`);
@@ -65,7 +65,7 @@ describe("AI site wizard", () => {
   });
   it("surfaces an interrupted stream without claiming success or redirecting", async () => {
     await review();
-    await act(async () => { container.querySelector<HTMLInputElement>("input[type=checkbox]")!.click(); });
+    await act(async () => { container.querySelector<HTMLInputElement>("input[type=checkbox][required]")!.click(); });
     mocks.fetch.mockResolvedValue({ ok: true, body: new ReadableStream({ start(controller) { controller.close(); } }) });
     vi.spyOn(console, "error").mockImplementation(() => {});
     await act(async () => {

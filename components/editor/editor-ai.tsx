@@ -58,6 +58,7 @@ function AiDialog({ target, pageId, onClose }: { target: Target; pageId: string;
   const [instruction, setInstruction] = useState("");
   const [tone, setTone] = useState("professional");
   const [mode, setMode] = useState<"rewrite" | "seo" | "custom">("rewrite");
+  const [addMode, setAddMode] = useState<"catalog" | "custom">("catalog");
   const [index, setIndex] = useState(target.kind === "add" ? target.index : 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -78,7 +79,7 @@ function AiDialog({ target, pageId, onClose }: { target: Target; pageId: string;
     const input: EditorAiInput = target.kind === "section"
       ? { kind: "section", pageId, section: target.section, instruction: task, large: mode !== "rewrite" || tone === "longer" }
       : target.kind === "text" ? { kind: "text", pageId, text: target.text, instruction: task, large: tone === "longer" }
-      : { kind: "add", pageId, instruction: task };
+      : { kind: "add", pageId, instruction: task, mode: addMode };
     const id = ++requestId.current;
     setBusy(true); setError(""); setResult(null);
     try {
@@ -131,6 +132,19 @@ function AiDialog({ target, pageId, onClose }: { target: Target; pageId: string;
         <option value="rewrite">Rewrite</option><option value="seo">Improve for SEO</option><option value="custom">Custom request</option>
       </select>
     </label> : null}
+    {target.kind === "add" ? <fieldset className="mt-4">
+      <legend className="text-xs font-medium">Section type</legend>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {([
+          ["catalog", "SitoMax design"],
+          ["custom", "Custom layout"],
+        ] as const).map(([value, label]) => <label key={value} className="rounded-lg border p-2 text-xs">
+          <input type="radio" name="ai-add-mode" value={value} checked={addMode === value}
+            onChange={() => { setAddMode(value); setError(""); setResult(null); }} />
+          <span className="ml-2">{label}</span>
+        </label>)}
+      </div>
+    </fieldset> : null}
     {target.kind === "text" || (target.kind === "section" && mode === "rewrite") ? <label className="mt-3 block text-xs font-medium">Tone
       <select value={tone} onChange={(event) => setTone(event.target.value)} className="mt-1 w-full rounded-lg border p-2 text-sm">
         {["professional", "friendly", "luxurious", "shorter", "longer"].map((entry) => <option key={entry}>{entry}</option>)}
@@ -138,7 +152,9 @@ function AiDialog({ target, pageId, onClose }: { target: Target; pageId: string;
     </label> : null}
     <label className="mt-3 block text-xs font-medium">{target.kind === "text" || (target.kind === "section" && mode !== "custom") ? "Extra context (optional)" : "What would you like?"}
       <textarea maxLength={2000} value={instruction} onChange={(event) => setInstruction(event.target.value)} rows={3}
-        placeholder={target.kind === "add" ? "Add a pricing section with 3 plans" : "Make this more upscale"} className="mt-1 w-full rounded-lg border p-2 text-sm" />
+        placeholder={target.kind === "add" ? addMode === "custom"
+          ? "Add a split section with a heading, image and contact button"
+          : "Add a pricing section with 3 plans" : "Make this more upscale"} className="mt-1 w-full rounded-lg border p-2 text-sm" />
     </label>
     {target.kind === "add" ? <label className="mt-3 block text-xs font-medium">Insert position
       <select value={index} onChange={(event) => setIndex(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2 text-sm">
