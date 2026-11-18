@@ -207,10 +207,18 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
             set("fontDirection", direction);
           }}><option value="auto">Let AI choose</option><option value="serif">Serif headings</option><option value="sans">Sans-serif</option></select>
         </label>
-        <label className="text-sm font-medium sm:col-span-2">More design guidance (optional)
-          <textarea maxLength={800} className={`${fieldClass} mt-2`} rows={3} value={values.designDescription}
+        <label htmlFor="ai-design-guidance" className="text-sm font-medium sm:col-span-2">More design guidance (optional)
+          <textarea id="ai-design-guidance" aria-describedby="ai-design-guidance-count ai-design-guidance-error"
+            aria-invalid={values.designDescription.length > 5000}
+            className={`${fieldClass} mt-2`} rows={3} value={values.designDescription}
             onChange={(event) => set("designDescription", event.target.value)}
             placeholder="Describe a mood, layout preference, or colors. Do not include private customer information." />
+          <span id="ai-design-guidance-count" aria-live="polite" className="mt-1 block text-right text-xs text-zinc-500">
+            {values.designDescription.length.toLocaleString()} / 5,000 characters
+          </span>
+          {values.designDescription.length > 5000 ? <span id="ai-design-guidance-error" role="alert" className="mt-1 block text-sm text-red-700">
+            More design guidance is {values.designDescription.length - 5000} {values.designDescription.length - 5000 === 1 ? "character" : "characters"} over the 5,000-character limit. Shorten it before building your site.
+          </span> : <span id="ai-design-guidance-error" className="sr-only">Maximum 5,000 characters.</span>}
         </label>
         <label className="text-sm font-medium sm:col-span-2">Design foundation
           <select className={`${fieldClass} mt-2`} value={values.style} onChange={(event) => {

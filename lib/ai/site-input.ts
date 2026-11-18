@@ -20,7 +20,7 @@ export function createGenerationInputSchema(marketingSubdomain?: string, isInter
     generationMode: z.enum(["catalog", "custom"]).default("catalog"),
     styleDirection: z.enum(["auto", "minimal", "editorial", "bold", "organic", "premium", "playful"]).default("auto"),
     fontDirection: z.enum(["auto", "serif", "sans"]).default("auto"),
-    designDescription: z.string().trim().max(800).default(""),
+    designDescription: z.string().max(5000, "More design guidance must be 5,000 characters or fewer.").default(""),
     desiredPages: z.array(z.enum(GENERATION_PAGE_SLUGS)).min(1).max(4).default([...GENERATION_PAGE_SLUGS]),
     desiredSections: z.array(z.enum(DESIRED_SECTION_TYPES)).max(DESIRED_SECTION_TYPES.length).default([]),
     primaryColor: z.union([z.literal(""), z.string().regex(/^#[0-9a-f]{6}$/i)]),

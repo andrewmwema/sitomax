@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({ push: vi.fn(), fetch: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 import { AiSiteWizard } from "./ai-site-wizard";
 import { emptyBusiness } from "@/lib/business";
+import { createGenerationInputSchema } from "@/lib/ai/site-input";
 
 let container: HTMLDivElement, root: Root;
 const site = { id: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000002", name: "Local Plumbing", business: emptyBusiness };
@@ -33,8 +34,46 @@ async function review() {
   });
   await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
 }
+async function setDesignGuidance(value: string) {
+  const field = container.querySelector<HTMLTextAreaElement>("#ai-design-guidance")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 
 describe("AI site wizard", () => {
+  it("accepts 5,000 guidance characters and rejects longer text without truncating it", () => {
+    const schema = createGenerationInputSchema();
+    const required = {
+      accountId: site.accountId, siteId: site.id, businessName: "Example", businessType: "Plumber", city: "Nairobi",
+      services: ["Repairs"], style: "auto", primaryColor: "", secondaryColor: "", phone: "", email: "",
+      difference: "", address: "", description: "", confirmReplace: true,
+    };
+    expect(schema.parse({ ...required, designDescription: "x".repeat(5000) }).designDescription).toHaveLength(5000);
+    expect(schema.safeParse({ ...required, designDescription: "x".repeat(5001) })).toMatchObject({
+      success: false, error: { issues: [expect.objectContaining({ message: "More design guidance must be 5,000 characters or fewer." })] },
+    });
+    expect(schema.safeParse({ ...required, designDescription: " ".repeat(5001) }).success).toBe(false);
+  });
+  it("shows a live counter and limit message, and preserves full guidance when moving between steps", async () => {
+    await review();
+    const guidance = "y".repeat(5001);
+    await setDesignGuidance(guidance);
+    expect(container.querySelector("#ai-design-guidance-count")?.textContent).toContain("5,001 / 5,000");
+    expect(container.querySelector("#ai-design-guidance-error")?.textContent).toContain("1 character over the 5,000-character limit");
+    expect(container.querySelector<HTMLTextAreaElement>("#ai-design-guidance")?.value).toBe(guidance);
+    await act(async () => { container.querySelector<HTMLButtonElement>("button[type=button]")!.click(); });
+    expect(container.querySelector("#ai-design-guidance")).toBeNull();
+    const continueButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Continue")!;
+    await act(async () => continueButton.click());
+    expect(container.querySelector<HTMLTextAreaElement>("#ai-design-guidance")?.value).toBe(guidance);
+    expect(container.querySelector("#ai-design-guidance-error")?.textContent).toContain("Shorten it before building");
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect([...container.querySelectorAll("[role=alert]")].some((item) =>
+      item.textContent?.includes("More design guidance must be 5,000 characters or fewer"))).toBe(true);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
   it("prefills previously saved business information", async () => {
     const business = { ...emptyBusiness, businessName: "Example", businessType: "Plumber", city: "York", services: ["Repairs"], tone: "Friendly" };
     await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={{ ...site, business }} rootDomain="localhost:3000" marketingSubdomain="sitomax" />));
