@@ -100,6 +100,12 @@ before the run stops without saving drafts. The diagnostic prints tool metadata,
 not prompts, business details or keys.
 Provider errors are logged centrally and sanitized details are shown only to
 super admins.
+For Original Custom Layout, use the reference shown on a failed generation to
+find the `AI custom generation attempt` entries in server logs. They record the
+contract version, attempt, page (for fills), provider request ID when available,
+stop reason, and validation paths/codes without logging prompts or tool input.
+For a live check, generate with synthetic details on a disposable staging site;
+the diagnostic script's `--generation` flag tests the catalog mode only.
 
 ## Analytics
 

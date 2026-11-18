@@ -59,8 +59,10 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
     const parsed = generationInputSchema.safeParse(values);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your details."); return; }
     setBusy(true); setError(""); setMessages(["Planning your site…"]);
+    let requestId: string | null = null;
     try {
       const response = await fetch("/api/ai/generate-site", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed.data) });
+      requestId = response.headers.get("X-Request-ID");
       if (!response.ok || !response.body) throw new Error("Could not start generation. Check your connection and sign-in.");
       const reader = response.body.getReader(), decoder = new TextDecoder();
       let buffer = "", complete = false;
@@ -89,8 +91,9 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
         if (!complete) throw new Error("The connection ended before confirmation. Check your drafts and contact your agency before retrying.");
       } finally { reader.releaseLock(); }
     } catch (cause) {
-      console.error("Site generation did not complete", { type: cause instanceof Error ? cause.name : "Unknown" });
-      setError(cause instanceof Error && !(cause instanceof z.ZodError) ? cause.message : "The progress response was invalid. Check your drafts before retrying.");
+      console.error("Site generation did not complete", { requestId, type: cause instanceof Error ? cause.name : "Unknown" });
+      const message = cause instanceof Error && !(cause instanceof z.ZodError) ? cause.message : "The progress response was invalid. Check your drafts before retrying.";
+      setError(requestId ? `${message} Reference: ${requestId}` : message);
     } finally { setBusy(false); }
   };
   if (result) return <div className="platform-panel p-6">

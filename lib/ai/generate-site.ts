@@ -14,18 +14,17 @@ import { AiProviderError } from "./provider-error";
 import { beginSiteGeneration, finishSiteGeneration } from "./usage";
 import { createGenerationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
 import { defaultSection, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
-import { fillPage, runSiteTool, validationMessage, type SiteToolCall } from "./site-tool";
+import { fillPage, fillSiteTool, runSiteTool, validationMessage, type SiteToolCall } from "./site-tool";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
 import {
-  assertCustomLinks,
   buildCustomSections,
+  CUSTOM_LAYOUT_CONTRACT,
   customPageContract,
   customPageTask,
-  customPlanSchema,
+  customPlanContract,
   customPlanTask,
   customSystemPrompt,
-  PLAN_CUSTOM_SITE_TOOL,
 } from "./custom-layout";
 import { brand } from "@/lib/brand";
 
@@ -100,7 +99,7 @@ function planValidator(input: GenerationInput) {
 }
 
 export async function buildGeneratedSite(
-  raw: unknown, emit: (event: GenerationProgress) => void = () => {},
+  raw: unknown, emit: (event: GenerationProgress) => void = () => {}, requestId: string = crypto.randomUUID(),
 ): Promise<GenerationResult> {
   const input = createGenerationInputSchema(brand.marketingSiteSubdomain, true).parse(raw);
   const { supabase, isAdmin } = await authorize(input);
@@ -109,6 +108,14 @@ export async function buildGeneratedSite(
   try { generationId = await beginSiteGeneration(input.accountId, input.siteId); }
   catch (cause) {
     throw new SiteGenerationError(cause instanceof Error ? cause.message : "Could not reserve a site generation.");
+  }
+  const trace = { requestId, generationId, contract: CUSTOM_LAYOUT_CONTRACT };
+  function customFailure(outcome: string, stage: string) {
+    const message = outcome === "incomplete" ? `The AI response for the ${stage} was incomplete. Try simpler design guidance.`
+      : outcome === "refused" ? `The AI could not complete the ${stage} with these instructions. Try rephrasing them.`
+        : outcome === "missing_tool" ? `The AI did not return the ${stage} in the expected format. Please try again.`
+          : `The AI-generated ${stage} failed validation. Try more focused design guidance.`;
+    return new SiteGenerationError(`${message} No drafts were changed.`);
   }
   const warnings = new Set<string>();
   const business = JSON.stringify({
@@ -125,7 +132,7 @@ export async function buildGeneratedSite(
     phone: input.phone, email: input.email, address: input.address, openingHours: input.openingHours,
   });
   const call: SiteToolCall = (tool, messages) => requestAi({
-      accountId: input.accountId, siteId: input.siteId, action: "generate_site", generationId,
+      accountId: input.accountId, siteId: input.siteId, action: "generate_site", generationId, correlationId: requestId,
       system: input.generationMode === "custom" ? customSystemPrompt() : SITE_SYSTEM_PROMPT, cacheTtl: "5m",
       tools: [tool], toolName: tool.name,
       maxTokens: tool.name === "plan_site" || tool.name === "plan_custom_site" ? 7000 : 16000,
@@ -134,40 +141,13 @@ export async function buildGeneratedSite(
   const prompt = (task: string) => `${task}\nBUSINESS DATA:\n${business}`;
   try {
     emit({ message: "Planning your site…" });
-    const pageSelectionValidator = <T extends z.ZodType<{
-      style: "classic" | "modern";
-      colors: SitePlan["colors"];
-      fonts: SitePlan["fonts"];
-      pages: { slug: string; sections: unknown[] }[];
-    }>>(schema: T) =>
-      schema.superRefine((plan, ctx) => {
-        if (input.style !== "auto" && plan.style !== input.style) ctx.addIssue({ code: "custom", path: ["style"], message: "Respect the requested style." });
-        const slugs = plan.pages.map(({ slug }) => slug);
-        if (slugs.length !== input.desiredPages.length || input.desiredPages.some((slug) => !slugs.includes(slug))) {
-          ctx.addIssue({ code: "custom", path: ["pages"], message: "Include each requested page exactly once and omit unselected pages." });
-        }
-        requireDesiredSections(plan.pages.flatMap(({ sections }) => sections), input, ctx);
-        if (input.fontDirection !== "auto") {
-          const headingCategory = CURATED_FONTS.find(({ name }) => name === plan.fonts.heading)?.category;
-          if (input.fontDirection === "serif" && headingCategory !== "Serif") {
-            ctx.addIssue({ code: "custom", path: ["fonts", "heading"], message: "Use a curated serif heading font." });
-          }
-          if (input.fontDirection === "sans" && (headingCategory !== "Sans-serif"
-            || CURATED_FONTS.find(({ name }) => name === plan.fonts.body)?.category !== "Sans-serif")) {
-            ctx.addIssue({ code: "custom", path: ["fonts"], message: "Use curated sans-serif fonts." });
-          }
-        }
-        if (contrastRatio(plan.colors.background, plan.colors.text) < 4.5) {
-          ctx.addIssue({ code: "custom", path: ["colors"], message: "Body text/background contrast must be at least 4.5:1." });
-        }
-      });
-    let planPages: { slug: typeof PAGE_SLUGS[number]; title: string; sections: unknown[] }[];
+    let planPages: { slug: typeof PAGE_SLUGS[number]; title: string; sections: unknown[]; seo?: SitePlan["seo"]["home"] }[];
     let planStyle: "classic" | "modern";
     let planColors: SitePlan["colors"];
     let planFonts: SitePlan["fonts"];
-    let planSeo: SitePlan["seo"];
+    let planSeo: SitePlan["seo"] | undefined;
     if (input.generationMode === "custom") {
-      const validator = pageSelectionValidator(customPlanSchema);
+      const { schema, tool } = customPlanContract(input);
       const task = customPlanTask({
         businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
         difference: input.difference, style: input.style, styleDirection: input.styleDirection, fontDirection: input.fontDirection,
@@ -175,18 +155,12 @@ export async function buildGeneratedSite(
         primaryColor: input.primaryColor, secondaryColor: input.secondaryColor, phone: input.phone, email: input.email,
         address: input.address, tone: input.tone, openingHours: input.openingHours, description: input.description,
       });
-      let { result } = await runSiteTool(call, PLAN_CUSTOM_SITE_TOOL, validator, [{ role: "user", content: task }]);
-      if (!result.success) {
-        ({ result } = await runSiteTool(call, PLAN_CUSTOM_SITE_TOOL, validator, [{
-          role: "user", content: `Repair the custom site plan. Correct these validation errors:\n${validationMessage(result.error)}`,
-        }], true));
-      }
-      if (!result.success) throw new SiteGenerationError("The custom site plan was invalid twice. No drafts were changed. Please contact your agency.");
+      const { result, outcome } = await fillSiteTool(call, tool, schema, task, trace);
+      if (!result.success) throw customFailure(outcome, "website plan");
       planPages = result.data.pages;
       planStyle = result.data.style;
       planColors = result.data.colors;
       planFonts = result.data.fonts;
-      planSeo = result.data.seo;
     } else {
       const validator = planValidator(input);
       const task = `Plan the selected pages for this site. Use the user's desired section types where appropriate. Return only the selected pages, with Home required.\nDESIGN PREFERENCES:\n${JSON.stringify({
@@ -215,15 +189,14 @@ export async function buildGeneratedSite(
       let content: { type: string; props: Record<string, unknown> }[];
       if (input.generationMode === "custom") {
         emit({ message: `Designing ${label}…` });
-        const { schema, tool } = customPageContract(page.slug);
-        const parsed = await fillPage(call, tool, schema, customPageTask(page, {
+        const { schema, tool } = customPageContract(page.slug, page.sections.length, input);
+        const { result: parsed, outcome } = await fillSiteTool(call, tool, schema, customPageTask(page, {
           businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
           difference: input.difference, tone: input.tone, openingHours: input.openingHours,
           phone: input.phone, email: input.email, address: input.address, description: input.description,
-          designDescription: input.designDescription, styleDirection: input.styleDirection, fontDirection: input.fontDirection,
-        }));
-        if (!parsed.success) throw new SiteGenerationError(`Page ${label} failed validation after repair. No drafts were changed.`);
-        assertCustomLinks(parsed.data.sections, input);
+          designDescription: input.designDescription, styleDirection: input.styleDirection, fontDirection: input.fontDirection, desiredPages: input.desiredPages,
+        }), { ...trace, page: page.slug || "home" });
+        if (!parsed.success) throw customFailure(outcome, `${label} page layout`);
         content = buildCustomSections(parsed.data.sections, planColors);
       } else {
         emit({ message: `Writing ${label}…` });
@@ -237,7 +210,8 @@ export async function buildGeneratedSite(
           return item;
         });
       }
-      const seo = planSeo[page.slug || "home"];
+      const seo = page.seo ?? planSeo?.[page.slug || "home"];
+      if (!seo) throw new SiteGenerationError("A page was missing its search preview. No drafts were changed.");
       const navigation: { type: string; props: Record<string, unknown> } = {
         type: "Navigation",
         props: { ...puckConfig.components.Navigation.defaultProps, id: `Navigation-${crypto.randomUUID()}`,
@@ -283,14 +257,18 @@ export async function buildGeneratedSite(
   } catch (cause) {
     try { await finishSiteGeneration(generationId, false); }
     catch (accountingError) {
-      console.error("AI generation finalization failed", { generationId });
+      console.error("AI generation finalization failed", { requestId, generationId });
       throw accountingError;
     }
     if (cause instanceof SiteGenerationError) throw cause;
     // Log a reference, never prompts, business information or provider errors.
-    console.error("AI site generation failed", { generationId });
+    console.error("AI site generation failed", { requestId, generationId });
     const message = `Generation stopped. Check your drafts and contact your agency with reference ${generationId} before retrying.`;
-    if (cause instanceof AiProviderError) throw new AiProviderError(message, cause.details);
+    if (cause instanceof AiProviderError) {
+      throw new AiProviderError(input.generationMode === "custom" && (cause.details.status === 429 || (cause.details.status ?? 0) >= 500)
+        ? "The AI service is temporarily unavailable. No drafts were changed."
+        : message, cause.details);
+    }
     throw new SiteGenerationError(message);
   }
 }

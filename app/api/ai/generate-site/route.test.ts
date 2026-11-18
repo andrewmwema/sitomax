@@ -23,6 +23,9 @@ describe("generation progress transport", () => {
       emit({ message: "Finding photos…" }); return result;
     });
     const response = await POST(request());
+    const requestId = response.headers.get("X-Request-ID");
+    expect(requestId).toMatch(/^[a-f0-9-]{36}$/);
+    expect(mocks.build).toHaveBeenCalledWith({ businessName: "Example" }, expect.any(Function), requestId);
     const reader = response.body!.getReader(), decoder = new TextDecoder();
     expect(JSON.parse(decoder.decode((await reader.read()).value))).toEqual({ type: "progress", message: "Planning your site…" });
     expect(mocks.revalidate).not.toHaveBeenCalled();

@@ -22,6 +22,7 @@ const requestSchema = z.object({
   action: z.enum(AI_ACTIONS),
   largeRewrite: z.boolean().default(false),
   generationId: z.uuid().optional(),
+  correlationId: z.uuid().optional(),
   tools: z.array(z.strictObject({
     name: z.string().regex(/^[a-zA-Z0-9_-]+$/),
     description: z.string().optional(),
@@ -46,7 +47,7 @@ const requestSchema = z.object({
 export type AiRequest = Omit<z.input<typeof requestSchema>, "messages"> & { messages: Anthropic.MessageParam[] };
 
 /** The only SDK call entry point: authenticated reservation -> provider -> ledger. */
-export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
+export async function requestAi(raw: AiRequest): Promise<Anthropic.Message & { _request_id?: string | null }> {
   const input = requestSchema.parse(raw);
   const model = modelForAction(input.action, input.largeRewrite);
   assertPricedModel(model);
@@ -59,7 +60,7 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
     siteId: input.siteId, largeRewrite: input.largeRewrite,
     ...(input.generationId ? { generationId: input.generationId } : {}),
   });
-  let response: Anthropic.Message;
+  let response: Anthropic.Message & { _request_id?: string | null };
   try {
     response = await sdk.messages.create(anthropicRequestParams(reservation.model, input));
   } catch (cause) {
@@ -67,7 +68,7 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
     const status = details?.status;
     const requestError = (message: string) => details ? new AiProviderError(message, details) : new Error(message);
     if (details) console.error("Anthropic request failed", {
-      ...details, requestId: reservation.id, generationId: input.generationId, model: reservation.model, action: input.action,
+      ...details, requestId: reservation.id, correlationId: input.correlationId, generationId: input.generationId, model: reservation.model, action: input.action,
     });
     if (status === undefined || ![400, 401, 403, 404, 412, 413, 422, 429, 431].includes(status)) {
       // A timeout or server error may have occurred after billable generation.
@@ -100,7 +101,7 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
   } catch {
     // Do not refund or return a billable response that failed accounting.
     console.error("Completed AI request needs usage reconciliation", {
-      requestId: reservation.id, model: response.model,
+      requestId: reservation.id, correlationId: input.correlationId, model: response.model,
       inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens,
       cacheReadTokens: response.usage?.cache_read_input_tokens,
       cacheWriteTokens: response.usage?.cache_creation_input_tokens,

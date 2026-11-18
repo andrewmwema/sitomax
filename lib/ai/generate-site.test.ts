@@ -19,7 +19,8 @@ import { aiCatalog, blockFields, blockSchemas, PAGE_SLUGS, pageFillContract, PLA
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
 import { strictTool } from "./strict-tool";
-import { customSystemPrompt, PLAN_CUSTOM_SITE_TOOL } from "./custom-layout";
+import { customSystemPrompt } from "./custom-layout";
+import type { GenerationInput } from "./site-input";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
@@ -310,50 +311,58 @@ describe("catalog site generation", () => {
 });
 
 describe("custom site generation", () => {
-  it("plans selected pages and generates original editable Puck layouts sequentially", async () => {
-    const desiredPages = ["", "services"] as const;
-    const customPlan = {
+  function customPlan(desiredPages: GenerationInput["desiredPages"], extras: GenerationInput["desiredSections"] = []) {
+    return {
       style: "modern", colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
       fonts: { heading: "Lora", body: "Inter" },
-      pages: desiredPages.map((slug) => ({ slug, title: slug || "Home", sections: ["Gallery highlights", "Contact footer"] })),
-      seo: { home: seo, about: seo, services: seo, contact: seo },
+      pages: desiredPages.map((slug) => ({ slug, title: slug || "Home", seo, sections: [
+        { kind: "hero", goal: "Welcome visitors" },
+        ...(slug === "" ? extras.map((kind) => ({ kind, goal: "Explain the options with supplied facts" })) : []),
+        { kind: "footer", goal: "Contact details" },
+      ] })),
     };
-    const generatedSection = (heading: string) => ({
+  }
+  const generatedSection = (heading: string) => ({
       background: "default", width: "contained", rowGap: 48, design: {},
       rows: [{ layout: "1", gap: 32, reverseOnMobile: false, columns: [{
         surface: "none", verticalAlign: "top", gap: 16,
         elements: [{ type: "Heading", text: heading, level: "h2", align: "left" }],
       }] }],
-    });
+  });
+  const requestId = "00000000-0000-4000-8000-000000000005";
+
+  it.each([
+    { type: "Plumber", pages: [""] as GenerationInput["desiredPages"], extras: [] as GenerationInput["desiredSections"] },
+    { type: "SaaS", pages: [...PAGE_SLUGS], extras: ["pricing", "faq", "gallery"] as GenerationInput["desiredSections"] },
+  ])("assembles editable draft data for $type with pages $pages", async ({ type, pages: desiredPages, extras }) => {
+    const layoutPlan = customPlan(desiredPages, extras);
     let pageIndex = 0;
     mocks.request.mockImplementation((request) => {
-      if (request.toolName === "plan_custom_site") return message("plan_custom_site", customPlan);
-      const slug = desiredPages[pageIndex++];
+      if (request.toolName === "plan_custom_site") return message("plan_custom_site", layoutPlan);
+      const { slug, sections } = layoutPlan.pages[pageIndex++];
       return message("fill_custom_page", {
-        slug, sections: [generatedSection("Welcome"), generatedSection("Get in touch")],
+        slug, sections: sections.map(({ goal }) => generatedSection(goal)),
       });
     });
     const progress: string[] = [];
     const result = await buildGeneratedSite({
-      ...input, generationMode: "custom", desiredPages: [...desiredPages], desiredSections: ["gallery"],
+      ...input, businessType: type, generationMode: "custom", desiredPages, desiredSections: extras,
       styleDirection: "organic", fontDirection: "serif", designDescription: "Warm natural materials.",
-    }, ({ message }) => progress.push(message));
+    }, ({ message }) => progress.push(message), requestId);
     expect(result).toMatchObject({ siteId, pageId });
     expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId);
-    expect(mocks.request).toHaveBeenCalledTimes(3);
     expect(mocks.request.mock.calls.map(([request]) => request.toolName))
-      .toEqual(["plan_custom_site", "fill_custom_page", "fill_custom_page"]);
+      .toEqual(["plan_custom_site", ...desiredPages.map(() => "fill_custom_page")]);
     for (const [request] of mocks.request.mock.calls) {
       expect(request).toMatchObject({
         action: "generate_site", tools: [{ strict: request.toolName === "plan_custom_site" }],
-        cacheTtl: "5m", system: customSystemPrompt(),
+        cacheTtl: "5m", system: customSystemPrompt(), generationId, correlationId: requestId,
       });
     }
-    expect(PLAN_CUSTOM_SITE_TOOL.strict).toBe(true);
     const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1];
-    expect(save.p_pages).toHaveLength(2);
-    expect(save.p_pages.map((page: { slug: string }) => page.slug)).toEqual(["", "services"]);
-    expect(save.p_pages[0].data.content).toHaveLength(3);
+    expect(save.p_pages.map((page: { slug: string }) => page.slug)).toEqual(desiredPages);
+    expect(save.p_pages[0].data.content).toHaveLength(3 + extras.length);
+    expect(save.p_pages[0].data.root.props).toMatchObject(seo);
     expect(save.p_pages[0].data.content[1]).toMatchObject({ type: "Section" });
     const rows = save.p_pages[0].data.content[1].props.rows as {
       type: string;
@@ -361,8 +370,59 @@ describe("custom site generation", () => {
     }[];
     expect(rows[0].props.columns[0].props.content[0].type).toBe("Heading");
     expect(save.p_theme).toMatchObject({ style: "modern", headingFont: "Lora", bodyFont: "Inter" });
-    expect(progress).toEqual(["Planning your site…", "Designing Home…", "Designing Services…",
-      "Finding photos…", "Saving unpublished drafts…"]);
+    expect(progress).toEqual(["Planning your site…", ...desiredPages.map((slug) =>
+      `Designing ${{ "": "Home", about: "About", services: "Services", contact: "Contact" }[slug]}…`),
+    "Finding photos…", "Saving unpublished drafts…"]);
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
+  });
+
+  it("repairs a plan with the original brief, actual tool ID and actionable issue; logs no generated values", async () => {
+    const valid = customPlan([""], ["faq"]);
+    const invalid = structuredClone(valid);
+    invalid.pages[0].sections[1] = { kind: "content", goal: "PRIVATE GENERATED VALUE" };
+    const first = { ...message("plan_custom_site", invalid), _request_id: "req_first_attempt" };
+    mocks.request.mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(message("plan_custom_site", valid))
+      .mockResolvedValueOnce(message("fill_custom_page", { slug: "", sections: valid.pages[0].sections.map(({ goal }) => generatedSection(goal)) }));
+    await buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: [""], desiredSections: ["faq"] }, undefined, requestId);
+    const [initial, assistant, feedback] = mocks.request.mock.calls[1][0].messages;
+    expect(initial).toEqual(mocks.request.mock.calls[0][0].messages[0]);
+    expect(initial.content).toContain('"desiredSections":["faq"]');
+    expect(assistant).toEqual({ role: "assistant", content: first.content });
+    expect(feedback.content[0]).toMatchObject({
+      type: "tool_result", tool_use_id: "toolu_test", is_error: true, content: expect.stringContaining('kind "faq"'),
+    });
+    expect(console.info).toHaveBeenCalledWith("AI custom generation attempt", expect.objectContaining({
+      requestId, generationId, attempt: 1, providerRequestId: "req_first_attempt", outcome: "validation_failed",
+      issues: [{ path: ["pages"], code: "custom" }],
+    }));
+    expect(console.info).toHaveBeenCalledWith("AI custom generation attempt", expect.objectContaining({ requestId, attempt: 2, outcome: "valid" }));
+    expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain("PRIVATE GENERATED VALUE");
+  });
+
+  it("does not save any drafts when a later page still fails after one repair", async () => {
+    const good = [generatedSection("Welcome"), generatedSection("Contact")];
+    const invalid = structuredClone(good);
+    invalid[0].rows[0].columns[0].elements = [{ type: "Heading", text: "Malformed", level: "h9", align: "left" }];
+    mocks.request.mockResolvedValueOnce(message("plan_custom_site", customPlan(["", "services"])))
+      .mockResolvedValueOnce(message("fill_custom_page", { slug: "", sections: good }))
+      .mockResolvedValueOnce(message("fill_custom_page", { slug: "services", sections: invalid }))
+      .mockResolvedValueOnce(message("fill_custom_page", { slug: "services", sections: invalid }));
+    await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: ["", "services"] }))
+      .rejects.toThrow("Services page layout failed validation. Try more focused design guidance. No drafts were changed.");
+    expect(mocks.request).toHaveBeenCalledTimes(4);
+    expect(mocks.rpc).not.toHaveBeenCalledWith("replace_ai_site_drafts_with_business", expect.anything());
+    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
+  });
+
+  it("distinguishes truncation and never echoes a partial tool call back to the provider", async () => {
+    mocks.request.mockResolvedValue({ ...message("plan_custom_site", {}), stop_reason: "max_tokens" });
+    await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: [""] }))
+      .rejects.toThrow("response for the website plan was incomplete");
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    const repair = mocks.request.mock.calls[1][0].messages;
+    expect(repair).toEqual([{ role: "user", content: expect.stringContaining('"desiredPages":[""]') }]);
+    expect(repair[0].content).toContain("previous response was incomplete");
+    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
 });

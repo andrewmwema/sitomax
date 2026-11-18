@@ -5,11 +5,15 @@ import { puckConfig } from "@/lib/puck/config";
 import { ROW_LAYOUTS, type LayoutItem } from "@/lib/layout/structure";
 import { editDesign, designPatchSchema } from "./edit-design";
 import { strictTool } from "./strict-tool";
-import { PAGE_SLUGS, type SitePlan } from "./site-schemas";
+import type { SitePlan } from "./site-schemas";
 import { escapeHtml, sanitizeRichText } from "@/lib/richtext";
-import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
+import { CURATED_FONTS, CURATED_FONT_NAMES } from "@/lib/theme/fonts";
+import { contrastRatio } from "@/lib/theme/presets";
 import { SPACING_SCALE } from "@/lib/layout/spacing";
 import { ICON_NAMES } from "@/components/blocks/ui/icon";
+import { DESIRED_SECTION_TYPES, type GenerationInput } from "./site-input";
+
+export const CUSTOM_LAYOUT_CONTRACT = "custom-layout-v2";
 
 const link = z.string().max(500).refine(
   (value) => !value || /^(?:\/(?!\/)|#|https?:\/\/|mailto:|tel:)/i.test(value),
@@ -71,28 +75,57 @@ const customSectionsSchema = z.array(customSectionSchema).min(2).max(7).superRef
 
 const seoSchema = z.strictObject({ title: z.string().min(1).max(59), description: z.string().min(1).max(159) });
 const colorSchema = z.string().regex(/^#[0-9a-f]{6}$/i);
-export const customPlanSchema = z.strictObject({
-  style: z.enum(["classic", "modern"]),
-  colors: z.strictObject({ primary: colorSchema, secondary: colorSchema, background: colorSchema, text: colorSchema }),
-  fonts: z.strictObject({ heading: z.enum(CURATED_FONT_NAMES), body: z.enum(CURATED_FONT_NAMES) }),
-  pages: z.array(z.strictObject({
-    slug: z.enum(PAGE_SLUGS),
-    title: z.string().min(1).max(80),
-    sections: z.array(z.string().trim().min(1).max(160)).min(2).max(7),
-  })).min(1).max(PAGE_SLUGS.length),
-  seo: z.strictObject({ home: seoSchema, about: seoSchema, services: seoSchema, contact: seoSchema }),
-}).superRefine((plan, ctx) => {
-  const slugs = plan.pages.map((page) => page.slug);
-  if (new Set(slugs).size !== slugs.length || !slugs.includes("")) {
-    ctx.addIssue({ code: "custom", path: ["pages"], message: "Include Home and list each selected page exactly once." });
-  }
+const sectionGoal = z.strictObject({
+  kind: z.enum(["hero", "content", "services", "contact", "footer", ...DESIRED_SECTION_TYPES]),
+  goal: z.string().trim().min(1).max(160),
 });
-export const PLAN_CUSTOM_SITE_TOOL = strictTool("plan_custom_site", "Plan an original custom site theme and page structure, without catalog design IDs.", customPlanSchema);
+const fontsIn = (category: string) => CURATED_FONTS.filter((font) => font.category === category).map((font) => font.name);
+const serifFonts = fontsIn("Serif");
+const sansFonts = fontsIn("Sans-serif");
 
-export function customPageContract(slug: SitePlan["pages"][number]["slug"]) {
+export function customPlanContract(input: Pick<GenerationInput, "style" | "fontDirection" | "desiredPages" | "desiredSections">) {
   const schema = z.strictObject({
+    style: input.style === "auto" ? z.enum(["classic", "modern"]) : z.literal(input.style),
+    colors: z.strictObject({ primary: colorSchema, secondary: colorSchema, background: colorSchema, text: colorSchema }),
+    fonts: z.strictObject({
+      heading: z.enum(input.fontDirection === "serif" ? serifFonts : input.fontDirection === "sans" ? sansFonts : CURATED_FONT_NAMES),
+      body: z.enum(input.fontDirection === "sans" ? sansFonts : CURATED_FONT_NAMES),
+    }),
+    pages: z.array(z.strictObject({
+      slug: z.enum(input.desiredPages),
+      title: z.string().trim().min(1).max(80),
+      sections: z.array(sectionGoal).min(2).max(7),
+      seo: seoSchema,
+    })).length(input.desiredPages.length),
+  }).superRefine((plan, ctx) => {
+    if (new Set(plan.pages.map(({ slug }) => slug)).size !== input.desiredPages.length) {
+      ctx.addIssue({ code: "custom", path: ["pages"], message: "Include each requested page exactly once." });
+    }
+    const kinds = new Set(plan.pages.flatMap(({ sections }) => sections.map(({ kind }) => kind)));
+    for (const kind of input.desiredSections) if (!kinds.has(kind)) {
+      ctx.addIssue({ code: "custom", path: ["pages"], message: `Include a section with kind "${kind}".` });
+    }
+    if (contrastRatio(plan.colors.background, plan.colors.text) < 4.5) {
+      ctx.addIssue({ code: "custom", path: ["colors"], message: "Body text/background contrast must be at least 4.5:1." });
+    }
+  });
+  return {
+    schema,
+    tool: strictTool("plan_custom_site", `${CUSTOM_LAYOUT_CONTRACT}: plan an original site without catalog design IDs.`, schema),
+  };
+}
+
+export function customPageContract(slug: SitePlan["pages"][number]["slug"], expectedSections?: number,
+  links?: LinkInputs) {
+  const shape = z.strictObject({
     slug: z.literal(slug),
     sections: customSectionsSchema,
+  });
+  const schema = shape.superRefine(({ sections }, ctx) => {
+    if (expectedSections !== undefined && sections.length !== expectedSections) {
+      ctx.addIssue({ code: "custom", path: ["sections"], message: `Generate exactly ${expectedSections} sections, one per planned goal.` });
+    }
+    if (links) checkCustomLinks(sections, links, ctx);
   });
   return {
     schema,
@@ -168,8 +201,9 @@ export function customPageTask(page: { slug: SitePlan["pages"][number]["slug"]; 
   designDescription: string;
   styleDirection: string;
   fontDirection: string;
+  desiredPages: readonly string[];
 }) {
-  return `Create an original layout using only the supplied editable Section, Row, Column and element schema. Use the planned section goals in order; design each page distinctly. Include a clear next step and finish with a compact footer section. Use only supplied facts. Return image search queries, never URLs. Do not output markup, component IDs or properties outside the schema.
+  return `Create an original layout using only the supplied editable Section, Row, Column and element schema. Generate exactly one section per planned goal, in the same order. Render a compact footer for a footer goal; do not add unplanned sections. Use only supplied facts. Return image search queries, never URLs. Do not output markup, component IDs or properties outside the schema.
 PAGE PLAN:\n${JSON.stringify({ slug: page.slug, title: page.title, sectionGoals: page.sections })}
 BUSINESS FACTS:\n${JSON.stringify(input)}
 Layout guidance: vary row presets and card surfaces; use supported theme backgrounds, responsive spacing, color or gradient backgrounds, borders, shadows and entrance animations. Use a single H1 on the home page and headings in logical order. Keep copy concise, accessible and useful. Buttons may link only to selected site pages, anchors, the supplied phone/email, or URLs explicitly present in the business facts. Use generic, non-identifying photo searches; never imply that stock imagery depicts this business. Do not invent prices, metrics, reviews, credentials, staff, project results, operating hours or guarantees. For missing details, use a bracketed placeholder.`;
@@ -200,30 +234,36 @@ export function customPlanTask(input: {
   openingHours: string;
   description: string;
 }) {
-  return `Plan an original, editable website theme and the requested page structure. Use 2–7 concise, distinct section goals per page. Do not select or name catalog designs.
+  return `Plan an original, editable website theme and only the requested pages. Home has slug "". Supply seo.title and seo.description inside each selected page. Use 2–7 ordered section goals per page, each with a kind from the schema and a concise goal. Use the exact requested section kinds (desiredSections) at least once across the selected pages, even if the goal uses different wording. Include a compact footer as the final goal on each page. Respect the requested style and font direction. Use six-digit hex colors with text/background contrast of at least 4.5:1. Do not select or name catalog designs.
 PREFERENCES:\n${JSON.stringify(input)}
 Return only the site plan.`;
 }
 
-export function assertCustomLinks(sections: GeneratedSection[], input: {
+type LinkInputs = {
   desiredPages: readonly string[];
   phone: string;
   email: string;
   description: string;
   designDescription: string;
-}) {
+};
+
+function checkCustomLinks(sections: GeneratedSection[], input: LinkInputs, ctx: z.RefinementCtx) {
   const allowedPaths = new Set(input.desiredPages.map((slug) => slug ? `/${slug}` : "/"));
   const explicitUrls = new Set(`${input.description}\n${input.designDescription}`.match(/https?:\/\/[^\s"'<>]+/gi) ?? []);
   const allowedContactLinks = new Set([
     input.email ? `mailto:${input.email}` : "",
     input.phone ? `tel:${input.phone.replace(/[^\d+]/g, "")}` : "",
   ]);
-  for (const section of sections) for (const row of section.rows) for (const column of row.columns) {
-    for (const element of column.elements) if (element.type === "Button" && element.href) {
+  sections.forEach((section, s) => section.rows.forEach((row, r) => row.columns.forEach((column, c) =>
+    column.elements.forEach((element, e) => {
+      if (element.type !== "Button" || !element.href) return;
       const { href } = element;
-      if (href.startsWith("#")) continue;
-      if (allowedPaths.has(href) || allowedContactLinks.has(href) || explicitUrls.has(href)) continue;
-      throw new Error("Custom layout contains a link that was not supplied by the business.");
-    }
-  }
+      if (!/[\\\u0000-\u001f]/.test(href) && (href.startsWith("#") || allowedPaths.has(href) || allowedContactLinks.has(href) || explicitUrls.has(href))) return;
+      ctx.addIssue({ code: "custom", path: ["sections", s, "rows", r, "columns", c, "elements", e, "href"],
+        message: "Link was not supplied by the business. Use a selected page, anchor, supplied contact link, or an empty link." });
+    }))));
+}
+
+export function assertCustomLinks(sections: GeneratedSection[], input: LinkInputs) {
+  z.array(customSectionSchema).superRefine((value, ctx) => checkCustomLinks(value, input, ctx)).parse(sections);
 }

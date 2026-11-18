@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Render } from "@puckeditor/core";
+import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import {
   assertCustomLinks,
   buildCustomSections,
   customPageContract,
+  customPlanContract,
 } from "./custom-layout";
 
 type ContentItem = { type: string; props: Record<string, unknown> };
@@ -33,6 +38,34 @@ const section = {
 };
 
 describe("custom AI layout schemas", () => {
+  it("uses the selected pages, explicit style and font direction in the strict wire contract", () => {
+    const { tool, schema } = customPlanContract({
+      style: "modern", fontDirection: "serif", desiredPages: [""], desiredSections: ["faq"],
+    });
+    expect(tool.strict).toBe(true);
+    // The SDK hoists nested schemas into $defs.
+    const definitions = Object.values(("$defs" in tool.input_schema && tool.input_schema.$defs) || {});
+    expect(definitions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ const: "modern" }),
+      expect.objectContaining({ properties: expect.objectContaining({
+        heading: { enum: expect.arrayContaining(["Lora"]) },
+      }) }),
+      expect.objectContaining({
+        properties: expect.objectContaining({ slug: { enum: [""] } }),
+        required: expect.arrayContaining(["slug", "sections", "seo"]),
+      }),
+    ]));
+    const plan = {
+      style: "modern", fonts: { heading: "Lora", body: "Inter" },
+      colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
+      pages: [{ slug: "", title: "Home", seo: { title: "Home", description: "An example business." },
+        sections: [{ kind: "faq", goal: "What to expect" }, { kind: "footer", goal: "Contact details" }] }],
+    };
+    expect(schema.safeParse(plan).success).toBe(true);
+    expect(schema.safeParse({ ...plan, pages: [plan.pages[0], plan.pages[0]] }).success).toBe(false);
+    expect(schema.safeParse({ ...plan, colors: { ...plan.colors, text: "#aaaaaa" } }).success).toBe(false);
+  });
+
   it("builds validated layouts from existing Puck primitives and assigns server IDs", () => {
     const { schema } = customPageContract("");
     const parsed = schema.parse({ slug: "", sections: [section, section] });
@@ -50,6 +83,35 @@ describe("custom AI layout schemas", () => {
       src: "plumbing tools", alt: "Tools on a workbench",
     });
     expect(new Set(content.map(({ props }) => props.id)).size).toBe(2);
+  });
+
+  it("renders a generated layout including its mobile row setting", () => {
+    const responsive = structuredClone(section);
+    responsive.rows[0].reverseOnMobile = true;
+    const { sections } = customPageContract("", 2).schema.parse({ slug: "", sections: [responsive, section] });
+    const content = buildCustomSections(sections, {
+      primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111",
+    });
+    const html = renderToStaticMarkup(createElement(Render, {
+      config: puckConfig,
+      data: { root: { props: {} }, content } as PuckPageData,
+      fieldTransforms: { richtext: ({ value }) => value },
+    }));
+    expect(html).toContain("layout-row layout-row-2 layout-row-reverse");
+    expect(html).toContain("<h1");
+    expect(html).toContain("Local help for your home.");
+    expect(html).toContain('href="/contact"');
+  });
+
+  it("reports repairable paths for a wrong section count and an unselected-page link", () => {
+    const { schema } = customPageContract("", 3, {
+      desiredPages: [""], phone: "", email: "", description: "", designDescription: "",
+    });
+    const parsed = schema.safeParse({ slug: "", sections: [section, section] });
+    expect(parsed.error?.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ["sections"], message: expect.stringContaining("exactly 3") }),
+      expect.objectContaining({ path: ["sections", 0, "rows", 0, "columns", 0, "elements", 2, "href"] }),
+    ]));
   });
 
   it("rejects unknown component properties, unsupported components and mismatched row presets", () => {
