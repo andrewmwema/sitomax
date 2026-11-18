@@ -100,12 +100,17 @@ before the run stops without saving drafts. The diagnostic prints tool metadata,
 not prompts, business details or keys.
 Provider errors are logged centrally and sanitized details are shown only to
 super admins.
-For Original Custom Layout, use the reference shown on a failed generation to
-find the `AI custom generation attempt` entries in server logs. They record the
-contract version, attempt, page (for fills), provider request ID when available,
-stop reason, and validation paths/codes without logging prompts or tool input.
-For a live check, generate with synthetic details on a disposable staging site;
-the diagnostic script's `--generation` flag tests the catalog mode only.
+For Original Custom Layout, apply
+[`0024_custom_generation_call_budget.sql`](supabase/migrations/0024_custom_generation_call_budget.sql)
+before using per-section generation. The generation still consumes one credit;
+section calls and repairs are metered against the same generation. To verify
+with synthetic details and no database writes, run
+`node scripts/test-anthropic.mjs --custom --home-only` and then
+`node scripts/test-anthropic.mjs --custom` (four pages with FAQ and Pricing).
+The diagnostic prints validation paths, codes, messages, and truncated received
+values. Production logs use the request reference and record the received type
+or length instead of generated text. Only super admins see validation issues in
+the wizard.
 
 ## Analytics
 

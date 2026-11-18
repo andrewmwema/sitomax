@@ -32,7 +32,8 @@ export async function POST(request: Request) {
         const fallback = cause instanceof SiteGenerationError || cause instanceof AiProviderError ? cause.message
           : cause instanceof z.ZodError ? "Check the business details and replacement confirmation."
             : "Generation stopped. Check your drafts and contact your agency before retrying.";
-        send({ type: "error", message: await aiErrorMessage(cause, fallback) });
+        send({ type: "error", message: await aiErrorMessage(cause, fallback),
+          ...(cause instanceof SiteGenerationError && cause.validationIssues?.length ? { issues: cause.validationIssues } : {}) });
       } finally {
         if (!disconnected) controller.close();
       }

@@ -23,6 +23,7 @@ const requestSchema = z.object({
   largeRewrite: z.boolean().default(false),
   generationId: z.uuid().optional(),
   correlationId: z.uuid().optional(),
+  customGeneration: z.literal(true).optional(),
   tools: z.array(z.strictObject({
     name: z.string().regex(/^[a-zA-Z0-9_-]+$/),
     description: z.string().optional(),
@@ -59,6 +60,7 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message & { _
   const reservation = await checkLimit(input.accountId, input.action, {
     siteId: input.siteId, largeRewrite: input.largeRewrite,
     ...(input.generationId ? { generationId: input.generationId } : {}),
+    ...(input.customGeneration ? { customGeneration: true } : {}),
   });
   let response: Anthropic.Message & { _request_id?: string | null };
   try {

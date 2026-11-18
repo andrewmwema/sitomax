@@ -14,21 +14,16 @@ import { AiProviderError } from "./provider-error";
 import { beginSiteGeneration, finishSiteGeneration } from "./usage";
 import { createGenerationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
 import { defaultSection, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
-import { fillPage, fillSiteTool, runSiteTool, validationMessage, type SiteToolCall } from "./site-tool";
+import { fillPage, runSiteTool, validationMessage, type SiteToolCall } from "./site-tool";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
-import {
-  buildCustomSections,
-  CUSTOM_LAYOUT_CONTRACT,
-  customPageContract,
-  customPageTask,
-  customPlanContract,
-  customPlanTask,
-  customSystemPrompt,
-} from "./custom-layout";
+import { CUSTOM_LAYOUT_CONTRACT, customSystemPrompt } from "./custom-layout";
+import { CustomSiteError, customSiteMaxTokens, planCustomSite, writeCustomPage } from "./custom-site";
 import { brand } from "@/lib/brand";
 
-export class SiteGenerationError extends Error {}
+export class SiteGenerationError extends Error {
+  constructor(message: string, readonly validationIssues?: CustomSiteError["issues"]) { super(message); }
+}
 
 const desiredSectionTerms: Record<GenerationInput["desiredSections"][number], RegExp> = {
   gallery: /gallery|portfolio/i,
@@ -110,13 +105,6 @@ export async function buildGeneratedSite(
     throw new SiteGenerationError(cause instanceof Error ? cause.message : "Could not reserve a site generation.");
   }
   const trace = { requestId, generationId, contract: CUSTOM_LAYOUT_CONTRACT };
-  function customFailure(outcome: string, stage: string) {
-    const message = outcome === "incomplete" ? `The AI response for the ${stage} was incomplete. Try simpler design guidance.`
-      : outcome === "refused" ? `The AI could not complete the ${stage} with these instructions. Try rephrasing them.`
-        : outcome === "missing_tool" ? `The AI did not return the ${stage} in the expected format. Please try again.`
-          : `The AI-generated ${stage} failed validation. Try more focused design guidance.`;
-    return new SiteGenerationError(`${message} No drafts were changed.`);
-  }
   const warnings = new Set<string>();
   const business = JSON.stringify({
     businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
@@ -135,7 +123,8 @@ export async function buildGeneratedSite(
       accountId: input.accountId, siteId: input.siteId, action: "generate_site", generationId, correlationId: requestId,
       system: input.generationMode === "custom" ? customSystemPrompt() : SITE_SYSTEM_PROMPT, cacheTtl: "5m",
       tools: [tool], toolName: tool.name,
-      maxTokens: tool.name === "plan_site" || tool.name === "plan_custom_site" ? 7000 : 16000,
+      maxTokens: input.generationMode === "custom" ? customSiteMaxTokens(tool.name) : tool.name === "plan_site" ? 7000 : 16000,
+      ...(input.generationMode === "custom" ? { customGeneration: true } : {}),
       messages,
   });
   const prompt = (task: string) => `${task}\nBUSINESS DATA:\n${business}`;
@@ -146,21 +135,12 @@ export async function buildGeneratedSite(
     let planColors: SitePlan["colors"];
     let planFonts: SitePlan["fonts"];
     let planSeo: SitePlan["seo"] | undefined;
-    if (input.generationMode === "custom") {
-      const { schema, tool } = customPlanContract(input);
-      const task = customPlanTask({
-        businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
-        difference: input.difference, style: input.style, styleDirection: input.styleDirection, fontDirection: input.fontDirection,
-        designDescription: input.designDescription, desiredPages: input.desiredPages, desiredSections: input.desiredSections,
-        primaryColor: input.primaryColor, secondaryColor: input.secondaryColor, phone: input.phone, email: input.email,
-        address: input.address, tone: input.tone, openingHours: input.openingHours, description: input.description,
-      });
-      const { result, outcome } = await fillSiteTool(call, tool, schema, task, trace);
-      if (!result.success) throw customFailure(outcome, "website plan");
-      planPages = result.data.pages;
-      planStyle = result.data.style;
-      planColors = result.data.colors;
-      planFonts = result.data.fonts;
+    const customPlan = input.generationMode === "custom" ? await planCustomSite(call, input, trace) : undefined;
+    if (customPlan) {
+      planPages = customPlan.pages;
+      planStyle = customPlan.style;
+      planColors = customPlan.colors;
+      planFonts = customPlan.fonts;
     } else {
       const validator = planValidator(input);
       const task = `Plan the selected pages for this site. Use the user's desired section types where appropriate. Return only the selected pages, with Home required.\nDESIGN PREFERENCES:\n${JSON.stringify({
@@ -187,17 +167,9 @@ export async function buildGeneratedSite(
     for (const page of planPages) {
       const label = { "": "Home", about: "About", services: "Services", contact: "Contact" }[page.slug];
       let content: { type: string; props: Record<string, unknown> }[];
-      if (input.generationMode === "custom") {
-        emit({ message: `Designing ${label}…` });
-        const { schema, tool } = customPageContract(page.slug, page.sections.length, input);
-        const { result: parsed, outcome } = await fillSiteTool(call, tool, schema, customPageTask(page, {
-          businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
-          difference: input.difference, tone: input.tone, openingHours: input.openingHours,
-          phone: input.phone, email: input.email, address: input.address, description: input.description,
-          designDescription: input.designDescription, styleDirection: input.styleDirection, fontDirection: input.fontDirection, desiredPages: input.desiredPages,
-        }), { ...trace, page: page.slug || "home" });
-        if (!parsed.success) throw customFailure(outcome, `${label} page layout`);
-        content = buildCustomSections(parsed.data.sections, planColors);
+      if (customPlan) {
+        const plannedPage = customPlan.pages.find(({ slug }) => slug === page.slug)!;
+        content = await writeCustomPage(call, input, trace, customPlan, plannedPage, label, emit);
       } else {
         emit({ message: `Writing ${label}…` });
         const { slots, schema, task, tool } = pageFillContract(page as SitePlan["pages"][number]);
@@ -261,6 +233,7 @@ export async function buildGeneratedSite(
       throw accountingError;
     }
     if (cause instanceof SiteGenerationError) throw cause;
+    if (cause instanceof CustomSiteError) throw new SiteGenerationError(cause.message, isAdmin ? cause.issues : undefined);
     // Log a reference, never prompts, business information or provider errors.
     console.error("AI site generation failed", { requestId, generationId });
     const message = `Generation stopped. Check your drafts and contact your agency with reference ${generationId} before retrying.`;

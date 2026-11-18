@@ -315,11 +315,11 @@ describe("custom site generation", () => {
     return {
       style: "modern", colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
       fonts: { heading: "Lora", body: "Inter" },
-      pages: desiredPages.map((slug) => ({ slug, title: slug || "Home", seo, sections: [
+      pages: Object.fromEntries(desiredPages.map((slug) => [slug || "home", { title: slug || "Home", seo, sections: [
         { kind: "hero", goal: "Welcome visitors" },
         ...(slug === "" ? extras.map((kind) => ({ kind, goal: "Explain the options with supplied facts" })) : []),
         { kind: "footer", goal: "Contact details" },
-      ] })),
+      ] }])),
     };
   }
   const generatedSection = (heading: string) => ({
@@ -336,13 +336,10 @@ describe("custom site generation", () => {
     { type: "SaaS", pages: [...PAGE_SLUGS], extras: ["pricing", "faq", "gallery"] as GenerationInput["desiredSections"] },
   ])("assembles editable draft data for $type with pages $pages", async ({ type, pages: desiredPages, extras }) => {
     const layoutPlan = customPlan(desiredPages, extras);
-    let pageIndex = 0;
     mocks.request.mockImplementation((request) => {
       if (request.toolName === "plan_custom_site") return message("plan_custom_site", layoutPlan);
-      const { slug, sections } = layoutPlan.pages[pageIndex++];
-      return message("fill_custom_page", {
-        slug, sections: sections.map(({ goal }) => generatedSection(goal)),
-      });
+      const { current } = JSON.parse(request.messages[0].content.split("\n")[2]);
+      return message("fill_custom_section", { section: generatedSection(current.goal) });
     });
     const progress: string[] = [];
     const result = await buildGeneratedSite({
@@ -352,7 +349,7 @@ describe("custom site generation", () => {
     expect(result).toMatchObject({ siteId, pageId });
     expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId);
     expect(mocks.request.mock.calls.map(([request]) => request.toolName))
-      .toEqual(["plan_custom_site", ...desiredPages.map(() => "fill_custom_page")]);
+      .toEqual(["plan_custom_site", ...Array(desiredPages.length * 2 + extras.length).fill("fill_custom_section")]);
     for (const [request] of mocks.request.mock.calls) {
       expect(request).toMatchObject({
         action: "generate_site", tools: [{ strict: request.toolName === "plan_custom_site" }],
@@ -370,47 +367,52 @@ describe("custom site generation", () => {
     }[];
     expect(rows[0].props.columns[0].props.content[0].type).toBe("Heading");
     expect(save.p_theme).toMatchObject({ style: "modern", headingFont: "Lora", bodyFont: "Inter" });
-    expect(progress).toEqual(["Planning your site…", ...desiredPages.map((slug) =>
-      `Designing ${{ "": "Home", about: "About", services: "Services", contact: "Contact" }[slug]}…`),
-    "Finding photos…", "Saving unpublished drafts…"]);
+    expect(progress[0]).toBe("Planning your site…");
+    expect(progress.some((entry) => entry.startsWith("Designing Home"))).toBe(true);
+    expect(progress.slice(-2)).toEqual(["Finding photos…", "Saving unpublished drafts…"]);
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
   });
 
   it("repairs a plan with the original brief, actual tool ID and actionable issue; logs no generated values", async () => {
     const valid = customPlan([""], ["faq"]);
     const invalid = structuredClone(valid);
-    invalid.pages[0].sections[1] = { kind: "content", goal: "PRIVATE GENERATED VALUE" };
+    invalid.pages.home.sections[1] = { kind: "invalid", goal: "PRIVATE GENERATED VALUE" };
     const first = { ...message("plan_custom_site", invalid), _request_id: "req_first_attempt" };
     mocks.request.mockResolvedValueOnce(first)
       .mockResolvedValueOnce(message("plan_custom_site", valid))
-      .mockResolvedValueOnce(message("fill_custom_page", { slug: "", sections: valid.pages[0].sections.map(({ goal }) => generatedSection(goal)) }));
+      .mockResolvedValue(message("fill_custom_section", { section: generatedSection("Site section") }));
     await buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: [""], desiredSections: ["faq"] }, undefined, requestId);
     const [initial, assistant, feedback] = mocks.request.mock.calls[1][0].messages;
     expect(initial).toEqual(mocks.request.mock.calls[0][0].messages[0]);
     expect(initial.content).toContain('"desiredSections":["faq"]');
     expect(assistant).toEqual({ role: "assistant", content: first.content });
     expect(feedback.content[0]).toMatchObject({
-      type: "tool_result", tool_use_id: "toolu_test", is_error: true, content: expect.stringContaining('kind "faq"'),
+      type: "tool_result", tool_use_id: "toolu_test", is_error: true, content: expect.stringContaining("pages.home.sections.1.kind (invalid_value)"),
     });
     expect(console.info).toHaveBeenCalledWith("AI custom generation attempt", expect.objectContaining({
       requestId, generationId, attempt: 1, providerRequestId: "req_first_attempt", outcome: "validation_failed",
-      issues: [{ path: ["pages"], code: "custom" }],
+      issues: [expect.objectContaining({ path: "pages.home.sections.1.kind", code: "invalid_value", received: "string(7)" })],
     }));
     expect(console.info).toHaveBeenCalledWith("AI custom generation attempt", expect.objectContaining({ requestId, attempt: 2, outcome: "valid" }));
     expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain("PRIVATE GENERATED VALUE");
   });
 
   it("does not save any drafts when a later page still fails after one repair", async () => {
-    const good = [generatedSection("Welcome"), generatedSection("Contact")];
+    const good = generatedSection("Welcome");
     const invalid = structuredClone(good);
-    invalid[0].rows[0].columns[0].elements = [{ type: "Heading", text: "Malformed", level: "h9", align: "left" }];
+    invalid.rows[0].columns[0].elements = [{ type: "Heading", text: "Malformed", level: "h9", align: "left" }];
     mocks.request.mockResolvedValueOnce(message("plan_custom_site", customPlan(["", "services"])))
-      .mockResolvedValueOnce(message("fill_custom_page", { slug: "", sections: good }))
-      .mockResolvedValueOnce(message("fill_custom_page", { slug: "services", sections: invalid }))
-      .mockResolvedValueOnce(message("fill_custom_page", { slug: "services", sections: invalid }));
+      .mockResolvedValueOnce(message("fill_custom_section", { section: good }))
+      .mockResolvedValueOnce(message("fill_custom_section", { section: good }))
+      .mockResolvedValueOnce(message("fill_custom_section", { section: invalid }))
+      .mockResolvedValueOnce(message("fill_custom_section", { section: good }))
+      .mockResolvedValueOnce(message("fill_custom_section", { section: invalid }));
     await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: ["", "services"] }))
-      .rejects.toThrow("Services page layout failed validation. Try more focused design guidance. No drafts were changed.");
-    expect(mocks.request).toHaveBeenCalledTimes(4);
+      .rejects.toMatchObject({ message: expect.stringContaining("Services section 1 failed validation"), validationIssues: undefined });
+    expect(mocks.request).toHaveBeenCalledTimes(6);
+    expect(mocks.request.mock.calls[5][0].messages[2].content[0]).toMatchObject({
+      type: "tool_result", content: expect.stringContaining("section.rows.0.columns.0.elements.0.level (invalid_value)"),
+    });
     expect(mocks.rpc).not.toHaveBeenCalledWith("replace_ai_site_drafts_with_business", expect.anything());
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
@@ -424,5 +426,15 @@ describe("custom site generation", () => {
     expect(repair).toEqual([{ role: "user", content: expect.stringContaining('"desiredPages":[""]') }]);
     expect(repair[0].content).toContain("previous response was incomplete");
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
+  });
+
+  it("exposes at most five sanitized validation issues to super admins only", async () => {
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
+    mocks.request.mockResolvedValue(message("plan_custom_site", {
+      style: "invalid", colors: { primary: "bad", secondary: "bad", background: "bad", text: "bad" },
+      fonts: { heading: "bad", body: "bad" }, pages: {},
+    }));
+    await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: [""] }))
+      .rejects.toMatchObject({ validationIssues: Array(5).fill(expect.objectContaining({ code: expect.any(String), message: expect.any(String) })) });
   });
 });

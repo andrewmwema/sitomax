@@ -6,9 +6,11 @@ import { SITE_GENERATION_MODEL } from "../lib/ai/models.ts";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const generation = args.has("--generation");
+const custom = args.has("--custom");
 const dryRun = args.has("--dry-run");
 let apiKey;
 let vite;
+const redact = (value) => (apiKey ? value.replaceAll(apiKey, "[redacted]") : value).replace(/\bsk-ant-[\w-]+/g, "[redacted]");
 try {
   loadEnvFile(`${root}.env.local`);
   apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -16,7 +18,7 @@ try {
   const sdk = dryRun ? null : new Anthropic({
     apiKey, baseURL: "https://api.anthropic.com", maxRetries: 0, timeout: 120_000,
   });
-  if (!generation) {
+  if (!generation && !custom) {
     const params = { model: SITE_GENERATION_MODEL, max_tokens: 32, thinking: { type: "between_tools" },
       messages: [{ role: "user", content: "Say hi" }] };
     console.log(JSON.stringify(params));
@@ -35,10 +37,13 @@ try {
     const business = JSON.stringify({ businessName: "Example Plumbing", businessType: "Plumber",
       city: "Example City", services: ["Pipe repairs"], style: "modern" });
     const prompt = (task) => `${task}\nBUSINESS DATA:\n${business}`;
+    const { CUSTOM_LAYOUT_CONTRACT, customPlanContract, customSiteSectionContract, customSystemPrompt } =
+      custom ? await vite.ssrLoadModule("/lib/ai/custom-layout.ts") : {};
+    const { customSiteMaxTokens, planCustomSite, writeCustomPage } = custom ? await vite.ssrLoadModule("/lib/ai/custom-site.ts") : {};
     async function send(tool, messages) {
       const params = anthropicRequestParams(SITE_GENERATION_MODEL, {
-        maxTokens: tool.name === "plan_site" ? 6000 : 16000,
-        system: SITE_SYSTEM_PROMPT, cacheTtl: "5m", toolName: tool.name, tools: [tool], messages,
+        maxTokens: custom ? customSiteMaxTokens(tool.name) : tool.name === "plan_site" ? 6000 : 16000,
+        system: custom ? customSystemPrompt() : SITE_SYSTEM_PROMPT, cacheTtl: "5m", toolName: tool.name, tools: [tool], messages,
       });
       if (!sdk) {
         console.log(JSON.stringify({ model: params.model, tool: tool.name, strict: tool.strict,
@@ -48,28 +53,56 @@ try {
       }
       return sdk.messages.create(params);
     }
-    const planMessages = [{ role: "user", content: prompt("Plan the complete site.") }];
-    const plan = sdk ? (await runSiteTool(send, PLAN_SITE_TOOL, planSchema, planMessages)).result : null;
-    if (plan && !plan.success) throw new Error("Generated plan failed local schema validation.");
-    if (!sdk) await send(PLAN_SITE_TOOL, planMessages);
-    const pages = plan ? plan.data.pages : PAGE_SLUGS.map((slug) => ({
-      slug, title: slug || "Home", sections: ["Hero", "Services", "Footer"].map((blockType) => ({
-        blockType, designId: aiCatalog.find((design) => design.blockType === blockType && design.styles.includes("modern")).id,
-      })),
-    }));
-    pages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
-    for (const page of pages) {
-      const { tool, task, schema } = pageFillContract(page);
+    if (custom) {
+      const desiredPages = args.has("--home-only") ? [""] : [...PAGE_SLUGS];
+      const input = {
+        ...JSON.parse(business), difference: "", style: "auto", styleDirection: "auto", fontDirection: "auto",
+        designDescription: "", desiredPages, desiredSections: args.has("--home-only") ? [] : ["faq", "pricing"],
+        primaryColor: "", secondaryColor: "", phone: "", email: "", address: "", tone: "", openingHours: "", description: "",
+      };
+      const trace = {
+        requestId: crypto.randomUUID(), contract: CUSTOM_LAYOUT_CONTRACT,
+        inspect({ attempt, issues, input: raw }) {
+          for (const { path, code, message } of issues) {
+            const value = path.reduce((current, key) => current && Object.hasOwn(current, key) ? current[key] : undefined, raw);
+            console.log(JSON.stringify({ attempt, path, code, message: redact(message), received: redact(JSON.stringify(value) ?? "(missing)").slice(0, 180) }));
+          }
+        },
+      };
       if (!sdk) {
-        await send(tool, [{ role: "user", content: prompt(task) }]);
-      } else if (!(await fillPage(send, tool, schema, prompt(task))).success) {
-        throw new Error(`Page ${page.title} failed validation after repair.`);
+        await send(customPlanContract(input).tool, []);
+        if (!args.has("--plan-only")) await send(customSiteSectionContract(input).tool, []);
+      } else {
+        const plan = await planCustomSite(send, input, trace);
+        for (const page of args.has("--plan-only") ? [] : plan.pages) {
+          const layout = await writeCustomPage(send, input, trace, plan, page, page.slug || "home", () => {});
+          console.log(`Validated ${page.slug || "home"}: ${layout.length} sections (${page.sections.map(({ kind }) => kind).join(", ")}).`);
+        }
+        console.log(`Validated custom ${args.has("--plan-only") ? "plan" : "generation"}: ${desiredPages.map((slug) => slug || "home").join(", ")} (no database writes).`);
       }
+    } else {
+      const planMessages = [{ role: "user", content: prompt("Plan the complete site.") }];
+      const plan = sdk ? (await runSiteTool(send, PLAN_SITE_TOOL, planSchema, planMessages)).result : null;
+      if (plan && !plan.success) throw new Error("Generated plan failed local schema validation.");
+      if (!sdk) await send(PLAN_SITE_TOOL, planMessages);
+      const pages = plan ? plan.data.pages : PAGE_SLUGS.map((slug) => ({
+        slug, title: slug || "Home", sections: ["Hero", "Services", "Footer"].map((blockType) => ({
+          blockType, designId: aiCatalog.find((design) => design.blockType === blockType && design.styles.includes("modern")).id,
+        })),
+      }));
+      pages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
+      for (const page of pages) {
+        const { tool, task, schema } = pageFillContract(page);
+        if (!sdk) {
+          await send(tool, [{ role: "user", content: prompt(task) }]);
+        } else if (!(await fillPage(send, tool, schema, prompt(task))).success) {
+          throw new Error(`Page ${page.title} failed validation after repair.`);
+        }
+      }
+      if (sdk) console.log("Validated one plan and four generated pages (no database writes).");
     }
-    if (sdk) console.log("Validated one plan and four generated pages (no database writes).");
   }
 } catch (error) {
-  const redact = (value) => (apiKey ? value.replaceAll(apiKey, "[redacted]") : value).replace(/\bsk-ant-[\w-]+/g, "[redacted]");
   console.error(JSON.stringify({
     status: error instanceof Anthropic.APIError ? error.status ?? null : null,
     error: {

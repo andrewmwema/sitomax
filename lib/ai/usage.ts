@@ -19,12 +19,13 @@ async function authorizeAccount(accountId: string) {
 export async function checkLimit(
   accountId: string,
   action: AiAction,
-  options: { siteId?: string; largeRewrite?: boolean; generationId?: string } = {},
+  options: { siteId?: string; largeRewrite?: boolean; generationId?: string; customGeneration?: true } = {},
 ): Promise<AiReservation> {
   const parsed = z.object({
     accountId: z.uuid(), action: z.enum(AI_ACTIONS), siteId: z.uuid().optional(),
     largeRewrite: z.boolean().optional(),
     generationId: z.uuid().optional(),
+    customGeneration: z.literal(true).optional(),
   }).parse({ accountId, action, ...options });
   const user = await authorizeAccount(parsed.accountId);
 
@@ -32,10 +33,12 @@ export async function checkLimit(
   assertPricedModel(model);
   // The DB rechecks membership/site ownership and atomically reserves the quota.
   if (parsed.generationId && parsed.action !== "generate_site") throw new Error("A generation can only contain site-generation calls.");
+  if (parsed.customGeneration && !parsed.generationId) throw new Error("Custom section calls require a site generation.");
   const { data: id, error: reserveError } = await createAdminClient().rpc(parsed.generationId ? "reserve_ai_generation_call" : "reserve_ai_request", {
     p_user_id: user.id, p_account_id: parsed.accountId, p_action: parsed.action,
     p_model: model, p_site_id: parsed.siteId ?? null,
     ...(parsed.generationId ? { p_generation_id: parsed.generationId } : {}),
+    ...(parsed.customGeneration ? { p_custom: true } : {}),
   });
   if (reserveError) {
     if (reserveError.code === "P0001" || reserveError.code === "42501") throw new Error(reserveError.message);

@@ -17,7 +17,8 @@ const sectionLabels: Record<(typeof DESIRED_SECTION_TYPES)[number], string> = {
 };
 const eventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("progress"), message: z.string() }),
-  z.object({ type: z.literal("error"), message: z.string() }),
+  z.object({ type: z.literal("error"), message: z.string(),
+    issues: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])), code: z.string(), message: z.string() })).max(5).optional() }),
   z.object({ type: z.literal("result"), siteId: z.uuid(), pageId: z.uuid(), warnings: z.array(z.string()) }),
 ]);
 
@@ -45,6 +46,7 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [issues, setIssues] = useState<NonNullable<Extract<z.infer<typeof eventSchema>, { type: "error" }>["issues"]>>([]);
   const [messages, setMessages] = useState<string[]>([]);
   const [result, setResult] = useState<{ pageId: string; warnings: string[] } | null>(null);
   const set = <K extends keyof GenerationInput>(key: K, value: GenerationInput[K]) => {
@@ -58,7 +60,7 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
   const generate = async () => {
     const parsed = generationInputSchema.safeParse(values);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your details."); return; }
-    setBusy(true); setError(""); setMessages(["Planning your site…"]);
+    setBusy(true); setError(""); setIssues([]); setMessages(["Planning your site…"]);
     let requestId: string | null = null;
     try {
       const response = await fetch("/api/ai/generate-site", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed.data) });
@@ -68,7 +70,7 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
       let buffer = "", complete = false;
       const receive = (line: string) => {
         const event = eventSchema.parse(JSON.parse(line));
-        if (event.type === "error") throw new Error(event.message);
+        if (event.type === "error") { setIssues(event.issues ?? []); throw new Error(event.message); }
         if (event.type === "progress") setMessages((previous) => previous.at(-1) === event.message ? previous : [...previous, event.message]);
         if (event.type === "result") {
           complete = true;
@@ -246,7 +248,12 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
       <p className="font-medium">Building your draft site. Keep this page open.</p>
       <ul className="mt-2 space-y-1 text-zinc-600">{messages.map((message, index) => <li key={index}>{message}</li>)}</ul>
     </div> : null}
-    {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
+    {error ? <div role="alert" className="mt-4 text-sm text-red-700">
+      <p>{error}</p>
+      {issues.length ? <ul className="mt-2 list-disc pl-5">
+        {issues.map(({ path, code, message }, index) => <li key={index}>{path.join(".") || "(root)"} ({code}): {message}</li>)}
+      </ul> : null}
+    </div> : null}
     <div className="mt-6 flex gap-3">
       {step > 0 ? <button type="button" disabled={busy} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40" onClick={() => setStep(0)}>Back</button> : null}
       <button disabled={busy} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{busy ? "Building…" : step === 0 ? "Continue" : "Build draft site"}</button>
