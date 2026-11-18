@@ -5,12 +5,10 @@ import { SITE_GENERATION_MODEL, SMALL_EDIT_MODEL } from "./models";
 const mocks = vi.hoisted(() => ({
   create: vi.fn(), constructor: vi.fn(), check: vi.fn(), record: vi.fn(), release: vi.fn(),
 }));
-vi.mock("@anthropic-ai/sdk", () => {
-  class APIError extends Error {
-    constructor(public status?: number) { super("Test provider error"); }
-  }
+vi.mock("@anthropic-ai/sdk", async (importOriginal) => {
+  const { default: SDKOriginal } = await importOriginal<typeof import("@anthropic-ai/sdk")>();
   class SDK {
-    static APIError = APIError;
+    static APIError = SDKOriginal.APIError;
     messages = { create: mocks.create };
     constructor(options: unknown) { mocks.constructor(options); }
   }
@@ -81,16 +79,38 @@ describe("metered AI entry point", () => {
       inputTokens: 30, outputTokens: 10, cacheReadTokens: 100, cacheWrite5mTokens: 100, cacheWrite1hTokens: 50,
     });
   });
-  it("passes strict tool schemas and the shared generation reservation through the metered entry point", async () => {
+  it("uses automatic tool choice for Sonnet without dropping strict schemas, caching or metering", async () => {
     const generationId = "00000000-0000-4000-8000-000000000002";
     mocks.check.mockResolvedValueOnce({ id, model: SITE_GENERATION_MODEL });
     mocks.create.mockResolvedValueOnce({ model: SITE_GENERATION_MODEL, usage: { input_tokens: 10, output_tokens: 10 } });
     const tools = [{ name: "plan_site", strict: true as const, input_schema: { type: "object" as const, properties: {}, additionalProperties: false } }];
-    await requestAi({ ...input, action: "generate_site", generationId, tools, toolName: "plan_site" });
+    await requestAi({ ...input, action: "generate_site", generationId, tools, toolName: "plan_site", system: "Instructions", cacheTtl: "5m" });
     expect(mocks.check).toHaveBeenCalledWith(id, "generate_site", expect.objectContaining({ generationId }));
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
-      tools, tool_choice: { type: "tool", name: "plan_site", disable_parallel_tool_use: true },
+      tools, tool_choice: { type: "auto", disable_parallel_tool_use: true },
+      thinking: { type: "between_tools" },
+      messages: [{ role: "user", content: expect.stringContaining("Call the plan_site tool exactly once") }],
+      system: [{ type: "text", text: "Instructions", cache_control: { type: "ephemeral", ttl: "5m" } }],
     }));
+  });
+  it("retains forced tool choice for Haiku", async () => {
+    const tools = [{ name: "rewrite_text", strict: true as const, input_schema: { type: "object" as const } }];
+    await requestAi({ ...input, tools, toolName: "rewrite_text" });
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
+      model: SMALL_EDIT_MODEL, tool_choice: { type: "tool", name: "rewrite_text", disable_parallel_tool_use: true },
+    }));
+  });
+  it("logs provider type, message and both references without credentials or raw SDK errors", async () => {
+    const message = 'tool_choice: type "tool" and "any" are not supported for this model.';
+    const cause = Anthropic.APIError.generate(400, {
+      type: "error", error: { type: "invalid_request_error", message }, unused: "local-test-not-a-key",
+    }, undefined, new Headers({ "request-id": "req_test" }));
+    mocks.create.mockRejectedValueOnce(cause);
+    await expect(requestAi(input)).rejects.toThrow("AI request failed");
+    expect(console.error).toHaveBeenCalledWith("Anthropic request failed", expect.objectContaining({
+      status: 400, type: "invalid_request_error", message, requestId: id, providerRequestId: "req_test",
+    }));
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("local-test-not-a-key");
   });
   it("rejects unpriced caching before calling, and leaves unknown response models held", async () => {
     await expect(requestAi({ ...input, system: "Instructions", cacheTtl: "5m" })).rejects.toThrow("caching");

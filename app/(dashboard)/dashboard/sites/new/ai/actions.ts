@@ -5,6 +5,7 @@ import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { buildGeneratedSite, SiteGenerationError } from "@/lib/ai/generate-site";
+import { AiProviderError, aiErrorMessage } from "@/lib/ai/provider-error";
 
 export async function generateSite(raw: unknown) {
   try {
@@ -15,8 +16,9 @@ export async function generateSite(raw: unknown) {
   } catch (cause) {
     unstable_rethrow(cause);
     console.error("Site generation action failed", { type: cause instanceof Error ? cause.name : "Unknown" });
-    return { status: "error" as const, message: cause instanceof SiteGenerationError ? cause.message
-      : cause instanceof z.ZodError ? "Check the business details and replacement confirmation." : "Generation failed. Check your drafts before retrying." };
+    const fallback = cause instanceof SiteGenerationError || cause instanceof AiProviderError ? cause.message
+      : cause instanceof z.ZodError ? "Check the business details and replacement confirmation." : "Generation failed. Check your drafts before retrying.";
+    return { status: "error" as const, message: await aiErrorMessage(cause, fallback) };
   }
 }
 

@@ -44,6 +44,15 @@ the requested content to the configured AI provider; each attempt is metered.
 Review generated content and placeholders before accepting or publishing it.
 AI-created sections use image placeholders that can be replaced in the editor.
 
+To diagnose the provider locally with a configured API key, run
+`node scripts/test-anthropic.mjs` for a small message using the site's model.
+Add `--generation` to test planning and four page requests with synthetic
+details and no database writes (this uses provider credits). Add `--dry-run`
+to inspect the request without sending it, or use `--legacy` to reproduce the
+old forced-tool planning request. The script omits request messages and keys.
+Provider errors are logged centrally and sanitized details are shown only to
+super admins.
+
 ## Analytics
 
 Apply `0014_analytics_reporting.sql` after the preceding migrations and set

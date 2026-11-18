@@ -5,6 +5,8 @@ import { z } from "zod";
 import { AI_ACTIONS, modelForAction, SITE_GENERATION_MODEL } from "./models";
 import { assertPricedModel, type TokenUsage } from "./pricing";
 import { checkLimit, recordUsage, releaseFailedRequest } from "./usage";
+import { anthropicRequestParams } from "./request-params";
+import { AiProviderError, providerFailure } from "./provider-error";
 
 let client: Anthropic | undefined;
 function getClient(): Anthropic {
@@ -52,31 +54,25 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
   });
   let response: Anthropic.Message;
   try {
-    response = await sdk.messages.create({
-      model: reservation.model, max_tokens: input.maxTokens, messages: input.messages,
-      system: input.cacheTtl
-        ? [{ type: "text", text: input.system!, cache_control: { type: "ephemeral", ttl: input.cacheTtl } }]
-        : input.system,
-      ...(input.tools ? {
-        tools: input.tools,
-        tool_choice: { type: "tool" as const, name: input.toolName!, disable_parallel_tool_use: true },
-      } : {}),
-    });
+    response = await sdk.messages.create(anthropicRequestParams(reservation.model, input));
   } catch (cause) {
-    const status = cause instanceof Anthropic.APIError ? cause.status : undefined;
+    const details = providerFailure(cause);
+    const status = details?.status;
+    const requestError = (message: string) => details ? new AiProviderError(message, details) : new Error(message);
+    if (details) console.error("Anthropic request failed", {
+      ...details, requestId: reservation.id, generationId: input.generationId, model: reservation.model, action: input.action,
+    });
     if (status === undefined || ![400, 401, 403, 404, 412, 413, 422, 429, 431].includes(status)) {
       // A timeout or server error may have occurred after billable generation.
       console.error("AI request outcome needs reconciliation", { requestId: reservation.id, status });
-      throw new Error(`The AI request outcome is uncertain. Contact your agency with request ${reservation.id} before retrying.`);
+      throw requestError(`The AI request outcome is uncertain. Contact your agency with request ${reservation.id} before retrying.`);
     }
     try { await releaseFailedRequest(reservation); }
     catch {
       console.error("Failed AI request needs reservation reconciliation", { requestId: reservation.id });
-      throw new Error(`The AI request failed and its reservation could not be released. Contact your agency with request ${reservation.id}.`);
+      throw requestError(`The AI request failed and its reservation could not be released. Contact your agency with request ${reservation.id}.`);
     }
-    // Avoid exposing vendor names, API credentials or prompt-bearing SDK errors.
-    console.error("AI provider request failed", { requestId: reservation.id, status });
-    throw new Error("The AI request failed. Please retry.");
+    throw requestError("The AI request failed. Please retry.");
   }
 
   try {

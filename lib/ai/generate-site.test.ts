@@ -17,6 +17,7 @@ import { buildGeneratedSite, safeDefaultSection } from "./generate-site";
 import { aiCatalog, blockFields, blockSchemas, GENERATION_TOOLS, planSchema } from "./site-schemas";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
+import { strictTool } from "./strict-tool";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
@@ -195,6 +196,13 @@ describe("catalog site generation", () => {
       expect(schema.additionalProperties).toBe(false);
       expect(Object.keys(schema.properties ?? {})).toEqual(Object.keys(blockFields(type)).filter((key) => key !== "design"));
     }
-    expect(() => JSON.stringify(GENERATION_TOOLS)).not.toThrow();
+    const schema = z.strictObject({ items: z.array(z.string()).length(4) });
+    const { input_schema } = strictTool("test_tool", "Test schema", schema);
+    expect(input_schema).toMatchObject({
+      type: "object", additionalProperties: false,
+      properties: { items: { type: "array", description: expect.stringContaining("minItems: 4") } },
+    });
+    expect(input_schema).not.toHaveProperty("properties.items.maxItems");
+    expect(schema.safeParse({ items: ["one"] }).success).toBe(false);
   });
 });

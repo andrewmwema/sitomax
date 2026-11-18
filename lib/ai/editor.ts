@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Field } from "@puckeditor/core";
-import type { Tool } from "@anthropic-ai/sdk/resources/messages";
+import { strictTool } from "./strict-tool";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { businessSchema, emptyBusiness } from "@/lib/business";
@@ -108,8 +108,7 @@ function prepareSection(raw: unknown) {
 }
 
 function makeTool(name: string, schema: z.ZodType) {
-  return { name, description: "Return the requested result.", strict: true,
-    input_schema: { ...z.toJSONSchema(schema), type: "object" } } satisfies Tool;
+  return strictTool(name, "Return the requested result.", schema);
 }
 
 async function requestValidated<T>(schema: z.ZodType<T>, request: Parameters<typeof requestAi>[0] & { toolName: string }) {

@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { Field } from "@puckeditor/core";
-import type { Tool } from "@anthropic-ai/sdk/resources/messages";
+import { strictTool } from "./strict-tool";
 import { puckConfig } from "@/lib/puck/config";
 import { sectionCatalog } from "@/lib/sections/catalog";
 import { buildDesignItem } from "@/lib/sections/library";
@@ -96,15 +96,12 @@ export const fillSchema = z.strictObject({
   })))).min(2).max(7),
 });
 
-function tool(name: string, schema: z.ZodType) {
-  const json = z.toJSONSchema(schema);
-  return { name, description: `Return the validated ${name === "plan_site" ? "site plan" : "page content"}.`,
-    strict: true, input_schema: { ...json, type: "object" } } satisfies Tool;
-}
-
 // Keep tools identical between planning, parallel pages and validation retries:
 // tool definitions precede the cached system prompt in the provider's cache key.
-export const GENERATION_TOOLS = [tool("plan_site", planSchema), tool("fill_page", fillSchema)];
+export const GENERATION_TOOLS = [
+  strictTool("plan_site", "Return the validated site plan.", planSchema),
+  strictTool("fill_page", "Return the validated page content.", fillSchema),
+];
 
 export function defaultSection(designId: string) {
   const design = aiCatalog.find((entry) => entry.id === designId);

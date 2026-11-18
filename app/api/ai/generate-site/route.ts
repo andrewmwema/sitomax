@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { buildGeneratedSite, SiteGenerationError } from "@/lib/ai/generate-site";
+import { AiProviderError, aiErrorMessage } from "@/lib/ai/provider-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -27,9 +28,10 @@ export async function POST(request: Request) {
         send({ type: "result", ...result });
       } catch (cause) {
         console.error("Streamed site generation stopped", { type: cause instanceof Error ? cause.name : "Unknown" });
-        send({ type: "error", message: cause instanceof SiteGenerationError ? cause.message
+        const fallback = cause instanceof SiteGenerationError || cause instanceof AiProviderError ? cause.message
           : cause instanceof z.ZodError ? "Check the business details and replacement confirmation."
-            : "Generation stopped. Check your drafts and contact your agency before retrying." });
+            : "Generation stopped. Check your drafts and contact your agency before retrying.";
+        send({ type: "error", message: await aiErrorMessage(cause, fallback) });
       } finally {
         if (!disconnected) controller.close();
       }

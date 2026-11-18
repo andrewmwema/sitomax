@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ build: vi.fn(), revalidate: vi.fn() }));
+import Anthropic from "@anthropic-ai/sdk";
+const mocks = vi.hoisted(() => ({ build: vi.fn(), revalidate: vi.fn(), rpc: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc: mocks.rpc }) }));
 vi.mock("@/lib/ai/generate-site", () => ({ buildGeneratedSite: mocks.build, SiteGenerationError: class extends Error {} }));
+import { AiProviderError, providerFailure } from "@/lib/ai/provider-error";
 import { POST } from "./route";
 
 beforeEach(() => { vi.resetAllMocks(); vi.spyOn(console, "error").mockImplementation(() => {}); });
@@ -41,5 +44,24 @@ describe("generation progress transport", () => {
     expect(JSON.parse(events)).toMatchObject({ type: "error", message: expect.stringContaining("Check your drafts") });
     expect(events).not.toContain("private provider details");
     expect(mocks.revalidate).not.toHaveBeenCalled();
+  });
+  it.each([true, false])("only sends provider details when the signed-in actor is a super admin: %s", async (isAdmin) => {
+    const details = providerFailure(Anthropic.APIError.generate(400, {
+      type: "error", error: { type: "invalid_request_error", message: "tool_choice is unsupported." },
+    }, undefined, new Headers()))!;
+    mocks.rpc.mockResolvedValue({ data: isAdmin, error: null });
+    mocks.build.mockRejectedValue(new AiProviderError("Generation stopped.", details));
+    const event = JSON.parse(await (await POST(request())).text());
+    expect(event.type).toBe("error");
+    expect(event.message).toBe(isAdmin
+      ? "Generation stopped. Anthropic HTTP 400 (invalid_request_error): tool_choice is unsupported."
+      : "Generation stopped.");
+    expect(mocks.rpc).toHaveBeenCalledWith("is_super_admin");
+  });
+  it("withholds provider diagnostics that may echo submitted prompt data", () => {
+    const details = providerFailure(Anthropic.APIError.generate(400, {
+      type: "error", error: { type: "invalid_request_error", message: "messages.0.content: private business data" },
+    }, undefined, new Headers()))!;
+    expect(details.message).not.toContain("private business data");
   });
 });

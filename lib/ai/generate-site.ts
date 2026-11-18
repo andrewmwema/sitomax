@@ -11,6 +11,7 @@ import { businessSchema } from "@/lib/business";
 import { isReservedForAccountSite } from "@/lib/reserved-subdomains";
 import { contrastRatio } from "@/lib/theme/presets";
 import { requestAi } from "./client";
+import { AiProviderError } from "./provider-error";
 import { beginSiteGeneration, finishSiteGeneration } from "./usage";
 import { createGenerationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
 import { aiCatalog, blockFields, blockSchemas, defaultSection, GENERATION_TOOLS, planSchema, type SitePlan } from "./site-schemas";
@@ -239,6 +240,8 @@ export async function buildGeneratedSite(
     if (cause instanceof SiteGenerationError) throw cause;
     // Log a reference, never prompts, business information or provider errors.
     console.error("AI site generation failed", { generationId });
-    throw new SiteGenerationError(`Generation stopped. Check your drafts and contact your agency with reference ${generationId} before retrying.`);
+    const message = `Generation stopped. Check your drafts and contact your agency with reference ${generationId} before retrying.`;
+    if (cause instanceof AiProviderError) throw new AiProviderError(message, cause.details);
+    throw new SiteGenerationError(message);
   }
 }
