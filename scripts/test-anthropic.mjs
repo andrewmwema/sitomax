@@ -5,9 +5,8 @@ import { SITE_GENERATION_MODEL } from "../lib/ai/models.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = new Set(process.argv.slice(2));
-const generation = args.has("--generation") || args.has("--legacy");
+const generation = args.has("--generation");
 const dryRun = args.has("--dry-run");
-const legacy = args.has("--legacy");
 let apiKey;
 let vite;
 try {
@@ -30,27 +29,21 @@ try {
     const { createServer } = await import("vite");
     vite = await createServer({ root, configFile: `${root}vitest.config.ts`, server: { middlewareMode: true, ws: false, watch: null } });
     const { anthropicRequestParams } = await vite.ssrLoadModule("/lib/ai/request-params.ts");
-    const { GENERATION_TOOLS, planSchema, fillSchema } = await vite.ssrLoadModule("/lib/ai/site-schemas.ts");
+    const { aiCatalog, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema } = await vite.ssrLoadModule("/lib/ai/site-schemas.ts");
     const { SITE_SYSTEM_PROMPT } = await vite.ssrLoadModule("/lib/ai/site-prompt.ts");
-    const { z } = await import("zod");
     const business = JSON.stringify({ businessName: "Example Plumbing", businessType: "Plumber",
       city: "Example City", services: ["Pipe repairs"], style: "modern" });
-    async function send(toolName, task, maxTokens) {
+    async function send(tool, task, maxTokens) {
+      const toolName = tool.name;
       const content = `${task}\nBUSINESS DATA:\n${business}`;
       const params = anthropicRequestParams(SITE_GENERATION_MODEL, {
         maxTokens, system: SITE_SYSTEM_PROMPT, cacheTtl: "5m", toolName,
-        tools: GENERATION_TOOLS, messages: [{ role: "user", content }],
+        tools: [tool], messages: [{ role: "user", content }],
       });
-      if (legacy) {
-        delete params.thinking;
-        params.messages = [{ role: "user", content }];
-        params.tool_choice = { type: "tool", name: toolName, disable_parallel_tool_use: true };
-        params.tools = GENERATION_TOOLS.map((tool, i) => ({
-          ...tool, input_schema: { ...z.toJSONSchema(i === 0 ? planSchema : fillSchema), type: "object" },
-        }));
-      }
       const headers = { "anthropic-version": "2023-06-01" };
-      console.log(JSON.stringify({ ...params, messages: "[omitted]", temperature: "unset", top_p: "unset", headers, betaHeaders: [] }, null, 2));
+      console.log(JSON.stringify({ model: params.model, tool: toolName, strict: tool.strict,
+        schemaBytes: Buffer.byteLength(JSON.stringify(tool.input_schema)), maxTokens: params.max_tokens,
+        cacheTtl: params.system[0].cache_control.ttl }));
       if (!sdk) return;
       const result = await sdk.messages.create(params, { headers });
       const calls = result.content.filter((block) => block.type === "tool_use");
@@ -60,15 +53,19 @@ try {
       console.log(JSON.stringify({ model: result.model, stop_reason: result.stop_reason, tool: toolName, usage: result.usage }));
       return calls[0].input;
     }
-    const plan = await send("plan_site", "Plan the complete site.", 6000);
-    if (plan && !legacy) {
-      const validated = planSchema.parse(plan);
-      for (const page of validated.pages) {
-        const pageResult = await send("fill_page", `Fill this page in exactly the planned section order:\n${JSON.stringify(page)}`, 16000);
-        fillSchema.parse(pageResult);
-      }
-      console.log("Validated one plan and four generated pages (no database writes).");
+    const plan = await send(PLAN_SITE_TOOL, "Plan the complete site.", 6000);
+    const pages = sdk ? planSchema.parse(plan).pages : PAGE_SLUGS.map((slug) => ({
+      slug, title: slug || "Home", sections: ["Hero", "Services", "Footer"].map((blockType) => ({
+        blockType, designId: aiCatalog.find((design) => design.blockType === blockType && design.styles.includes("modern")).id,
+      })),
+    }));
+    pages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
+    for (const page of pages) {
+      const { tool, task, schema } = pageFillContract(page);
+      const result = await send(tool, task, 16000);
+      if (sdk && !schema.safeParse(result).success) throw new Error(`Generated page failed local schema validation (${page.slug || "home"}).`);
     }
+    if (sdk) console.log("Validated one plan and four generated pages (no database writes).");
   }
 } catch (error) {
   const redact = (value) => (apiKey ? value.replaceAll(apiKey, "[redacted]") : value).replace(/\bsk-ant-[\w-]+/g, "[redacted]");

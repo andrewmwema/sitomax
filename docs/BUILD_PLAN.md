@@ -593,13 +593,13 @@ Implemented foundation:
 Build the AI site generator using the section design catalog (lib/sections/catalog.ts) and the block schemas:
 1. Wizard (dashboard → New site → "Build with AI", and also available to account owners for their own site): business name, type, city/area, services (tags), what makes them different, style preference (Classic / Modern / let AI choose), colors (optional), phone, email, address, and a free-text "Describe your business" box.
 2. Server action generateSite, 2 steps with Claude tool use (strict JSON schemas, never free-form HTML):
-   Step 1, plan (Sonnet): returns { style, theme colors, fonts, pages: [{ slug, title, sections: [{ designId, purpose }] }], seo: {...} }. designId must be one of the catalog design IDs (pass the catalog's IDs, names and descriptions in the system prompt).
-   Step 2, fill each page in parallel (Sonnet): for each section returns props that match that block's schema exactly. Give the model each block's field schema as the tool input_schema.
-   Use prompt caching for the long, unchanging system prompt (block schemas + catalog + writing rules).
+   Step 1, plan (Sonnet): returns { style, theme colors, fonts, pages: [{ slug, title, sections: [{ blockType, designId }] }], seo: {...} }. Each pair must match a catalog entry; the plan has no props.
+   Step 2, fill pages sequentially (Sonnet): one strict tool has a numbered slot for each planned section and only the props schema for that block. Layout and variants are taken from the preset.
+   Keep the cache marker on the shared system prompt (catalog + writing rules). Anthropic caches tools before the system prompt, so different page schemas may miss the cache.
 3. Writing rules in the system prompt: professional, specific and confident copy for a local business; no invented facts. Never invent reviews, ratings, license numbers, years in business or awards; use clearly marked placeholders like [Add a real customer review] instead. Write SEO titles under 60 characters and descriptions under 160.
 4. Validate every AI response with zod against the block schemas; retry once with the validation errors if invalid; sanitize all rich text with the same DOMPurify rules as Phase 4b. If it still fails, fall back to the design's default props for that section.
 5. Images: for each image field, search Unsplash with a query the AI provides (e.g. "plumber kitchen sink"), store the photo URL plus photographer credit (required by Unsplash), and set alt text. If no key is set, use placeholders.
-6. Save everything as drafts (draft_data), never publish automatically. Stream progress to the UI with steps: "Planning your site…", "Designing Home…", "Writing Services…", "Finding photos…", then open the editor.
+6. Save everything as drafts (draft_data), never publish automatically. Stream progress to the UI with steps: "Planning your site…", "Writing Home…", "Writing Services…", "Finding photos…", then open the editor.
 7. Record usage and enforce limits from Prompt A.
 ```
 
@@ -629,9 +629,9 @@ Build the AI site generator using the section design catalog (lib/sections/catal
 - `generateSite` and the streamed POST transport use the same server-only
   pipeline. All planning/page/repair calls use Sonnet via `requestAi`.
   Strict tool schemas come from the actual Puck content fields (including nested
-  arrays/objects); layout/design controls remain the catalog preset. Tool
-  definitions and the long system prompt are stable across calls for prompt
-  caching. Four pages fill in parallel, with at most ten calls total: plan plus
+  arrays/objects); layout/design controls remain the catalog preset. Each call
+  sends only its own tool, reused on repair with the same cacheable system
+  prompt. Four pages fill sequentially, with at most ten calls total: plan plus
   four pages, each with one validation repair.
 - Each invalid response gets one repair with Zod errors. Invalid sections then
   use the preset layout with clearly marked placeholder copy, not unverifiable

@@ -14,7 +14,7 @@ import { requestAi } from "./client";
 import { AiProviderError } from "./provider-error";
 import { beginSiteGeneration, finishSiteGeneration } from "./usage";
 import { createGenerationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
-import { aiCatalog, blockFields, blockSchemas, defaultSection, GENERATION_TOOLS, planSchema, type SitePlan } from "./site-schemas";
+import { aiCatalog, blockFields, defaultSection, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema } from "./site-schemas";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
 import { brand } from "@/lib/brand";
@@ -61,33 +61,8 @@ function validationMessage(error: z.ZodError) {
 function planValidator(input: GenerationInput) {
   return planSchema.superRefine((plan, ctx) => {
     if (input.style !== "auto" && plan.style !== input.style) ctx.addIssue({ code: "custom", path: ["style"], message: "Respect the requested style." });
-    for (const page of plan.pages) for (const section of page.sections) {
-      if (!aiCatalog.find((design) => design.id === section.designId)?.styles.includes(plan.style)) {
-        ctx.addIssue({ code: "custom", path: ["pages"], message: "Choose designs supporting the selected style." });
-      }
-    }
     const bg = plan.colors.background, fg = plan.colors.text;
     if (contrastRatio(bg, fg) < 4.5) ctx.addIssue({ code: "custom", path: ["colors"], message: "Body text/background contrast must be at least 4.5:1." });
-  });
-}
-
-function sectionValidator(designId: string) {
-  const design = aiCatalog.find((entry) => entry.id === designId)!;
-  return z.strictObject({
-    blockType: z.literal(design.blockType), designId: z.literal(designId), props: blockSchemas[design.blockType],
-  }).superRefine((section, ctx) => {
-    if (design.props.variant !== undefined && section.props.variant !== design.props.variant) {
-      ctx.addIssue({ code: "custom", path: ["props", "variant"], message: "Keep the selected catalog design variant." });
-    }
-    if (design.blockType === "Testimonials" && Array.isArray(section.props.testimonials)) {
-      for (const review of section.props.testimonials) {
-        if (review && typeof review === "object" && Object.values(review).some(
-          (value) => typeof value === "string" && value !== "" && !/^\[.+\]$/.test(value),
-        )) {
-          ctx.addIssue({ code: "custom", path: ["props", "testimonials"], message: "Reviews must be clearly marked placeholders: [Add a real customer review]." });
-        }
-      }
-    }
   });
 }
 
@@ -102,6 +77,8 @@ export function safeDefaultSection(designId: string) {
       } else if (field.type === "custom" && key !== "design") props[key] = "";
       else if (field.type === "array" && Array.isArray(value)) {
         for (const entry of value) if (entry && typeof entry === "object") walk(entry, field.arrayFields as Record<string, Field>);
+      } else if (field.type === "object" && value && typeof value === "object" && !Array.isArray(value)) {
+        walk(value as Record<string, unknown>, field.objectFields as Record<string, Field>);
       }
     }
   };
@@ -132,58 +109,49 @@ export async function buildGeneratedSite(
     services: input.services, difference: input.difference, tone: input.tone,
     phone: input.phone, email: input.email, address: input.address, openingHours: input.openingHours,
   });
-  const call = async (name: "plan_site" | "fill_page", task: string, errors?: string) => {
+  const call = async (tool: typeof PLAN_SITE_TOOL, task: string, errors?: string) => {
     const response = await requestAi({
       accountId: input.accountId, siteId: input.siteId, action: "generate_site", generationId,
-      system: SITE_SYSTEM_PROMPT, cacheTtl: "5m", tools: GENERATION_TOOLS, toolName: name,
-      maxTokens: name === "plan_site" ? 6000 : 16000,
+      system: SITE_SYSTEM_PROMPT, cacheTtl: "5m",
+      tools: [tool], toolName: tool.name,
+      maxTokens: tool.name === "plan_site" ? 6000 : 16000,
       messages: [{ role: "user", content: `${task}\nBUSINESS DATA:\n${business}${errors ? `\nThe previous response was invalid. Correct these validation errors:\n${errors}` : ""}` }],
     });
-    return toolInput(response, name);
+    return toolInput(response, tool.name);
   };
   try {
     emit({ message: "Planning your site…" });
     const validator = planValidator(input);
-    let planResult = validator.safeParse(await call("plan_site", "Plan the complete site."));
-    if (!planResult.success) planResult = validator.safeParse(await call("plan_site", "Repair the site plan.", validationMessage(planResult.error)));
+    let planResult = validator.safeParse(await call(PLAN_SITE_TOOL, "Plan the complete site."));
+    if (!planResult.success) planResult = validator.safeParse(await call(PLAN_SITE_TOOL, "Repair the site plan.", validationMessage(planResult.error)));
     if (!planResult.success) throw new SiteGenerationError("The site plan was invalid twice. No drafts were changed. Please contact your agency.");
-    const plan: SitePlan = planResult.data;
+    const plan = planResult.data;
+    plan.pages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
     if (input.primaryColor) plan.colors.primary = input.primaryColor;
     if (input.secondaryColor) plan.colors.secondary = input.secondaryColor;
 
-    // Promise.allSettled keeps the generation open until every billable sibling
-    // finishes accounting, even if one page fails.
-    const filled = await Promise.allSettled(plan.pages.map(async (page) => {
+    const pages = [];
+    for (const page of plan.pages) {
       const label = { "": "Home", about: "About", services: "Services", contact: "Contact" }[page.slug];
-      emit({ message: `${page.slug === "" ? "Designing" : "Writing"} ${label}…` });
-      const schema = z.strictObject({
-        slug: z.literal(page.slug),
-        sections: z.array(z.unknown()).length(page.sections.length),
-      }).superRefine((value, ctx) => {
-        value.sections.forEach((section, index) => {
-          const planned = page.sections[index];
-          if (!planned) return;
-          const result = sectionValidator(planned.designId).safeParse(section);
-          if (!result.success) ctx.addIssue({ code: "custom", path: ["sections", index], message: validationMessage(result.error) });
-        });
-      });
-      const task = `Fill this page in exactly the planned section order:\n${JSON.stringify(page)}`;
-      let rawPage = await call("fill_page", task);
+      emit({ message: `Writing ${label}…` });
+      const { slots, schema, task, tool } = pageFillContract(page);
+      let rawPage = await call(tool, task);
       let parsed = schema.safeParse(rawPage);
       if (!parsed.success) {
-        rawPage = await call("fill_page", task, validationMessage(parsed.error));
+        rawPage = await call(tool, task, validationMessage(parsed.error));
         parsed = schema.safeParse(rawPage);
       }
       const candidates = parsed.success ? parsed.data.sections
-        : z.object({ sections: z.array(z.unknown()) }).safeParse(rawPage).data?.sections ?? [];
-      const content = page.sections.map((section, index) => {
-        const result = sectionValidator(section.designId).safeParse(candidates[index]);
+        : z.object({ slug: z.literal(page.slug), sections: z.record(z.string(), z.unknown()) }).safeParse(rawPage).data?.sections;
+      const content = slots.map(({ key, designId, schema: propsSchema, imageField }) => {
+        const result = propsSchema.safeParse(candidates?.[key]);
         if (!result.success) {
-          warnings.add(`${page.title}: "${aiCatalog.find((design) => design.id === section.designId)!.name}" used its default layout with placeholder copy after validation failed twice.`);
-          return safeDefaultSection(section.designId);
+          warnings.add(`${page.title}: "${aiCatalog.find((design) => design.id === designId)!.name}" used its default layout with placeholder copy after validation failed twice.`);
+          return safeDefaultSection(designId);
         }
-        const item = defaultSection(section.designId);
-        item.props = { ...item.props, ...result.data.props };
+        const item = defaultSection(designId);
+        if (imageField) item.props[imageField] = "";
+        item.props = { ...item.props, ...result.data };
         return item;
       });
       const seo = plan.seo[page.slug || "home"];
@@ -192,12 +160,9 @@ export async function buildGeneratedSite(
         props: { ...puckConfig.components.Navigation.defaultProps, id: `Navigation-${crypto.randomUUID()}`,
           businessName: input.businessName, links: plan.pages.map((entry) => ({ label: entry.title, href: `/${entry.slug}` })) },
       };
-      return { slug: page.slug, title: page.title,
-        data: { root: { props: { title: seo.title, description: seo.description } }, content: [navigation, ...content] } };
-    }));
-    const failed = filled.find((result) => result.status === "rejected");
-    if (failed?.status === "rejected") throw failed.reason;
-    const pages = filled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      pages.push({ slug: page.slug, title: page.title,
+        data: { root: { props: { title: seo.title, description: seo.description } }, content: [navigation, ...content] } });
+    }
     emit({ message: "Finding photos…" });
     const resolve = createPhotoResolver(warnings);
     const enrichedPages = [];

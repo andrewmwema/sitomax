@@ -1,7 +1,6 @@
 import "server-only";
 
-import { aiCatalog, blockSchemas } from "./site-schemas";
-import { z } from "zod";
+import { aiCatalog } from "./site-schemas";
 
 export const SITE_SYSTEM_PROMPT = `You are a professional local-business website designer and copywriter.
 Use ONLY the provided tools. Never output free-form HTML, CSS, scripts or Embed blocks.
@@ -19,8 +18,10 @@ Choose catalog design IDs verbatim, respect the chosen Classic/Modern style, var
 Include a Footer design on each page. Navigation will be added automatically.
 Keep SEO titles strictly under 60 characters and descriptions strictly under 160.
 Use ONLY the curated font names from the schema. Use six-digit hex colors with readable contrast.
-Fill every field in a selected block's schema, including nested array item fields. Use empty strings/arrays for unused content.
-Preserve the selected design's variant and layout. The application supplies its design controls.
+When planning, return only matching blockType/designId pairs in section order, without props.
+When writing a page, fill each named section slot with only the props in that slot's schema.
+Fill required fields, including nested array item fields. Use empty strings/arrays for unused content.
+The application supplies the selected design's variant and layout controls.
 For EACH image field, return a concise Unsplash search QUERY, not a URL; use "" to omit.
 Photo queries must be generic subjects, never business names, personal names, addresses or private business details.
 Write descriptive alt text in the corresponding alt/imageAlt field, identifying stock imagery where appropriate.
@@ -32,6 +33,4 @@ ${JSON.stringify(aiCatalog.map((design) => ({
   id: design.id, name: design.name,
   description: `${design.category}: ${design.name}; ${design.blockType} layout${design.props.variant ? `, variant ${design.props.variant}` : ""}.`,
   styles: design.styles, variant: design.props.variant ?? null,
-})))}
-BLOCK FIELD SCHEMAS:
-${JSON.stringify(Object.fromEntries(Object.entries(blockSchemas).map(([name, schema]) => [name, z.toJSONSchema(schema)])))}`;
+})))}`;

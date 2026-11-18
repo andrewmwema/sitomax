@@ -37,13 +37,16 @@ function fieldSchema(field: Field, key: string): z.ZodType {
       return /(?:href|link)$/i.test(key) ? link : z.string().max(field.type === "richtext" ? 8000 : 2000);
     case "number": return z.number().finite();
     case "radio":
-    case "select":
-      return z.union(field.options.map(({ value }) => {
+    case "select": {
+      const values = field.options.map(({ value }) => {
         if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean" && value !== null) {
           throw new Error(`Unsupported option for ${key}.`);
         }
-        return z.literal(value);
-      }));
+        return value;
+      });
+      if (values.length === 2 && values.includes(true) && values.includes(false)) return z.boolean();
+      return z.literal(values);
+    }
     case "array":
       return z.array(fieldsSchema(field.arrayFields as Fields)).max(12);
     case "object":
@@ -63,6 +66,7 @@ function fieldsSchema(fields: Fields) {
 }
 
 export const blockSchemas = Object.fromEntries(blockTypes.map((type) => [type, fieldsSchema(blockFields(type))]));
+const catalogById = new Map(aiCatalog.map((design) => [design.id, design]));
 const seoSchema = z.strictObject({
   title: z.string().min(1).max(59),
   description: z.string().min(1).max(159),
@@ -76,7 +80,7 @@ export const planSchema = z.strictObject({
     slug: z.enum(PAGE_SLUGS),
     title: z.string().min(1).max(80),
     sections: z.array(z.strictObject({
-      designId: z.enum(designIds), purpose: z.string().min(1).max(500),
+      blockType: z.enum(blockTypes), designId: z.enum(designIds),
     })).min(2).max(7),
   })).length(4),
   seo: z.strictObject({ home: seoSchema, about: seoSchema, services: seoSchema, contact: seoSchema }),
@@ -84,27 +88,55 @@ export const planSchema = z.strictObject({
   if (new Set(plan.pages.map((page) => page.slug)).size !== 4) {
     ctx.addIssue({ code: "custom", path: ["pages"], message: "Include Home, About, Services and Contact exactly once." });
   }
+  plan.pages.forEach((page, pageIndex) => page.sections.forEach(({ blockType, designId }, sectionIndex) => {
+    const design = catalogById.get(designId);
+    if (design?.blockType !== blockType || !design.styles.includes(plan.style)) {
+      ctx.addIssue({ code: "custom", path: ["pages", pageIndex, "sections", sectionIndex],
+        message: "Use a catalog blockType/designId pair that supports the selected style." });
+    }
+  }));
 });
 export type SitePlan = z.infer<typeof planSchema>;
+type PlannedPage = SitePlan["pages"][number];
 
-export const fillSchema = z.strictObject({
-  slug: z.enum(PAGE_SLUGS),
-  sections: z.array(z.union(blockTypes.map((type) => z.strictObject({
-    blockType: z.literal(type),
-    designId: z.enum(aiCatalog.filter((design) => design.blockType === type).map((design) => design.id)),
-    props: blockSchemas[type],
-  })))).min(2).max(7),
-});
+export const PLAN_SITE_TOOL = strictTool("plan_site", "Return the site plan, without section props.", planSchema);
 
-// Keep tools identical between planning, parallel pages and validation retries:
-// tool definitions precede the cached system prompt in the provider's cache key.
-export const GENERATION_TOOLS = [
-  strictTool("plan_site", "Return the validated site plan.", planSchema),
-  strictTool("fill_page", "Return the validated page content.", fillSchema),
-];
+const fillPropsByType = new Map(blockTypes.map((blockType) => {
+  const imageField = Object.entries(blockFields(blockType)).find(([, field]) => isImageField(field))?.[0];
+  const props = Object.entries(blockSchemas[blockType].shape).filter(([key]) => key !== "variant");
+  // Keep optional grammar branches bounded: only the primary image query can
+  // be omitted. Other fields with no content can be returned empty.
+  const schema = z.strictObject(Object.fromEntries(props.map(([key, field]) =>
+    [key, key === imageField ? field.optional() : field]))).superRefine((value, ctx) => {
+    if (blockType !== "Testimonials" || !Array.isArray(value.testimonials)) return;
+    if (value.testimonials.some((review) => review && typeof review === "object" && Object.values(review).some(
+      (field) => typeof field === "string" && field !== "" && !/^\[.+\]$/.test(field),
+    ))) {
+      ctx.addIssue({ code: "custom", path: ["testimonials"], message: "Use clearly marked review placeholders." });
+    }
+  });
+  return [blockType, { schema, imageField }] as const;
+}));
+
+export function pageFillContract(page: PlannedPage) {
+  // Named slots preserve the plan's order without a heterogeneous array union
+  // or tuple keywords unsupported by the provider's strict schema compiler.
+  const slots = page.sections.map(({ blockType, designId }, index) => {
+    const props = fillPropsByType.get(blockType);
+    if (!props || catalogById.get(designId)?.blockType !== blockType) throw new Error("Invalid planned section.");
+    return { key: `section_${index + 1}`, designId, blockType, ...props };
+  });
+  const sections = z.strictObject(Object.fromEntries(slots.map(({ key, schema }) => [key, schema])));
+  const schema = z.strictObject({ slug: z.literal(page.slug), sections });
+  const task = `Write only the props for the named section slots in this page plan. Layout variants are set by the application:\n${JSON.stringify({
+    slug: page.slug, title: page.title,
+    sections: Object.fromEntries(slots.map(({ key, designId, blockType }) => [key, { blockType, designId }])),
+  })}`;
+  return { slots, schema, task, tool: strictTool("fill_page", "Return props for the planned page's section slots.", schema) };
+}
 
 export function defaultSection(designId: string) {
-  const design = aiCatalog.find((entry) => entry.id === designId);
+  const design = catalogById.get(designId);
   if (!design) throw new Error("Unknown catalog design.");
   return buildDesignItem(design);
 }

@@ -14,7 +14,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
 vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGeneration: mocks.finish }));
 import { buildGeneratedSite, safeDefaultSection } from "./generate-site";
-import { aiCatalog, blockFields, blockSchemas, GENERATION_TOOLS, planSchema } from "./site-schemas";
+import { aiCatalog, blockFields, blockSchemas, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
 import { strictTool } from "./strict-tool";
@@ -32,8 +32,8 @@ const seo = { title: "Local Plumbing Nairobi", description: "Plumbing repairs in
 const plan = {
   style: "modern", colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
   fonts: { heading: "Inter", body: "Inter" },
-  pages: ["", "about", "services", "contact"].map((slug) => ({ slug, title: slug || "Home", sections: [
-    { designId: hero.id, purpose: "Introduce the business" }, { designId: footer.id, purpose: "Useful links" },
+  pages: PAGE_SLUGS.map((slug) => ({ slug, title: slug || "Home", sections: [
+    { blockType: hero.blockType, designId: hero.id }, { blockType: footer.blockType, designId: footer.id },
   ] })),
   seo: { home: seo, about: seo, services: seo, contact: seo },
 };
@@ -48,17 +48,18 @@ function fieldValue(field: Field): unknown {
 }
 function section(designId: string) {
   const design = aiCatalog.find((entry) => entry.id === designId)!;
-  return { designId, blockType: design.blockType, props: {
-    ...Object.fromEntries(Object.entries(blockFields(design.blockType)).filter(([key]) => key !== "design")
-      .map(([key, field]) => [key, fieldValue(field)])),
-    variant: design.props.variant,
-  } };
+  return Object.fromEntries(Object.entries(blockFields(design.blockType)).filter(([key]) => key !== "design" && key !== "variant")
+    .map(([key, field]) => [key, fieldValue(field)]));
 }
 const message = (name: string, value: unknown) => ({ stop_reason: "tool_use", content: [{ type: "tool_use", name, input: value }] });
 function answer(request: { toolName: string; messages: { content: string }[] }) {
   if (request.toolName === "plan_site") return message("plan_site", structuredClone(plan));
-  const page = JSON.parse(request.messages[0].content.split("\n")[1]) as typeof plan.pages[number];
-  return message("fill_page", { slug: page.slug, sections: page.sections.map((entry) => section(entry.designId)) });
+  const page = JSON.parse(request.messages[0].content.split("\n")[1]) as {
+    slug: string; sections: Record<string, { designId: string }>;
+  };
+  return message("fill_page", { slug: page.slug, sections: Object.fromEntries(
+    Object.entries(page.sections).map(([key, entry]) => [key, section(entry.designId)]),
+  ) });
 }
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv("ANTHROPIC_API_KEY", "local-test-not-a-key"); vi.stubEnv("UNSPLASH_ACCESS_KEY", "");
@@ -70,22 +71,24 @@ beforeEach(() => {
 });
 
 describe("catalog site generation", () => {
-  it("uses the same strict cached tools for a plan and four parallel pages, sanitizes and saves only drafts", async () => {
+  it("uses one strict tool per call with a shared cached prompt, sanitizes and saves only drafts", async () => {
     const progress: string[] = [];
     const result = await buildGeneratedSite(input, ({ message }) => progress.push(message));
     expect(result).toMatchObject({ siteId, pageId });
     expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId);
     expect(mocks.request).toHaveBeenCalledTimes(5);
     for (const [request] of mocks.request.mock.calls) expect(request).toMatchObject({
-      generationId, action: "generate_site", tools: GENERATION_TOOLS, cacheTtl: "5m", system: SITE_SYSTEM_PROMPT,
+      generationId, action: "generate_site", tools: [{ name: request.toolName, strict: true }], cacheTtl: "5m", system: SITE_SYSTEM_PROMPT,
     });
+    expect(mocks.request.mock.calls.map(([request]) => request.toolName)).toEqual(["plan_site", ...Array(4).fill("fill_page")]);
     const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1];
     expect(save.p_pages).toHaveLength(4);
     expect(JSON.stringify(save.p_pages)).not.toMatch(/onclick|<script>|bad\(\)/);
     expect(save).not.toHaveProperty("published_data");
     expect(save.p_pages[0].data.content[0].props.businessName).toBe("Local Plumbing");
     expect(save.p_business).toMatchObject({ businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi", services: ["Repairs"] });
-    expect(progress).toContain("Finding photos…");
+    expect(progress).toEqual(["Planning your site…", "Writing Home…", "Writing About…", "Writing Services…",
+      "Writing Contact…", "Finding photos…", "Saving unpublished drafts…"]);
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
     expect(mocks.admin).not.toHaveBeenCalled();
   });
@@ -99,8 +102,11 @@ describe("catalog site generation", () => {
     expect(mocks.request.mock.calls[1][0].messages[0].content).toContain("validation errors");
     expect(mocks.request.mock.calls[1][0].messages[0].content).toContain("seo.home.title");
     expect(planSchema.safeParse(invalid).success).toBe(false);
+    const mismatch = structuredClone(plan);
+    mismatch.pages[0].sections[0].blockType = footer.blockType;
+    expect(planSchema.safeParse(mismatch).success).toBe(false);
   });
-  it("starts all four fills in parallel and waits for every billable sibling before finalizing a failure", async () => {
+  it("waits for the previous page before starting the next and stops after a provider failure", async () => {
     let release!: () => void;
     const barrier = new Promise<void>((resolve) => { release = resolve; });
     mocks.request.mockImplementation(async (request) => {
@@ -109,18 +115,19 @@ describe("catalog site generation", () => {
       await barrier; return answer(request);
     });
     const pending = buildGeneratedSite(input);
-    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(5));
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
     expect(mocks.finish).not.toHaveBeenCalled();
     release();
     await expect(pending).rejects.toThrow("Generation stopped");
+    expect(mocks.request).toHaveBeenCalledTimes(3);
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
   it("repairs excess sections without throwing outside validation, and ignores unplanned content", async () => {
     mocks.request.mockImplementation((request) => {
       const response = answer(request);
       if (request.toolName === "fill_page") {
-        const page = response.content[0].input as { sections: unknown[] };
-        page.sections.push({ blockType: "Embed", props: { code: "<script>bad()</script>" } });
+        const page = response.content[0].input as { sections: Record<string, unknown> };
+        page.sections.unplanned = { code: "<script>bad()</script>" };
       }
       return response;
     });
@@ -132,12 +139,11 @@ describe("catalog site generation", () => {
   });
   it("falls back only the failing section after one repair, discloses it and removes unverifiable sample copy", async () => {
     mocks.request.mockImplementation((request) => {
-      const response = answer(request);
-      if (request.toolName === "fill_page") {
-        const page = response.content[0].input as { slug: string; sections: { props: Record<string, unknown> }[] };
-        if (page.slug === "about") page.sections[0].props.heading = 123;
-      }
-      return response;
+      if (request.toolName === "plan_site") return answer(request);
+      const { slug, sections } = JSON.parse(request.messages[0].content.split("\n")[1]);
+      return message("fill_page", { slug, sections: Object.fromEntries(Object.entries(sections)
+        .map(([key, entry]) => [key, { ...section((entry as { designId: string }).designId),
+          ...(slug === "about" && key === "section_1" ? { heading: 123 } : {}) }])) });
     });
     const result = await buildGeneratedSite(input);
     expect(mocks.request).toHaveBeenCalledTimes(6);
@@ -204,5 +210,41 @@ describe("catalog site generation", () => {
     });
     expect(input_schema).not.toHaveProperty("properties.items.maxItems");
     expect(schema.safeParse({ items: ["one"] }).success).toBe(false);
+  });
+  it("keeps all four maximum-size page grammars below 16 KiB and free of unions", () => {
+    const bytes = (schema: object) => Buffer.byteLength(JSON.stringify(schema));
+    expect(bytes(PLAN_SITE_TOOL.input_schema)).toBeLessThan(8 * 1024);
+    for (const style of ["classic", "modern"] as const) {
+      const designs = [...new Map(aiCatalog.filter((design) => design.styles.includes(style))
+        .map((design) => [design.blockType, design])).values()];
+      const sections = designs.map(({ blockType, id: designId }) => ({ blockType, designId }))
+        .map((section) => ({ section, size: bytes(pageFillContract({
+          slug: "", title: "Home", sections: [section],
+        }).tool.input_schema) }))
+        .sort((a, b) => b.size - a.size).slice(0, 7).map(({ section }) => section);
+      expect(sections).toHaveLength(7);
+      const largest = planSchema.parse({ ...plan, style, pages: PAGE_SLUGS.map((slug) =>
+        ({ slug, title: slug || "Home", sections })) }) satisfies SitePlan;
+      for (const page of largest.pages) {
+        const { tool, slots } = pageFillContract(page);
+        const json = JSON.stringify(tool.input_schema);
+        expect(bytes(tool.input_schema)).toBeLessThan(16 * 1024);
+        expect(json).not.toMatch(/"(anyOf|oneOf|prefixItems|blockType|designId|variant)":/);
+        expect(slots.map(({ blockType }) => blockType)).toEqual(sections.map(({ blockType }) => blockType));
+      }
+    }
+  });
+  it("uses compact enums and booleans, preserves variants, and allows an omitted image", () => {
+    const design = aiCatalog.find(({ id }) => id === "hero-centered-badge")!;
+    const { slots: [slot], tool } = pageFillContract({ slug: "", title: "Home",
+      sections: [{ blockType: design.blockType, designId: design.id }] });
+    const json = JSON.stringify(tool.input_schema);
+    expect(json).toContain('"type":"boolean"');
+    expect(z.toJSONSchema(blockSchemas.Hero).properties?.variant).toMatchObject({ enum: expect.arrayContaining([design.props.variant]) });
+    expect(slot.imageField).toBeTruthy();
+    const props = section(design.id);
+    delete props[slot.imageField!];
+    expect(slot.schema.safeParse(props).success).toBe(true);
+    expect(slot.schema.safeParse({ ...props, variant: "unplanned" }).success).toBe(false);
   });
 });
