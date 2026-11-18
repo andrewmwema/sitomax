@@ -118,12 +118,14 @@ export function ThemePanel({
   onChange,
   open,
   onClose,
+  saveOverride,
 }: {
   siteId: string;
   theme: SiteTheme;
   onChange: (theme: SiteTheme) => void;
   open: boolean;
   onClose: () => void;
+  saveOverride?: (theme: SiteTheme) => ReturnType<typeof saveSiteTheme>;
 }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -148,7 +150,7 @@ export function ThemePanel({
   async function handleSave() {
     setSaving(true);
     setMessage(null);
-    const result = await saveSiteTheme(siteId, theme);
+    const result = await (saveOverride ? saveOverride(theme) : saveSiteTheme(siteId, theme));
     setSaving(false);
     setMessage(result.status === "idle" ? null : result.message);
   }

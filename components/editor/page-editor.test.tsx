@@ -42,6 +42,7 @@ vi.mock("./seo-panel", () => ({
     <button onClick={() => onSelectPage("about-page")}>Select About</button>,
 }));
 vi.mock("./editor-ai", () => ({ EditorAiProvider: ({ children }: { children: ReactNode }) => children }));
+vi.mock("@/app/editor/[pageId]/ai-actions", () => ({ suggestEditorEdits: vi.fn() }));
 vi.mock("./section-library", () => ({
   ROOT_ZONE: "root:default-zone",
   SectionLibraryContext: { Provider: ({ children }: { children: ReactNode }) => children },

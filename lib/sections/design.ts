@@ -46,8 +46,11 @@ export type BlockDesign = {
     hideOnMobile?: boolean;
   };
   background?: {
-    type?: "none" | "color" | "image" | "video";
+    type?: "none" | "color" | "gradient" | "image" | "video";
     color?: string;
+    from?: string;
+    to?: string;
+    angle?: number;
     /** 1 image = static; several = auto-rotating background slider. */
     images?: string[];
     /** Focal point in percent (0–100). */
@@ -253,6 +256,7 @@ export type NormalizedOverlay = { color: string; opacity: number } | null;
 export type NormalizedBackground =
   | { kind: "none" }
   | { kind: "color"; color: string }
+  | { kind: "gradient"; from: string; to: string; angle: number }
   | {
       kind: "image";
       images: string[];
@@ -357,6 +361,9 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
     if (rawBackground.type === "color") {
       const color = safeHexColor(rawBackground.color);
       if (color) background = { kind: "color", color };
+    } else if (rawBackground.type === "gradient") {
+      const from = safeHexColor(rawBackground.from), to = safeHexColor(rawBackground.to);
+      if (from && to) background = { kind: "gradient", from, to, angle: clamp(rawBackground.angle, 0, 360) ?? 135 };
     } else if (rawBackground.type === "image") {
       const images = (Array.isArray(rawBackground.images) ? rawBackground.images : [])
         .map(safeMediaUrl)

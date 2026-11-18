@@ -51,7 +51,7 @@ export function Button({
       {...(newTab ? { target: "_blank", rel: "noopener noreferrer" } : null)}
       className={`site-button inline-flex min-h-12 items-center justify-center gap-2 px-6 py-3 text-center text-base font-semibold whitespace-normal no-underline transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 ${className}`}
       style={{
-        borderRadius: "var(--radius-sm)",
+        borderRadius: "var(--button-radius, var(--radius-sm))",
         fontFamily: "var(--font-body)",
         outlineColor: "var(--color-secondary)",
         ...VARIANTS[variant],

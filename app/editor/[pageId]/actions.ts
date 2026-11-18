@@ -34,6 +34,7 @@ async function updatePage(
   pageId: string,
   rawData: unknown,
   publish: boolean,
+  ai?: { snapshot: boolean; theme?: z.infer<typeof themeSchema>; expectedTheme?: z.infer<typeof themeSchema> },
 ): Promise<ActionState> {
   const parsedId = z.uuid().safeParse(pageId);
   const parsedData = puckDataSchema.safeParse(rawData);
@@ -94,6 +95,21 @@ async function updatePage(
   // Rich text props are client-authored HTML: sanitize before storing so
   // malicious markup never reaches site visitors or other editors.
   const cleanData = sanitizePuckData(parsedData.data);
+  if (cleanData.root.props) delete cleanData.root.props.__editorTheme;
+
+  if (ai) {
+    const { data: saved, error } = await supabase.rpc("save_editor_ai_draft", {
+      p_page_id: parsedId.data, p_data: cleanData, p_theme: ai.theme ?? null,
+      p_snapshot: ai.snapshot, p_expected_theme: ai.expectedTheme ?? null,
+    });
+    if (error || saved !== true) {
+      console.error("Could not save AI draft", { code: error?.code });
+      return { status: "error", message: error?.code === "40001"
+        ? "The site theme changed in another editor. Reload before trying again."
+        : "Could not save the AI draft. Check that the editor history migration has been applied." };
+    }
+    return { status: "success", message: "Draft saved." };
+  }
 
   const update: Record<string, unknown> = {
     draft_data: cleanData,
@@ -121,14 +137,20 @@ export async function savePageDraft(pageId: string, data: unknown): Promise<Acti
   return updatePage(pageId, data, false);
 }
 
+export async function saveAiEdit(pageId: string, data: unknown, raw: unknown): Promise<ActionState> {
+  const parsed = z.strictObject({ snapshot: z.boolean(), theme: themeSchema.optional(), expectedTheme: themeSchema.optional() }).safeParse(raw);
+  if (!parsed.success) return { status: "error", message: "Invalid theme or draft snapshot." };
+  return updatePage(pageId, data, false, parsed.data);
+}
+
 export async function publishPage(pageId: string, data: unknown): Promise<ActionState> {
   return updatePage(pageId, data, true);
 }
 
-export async function listPageVersions(pageId: string): Promise<{ id: string; published_at: string }[]> {
+export async function listPageVersions(pageId: string): Promise<{ id: string; published_at: string; kind: "published" | "ai_edit" }[]> {
   const id = z.uuid().parse(pageId);
   const { supabase } = await requireUser();
-  const { data, error } = await supabase.from("page_versions").select("id, published_at")
+  const { data, error } = await supabase.from("page_versions").select("id, published_at, kind")
     .eq("page_id", id).order("published_at", { ascending: false }).order("id", { ascending: false }).limit(20);
   if (error) throw new Error("Could not load published versions.", { cause: error });
   return data ?? [];
@@ -138,15 +160,16 @@ export async function restorePageVersion(pageId: string, versionId: string) {
   const parsed = z.object({ pageId: z.uuid(), versionId: z.uuid() }).safeParse({ pageId, versionId });
   if (!parsed.success) return { status: "error" as const, message: "Invalid page version." };
   const { supabase } = await requireUser();
-  const { data: version, error } = await supabase.from("page_versions").select("data")
+  const { data: version, error } = await supabase.from("page_versions").select("data, theme")
     .eq("page_id", parsed.data.pageId).eq("id", parsed.data.versionId).maybeSingle();
   if (error || !version) {
     console.error("Unable to load page version", error);
     return { status: "error" as const, message: "This version is unavailable." };
   }
-  const result = await updatePage(pageId, version.data, false);
+  const theme = version.theme ? themeSchema.parse(version.theme) : undefined;
+  const result = await updatePage(pageId, version.data, false, theme ? { theme, snapshot: false } : undefined);
   return result.status === "success"
-    ? { status: "success" as const, message: "Version restored to draft. Publish to make it live.", data: version.data }
+    ? { status: "success" as const, message: "Version restored to draft. Publish to make it live.", data: version.data, theme }
     : result;
 }
 /**

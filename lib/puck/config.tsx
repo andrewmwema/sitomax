@@ -100,6 +100,7 @@ type Components = {
 };
 
 export type RootProps = {
+  __editorTheme?: SiteTheme;
   title?: string;
   seoTitle?: string;
   description?: string;
@@ -246,8 +247,8 @@ export const puckConfig: PuckConfig = {
       socialImage: "",
       indexing: "inherit",
     },
-    render: ({ children, puck }) => {
-      const theme = (puck.metadata?.theme ?? {}) as SiteTheme;
+    render: ({ children, puck, __editorTheme }) => {
+      const theme = (puck.isEditing && __editorTheme) || (puck.metadata?.theme ?? {}) as SiteTheme;
       return (
         <div
           className="site-content flex min-h-screen min-w-0 flex-col antialiased"

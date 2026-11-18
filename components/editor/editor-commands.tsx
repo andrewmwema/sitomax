@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useGetPuck } from "@puckeditor/core";
@@ -20,29 +20,6 @@ export function EditorCommands({ persistence, onPublish, onTheme }: {
   const ref = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    const show = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k" || event.defaultPrevented) return;
-      const target = event.target as HTMLElement;
-      if (target.closest("[contenteditable=true]")) return;
-      event.preventDefault();
-      ref.current?.showModal();
-      setQuery("");
-    };
-    document.addEventListener("keydown", show);
-    let doc: Document | null = null;
-    const attach = () => {
-      const frame = document.querySelector<HTMLIFrameElement>("#preview-frame");
-      if (doc === frame?.contentDocument) return;
-      doc?.removeEventListener("keydown", show);
-      doc = frame?.contentDocument ?? null;
-      doc?.addEventListener("keydown", show);
-    };
-    attach();
-    const timer = setInterval(attach, 500);
-    return () => { clearInterval(timer); document.removeEventListener("keydown", show); doc?.removeEventListener("keydown", show); };
-  }, []);
-
   const commands = [
     { label: "Add pricing section", run: () => {
       openLibrary(getPuck().appState.data.content.length, "Pricing");
@@ -55,9 +32,9 @@ export function EditorCommands({ persistence, onPublish, onTheme }: {
     })),
   ].filter((command) => command.label.toLowerCase().includes(query.toLowerCase()));
   return <>
-    <button type="button" onClick={() => ref.current?.showModal()} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs">Commands</button>
+    <button type="button" onClick={() => { setQuery(""); ref.current?.showModal(); }} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs">Commands</button>
     <dialog ref={ref} aria-label="Command palette" className="m-auto w-[min(520px,94vw)] rounded-xl border border-zinc-200 p-4 shadow-xl backdrop:bg-zinc-950/30">
-      <label className="block text-xs font-semibold">Commands · Ctrl/Cmd+K
+      <label className="block text-xs font-semibold">Commands
         <input aria-label="Search commands" autoFocus value={query} onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "ArrowDown") { event.preventDefault(); ref.current?.querySelector<HTMLButtonElement>("[data-command]")?.focus(); }
@@ -83,7 +60,7 @@ export function EditorCommands({ persistence, onPublish, onTheme }: {
 export function VersionHistory({ persistence, siteId }: { persistence: Persistence; siteId: string }) {
   const { pageId } = useInteractions();
   const ref = useRef<HTMLDialogElement>(null);
-  const [versions, setVersions] = useState<{ id: string; published_at: string }[]>([]);
+  const [versions, setVersions] = useState<Awaited<ReturnType<typeof listPageVersions>>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const load = async () => {
@@ -94,23 +71,23 @@ export function VersionHistory({ persistence, siteId }: { persistence: Persisten
   };
   return <>
     <button type="button" onClick={() => void load()} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs">History</button>
-    <dialog ref={ref} aria-label="Published version history" className="m-auto w-[min(480px,94vw)] rounded-xl border border-zinc-200 p-5 shadow-xl backdrop:bg-zinc-950/30">
-      <h2 className="text-sm font-semibold">Published versions</h2>
-      <p className="my-2 text-xs text-zinc-500">The last 20 published versions. Restore updates the draft, not the live site.</p>
+    <dialog ref={ref} aria-label="Version history" className="m-auto w-[min(480px,94vw)] rounded-xl border border-zinc-200 p-5 shadow-xl backdrop:bg-zinc-950/30">
+      <h2 className="text-sm font-semibold">Version history</h2>
+      <p className="my-2 text-xs text-zinc-500">The last 20 published versions and AI edits. Restore updates the draft, not the live site.</p>
       <Link href={`/dashboard/sites/${siteId}#ai-history`} className="my-2 block text-xs underline">Site-wide AI draft backups (account owners)</Link>
       {loading ? <p role="status">Loading...</p> : null}
       {error ? <p role="alert" className="text-xs text-red-600">{error} <button type="button" className="underline" onClick={() => void load()}>Retry</button></p> : null}
       <ol className="my-3 max-h-80 overflow-y-auto">
         {versions.map((version) => <li key={version.id} className="flex items-center justify-between gap-3 border-t py-3 text-xs">
-          <time dateTime={version.published_at}>{new Date(version.published_at).toLocaleString()}</time>
+          <span>{version.kind === "ai_edit" ? "AI edit" : "Published"} · <time dateTime={version.published_at}>{new Date(version.published_at).toLocaleString()}</time></span>
           <button type="button" disabled={persistence.busy !== null} className="rounded border px-3 py-1 disabled:opacity-40"
             onClick={async () => {
-              if (!window.confirm("Restore this published version to the draft? Unsaved changes will be replaced; Undo can recover them.")) return;
+              if (!window.confirm("Restore this version to the draft? Unsaved changes will be replaced; Undo can recover them.")) return;
               if (await persistence.restore(version.id)) ref.current?.close();
             }}>Restore to draft</button>
         </li>)}
       </ol>
-      {!loading && !error && !versions.length ? <p className="text-xs text-zinc-500">No published versions yet.</p> : null}
+      {!loading && !error && !versions.length ? <p className="text-xs text-zinc-500">No versions yet.</p> : null}
       <button type="button" onClick={() => ref.current?.close()} className="text-xs underline">Close</button>
     </dialog>
   </>;

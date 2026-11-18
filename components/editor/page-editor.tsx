@@ -60,6 +60,8 @@ import type { SeoPageSummary } from "@/components/editor/seo-panel";
 import type { SiteSeo } from "@/lib/seo";
 import { canonicalUrl } from "@/lib/seo-public";
 
+import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
+
 type EditorUi = {
   pageId: string;
   siteId: string;
@@ -69,7 +71,11 @@ type EditorUi = {
   publicUrl: string;
   previewUrl: string;
   openThemePanel: () => void;
+  closeThemePanel: () => void;
+  themePanelOpen: boolean;
+  updateTheme: (theme: SiteTheme) => void;
   business: Business;
+  theme: SiteTheme;
 };
 
 const EditorUiContext = createContext<EditorUi | null>(null);
@@ -90,9 +96,30 @@ function usePersistence() {
 }
 
 function EditorRuntime({ children }: { children: React.ReactNode }) {
-  const { pageId } = useEditorUi();
-  const persistence = useDraftPersistence(pageId);
-  return <PersistenceContext.Provider value={persistence}>{children}</PersistenceContext.Provider>;
+  const { pageId, theme } = useEditorUi();
+  const persistence = useDraftPersistence(pageId, theme);
+  return <PersistenceContext.Provider value={persistence}><AskAiProvider pageId={pageId} theme={theme} persistence={persistence}>
+    {children}
+    <EditorThemePanel />
+  </AskAiProvider></PersistenceContext.Provider>;
+}
+
+function EditorThemePanel() {
+  const { siteId, theme, themePanelOpen, closeThemePanel, updateTheme } = useEditorUi();
+  const getPuck = useGetPuck();
+  const persistence = usePersistence();
+  const override = usePuckStore((state) => (state.appState.data.root.props as { __editorTheme?: SiteTheme } | undefined)?.__editorTheme);
+  const [pending, setPending] = useState<{ base: SiteTheme; theme: SiteTheme }>();
+  const displayed = override ? (pending?.base === override ? pending.theme : override) : theme;
+  return <ThemePanel siteId={siteId} theme={displayed} open={themePanelOpen}
+    onClose={() => { setPending(undefined); closeThemePanel(); }}
+    onChange={(next) => override ? setPending({ base: override, theme: next }) : updateTheme(next)}
+    saveOverride={override ? async (next) => {
+      const base = getPuck().appState.data;
+      return await persistence.applyAi(base, base, next, false)
+        ? { status: "success", message: "Theme saved." }
+        : { status: "error", message: "Could not save the theme. Check the editor status." };
+    } : undefined} />;
 }
 
 function PagesPanel() {
@@ -137,13 +164,14 @@ function SeoTool() {
 }
 
 function AiTool() {
-  const { openSection, openAdd } = useEditorAi();
+  const { openAdd } = useEditorAi();
+  const askAi = useAskAi();
   const selection = usePuckStore((state) => state.appState.ui.itemSelector);
   const canEdit = usePuckStore((state) => state.getPermissions({ item: state.selectedItem }).edit !== false);
   const topLevel = selection && (!selection.zone || selection.zone === ROOT_ZONE) && canEdit;
   return <div className="editor-panel"><header className="editor-panel-header"><p className="platform-eyebrow mb-1">Creative assistant</p><h2 className="font-semibold">AI editing</h2>
     <p className="mt-2 text-xs leading-relaxed text-zinc-500">Preview changes before adding them to your draft.</p></header>
-    <button type="button" disabled={!topLevel} onClick={openSection} className="platform-button mt-4 w-full">Edit selected section</button>
+    <button type="button" disabled={!topLevel} onClick={() => askAi?.open()} className="platform-button mt-4 w-full">Edit selected section</button>
     <button type="button" onClick={openAdd} className="platform-button platform-button-ai mt-2 w-full"><Sparkles size={14} />Add a section with AI</button>
   </div>;
 }
@@ -186,6 +214,7 @@ const BLOCK_LABELS = Object.fromEntries(
 /** Header buttons: Save draft, Preview, Publish and the theme panel toggle. */
 function HeaderActions() {
   const getPuck = useGetPuck();
+  const askAi = useAskAi();
   const { siteId, previewUrl, openThemePanel } = useEditorUi();
   const persistence = usePersistence();
   const router = useRouter();
@@ -228,6 +257,8 @@ function HeaderActions() {
         {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
       </span>
       <EditorCommands persistence={persistence} onPublish={requestPublish} onTheme={openThemePanel} />
+      <button type="button" onClick={() => askAi?.open()} disabled={!!askAi?.proposal} aria-keyshortcuts="Control+K Meta+K"
+        className="platform-button platform-button-ai"><Sparkles size={13} />Ask AI</button>
       <VersionHistory persistence={persistence} siteId={siteId} />
       <button
         type="button"
@@ -337,7 +368,7 @@ function EditorActionBar({
   dragHandle?: React.ReactNode;
 }) {
   const { openSaveDesign, isSuperAdmin } = useSectionLibrary();
-  const { openSection } = useEditorAi();
+  const askAi = useAskAi();
   const getPuck = useGetPuck();
   const zone = usePuckStore((s) => s.appState.ui.itemSelector?.zone);
   const selectedType = usePuckStore((s) => s.selectedItem?.type);
@@ -374,7 +405,7 @@ function EditorActionBar({
   return (
     <ActionBar>
       <ActionBar.Group>
-        <ActionBar.Action label="Ask AI" disabled={!topLevel || !canEdit} onClick={openSection}><Sparkles size={16} /></ActionBar.Action>
+        <ActionBar.Action label="Ask AI about this section" disabled={!topLevel || !canEdit} onClick={() => askAi?.open()}><Sparkles size={16} /></ActionBar.Action>
         {parentAction}
         {label ? <ActionBar.Label label={label} /> : null}
       </ActionBar.Group>
@@ -468,11 +499,13 @@ export function PageEditor({
       }, page.slug),
       previewUrl,
       openThemePanel: () => setThemePanelOpen(true),
+      closeThemePanel: () => setThemePanelOpen(false),
+      themePanelOpen, updateTheme: setTheme,
       siteId: site.id,
       siteSeo,
-      business,
+      business, theme,
     }),
-    [page.id, page.title, page.slug, previewUrl, site.id, site.subdomain, site.custom_domain, site.domain_verified, siteSeo, seoPages, business],
+    [page.id, page.title, page.slug, previewUrl, site.id, site.subdomain, site.custom_domain, site.domain_verified, siteSeo, seoPages, business, theme, themePanelOpen],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
@@ -500,13 +533,13 @@ export function PageEditor({
       drawer: ({ children }) => <EditorDrawer>{children}</EditorDrawer>,
       fields: (props) => <EditorInspector {...props} />,
       preview: ({ children }) => (
-        <>
+        <AskAiCanvas>
           {children}
           <CanvasInsertZones />
           <AddSectionEndBar />
           <SectionGhost />
           <AiCommandBar />
-        </>
+        </AskAiCanvas>
       ),
       puck: ({ children }) => (
         <EditorRuntime><EditorAiProvider>
@@ -556,13 +589,6 @@ export function PageEditor({
               plugins={editorPlugins}
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}
               headerPath={page.slug ? `/${page.slug}` : "/"}
-            />
-            <ThemePanel
-              siteId={site.id}
-              theme={theme}
-              onChange={setTheme}
-              open={themePanelOpen}
-              onClose={() => setThemePanelOpen(false)}
             />
           </div>
           </InteractionContext.Provider>

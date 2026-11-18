@@ -152,7 +152,17 @@ export async function runEditorAi(raw: unknown) {
     return { kind: "section" as const, section: clean.content[0] };
   }
 
-  const schema = z.strictObject({ section: z.union(blockTypes.map((type) => z.strictObject({
+  const schema = insertSectionSchema;
+  const catalog = aiCatalog.map(({ id, name, category, blockType, props }) => ({ id, name, category, blockType, variant: props.variant }));
+  const result = await requestValidated(schema, { ...common, action: "edit_section", largeRewrite: true,
+    tools: [makeTool("add_section", schema)], toolName: "add_section",
+    messages: [{ role: "user", content: JSON.stringify({ instruction: input.instruction, business, catalog,
+      rules: "Choose one catalog design. Preserve its variant. For image fields return a generic photo search query, not a URL." }) }] });
+  return { kind: "add" as const, ...await materializeInsertSection(result.section,
+    { supabase, accountId: site.account_id, siteId: site.id }) };
+}
+
+export const insertSectionSchema = z.strictObject({ section: z.union(blockTypes.map((type) => z.strictObject({
     blockType: z.literal(type),
     designId: z.enum(aiCatalog.filter((design) => design.blockType === type).map((design) => design.id)),
     props: blockSchemas[type],
@@ -167,18 +177,23 @@ export async function runEditorAi(raw: unknown) {
       )) ctx.addIssue({ code: "custom", path: ["section", "props", "testimonials"], message: "Reviews must be marked placeholders." });
     }
   });
-  const catalog = aiCatalog.map(({ id, name, category, blockType, props }) => ({ id, name, category, blockType, variant: props.variant }));
-  const result = await requestValidated(schema, { ...common, action: "edit_section", largeRewrite: true,
-    tools: [makeTool("add_section", schema)], toolName: "add_section",
-    messages: [{ role: "user", content: JSON.stringify({ instruction: input.instruction, business, catalog,
-      rules: "Choose one catalog design. Preserve its variant. For image fields return a generic photo search query, not a URL." }) }] });
-  const selected = result.section;
+export async function materializeInsertSection(selected: z.infer<typeof insertSectionSchema>["section"],
+  storage: NonNullable<Parameters<typeof createPhotoResolver>[1]>, plainText = false) {
   const preset = defaultSection(selected.designId);
-  preset.props = { ...preset.props, ...selected.props };
+  preset.props = { ...preset.props, ...(plainText ? plainSectionProps(selected.props) : selected.props) };
   const warnings = new Set<string>();
   preset.props.photoCredits = await fillSectionPhotos(preset.type, preset.props,
-    createPhotoResolver(warnings, { supabase, accountId: site.account_id, siteId: site.id }));
-  return { kind: "add" as const, section: sanitizePuckData({ content: [preset] }).content[0], warnings: [...warnings] };
+    createPhotoResolver(warnings, storage));
+  return { section: sanitizePuckData({ content: [preset] }).content[0], warnings: [...warnings] };
+}
+
+function plainSectionProps(props: RecordValue): RecordValue {
+  const check = (value: unknown) => {
+    if (typeof value === "string" && /[<>]/.test(value)) throw new Error("New section text must be plain text.");
+    if (value && typeof value === "object") Object.values(value).forEach(check);
+  };
+  check(props);
+  return props;
 }
 
 function toolResult(message: Awaited<ReturnType<typeof requestAi>>, name: string): unknown {

@@ -346,10 +346,12 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
         options={[
           { value: "none" as const, label: "None" },
           { value: "color" as const, label: "Color" },
+          { value: "gradient" as const, label: "Gradient" },
           ...(level !== "element" ? [{ value: "image" as const, label: "Image" }] : []),
           ...(level === "section" ? [{ value: "video" as const, label: "Video" }] : []),
         ]}
-        onChange={(type) => patchBackground({ type })}
+        onChange={(type) => patchBackground(type === "gradient"
+          ? { type, from: background.from ?? "#ffffff", to: background.to ?? "#e4e9f0", angle: background.angle ?? 135 } : { type })}
       />
 
       {backgroundType === "color" ? (
@@ -359,6 +361,11 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
           onChange={(color) => patchBackground({ color })}
         />
       ) : null}
+      {backgroundType === "gradient" ? <>
+        <ColorControl label="Gradient start" value={background.from} onChange={(from) => patchBackground({ from })} />
+        <ColorControl label="Gradient end" value={background.to} onChange={(to) => patchBackground({ to })} />
+        <SliderRow label="Gradient angle" value={background.angle ?? 135} min={0} max={360} onChange={(angle) => patchBackground({ angle })} />
+      </> : null}
 
       {backgroundType === "image" ? (
         <>

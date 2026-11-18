@@ -11,6 +11,7 @@ import type { BlockDesign } from "@/lib/sections/design";
 import { blankSection, ELEMENT_TYPES, type LayoutItem } from "@/lib/layout/structure";
 import { useSectionLibrary } from "./section-library";
 import { appPoint, useInteractions } from "./interaction-context";
+import { useAskAi } from "./ask-ai";
 
 const usePuck = createUsePuck();
 const CLIPBOARD_KEY = "agency-editor-block";
@@ -27,6 +28,7 @@ export function SelectionMenuButton() {
 }
 
 export function EditorInteractions() {
+  const askAi = useAskAi();
   const ui = useInteractions();
   const { setMenu, menu } = ui;
   const { isSuperAdmin, openLibrary, openSaveDesign } = useSectionLibrary();
@@ -145,6 +147,9 @@ export function EditorInteractions() {
       <p className="px-3 py-1 text-[10px] font-semibold uppercase text-zinc-400">{menuEntry.item.type}</p>
       {action("Edit content", () => { select(menuEntry.item.props.id); ui.setTab("content"); finish(); })}
       {action("Edit design", () => { select(menuEntry.item.props.id); ui.setTab("style"); finish(); }, permission.edit === false)}
+      {askAi && !menuEntry.parentId ? action("Ask AI about this section", () => {
+        askAi.open(menuEntry.item.props.id); finish();
+      }, permission.edit === false) : null}
       {action(menuEntry.item.type === "Row" ? "Add row below" : menuEntry.item.type === "Column" ? "Add element" : "Add element below", () => {
         if (menuEntry.item.type === "Row") { insert((blankSection().props.rows as LayoutItem[])[0]); return; }
         if (!menuEntry.parentId) { openLibrary(menuEntry.selector.index + 1); finish(); }

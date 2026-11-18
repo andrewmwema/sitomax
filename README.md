@@ -44,6 +44,17 @@ the requested content to the configured AI provider; each attempt is metered.
 Review generated content and placeholders before accepting or publishing it.
 AI-created sections use stock photos when configured, otherwise image placeholders.
 
+### Ask AI to edit
+
+Apply [0022_editor_ai_history.sql](./supabase/migrations/0022_editor_ai_history.sql)
+after the preceding migrations. Open **Ask AI** from the editor header
+(Ctrl/Cmd+K) or a section’s toolbar/menu. Choose a section, page, or site theme.
+The assistant proposes typed, validated edits and previews them in the canvas
+without changing the draft. Apply records one undo step and an **AI edit** in
+version history; deletion proposals need separate confirmation. Theme edits
+are staged site-wide and go live on publish. Generating or refining a proposal
+uses one AI credit, including when you choose not to apply it.
+
 ### Stock photos
 
 Apply `0020_stock_photos.sql` and `0021_media_library.sql` after `0019` and set

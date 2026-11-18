@@ -50,11 +50,11 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {
   const input = requestSchema.parse(raw);
   const model = modelForAction(input.action, input.largeRewrite);
   assertPricedModel(model);
-  if (input.cacheTtl && (model !== SITE_GENERATION_MODEL || !input.system)) {
+  if (input.cacheTtl && (!input.system || (model !== SITE_GENERATION_MODEL && !(input.action === "edit_section" && input.cacheTtl === "5m" && !input.toolName)))) {
     throw new Error("Prompt caching requires a priced model and a system prompt.");
   }
   const sdk = getClient();
-  if (input.tools && !input.tools.some((tool) => tool.name === input.toolName)) throw new Error("Choose a supplied AI tool.");
+  if (input.toolName && !input.tools?.some((tool) => tool.name === input.toolName)) throw new Error("Choose a supplied AI tool.");
   const reservation = await checkLimit(input.accountId, input.action, {
     siteId: input.siteId, largeRewrite: input.largeRewrite,
     ...(input.generationId ? { generationId: input.generationId } : {}),

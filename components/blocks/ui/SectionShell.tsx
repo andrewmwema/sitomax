@@ -250,6 +250,9 @@ function SectionBackground({
           style={{ backgroundColor: background.color }}
         />
       ) : null}
+      {background.kind === "gradient" ? (
+        <div className="absolute inset-0" style={{ backgroundImage: `linear-gradient(${background.angle}deg, ${background.from}, ${background.to})` }} />
+      ) : null}
       {background.kind === "image" ? (
         <ImageSlider
           images={background.images}

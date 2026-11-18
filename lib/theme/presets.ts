@@ -19,9 +19,12 @@ export type SiteTheme = {
   style?: StyleId;
   headingFont?: CuratedFont;
   bodyFont?: CuratedFont;
+  radius?: number;
+  buttonStyle?: "rounded" | "square" | "pill";
   colors?: {
     primary?: string;
     secondary?: string;
+    accent?: string;
     background?: string;
     text?: string;
   };
@@ -134,11 +137,8 @@ const DARK_INK = "#17202b";
 
 /** White or dark ink for text on the primary color — WCAG 4.5:1 first. */
 export function onPrimaryColor(primary: string): string {
-  try {
-    return contrastRatio("#ffffff", primary) >= 4.5 ? "#ffffff" : DARK_INK;
-  } catch {
-    return "#ffffff";
-  }
+  if (contrastRatio("#ffffff", primary) >= 4.5) return "#ffffff";
+  return contrastRatio(DARK_INK, primary) >= 4.5 ? DARK_INK : "#000000";
 }
 
 /** Mix two hex colors (JS equivalent of color-mix for computed vars). */
@@ -182,13 +182,17 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
 
   // Computed in JS (not color-mix) so button contrast can be measured.
   const darkBg = mixHex(colors.text, "#000000", 0.92);
-  const ctaDark = ctaOnColor(darkBg, colors.secondary);
-  const ctaPrimary = ctaOnColor(colors.primary, colors.secondary);
+  const ctaDark = ctaOnColor(darkBg, colors.accent ?? colors.secondary);
+  const ctaPrimary = ctaOnColor(colors.primary, colors.accent ?? colors.secondary);
   const [headingFont, bodyFont] = themeFonts(theme);
+  const radius = typeof theme?.radius === "number" && Number.isFinite(theme.radius) ? Math.min(48, Math.max(0, theme.radius)) : undefined;
+  const buttonRadius = theme?.buttonStyle === "square" ? "0px" : theme?.buttonStyle === "pill" ? "999px"
+    : theme?.buttonStyle === "rounded" ? (radius === undefined ? "12px" : `${radius}px`) : "var(--radius-sm)";
 
   return {
     "--color-primary": colors.primary,
     "--color-secondary": colors.secondary,
+    "--color-accent": colors.accent ?? colors.secondary,
     "--color-bg": colors.background,
     "--color-text": colors.text,
     "--color-on-primary": onPrimaryColor(colors.primary),
@@ -203,6 +207,8 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
     "--color-cta-primary": ctaPrimary,
     "--color-on-cta-primary": onPrimaryColor(ctaPrimary),
     ...preset.vars,
+    ...(radius === undefined ? {} : { "--radius-sm": `${radius}px`, "--radius-lg": `${radius}px` }),
+    "--button-radius": buttonRadius,
     "--section-gap": "calc(var(--section-pad) / 2)",
     "--content-gap": "calc(var(--section-pad) / 4)",
     "--detail-gap": "calc(var(--section-pad) / 8)",
