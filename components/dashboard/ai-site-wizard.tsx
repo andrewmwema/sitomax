@@ -14,13 +14,12 @@ const eventSchema = z.discriminatedUnion("type", [
 ]);
 
 export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubdomain }: {
-  accounts: { id: string; name: string }[];
+  accounts: { id: string; name: string; is_internal?: boolean }[];
   existingSite?: { id: string; accountId: string; name: string; business: Business };
   rootDomain: string;
   marketingSubdomain: string;
 }) {
   const router = useRouter();
-  const generationInputSchema = createGenerationInputSchema(marketingSubdomain);
   const [values, setValues] = useState<GenerationInput>({
     accountId: existingSite?.accountId ?? "", siteId: existingSite?.id, subdomain: existingSite ? undefined : "",
     businessName: existingSite?.business.businessName || existingSite?.name || "",
@@ -30,6 +29,8 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
     style: "auto", primaryColor: "", secondaryColor: "", phone: existingSite?.business.phone ?? "",
     email: existingSite?.business.email ?? "", address: existingSite?.business.address ?? "", description: "", confirmReplace: false,
   });
+  const isInternal = accounts.some((account) => account.id === values.accountId && account.is_internal);
+  const generationInputSchema = createGenerationInputSchema(marketingSubdomain, isInternal);
   const [service, setService] = useState("");
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -101,9 +102,9 @@ export function AiSiteWizard({ accounts, existingSite, rootDomain, marketingSubd
     </ol>
     <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
       {step === 0 ? <>
-        {!existingSite ? <label className="text-sm font-medium sm:col-span-2">Client account
+        {!existingSite ? <label className="text-sm font-medium sm:col-span-2">Account
           <select required className={`${fieldClass} mt-2`} value={values.accountId} onChange={(event) => set("accountId", event.target.value)}>
-            <option value="">Choose a client</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            <option value="">Choose an account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
           </select>
         </label> : null}
         {([

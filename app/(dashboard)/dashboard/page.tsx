@@ -8,6 +8,7 @@ import { SiteGrid } from "@/components/dashboard/site-grid";
 import type { SiteCardSite } from "@/components/dashboard/site-card";
 import { AiUsageCards } from "@/components/dashboard/ai-usage-cards";
 import { brand } from "@/lib/brand";
+import { DashboardGreeting } from "@/components/dashboard/dashboard-greeting";
 
 type SiteRow = Omit<SiteCardSite, "accountName" | "canManageDomains" | "placeholderCount" | "pages"> & {
   account_id: string;
@@ -54,22 +55,18 @@ async function Overview() {
     }) : null,
   ]);
   const displayName = profile?.full_name?.trim().split(/\s+/)[0] || "there";
-  const hour = now.getHours();
-  const greeting = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
   const liveSites = cards.filter((site) => site.pages.some((page) => page.slug === "" && page.published_at)).length;
   const metrics = [
     { label: "Live sites", value: String(liveSites), detail: `of ${cards.length} sites`, icon: Globe2 },
     { label: "Page views · 30 days", value: !canSeeReporting ? "—" : viewsResult?.error ? "Unavailable" : (viewsResult?.count ?? 0).toLocaleString(), icon: BarChart3 },
     { label: "Leads · last 7 days", value: !canSeeReporting ? "—" : newLeadsResult?.error ? "Unavailable" : (newLeadsResult?.count ?? 0).toLocaleString(), icon: Inbox },
-    ...(isAdmin ? [{ label: "AI spend · this month", value: costResult?.error ? "Unavailable" : `$${(costResult?.total ?? 0).toFixed(2)}`, detail: "estimated", icon: CircleDollarSign }] : []),
+    ...(isAdmin ? [{ label: "Client AI spend · this month", value: costResult?.error ? "Unavailable" : `$${(costResult?.total ?? 0).toFixed(2)}`, detail: "estimated", icon: CircleDollarSign }] : []),
   ];
   const ownerSite = sites.find((site) => memberships?.some((member) => member.account_id === site.account_id));
   const aiHref = isAdmin ? "/dashboard/sites/new/ai" : ownerSite ? `/dashboard/sites/${ownerSite.id}/generate` : null;
   return <div className="flex flex-col gap-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="platform-eyebrow">{new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(now)}</p>
-        <h1 className="mt-2 text-[32px] leading-tight font-semibold tracking-[-0.8px]">Good {greeting}, {displayName}</h1>
-        <p className="mt-2 text-[13px] text-[#6B6A66]">A clear view of your websites, clients and what&apos;s next.</p></div>
+      <DashboardGreeting displayName={displayName} />
       {isAdmin ? <div className="flex flex-wrap gap-2.5">
         <Link href="/dashboard/clients" className="platform-button"><UserPlus size={15} />Invite client</Link>
         <Link href="/dashboard/sites/new/ai" className="platform-button platform-button-ai"><Sparkles size={15} />Build with AI</Link>

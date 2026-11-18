@@ -11,7 +11,7 @@ export function isReservedSubdomain(subdomain: string): boolean {
   return RESERVED_SUBDOMAINS.has(normalized) || normalized === brand.marketingSiteSubdomain;
 }
 
-export function isReservedForAccountSite(subdomain: string, isSuperAdmin: boolean): boolean {
+export function isReservedForAccountSite(subdomain: string, isSuperAdmin: boolean, isInternal = false): boolean {
   return isReservedSubdomain(subdomain) &&
-    !(isSuperAdmin && subdomain.toLowerCase() === brand.marketingSiteSubdomain);
+    !(isSuperAdmin && isInternal && subdomain.toLowerCase() === brand.marketingSiteSubdomain);
 }

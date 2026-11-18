@@ -75,6 +75,15 @@ export async function inviteOwner(
 
   const { accountId, email } = parsed.data;
   const admin = createAdminClient();
+  const { data: account, error: accountError } = await admin.from("accounts")
+    .select("id, is_internal").eq("id", accountId).maybeSingle();
+  if (accountError) {
+    console.error("Could not verify invitation account", accountError);
+    return { status: "error", message: "Could not verify the client account. Please retry." };
+  }
+  if (!account || account.is_internal) {
+    return { status: "error", message: "Invitations are only available for client accounts." };
+  }
 
   let userId: string;
   let invited = false;

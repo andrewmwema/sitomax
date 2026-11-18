@@ -22,16 +22,17 @@ beforeEach(() => {
 describe("site wizard actions", () => {
   it("checks permissions before checking availability or creating a site", async () => {
     mocks.authorize.mockRejectedValue(new Error("not authorized"));
-    await expect(checkSubdomain("acme")).rejects.toThrow("not authorized");
+    await expect(checkSubdomain("acme", input.accountId)).rejects.toThrow("not authorized");
     await expect(createSite(input)).rejects.toThrow("not authorized");
     expect(mocks.admin).not.toHaveBeenCalled();
   });
   it("checks availability and reports lookup errors", async () => {
-    mocks.lookup.mockResolvedValueOnce({ data: null, error: null });
-    expect(await checkSubdomain("acme")).toMatchObject({ available: true });
-    expect(await checkSubdomain("www")).toMatchObject({ available: false });
+    mocks.lookup.mockResolvedValueOnce({ data: { id: input.accountId }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    expect(await checkSubdomain("acme", input.accountId)).toMatchObject({ available: true });
+    expect(await checkSubdomain("www", input.accountId)).toMatchObject({ available: false });
     mocks.lookup.mockResolvedValueOnce({ data: null, error: { message: "offline" } });
-    expect(await checkSubdomain("acme")).toMatchObject({ available: false, message: expect.stringContaining("retry") });
+    expect(await checkSubdomain("acme", input.accountId)).toMatchObject({ available: false, message: expect.stringContaining("retry") });
   });
   it("creates four fully instantiated pages through one atomic RPC", async () => {
     expect(await createSite(input)).toMatchObject({ status: "success" });
@@ -51,8 +52,17 @@ describe("site wizard actions", () => {
     mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "23505" } });
     expect(await createSite(input)).toMatchObject({ status: "error", message: expect.stringContaining("already in use") });
   });
-  it("allows the super admin to create the configured marketing tenant", async () => {
+  it("rejects marketing hostnames for client accounts even for a super admin", async () => {
+    expect(await createSite({ ...input, subdomain: brand.marketingSiteSubdomain })).toMatchObject({ status: "error", message: expect.stringContaining("reserved") });
+    expect(await checkSubdomain(brand.marketingSiteSubdomain, input.accountId)).toMatchObject({ available: false });
+    expect(mocks.admin).not.toHaveBeenCalled();
+  });
+  it("allows the super admin to create the configured marketing tenant in the internal account", async () => {
+    mocks.lookup.mockResolvedValue({ data: { id: input.accountId, is_internal: true }, error: null });
     expect(await createSite({ ...input, subdomain: brand.marketingSiteSubdomain })).toMatchObject({ status: "success" });
     expect(mocks.rpc.mock.calls[0][1].p_subdomain).toBe(brand.marketingSiteSubdomain);
+    mocks.lookup.mockResolvedValueOnce({ data: { id: input.accountId, is_internal: true }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    expect(await checkSubdomain(brand.marketingSiteSubdomain, input.accountId)).toMatchObject({ available: true });
   });
 });

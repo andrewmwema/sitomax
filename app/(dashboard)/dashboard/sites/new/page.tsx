@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireSuperAdmin } from "@/lib/auth";
+import { getSiteAccountOptions } from "@/lib/accounts";
 import { instantiateTemplate } from "@/templates/instantiate";
 import { templates } from "@/templates";
 import { NewSiteWizard } from "@/components/dashboard/new-site-wizard";
@@ -7,9 +7,7 @@ import type { SectionDesign } from "@/lib/sections/catalog";
 import { brand } from "@/lib/brand";
 
 export default async function NewSitePage() {
-  const { supabase } = await requireSuperAdmin();
-  const { data: accounts, error } = await supabase.from("accounts").select("id, name").order("name");
-  if (error) throw new Error("Could not load client accounts.", { cause: error });
+  const accounts = await getSiteAccountOptions();
   const sample = { businessName: "Your business", city: "Your city", phone: "0123 456 789", email: "hello@example.com", address: "Your address", services: "your services" };
   const choices = Object.values(templates).map((template) => {
     const hero = instantiateTemplate(template, sample)[0].data.content.find((item) => item.type === "Hero");

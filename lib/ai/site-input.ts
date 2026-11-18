@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { createSubdomainSchema } from "@/lib/site-creation";
 
-export function createGenerationInputSchema(marketingSubdomain?: string) {
+export function createGenerationInputSchema(marketingSubdomain?: string, isInternal = false) {
   return z.strictObject({
     accountId: z.uuid(),
     siteId: z.uuid().optional(),
-    subdomain: createSubdomainSchema(marketingSubdomain).optional(),
+    subdomain: createSubdomainSchema(marketingSubdomain, isInternal).optional(),
     businessName: z.string().trim().min(1).max(100),
     businessType: z.string().trim().min(1).max(100),
     city: z.string().trim().min(1).max(100),

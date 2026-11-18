@@ -40,12 +40,14 @@ export default function ClientsPage() {
 async function ClientsContent() {
   const { supabase } = await requireSuperAdmin();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("accounts")
     .select(
       "id, name, created_at, account_members(role, profile:profiles(email, full_name)), sites(id)",
     )
+    .eq("is_internal", false)
     .order("created_at", { ascending: true });
+  if (error) throw new Error("Could not load client accounts.", { cause: error });
 
   // Without generated DB types, supabase-js infers to-one joins (profile)
   // as arrays; at runtime they are single objects, so cast through unknown.

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createSiteCreationSchema, createSubdomainSchema } from "@/lib/site-creation";
@@ -9,9 +10,18 @@ import { instantiateTemplate } from "@/templates/instantiate";
 import { templates } from "@/templates";
 import { brand } from "@/lib/brand";
 
-export async function checkSubdomain(raw: unknown) {
+export async function checkSubdomain(raw: unknown, rawAccountId: unknown) {
   const { supabase } = await requireSuperAdmin();
-  const parsed = createSubdomainSchema(brand.marketingSiteSubdomain).safeParse(raw);
+  const accountId = z.uuid().safeParse(rawAccountId);
+  if (!accountId.success) return { available: false, message: "Choose an account first." };
+  const { data: account, error: accountError } = await supabase.from("accounts")
+    .select("id, is_internal").eq("id", accountId.data).maybeSingle();
+  if (accountError) {
+    console.error("Could not check subdomain account", accountError);
+    return { available: false, message: "Could not verify the account. Please retry." };
+  }
+  if (!account) return { available: false, message: "The selected account no longer exists." };
+  const parsed = createSubdomainSchema(brand.marketingSiteSubdomain, account.is_internal === true).safeParse(raw);
   if (!parsed.success) return { available: false, message: parsed.error.issues[0]?.message ?? "Invalid subdomain." };
   const { data, error } = await supabase.from("sites").select("id").eq("subdomain", parsed.data).maybeSingle();
   if (error) {
@@ -23,15 +33,17 @@ export async function checkSubdomain(raw: unknown) {
 
 export async function createSite(raw: unknown): Promise<{ status: "success"; siteId: string } | { status: "error"; message: string }> {
   const { supabase } = await requireSuperAdmin();
-  const parsed = createSiteCreationSchema(brand.marketingSiteSubdomain).safeParse(raw);
+  const parsed = createSiteCreationSchema(brand.marketingSiteSubdomain, true).safeParse(raw);
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Invalid site information." };
   const input = parsed.data;
-  const { data: account, error: accountError } = await supabase.from("accounts").select("id").eq("id", input.accountId).maybeSingle();
+  const { data: account, error: accountError } = await supabase.from("accounts").select("id, is_internal").eq("id", input.accountId).maybeSingle();
   if (accountError) {
     console.error("Could not load client account", accountError);
     return { status: "error", message: "Could not verify the client account. Please retry." };
   }
   if (!account) return { status: "error", message: "The selected client account no longer exists." };
+  const subdomain = createSubdomainSchema(brand.marketingSiteSubdomain, account.is_internal === true).safeParse(input.subdomain);
+  if (!subdomain.success) return { status: "error", message: "This subdomain is reserved for the internal agency account." };
 
   const template = templates[input.template];
   const pages = instantiateTemplate(template, input);

@@ -17,18 +17,20 @@ const initial: FormValues = {
 const inputClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
 
 export function NewSiteWizard({ accounts, choices, rootDomain, marketingSubdomain }: {
-  accounts: { id: string; name: string }[]; choices: Choice[]; rootDomain: string; marketingSubdomain: string;
+  accounts: { id: string; name: string; is_internal: boolean }[]; choices: Choice[]; rootDomain: string; marketingSubdomain: string;
 }) {
   const router = useRouter();
-  const subdomainSchema = useMemo(() => createSubdomainSchema(marketingSubdomain), [marketingSubdomain]);
-  const siteCreationSchema = useMemo(() => createSiteCreationSchema(marketingSubdomain), [marketingSubdomain]);
   const [values, setValues] = useState(initial);
+  const isInternal = accounts.some((account) => account.id === values.accountId && account.is_internal);
+  const subdomainSchema = useMemo(() => createSubdomainSchema(marketingSubdomain, isInternal), [marketingSubdomain, isInternal]);
+  const siteCreationSchema = useMemo(() => createSiteCreationSchema(marketingSubdomain, isInternal), [marketingSubdomain, isInternal]);
   const [step, setStep] = useState(0);
   const [availability, setAvailability] = useState<{ available: boolean; message: string } | null>(null);
   const [checkAttempt, setCheckAttempt] = useState(0);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const set = (key: keyof FormValues, value: string) => {
+    if (key === "accountId") setAvailability(null);
     setValues((previous) => ({ ...previous, [key]: value }));
     setError("");
   };
@@ -37,7 +39,7 @@ export function NewSiteWizard({ accounts, choices, rootDomain, marketingSubdomai
     if (!parsed.success) return;
     let active = true;
     const timer = window.setTimeout(() => {
-      void checkSubdomain(parsed.data).then((result) => {
+      void checkSubdomain(parsed.data, values.accountId).then((result) => {
         if (active) setAvailability(result);
       }).catch((cause) => {
         console.error("Could not check subdomain", cause);
@@ -45,7 +47,7 @@ export function NewSiteWizard({ accounts, choices, rootDomain, marketingSubdomai
       });
     }, 350);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [values.subdomain, checkAttempt, subdomainSchema]);
+  }, [values.subdomain, values.accountId, checkAttempt, subdomainSchema]);
   const submit = () => {
     const parsed = siteCreationSchema.safeParse(values);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your site details."); return; }
@@ -72,9 +74,9 @@ export function NewSiteWizard({ accounts, choices, rootDomain, marketingSubdomai
         <li key={label} aria-current={step === index ? "step" : undefined} className={step === index ? "text-zinc-900" : ""}>{index + 1}. {label}</li>)}
     </ol>
     {step === 0 ? <label className="flex max-w-lg flex-col gap-2 text-sm font-medium">
-      Client account
+      Account
       <select className={inputClass} value={values.accountId} onChange={(event) => set("accountId", event.target.value)}>
-        <option value="">Choose a client</option>
+        <option value="">Choose an account</option>
         {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
       </select>
     </label> : null}

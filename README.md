@@ -19,6 +19,21 @@ chrome also uses Puck's documented theme tokens. Keep platform styling
 inside `.platform-ui` or `.platform-editor`. Public tenant pages and the
 editor's preview iframe retain each site's own colors, fonts and content.
 
+## Internal agency sites
+
+Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
+through `0018`. Opening **New site** or **Build with AI** as a super admin
+creates the single agency account, named by `NEXT_PUBLIC_AGENCY_NAME` (default
+`SitoMax`), and adds that admin as its owner. Choose **SitoMax (internal)**,
+shown first, for agency-owned sites. Existing sites are not moved automatically.
+Only this account can create sites using `MARKETING_SITE_SUBDOMAIN`.
+
+The internal account cannot receive client invitations and is excluded from
+Clients, client AI usage/credit limits and client cost reports. Agency AI usage
+is still recorded, with existing request rate limits but no credit quota.
+The dashboard greeting and header date use the browser's local timezone;
+reporting periods continue to use UTC.
+
 ## Editor AI and business information
 
 Apply migrations through `0013_site_business.sql` in order before using this version.

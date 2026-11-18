@@ -33,7 +33,12 @@ async function authorize(input: GenerationInput) {
   ]);
   if (adminError || ownerError) throw new SiteGenerationError("Could not verify generation permissions.");
   if (!admin && (!owner || !input.siteId)) throw new SiteGenerationError("Only account owners or the agency can generate a site.");
-  if (!input.siteId && input.subdomain && isReservedForAccountSite(input.subdomain, Boolean(admin))) {
+  const { data: account, error: accountError } = await supabase.from("accounts")
+    .select("id, is_internal").eq("id", input.accountId).maybeSingle();
+  if (accountError || !account || (account.is_internal && !admin)) {
+    throw new SiteGenerationError("This account is unavailable.");
+  }
+  if (!input.siteId && input.subdomain && isReservedForAccountSite(input.subdomain, Boolean(admin), account.is_internal === true)) {
     throw new SiteGenerationError("This subdomain is reserved.");
   }
   if (input.siteId) {
@@ -106,7 +111,7 @@ export function safeDefaultSection(designId: string) {
 export async function buildGeneratedSite(
   raw: unknown, emit: (event: GenerationProgress) => void = () => {},
 ): Promise<GenerationResult> {
-  const input = createGenerationInputSchema(brand.marketingSiteSubdomain).parse(raw);
+  const input = createGenerationInputSchema(brand.marketingSiteSubdomain, true).parse(raw);
   const { supabase, isAdmin } = await authorize(input);
   if (!process.env.ANTHROPIC_API_KEY) throw new SiteGenerationError("AI is not configured. Ask your agency to enable it.");
   let generationId: string;

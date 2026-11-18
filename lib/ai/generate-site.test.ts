@@ -158,13 +158,29 @@ describe("catalog site generation", () => {
   });
   it("creates agency-built sites as unpublished drafts and links the one generation charge to the saved site", async () => {
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
-    mocks.lookup.mockResolvedValue({ data: null, error: null });
+    mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: false }, error: null })
+      .mockResolvedValue({ data: null, error: null });
     const create = vi.fn().mockResolvedValue({ data: [{ site_id: siteId, page_id: pageId }], error: null });
     mocks.admin.mockReturnValue({ rpc: create });
     await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "local-plumbing" })).resolves.toMatchObject({ siteId, pageId });
     expect(create).toHaveBeenCalledWith("create_ai_site_with_business", expect.objectContaining({ p_account_id: accountId, p_subdomain: "local-plumbing" }));
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
     for (const [request] of mocks.request.mock.calls) expect(request.messages[0].content).not.toContain(accountId);
+  });
+  it("reserves the marketing hostname for internal accounts before charging or generating", async () => {
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
+    mocks.lookup.mockResolvedValue({ data: { id: accountId, is_internal: false }, error: null });
+    const marketing = { ...input, siteId: undefined, subdomain: brand.marketingSiteSubdomain };
+    await expect(buildGeneratedSite(marketing)).rejects.toThrow("reserved");
+    expect(mocks.begin).not.toHaveBeenCalled();
+    expect(mocks.request).not.toHaveBeenCalled();
+
+    mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: true }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    const create = vi.fn().mockResolvedValue({ data: [{ site_id: siteId, page_id: pageId }], error: null });
+    mocks.admin.mockReturnValue({ rpc: create });
+    await expect(buildGeneratedSite(marketing)).resolves.toMatchObject({ siteId, pageId });
+    expect(create).toHaveBeenCalledWith("create_ai_site_with_business", expect.objectContaining({ p_subdomain: brand.marketingSiteSubdomain }));
   });
   it("stops after two invalid plans without saving; finalizes already-billed work without free retries", async () => {
     mocks.request.mockResolvedValue(message("plan_site", { style: "invented" }));
