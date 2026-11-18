@@ -5,6 +5,8 @@ import { createUsePuck, useGetPuck } from "@puckeditor/core";
 import type { Data } from "@puckeditor/core";
 import { publishPage, restorePageVersion, saveAiEdit, savePageDraft } from "@/app/editor/[pageId]/actions";
 import type { SiteTheme } from "@/lib/theme/presets";
+import { buildEmptyPageWithAi, saveEmptyPageWithAi } from "@/app/editor/[pageId]/empty-page-actions";
+import { isEmptyPage } from "@/lib/editor/empty-page";
 
 type EditorRoot = NonNullable<Data["root"]["props"]> & { __editorTheme?: SiteTheme };
 function themeOverride(data: Data) { return (data.root.props as EditorRoot | undefined)?.__editorTheme; }
@@ -23,6 +25,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
   const [saved, setSaved] = useState(() => JSON.stringify(data));
   const [busy, setBusy] = useState<"save" | "publish" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [buildNotes, setBuildNotes] = useState<string[]>([]);
   const active = useRef<Promise<boolean> | null>(null);
   const savedTheme = useRef(theme);
   const lastOverride = useRef<string | undefined>(undefined);
@@ -98,6 +101,45 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
     return operation;
   }, [getPuck, pageId, theme]);
 
+  const buildEmptyPage = useCallback(async (): Promise<boolean> => {
+    if (active.current) return false;
+    const base = structuredClone(getPuck().appState.data);
+    if (!isEmptyPage(base)) {
+      setError("Only empty pages can be built with AI.");
+      return false;
+    }
+    setBusy("save"); setError(null); setBuildNotes([]);
+    const operation = (async () => {
+      try {
+        const proposal = await buildEmptyPageWithAi(pageId);
+        if (proposal.status === "error") { setError(proposal.message); return false; }
+        if (JSON.stringify(getPuck().appState.data) !== JSON.stringify(base)) {
+          setError("The page changed while AI was working. No AI draft was saved.");
+          return false;
+        }
+        const next = { ...proposal.data, root: { ...base.root, props: {
+          ...base.root.props, generationWarnings: proposal.warnings,
+        } } } as Data;
+        const result = await saveEmptyPageWithAi(pageId, next, proposal.expectedDraft);
+        if (result.status !== "success") { setError(result.message); return false; }
+        setBuildNotes(proposal.warnings);
+        if (JSON.stringify(getPuck().appState.data) !== JSON.stringify(base)) {
+          setError("The AI draft was saved, but newer local changes were retained. Reload to review the saved draft.");
+          return false;
+        }
+        getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } });
+        getPuck().dispatch({ type: "setData", data: next, recordHistory: true });
+        setSaved(JSON.stringify(next));
+        return true;
+      } catch {
+        setError("Could not build this page. Your local draft has not been replaced.");
+        return false;
+      } finally { setBusy(null); active.current = null; }
+    })();
+    active.current = operation;
+    return operation;
+  }, [getPuck, pageId]);
+
   const restore = useCallback(async (versionId: string): Promise<boolean> => {
     while (active.current) await active.current;
     setBusy("restore"); setError(null);
@@ -143,5 +185,5 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  return { busy, dirty, error, save, restore, applyAi };
+  return { busy, dirty, error, save, restore, applyAi, buildEmptyPage, buildNotes };
 }

@@ -20,6 +20,8 @@ import {
 } from "@puckeditor/core";
 import { ArrowLeft, ArrowUpRight, Bookmark, Check, Eye, FileText, Layers, LayoutGrid, Palette, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { savePageMenuLabel } from "@/app/editor/[pageId]/actions";
+import { defaultMenuLabel, pageMenuLinks, siteContacts } from "@/lib/page-navigation";
 import { BusinessInfo } from "@/components/dashboard/business-info";
 import type { Business } from "@/lib/business";
 import { puckConfig } from "@/lib/puck/config";
@@ -61,6 +63,7 @@ import type { SiteSeo } from "@/lib/seo";
 import { canonicalUrl } from "@/lib/seo-public";
 
 import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
+import { isEmptyPage } from "@/lib/editor/empty-page";
 
 type EditorUi = {
   pageId: string;
@@ -122,6 +125,21 @@ function EditorThemePanel() {
     } : undefined} />;
 }
 
+function BuildEmptyPage({ canvas = false }: { canvas?: boolean }) {
+  const empty = usePuckStore((state) => isEmptyPage(state.appState.data));
+  const persistence = usePersistence();
+  if (!empty) return canvas && persistence.buildNotes?.length ? <aside role="status" className="platform-ui m-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+    <p className="mb-2 font-semibold">AI draft review notes</p>
+    <ul className="list-disc pl-4">{persistence.buildNotes.map((note) => <li key={note}>{note}</li>)}</ul>
+  </aside> : null;
+  return <section className={canvas ? "platform-ui mx-auto my-8 max-w-sm rounded-xl border border-zinc-200 bg-white p-5 text-center" : "mt-5 border-t border-zinc-200 pt-4"}>
+    <p className="mb-3 text-xs leading-relaxed text-zinc-500">Build this empty page using your saved business, site theme and page links. Review the draft before publishing.</p>
+    <button type="button" className="platform-button platform-button-ai w-full" disabled={persistence.busy !== null}
+      onClick={() => void persistence.buildEmptyPage()}><Sparkles size={14} />{persistence.busy ? "Building page…" : "Build this page with AI"}</button>
+    {canvas && persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
+  </section>;
+}
+
 function PagesPanel() {
   const { pages, pageId } = useInteractions();
   const persistence = usePersistence();
@@ -134,10 +152,33 @@ function PagesPanel() {
         className="rounded-lg px-3 py-2 text-left text-sm hover:bg-[#F7F7F5] disabled:opacity-60"
         onClick={async () => {
           if (!persistence.dirty || await persistence.save()) router.push(`/editor/${page.id}`);
-        }}>{page.title || page.slug || "Home"}</button>)}
+        }}>{page.nav_label ?? defaultMenuLabel(page.slug)}</button>)}
     </div>
+    <MenuLabelSettings key={pageId} page={pages.find((page) => page.id === pageId)} />
+    <BuildEmptyPage />
+    {persistence.buildNotes?.length ? <ul role="status" className="mt-3 list-disc pl-4 text-xs text-amber-800">{persistence.buildNotes.map((note) => <li key={note}>{note}</li>)}</ul> : null}
     {persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
   </div>;
+}
+
+function MenuLabelSettings({ page }: { page?: EditorPageLink }) {
+  const router = useRouter();
+  const [message, setMessage] = useState("");
+  const [label, setLabel] = useState(page?.nav_label ?? defaultMenuLabel(page?.slug ?? ""));
+  if (!page) return null;
+  return <form className="mt-4 border-t border-zinc-200 pt-4" action={async (formData) => {
+    const result = await savePageMenuLabel(page.id, String(formData.get("menuLabel") ?? ""));
+    if (result.status !== "idle") setMessage(result.message);
+    if (result.status === "success") router.refresh();
+  }}>
+    <h3 className="mb-2 text-sm font-semibold">Page settings</h3>
+    <label className="flex flex-col gap-1 text-xs">Menu label
+      <input name="menuLabel" value={label} onChange={(event) => setLabel(event.currentTarget.value)} maxLength={40} required
+        className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm" />
+    </label>
+    <button type="submit" className="platform-button mt-2">Save menu label</button>
+    <p role="status" className="mt-1 text-xs">{message}</p>
+  </form>;
 }
 
 function ThemeTool() {
@@ -535,6 +576,7 @@ export function PageEditor({
       preview: ({ children }) => (
         <AskAiCanvas>
           {children}
+          <BuildEmptyPage canvas />
           <CanvasInsertZones />
           <AddSectionEndBar />
           <SectionGhost />
@@ -584,7 +626,7 @@ export function PageEditor({
               config={config}
               data={data}
               ui={initialUi}
-              metadata={{ theme }}
+              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages), contacts: siteContacts(business) } }}
               overrides={overrides}
               plugins={editorPlugins}
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}

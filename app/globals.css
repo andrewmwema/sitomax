@@ -306,7 +306,9 @@ body {
 .layout-card {
   padding: 24px;
   background-color: var(--color-bg);
-  color: var(--color-text);
+  color: var(--color-on-bg, var(--color-text));
+  --color-text: var(--color-on-bg, var(--color-text));
+  --color-muted: color-mix(in srgb, var(--color-on-bg, var(--color-text)) 64%, transparent);
   border: 1px solid var(--card-border, var(--color-border));
   border-radius: var(--radius-lg);
   box-shadow: var(--card-shadow, var(--shadow-card));

@@ -15,12 +15,14 @@ export function Card({
       className={`site-card flex min-w-0 flex-col gap-3 p-6 sm:p-7 ${className}`}
       style={{
         backgroundColor: "var(--color-bg)",
-        color: "var(--color-text)",
+        color: "var(--color-on-bg, var(--color-text))",
+        "--color-text": "var(--color-on-bg, var(--color-text))",
+        "--color-muted": "var(--color-on-bg)",
         border: "1px solid var(--card-border, var(--color-border))",
         borderRadius: "var(--radius-lg)",
         boxShadow: "var(--card-shadow, var(--shadow-card))",
         ...style,
-      }}
+      } as CSSProperties}
     >
       {children}
     </div>

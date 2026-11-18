@@ -4,6 +4,8 @@ import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
 import { BlockIcon } from "./ui/icon";
+import { businessContactDetails, type SiteMenu } from "@/lib/page-navigation";
+import { safeHref } from "@/lib/layout/guardrails";
 
 export type FooterProps = {
   design?: BlockDesign;
@@ -81,7 +83,13 @@ export const Footer: ComponentConfig<FooterProps> = {
     hours: "",
     navigation: [],
   },
-  render: ({ businessName, phone, address, socialLinks, variant, tagline, email, hours, navigation }) => {
+  render: ({ businessName, phone, address, socialLinks, variant, tagline, email, hours, navigation, puck }) => {
+    const menu = puck.metadata?.siteMenu as SiteMenu | undefined;
+    const name = menu?.contacts.businessName || businessName;
+    const links = menu?.links ?? navigation;
+    const details = businessContactDetails(menu?.contacts ?? {
+      businessName, phone, address, email: email ?? "", openingHours: hours ?? "",
+    });
     const centered = (variant ?? "columns") === "centered";
 
     const contact = (
@@ -89,23 +97,9 @@ export const Footer: ComponentConfig<FooterProps> = {
         className={`flex flex-col gap-2 text-sm ${centered ? "items-center" : ""}`}
         style={{ lineHeight: 1.6 }}
       >
-        {phone ? (
-          <a
-            href={phone.includes("[") ? undefined : `tel:${phone.replace(/\s+/g, "")}`}
-            className="inline-flex min-h-12 items-center gap-2 transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <BlockIcon name="phone" size={15} />
-            {phone}
-          </a>
-        ) : null}
-        {email ? <a href={email.includes("[") ? undefined : `mailto:${email}`} className="inline-flex min-h-12 items-center gap-2 break-all focus-visible:outline-2 focus-visible:outline-offset-2"><BlockIcon name="mail" size={15} />{email}</a> : null}
-        {address ? (
-          <p className="inline-flex items-center gap-2" style={{ color: "var(--color-muted)" }}>
-            <BlockIcon name="map-pin" size={15} />
-            {address}
-          </p>
-        ) : null}
-        {hours ? <p style={{ color: "var(--color-muted)" }}>{hours}</p> : null}
+        {details.map(({ label, value, icon, href }) => href
+          ? <a key={label} href={safeHref(href)} className="inline-flex min-h-12 items-center gap-2 break-all hover:underline"><BlockIcon name={icon} size={15} />{value}</a>
+          : <p key={label} className="inline-flex items-center gap-2 whitespace-pre-line"><BlockIcon name={icon} size={15} />{value}</p>)}
       </div>
     );
 
@@ -115,7 +109,7 @@ export const Footer: ComponentConfig<FooterProps> = {
           {socialLinks.map((link, i) => (
             <a
               key={i}
-              href={link.url || "#"}
+              href={safeHref(link.url)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex min-h-12 items-center transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -136,11 +130,11 @@ export const Footer: ComponentConfig<FooterProps> = {
             letterSpacing: "-0.5px",
           }}
         >
-          {businessName}
+          {name}
         </p>
         {tagline ? <p className="max-w-[32ch] text-sm" style={{ color: "var(--color-muted)" }}>{tagline}</p> : null}
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          © {new Date().getFullYear()} {businessName}. All rights reserved.
+          © {new Date().getFullYear()} {name}. All rights reserved.
         </p>
       </div>
     );
@@ -159,8 +153,8 @@ export const Footer: ComponentConfig<FooterProps> = {
             }
           >
             {brand}
-            {navigation?.length ? <nav aria-label={`${businessName} footer`} className={`flex flex-wrap gap-x-6 ${centered ? "justify-center" : variant === "columns" ? "flex-col" : ""}`}>
-              {navigation.map((link, i) => <a key={i} href={link.href || "#"} className="inline-flex min-h-12 items-center text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2">{link.label}</a>)}
+            {links?.length ? <nav aria-label={`${name} footer`} className={`flex flex-wrap gap-x-6 ${centered ? "justify-center" : variant === "columns" ? "flex-col" : ""}`}>
+              {links.map((link, i) => <a key={i} href={safeHref(link.href)} className="inline-flex min-h-12 items-center text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2">{link.label}</a>)}
             </nav> : null}
             {contact}
             {social}

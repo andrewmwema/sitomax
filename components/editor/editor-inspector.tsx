@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useContext, useEffect, type ReactNode } from "react";
 import { createUsePuck, useGetPuck } from "@puckeditor/core";
 import { Monitor, Smartphone, Tablet } from "lucide-react";
 import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
@@ -9,10 +9,16 @@ import { hasPlaceholder } from "@/lib/sections/placeholders";
 import { DesignField } from "./design-field";
 import { useInteractions } from "./interaction-context";
 import { cleanPhotoCredits } from "@/lib/editor/media";
+import { DEFAULT_COLORS } from "@/lib/theme/presets";
+import { safeHexColor } from "@/lib/sections/design";
+import { resolveContrastBackgrounds } from "@/lib/theme/contrast";
+import { ContrastNotice } from "./contrast-notice";
+import { SectionLibraryContext } from "./section-library";
 
 const usePuck = createUsePuck();
 export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<string, ReactNode>>; isLoading: boolean }) {
   const ui = useInteractions();
+  const library = useContext(SectionLibraryContext);
   const selected = usePuck((state) => state.selectedItem);
   const rootProps = usePuck((state) => state.appState.data.root.props);
   const getPuck = useGetPuck();
@@ -33,6 +39,11 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
   };
   const appearance = design.appearance?.[device] ?? {};
   const base = design.appearance?.desktop ?? {};
+  const appearanceBackgrounds = resolveContrastBackgrounds({
+    appearance: { [device]: { backgroundColor: appearance.backgroundColor ?? base.backgroundColor } },
+  });
+  const appearanceText = safeHexColor(appearance.textColor) ?? safeHexColor(base.textColor) ??
+    safeHexColor(library?.theme.colors?.text) ?? DEFAULT_COLORS.text;
   const mobileIndicator = (key: keyof typeof appearance) =>
     design.appearance?.mobile?.[key] !== undefined && design.appearance.mobile[key] !== base[key]
       ? <Smartphone className="inline" size={12} aria-label="Mobile override" /> : null;
@@ -94,6 +105,7 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
           const next = { ...design.appearance }; delete next[device]; change({ ...design, appearance: next });
         }}>Reset {device} appearance</button>
       </fieldset> : null}
+      {ui.tab === "style" ? <ContrastNotice foreground={appearanceText} backgrounds={appearanceBackgrounds} /> : null}
       {ui.tab !== "style" || device === "desktop" ? <DesignField value={design} onChange={change} level={level} panelTab={ui.tab} /> :
         <p className="text-xs text-zinc-500">Other style controls use the desktop design.</p>}
     </>}

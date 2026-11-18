@@ -8,31 +8,35 @@ const BACKGROUNDS: Record<SectionBackground, CSSProperties> = {
   // when a custom design background (color / image / video) is active.
   default: {
     backgroundColor: "var(--section-bg-override, var(--color-bg))",
-    color: "var(--color-text)",
-  },
+    color: "var(--shell-text-override, var(--color-on-bg, var(--color-text)))",
+    "--color-text": "var(--shell-text-override, var(--color-on-bg, var(--color-text)))",
+    "--color-muted": "var(--shell-text-override, var(--color-on-bg))",
+  } as CSSProperties,
   soft: {
     backgroundColor: "var(--section-bg-override, var(--color-soft-bg))",
-    color: "var(--color-text)",
-  },
+    color: "var(--shell-text-override, var(--color-on-soft-bg, var(--color-text)))",
+    "--color-text": "var(--shell-text-override, var(--color-on-soft-bg, var(--color-text)))",
+    "--color-muted": "var(--shell-text-override, var(--color-on-soft-bg))",
+  } as CSSProperties,
   dark: {
     backgroundColor: "var(--section-bg-override, var(--color-dark-bg))",
-    color: "var(--shell-text-override, var(--color-bg))",
+    color: "var(--shell-text-override, var(--color-on-dark-bg, var(--color-bg)))",
     // Re-derive tints for light-on-dark content.
-    "--color-muted": "var(--shell-muted-override, color-mix(in srgb, var(--color-bg) 72%, transparent))",
-    "--color-border": "color-mix(in srgb, var(--color-bg) 18%, transparent)",
-    // Buttons on dark: accent primary (white if low contrast), white outline.
+    "--color-text": "var(--shell-text-override, var(--color-on-dark-bg, var(--color-bg)))",
+    "--color-muted": "var(--shell-text-override, var(--color-on-dark-bg))",
+    "--color-border": "color-mix(in srgb, var(--shell-text-override, var(--color-on-dark-bg, var(--color-bg))) 18%, transparent)",
+    // Buttons on dark: accent primary (white if low contrast).
     "--btn-bg": "var(--color-cta-dark)",
     "--btn-fg": "var(--color-on-cta-dark)",
-    "--btn-outline": "rgba(255, 255, 255, 0.85)",
   } as CSSProperties,
   primary: {
     backgroundColor: "var(--section-bg-override, var(--color-primary))",
     color: "var(--shell-text-override, var(--color-on-primary))",
-    "--color-muted": "var(--shell-muted-override, color-mix(in srgb, var(--color-on-primary) 78%, transparent))",
+    "--color-text": "var(--shell-text-override, var(--color-on-primary))",
+    "--color-muted": "var(--shell-text-override, var(--color-on-primary))",
     "--color-border": "color-mix(in srgb, var(--color-on-primary) 25%, transparent)",
     "--btn-bg": "var(--color-cta-primary)",
     "--btn-fg": "var(--color-on-cta-primary)",
-    "--btn-outline": "rgba(255, 255, 255, 0.85)",
   } as CSSProperties,
 };
 

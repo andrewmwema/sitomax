@@ -7,7 +7,9 @@ import { EditorInspector } from "./editor-inspector";
 
 vi.mock("@puckeditor/core", () => ({
   createUsePuck: () => (selector: (state: object) => unknown) => selector({
-    selectedItem: { type: "Hero", props: { id: "hero", heading: "[Add a headline]", design: {} } },
+    selectedItem: { type: "Hero", props: { id: "hero", heading: "[Add a headline]", design: {
+      appearance: { desktop: { backgroundColor: "#ffffff", textColor: "#ffffff" } },
+    } } },
     appState: { data: { root: { props: {} } }, ui: { viewports: { current: { width: 1280 } } } },
     getPermissions: () => ({ edit: true }),
   }),
@@ -38,6 +40,7 @@ describe("editor inspector", () => {
     const tab = (name: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((item) => item.textContent === name)!;
     expect([...container.querySelectorAll('[role="tab"]')].map((item) => item.textContent)).toEqual(["Content", "Design", "Motion"]);
     await act(async () => tab("Design").click());
+    expect(container.textContent).toContain("WCAG AA recommends");
     const spacing = [...container.querySelectorAll("button")].find((item) => item.textContent === "spacing")!;
     await act(async () => spacing.click());
     expect(tab("Design").getAttribute("aria-selected")).toBe("true");

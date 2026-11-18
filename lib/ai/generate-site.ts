@@ -20,6 +20,8 @@ import { createPhotoResolver, fillSectionPhotos } from "./photos";
 import { CUSTOM_LAYOUT_CONTRACT, customSystemPrompt } from "./custom-layout";
 import { CustomSiteError, customSiteMaxTokens, planCustomSite, writeCustomPage } from "./custom-site";
 import { brand } from "@/lib/brand";
+import { defaultMenuLabel, pageMenuLinks } from "@/lib/page-navigation";
+import { reviewGeneratedPage } from "./site-quality";
 
 export class SiteGenerationError extends Error {
   constructor(message: string, readonly validationIssues?: CustomSiteError["issues"]) { super(message); }
@@ -141,6 +143,7 @@ export async function buildGeneratedSite(
       planStyle = customPlan.style;
       planColors = customPlan.colors;
       planFonts = customPlan.fonts;
+      if (customPlan.contrastAdjusted) warnings.add("Theme text color was adjusted to meet WCAG AA contrast.");
     } else {
       const validator = planValidator(input);
       const task = `Plan the selected pages for this site. Use the user's desired section types where appropriate. Return only the selected pages, with Home required.\nDESIGN PREFERENCES:\n${JSON.stringify({
@@ -161,6 +164,7 @@ export async function buildGeneratedSite(
       planSeo = result.data.seo;
     }
     planPages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
+    const menuPages = planPages.map(({ slug }) => ({ slug, nav_label: defaultMenuLabel(slug) }));
     if (input.primaryColor) planColors.primary = input.primaryColor;
     if (input.secondaryColor) planColors.secondary = input.secondaryColor;
     const pages = [];
@@ -169,7 +173,9 @@ export async function buildGeneratedSite(
       let content: { type: string; props: Record<string, unknown> }[];
       if (customPlan) {
         const plannedPage = customPlan.pages.find(({ slug }) => slug === page.slug)!;
-        content = await writeCustomPage(call, input, trace, customPlan, plannedPage, label, emit);
+        const colors = new Set<string>();
+        content = await writeCustomPage(call, input, trace, customPlan, plannedPage, label, emit, colors);
+        for (const warning of colors) warnings.add(`${label}: ${warning}`);
       } else {
         emit({ message: `Writing ${label}…` });
         const { slots, schema, task, tool } = pageFillContract(page as SitePlan["pages"][number]);
@@ -187,25 +193,28 @@ export async function buildGeneratedSite(
       const navigation: { type: string; props: Record<string, unknown> } = {
         type: "Navigation",
         props: { ...puckConfig.components.Navigation.defaultProps, id: `Navigation-${crypto.randomUUID()}`,
-          businessName: input.businessName, links: planPages.map((entry) => ({ label: entry.title, href: entry.slug ? `/${entry.slug}` : "/" })) },
+          businessName: input.businessName, links: pageMenuLinks(menuPages),
+          buttonLink: input.desiredPages.includes("contact") ? "/contact" : content.some(({ type }) => type === "ContactForm") ? "#contact" : "" },
       };
-      pages.push({ slug: page.slug, title: page.title,
-        data: { root: { props: { title: seo.title, description: seo.description } }, content: [navigation, ...content] } });
+      pages.push({ slug: page.slug, title: page.title, nav_label: defaultMenuLabel(page.slug),
+        data: { root: { props: { title: page.title, seoTitle: seo.title, description: seo.description } }, content: [navigation, ...content] } });
     }
     emit({ message: "Finding photos…" });
     const assetSiteId = input.siteId ?? crypto.randomUUID();
     const resolve = createPhotoResolver(warnings, { supabase, accountId: input.accountId, siteId: assetSiteId });
     const enrichedPages = [];
+    const reviewNotes = new Set<string>();
+    const theme = { style: planStyle, colors: planColors, headingFont: planFonts.heading, bodyFont: planFonts.body };
     for (const page of pages) {
       for (const section of page.data.content) if (section.type !== "Navigation") {
         section.props.photoCredits = await fillSectionPhotos(section.type, section.props, resolve);
       }
-      enrichedPages.push({ ...page, data: sanitizePuckData({
-        ...page.data, root: { props: { ...page.data.root.props, generationWarnings: [...warnings] } },
-      }) });
+      const data = sanitizePuckData(page.data);
+      const review = reviewGeneratedPage(data.content, { pages: menuPages, slug: page.slug, business: businessProfile, theme });
+      review.notes.forEach((note) => reviewNotes.add(note));
+      enrichedPages.push({ ...page, data: { ...data, content: review.content, root: { props: { ...data.root.props, generationWarnings: review.notes } } } });
     }
-    for (const page of enrichedPages) page.data.root.props.generationWarnings = [...warnings];
-    const theme = { style: planStyle, colors: planColors, headingFont: planFonts.heading, bodyFont: planFonts.body };
+    for (const page of enrichedPages) page.data.root.props.generationWarnings.push(...warnings);
     emit({ message: "Saving unpublished drafts…" });
     let siteId = input.siteId;
     let pageId: string;
@@ -225,7 +234,7 @@ export async function buildGeneratedSite(
       pageId = saved.page_id;
     }
     await finishSiteGeneration(generationId, true, siteId);
-    return { siteId, pageId, warnings: [...warnings] };
+    return { siteId, pageId, warnings: [...warnings, ...reviewNotes] };
   } catch (cause) {
     try { await finishSiteGeneration(generationId, false); }
     catch (accountingError) {

@@ -10,9 +10,12 @@ import { TenantTracking } from "@/components/tenant-tracking";
 import { localBusinessJsonLd, parseSiteSeo, publicPageSeo } from "@/lib/seo-public";
 import { absoluteImage, rootSeoSchema } from "@/lib/seo";
 import { createClient } from "@/lib/supabase/server";
+import { businessSchema, emptyBusiness } from "@/lib/business";
+import { pageMenuLinks, siteContacts, type SiteMenu } from "@/lib/page-navigation";
 import {
   getSiteByHost,
   getSitePage,
+  getTenantMenuPages,
   type TenantPage,
   type TenantSite,
 } from "@/lib/tenant";
@@ -119,6 +122,12 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   const theme = ((isPreview ? site.draft_theme ?? site.theme : site.theme) ?? {}) as SiteTheme;
   const seo = parseSiteSeo(site);
   const jsonLd = JSON.stringify(localBusinessJsonLd(site)).replace(/</g, "\\u003c");
+  const menuPages = await getTenantMenuPages(site.id, isPreview);
+  const contacts = siteContacts(businessSchema.parse({ ...emptyBusiness, ...site.business }));
+  const siteMenu: SiteMenu = {
+    links: pageMenuLinks(menuPages, isPreview ? `/s/${encodeURIComponent((await params).site)}` : ""),
+    contacts,
+  };
 
   return (
     <>
@@ -134,7 +143,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
       <Render
         config={puckConfig}
         data={{ content: [], root: {}, ...data } as unknown as PuckPageData}
-        metadata={{ theme }}
+        metadata={{ theme, siteMenu }}
         // Disable Puck's default richtext transform (it injects the raw
         // HTML unsanitized); pass the string through so blocks render it
         // via <RichTextContent>, which sanitizes with DOMPurify.

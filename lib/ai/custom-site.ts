@@ -4,6 +4,8 @@ import {
 } from "./custom-layout";
 import { fillSiteTool, safeValidationIssues, type SiteToolCall, type SiteToolTrace } from "./site-tool";
 import type { GenerationInput, GenerationProgress } from "./site-input";
+import { puckConfig } from "@/lib/puck/config";
+import type { LayoutItem } from "@/lib/layout/structure";
 
 export const customSiteMaxTokens = (toolName: string) => toolName === "plan_custom_site" ? 7000 : 5000;
 
@@ -41,25 +43,34 @@ function generationBrief(input: GenerationInput) {
 
 export async function writeCustomPage(
   call: SiteToolCall, input: GenerationInput, trace: SiteToolTrace, plan: Plan,
-  page: Plan["pages"][number], label: string, emit: (event: GenerationProgress) => void,
+  page: Plan["pages"][number], label: string, emit: (event: GenerationProgress) => void, warnings = new Set<string>(),
 ) {
   const brief = generationBrief(input);
   const { tool, schema } = customSiteSectionContract(input);
-  const sections = [];
+  const sections: LayoutItem[] = [];
   for (let start = 0; start < page.sections.length; start += 3) {
     const indexes = page.sections.slice(start, start + 3).map((_, index) => start + index);
     emit({ message: `Designing ${label} (${start + 1}–${indexes.at(-1)! + 1} of ${page.sections.length})…` });
     const batch = await Promise.allSettled(indexes.map(async (index) => {
+      const { kind } = page.sections[index];
+      if (kind === "footer") return null;
+      if (kind === "contact") return {
+        type: "ContactForm",
+        props: { ...puckConfig.components.ContactForm.defaultProps, id: `ContactForm-${crypto.randomUUID()}`, variant: "split", image: "" },
+      };
       const { result, outcome } = await fillSiteTool(call, tool, schema, customSectionTask(page, index, brief, {
         style: plan.style, colors: plan.colors, fonts: plan.fonts,
       }), { ...trace, page: page.slug || "home", section: index + 1 });
       if (!result.success) throw customError(outcome, `${label} section ${index + 1}`, result.error);
-      return result.data.section;
+      return buildCustomSections([result.data.section], plan.colors, warnings)[0];
     }));
     for (const section of batch) {
       if (section.status === "rejected") throw section.reason;
-      sections.push(section.value);
+      if (section.value && (section.value.type !== "ContactForm" || !sections.some(({ type }) => type === "ContactForm"))) sections.push(section.value);
     }
   }
-  return buildCustomSections(sections, plan.colors);
+  return [...sections, {
+    type: "Footer",
+    props: { ...puckConfig.components.Footer.defaultProps, id: `Footer-${crypto.randomUUID()}` },
+  }];
 }

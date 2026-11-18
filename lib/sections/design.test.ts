@@ -159,6 +159,12 @@ describe("normalizeDesign", () => {
       textColor: "auto",
     });
     expect(normalized.textScheme).toBe("light");
+    expect(normalizeDesign({ background: { type: "color", color: "#ffffff" } }).textScheme)
+      .toBe("dark");
+    expect(normalizeDesign({
+      background: { type: "gradient", from: "#020617", to: "#ffffff" },
+      textColor: "auto",
+    }).textScheme).toBe("dark");
   });
 
   it("defaults cleanly for an empty design", () => {

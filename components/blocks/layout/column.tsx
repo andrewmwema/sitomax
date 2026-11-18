@@ -63,19 +63,29 @@ export const Column: ComponentConfig<ColumnProps> = {
     gap: 16,
     content: [],
   },
-  render: ({ verticalAlign, surface, gap, content: Content }) => (
-    <Content
-      className={{
-        none: "layout-column",
-        card: "layout-column layout-card site-card",
-        highlight: "layout-column layout-card layout-card-highlight site-card",
-      }[oneOf(surface, ["none", "card", "highlight"], "none")]}
-      style={
-        {
-          justifyContent: JUSTIFY[oneOf(verticalAlign, ["top", "center", "bottom"], "top")],
-          "--column-gap": `${snapSpacing(gap, 16)}px`,
-        } as CSSProperties
-      }
-    />
-  ),
+  render: ({ verticalAlign, surface, gap, content: Content }) => {
+    const cardSurface = oneOf(surface, ["none", "card", "highlight"], "none") !== "none";
+    return (
+      <Content
+        className={{
+          none: "layout-column",
+          card: "layout-column layout-card site-card",
+          highlight: "layout-column layout-card layout-card-highlight site-card",
+        }[oneOf(surface, ["none", "card", "highlight"], "none")]}
+        style={
+          {
+            justifyContent: JUSTIFY[oneOf(verticalAlign, ["top", "center", "bottom"], "top")],
+            "--column-gap": `${snapSpacing(gap, 16)}px`,
+            ...(cardSurface
+              ? {
+                  "--color-text": "var(--color-on-bg, var(--color-text))",
+                  "--color-muted": "var(--color-on-bg)",
+                  color: "var(--color-on-bg, var(--color-text))",
+                }
+              : null),
+          } as CSSProperties
+        }
+      />
+    );
+  },
 };

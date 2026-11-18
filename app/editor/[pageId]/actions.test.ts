@@ -16,7 +16,7 @@ vi.mock("@/lib/auth", () => ({
   } }),
 }));
 
-import { publishPage, restorePageVersion, savePageDraft } from "./actions";
+import { publishPage, restorePageVersion, savePageDraft, savePageMenuLabel } from "./actions";
 const PAGE = "00000000-0000-4000-8000-000000000001";
 const VERSION = "00000000-0000-4000-8000-000000000002";
 const payload = () => ({ root: { props: { title: "Test" } }, content: [{
@@ -31,6 +31,12 @@ beforeEach(() => {
   mocks.profile.mockResolvedValue({ data: { is_super_admin: false } });
 });
 describe("editor persistence", () => {
+  it("writes only the validated menu label, independent of title and SEO", async () => {
+    expect(await savePageMenuLabel(PAGE, "One Two Three Four")).toMatchObject({ status: "error" });
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(await savePageMenuLabel(PAGE, " Our   Work ")).toMatchObject({ status: "success" });
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({ nav_label: "Our Work" });
+  });
   it("publishes SEO fields without exposing draft metadata early", async () => {
     const data = { root: { props: { title: "Page", seoTitle: "Search title", description: "Search description", socialImage: "/share.jpg", indexing: "noindex" } }, content: [] };
     expect(await savePageDraft(PAGE, data)).toMatchObject({ status: "success" });

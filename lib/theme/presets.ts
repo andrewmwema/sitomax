@@ -1,5 +1,14 @@
 import type { CSSProperties } from "react";
 import { fontFamily, isCuratedFont, type CuratedFont } from "./fonts";
+import {
+  bestContrastingTextColor,
+  contrastRatio,
+  nearestContrast,
+} from "./contrast";
+
+export { assessContrast, bestContrastingTextColor, contrastRatio, contrastWarning,
+  nearestContrast, resolveContrastBackgrounds, reviewContrast, WCAG_AA_LARGE_TEXT,
+  WCAG_AA_NORMAL_TEXT } from "./contrast";
 
 /**
  * Shared design foundation for every Puck block.
@@ -112,33 +121,11 @@ export const COLOR_PALETTES = [
   },
 ] as const;
 
-/** WCAG relative luminance of a #rrggbb / #rgb color. */
-function relativeLuminance(hex: string): number {
-  let value = hex.replace("#", "");
-  if (value.length === 3) {
-    value = value.split("").map((c) => c + c).join("");
-  }
-  const channels = [0, 2, 4].map((offset) => {
-    const channel = parseInt(value.slice(offset, offset + 2), 16) / 255;
-    return channel <= 0.03928
-      ? channel / 12.92
-      : Math.pow((channel + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
-}
-
-/** WCAG contrast ratio between two hex colors (1–21). */
-export function contrastRatio(a: string, b: string): number {
-  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
-  return (light + 0.05) / (dark + 0.05);
-}
-
 const DARK_INK = "#17202b";
 
 /** White or dark ink for text on the primary color — WCAG 4.5:1 first. */
 export function onPrimaryColor(primary: string): string {
-  if (contrastRatio("#ffffff", primary) >= 4.5) return "#ffffff";
-  return contrastRatio(DARK_INK, primary) >= 4.5 ? DARK_INK : "#000000";
+  return bestContrastingTextColor([primary], ["#ffffff", DARK_INK, "#000000"]) ?? "#000000";
 }
 
 /** Mix two hex colors (JS equivalent of color-mix for computed vars). */
@@ -166,7 +153,9 @@ function mixHex(a: string, b: string, weightA: number): string {
  */
 export function ctaOnColor(background: string, accent: string): string {
   try {
-    return contrastRatio(accent, background) >= 4.5 ? accent : "#ffffff";
+    return contrastRatio(accent, background) >= 4.5
+      ? accent
+      : bestContrastingTextColor([background], ["#ffffff", "#000000"]) ?? "#ffffff";
   } catch {
     return "#ffffff";
   }
@@ -182,8 +171,12 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
 
   // Computed in JS (not color-mix) so button contrast can be measured.
   const darkBg = mixHex(colors.text, "#000000", 0.92);
+  const softBg = mixHex(colors.primary, colors.background, 0.06);
   const ctaDark = ctaOnColor(darkBg, colors.accent ?? colors.secondary);
   const ctaPrimary = ctaOnColor(colors.primary, colors.accent ?? colors.secondary);
+  const ctaBackground = ctaOnColor(colors.background, colors.primary);
+  const onSoftBg = onPrimaryColor(softBg);
+  const onBackground = nearestContrast(colors.text, [colors.background]) ?? onPrimaryColor(colors.background);
   const [headingFont, bodyFont] = themeFonts(theme);
   const radius = typeof theme?.radius === "number" && Number.isFinite(theme.radius) ? Math.min(48, Math.max(0, theme.radius)) : undefined;
   const buttonRadius = theme?.buttonStyle === "square" ? "0px" : theme?.buttonStyle === "pill" ? "999px"
@@ -194,13 +187,18 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
     "--color-secondary": colors.secondary,
     "--color-accent": colors.accent ?? colors.secondary,
     "--color-bg": colors.background,
-    "--color-text": colors.text,
+    "--color-text": onBackground,
+    "--color-on-bg": onBackground,
+    "--color-on-soft-bg": onSoftBg,
+    "--color-on-dark-bg": onPrimaryColor(darkBg),
     "--color-on-primary": onPrimaryColor(colors.primary),
     // Computed tints keep every palette harmonious without extra choices.
-    "--color-muted": "color-mix(in srgb, var(--color-text) 64%, var(--color-bg))",
+    "--color-muted": onBackground,
     "--color-soft-bg": "color-mix(in srgb, var(--color-primary) 6%, var(--color-bg))",
     "--color-border": "color-mix(in srgb, var(--color-text) 14%, transparent)",
     "--color-dark-bg": darkBg,
+    "--color-cta-background": ctaBackground,
+    "--color-on-cta-background": onPrimaryColor(ctaBackground),
     // Primary-button colors on dark and primary backgrounds.
     "--color-cta-dark": ctaDark,
     "--color-on-cta-dark": onPrimaryColor(ctaDark),

@@ -75,8 +75,12 @@ async function EditorLoader({
   // supabase-js types to-one joins as arrays without generated DB types.
   const site = data.site as unknown as EditorSite;
   const siteSeo = siteSeoSchema.parse(site.seo);
-  const { data: sitePages, error: pagesError } = await supabase.from("pages")
-    .select("id, slug, title, draft_data, seo").eq("site_id", site.id).order("sort_order");
+  const listed = await supabase.from("pages").select("id, slug, title, nav_label, draft_data, seo")
+    .eq("site_id", site.id).order("sort_order").order("slug");
+  const menuLabelsReady = listed.error?.code !== "42703";
+  if (!menuLabelsReady) console.warn("Page menu labels migration is not applied; the editor is using labels from slugs.");
+  const { data: sitePages, error: pagesError } = menuLabelsReady ? listed : await supabase.from("pages")
+    .select("id, slug, title, draft_data, seo").eq("site_id", site.id).order("sort_order").order("slug");
   if (pagesError) throw new Error("Unable to load site pages", { cause: pagesError });
   const seoPages: SeoPageSummary[] = (sitePages ?? []).map((page) => {
     const { checks, score } = seoChecklist(page.draft_data, page.title, siteSeo, page.seo);
@@ -119,7 +123,8 @@ async function EditorLoader({
       previewUrl={previewUrl}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
       userId={user.id}
-      sitePages={(sitePages ?? []).map(({ id, slug, title }) => ({ id, slug, title }))}
+      sitePages={(sitePages ?? []).map((page) => ({ id: page.id, slug: page.slug, title: page.title,
+        nav_label: "nav_label" in page && typeof page.nav_label === "string" ? page.nav_label : null }))}
       seoPages={seoPages}
       generationWarnings={generated.data?.root?.props?.generationWarnings ?? []}
     />

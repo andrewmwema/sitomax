@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   dirty: false,
   panel: "seo",
+  renderedPanel: "seo",
+  data: { content: [], root: { props: {} } } as { content: unknown[]; root: { props: object } },
+  build: vi.fn(),
+  busy: null as string | null,
   ui: undefined as unknown,
 }));
 
@@ -17,7 +21,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mocks.panel ? { panel: mocks.panel } : {}),
 }));
 vi.mock("@puckeditor/core", () => ({
-  createUsePuck: () => vi.fn(),
+  createUsePuck: () => (selector: (value: unknown) => unknown) => selector({ appState: { data: mocks.data } }),
   useGetPuck: vi.fn(),
   blocksPlugin: () => ({ name: "blocks" }),
   outlinePlugin: () => ({ name: "outline" }),
@@ -28,14 +32,15 @@ vi.mock("@puckeditor/core", () => ({
   }) => {
     mocks.ui = ui;
     const Wrapper = overrides.puck;
-    const Seo = plugins.find((plugin) => plugin.name === "seo")!.render!;
-    return <Wrapper><Seo /></Wrapper>;
+    const Panel = plugins.find((plugin) => plugin.name === mocks.renderedPanel)!.render!;
+    return <Wrapper><Panel /></Wrapper>;
   },
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: { components: {} } }));
 vi.mock("@/lib/puck/editor-config", () => ({ editorConfig: () => ({}) }));
 vi.mock("./use-draft-persistence", () => ({
-  useDraftPersistence: () => ({ dirty: mocks.dirty, busy: null, error: null, save: mocks.save }),
+  useDraftPersistence: () => ({ dirty: mocks.dirty, busy: mocks.busy, error: null, save: mocks.save,
+    buildEmptyPage: mocks.build, buildNotes: [] }),
 }));
 vi.mock("./seo-panel", () => ({
   SeoPanel: ({ onSelectPage }: { onSelectPage: (id: string) => void }) =>
@@ -74,8 +79,38 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   mocks.panel = "seo";
+  mocks.renderedPanel = "seo";
+  mocks.data = { content: [], root: { props: {} } };
+  mocks.busy = null;
   mocks.dirty = false;
   mocks.save.mockResolvedValue(true);
+});
+
+describe("empty-page AI entry point", () => {
+  it("offers building the current empty page from Pages and disables repeated clicks while busy", async () => {
+    mocks.renderedPanel = "pages";
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(<PageEditor {...props} />));
+    const build = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Build this page with AI"));
+    expect(build).toBeDefined();
+    await act(async () => build!.click());
+    expect(mocks.build).toHaveBeenCalledOnce();
+    mocks.busy = "save";
+    await act(async () => root.render(<PageEditor {...props} />));
+    expect(container.querySelector<HTMLButtonElement>(".platform-button-ai")!.disabled).toBe(true);
+    await act(async () => root.unmount());
+  });
+
+  it("does not offer page generation when the canvas already contains content", async () => {
+    mocks.renderedPanel = "pages";
+    mocks.data = { content: [{ type: "Hero" }], root: { props: {} } };
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(<PageEditor {...props} />));
+    expect(container.textContent).not.toContain("Build this page with AI");
+    await act(async () => root.unmount());
+  });
 });
 afterEach(() => vi.unstubAllGlobals());
 

@@ -102,6 +102,16 @@ describe("rows and columns", () => {
     expect(html).not.toContain("javascript:");
     expect(html).toContain("--spacer-height:64px");
   });
+
+  it("uses theme-contrast text on custom card surfaces", () => {
+    const section = sectionWith([el("Heading", { text: "Readable card" })]);
+    const row = (section.props.rows as LayoutItem[])[0];
+    const column = (row.props.columns as LayoutItem[])[0];
+    column.props.surface = "card";
+    const html = render([section]);
+    expect(html).toContain("layout-card");
+    expect(html).toContain("--color-text:var(--color-on-bg, var(--color-text))");
+  });
 });
 
 describe("embed element", () => {

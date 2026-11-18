@@ -125,3 +125,19 @@ export async function getPublishedSitePages(siteId: string): Promise<Pick<Tenant
     pages.push(...data);
   }
 }
+
+export async function getTenantMenuPages(siteId: string, preview: boolean) {
+  const supabase = createAdminClient();
+  const query = supabase.from("pages").select("slug, nav_label").eq("site_id", siteId).order("sort_order").order("slug");
+  const result = await (preview ? query : query.not("published_data", "is", null));
+  if (result.error?.code === "42703") {
+    console.warn("Page menu labels migration is not applied; using labels from slugs.");
+    const legacyQuery = supabase.from("pages").select("slug").eq("site_id", siteId).order("sort_order").order("slug");
+    const legacy = await (preview ? legacyQuery : legacyQuery.not("published_data", "is", null));
+    if (legacy.error) throw new Error("Could not load tenant menu.", { cause: legacy.error });
+    return legacy.data.map(({ slug }) => ({ slug, nav_label: null }));
+  }
+  const { data, error } = result;
+  if (error) throw new Error("Could not load tenant menu.", { cause: error });
+  return data;
+}

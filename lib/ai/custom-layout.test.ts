@@ -60,7 +60,8 @@ describe("custom AI layout schemas", () => {
     const normalized = schema.parse({ ...plan, colors: { ...plan.colors, text: "#aaaaaa" }, pages: {
       home: { ...plan.pages.home, sections: [], title: "x".repeat(90) }, about: plan.pages.home,
     } });
-    expect(normalized.colors.text).toBe("#000000");
+    expect(normalized.colors.text).toBe("#767676");
+    expect(normalized.contrastAdjusted).toBe(true);
     expect(normalized.pages.map(({ slug }) => slug)).toEqual([""]);
     expect(normalized.pages[0].title).toHaveLength(80);
     expect(normalized.pages[0].sections.map(({ kind }) => kind)).toEqual(["hero", "faq", "footer"]);

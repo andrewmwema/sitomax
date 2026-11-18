@@ -4,6 +4,11 @@ import { useContext, useState, type ReactNode } from "react";
 import { Smartphone } from "lucide-react";
 import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import {
+  bestContrastingTextColor,
+  resolveContrastBackgrounds,
+} from "@/lib/theme/contrast";
+import {
+  safeHexColor,
   videoEmbedUrl,
   type BlockDesign,
   type DesignLevel,
@@ -15,6 +20,7 @@ import { SectionLibraryContext } from "@/components/editor/section-library";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { VideoUploadField } from "@/components/editor/video-upload-field";
 import { InteractionContext } from "./interaction-context";
+import { ContrastNotice } from "./contrast-notice";
 
 /**
  * Editor UI for the "design" object every block carries (SectionShell).
@@ -319,6 +325,7 @@ function SettingsTab({ design, patch }: TabProps) {
 /* ------------------------------------------------------------------ */
 
 function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
+  const library = useContext(SectionLibraryContext);
   const background = design.background ?? {};
   const border = design.border ?? {};
   const patchBackground = (
@@ -337,6 +344,15 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
     video.source !== "upload" &&
     Boolean(video.embedUrl) &&
     videoEmbedUrl(video.embedUrl) === null;
+  const backgrounds = resolveContrastBackgrounds({ background });
+  const themeText = safeHexColor(library?.theme.colors?.text) ?? DEFAULT_COLORS.text;
+  const foreground = design.textColor === "light"
+    ? "#f8fafc"
+    : design.textColor === "dark"
+      ? "#17202b"
+      : design.textColor === "auto"
+        ? bestContrastingTextColor(backgrounds) ?? themeText
+        : themeText;
 
   return (
     <>
@@ -527,6 +543,7 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
         ]}
         onChange={(textColor) => patch({ textColor })}
       />
+      <ContrastNotice foreground={foreground} backgrounds={backgrounds} />
     </>
   );
 }

@@ -9,6 +9,10 @@ import {
   type ReactNode,
 } from "react";
 import {
+  assessContrast,
+  bestContrastingTextColor,
+} from "@/lib/theme/contrast";
+import {
   normalizeDesign,
   safeHexColor,
   type BlockDesign,
@@ -134,7 +138,12 @@ export function SectionShell({
   const style: CSSProperties = {
     ...spacingVars(normalized),
     ...(hasBackground ? { "--section-bg-override": "transparent", "--shell-design-bg": "transparent" } : null),
-    ...(textScheme ? TEXT_SCHEMES[textScheme] : null),
+    ...(textScheme
+      ? {
+          ...TEXT_SCHEMES[textScheme],
+          "--shell-text-override": TEXT_SCHEMES[textScheme].color,
+        }
+      : null),
     ...(border
       ? {
           border: border.width > 0 ? `${border.width}px solid ${border.color}` : undefined,
@@ -155,7 +164,12 @@ export function SectionShell({
     if (!appearance) continue;
     const vars = style as Record<string, string | number | undefined>;
     const bg = safeHexColor(appearance.backgroundColor);
-    const color = safeHexColor(appearance.textColor);
+    const requestedColor = safeHexColor(appearance.textColor);
+    const color = bg
+      ? requestedColor && assessContrast(requestedColor, bg)?.passes
+        ? requestedColor
+        : bestContrastingTextColor([bg])
+      : requestedColor;
     if (bg) vars[`--appearance-bg-${suffix}`] = bg;
     if (color) {
       vars[`--appearance-text-${suffix}`] = color;

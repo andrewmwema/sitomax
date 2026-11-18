@@ -1,4 +1,4 @@
-import { contrastRatio } from "@/lib/theme/presets";
+import { bestContrastingTextColor } from "@/lib/theme/contrast";
 import { snapSpacing } from "@/lib/layout/spacing";
 
 /**
@@ -306,15 +306,9 @@ const DARK_INK = "#17202b";
 
 /** Light or dark text for a hex background, 4.5:1 contrast first. */
 export function autoTextScheme(backgroundColor: string): "light" | "dark" {
-  try {
-    const light = contrastRatio("#ffffff", backgroundColor);
-    const dark = contrastRatio(DARK_INK, backgroundColor);
-    if (light >= 4.5 && light >= dark) return "light";
-    if (dark >= 4.5) return "dark";
-    return light >= dark ? "light" : "dark";
-  } catch {
-    return "dark";
-  }
+  return bestContrastingTextColor([backgroundColor], ["#f8fafc", DARK_INK]) === "#f8fafc"
+    ? "light"
+    : "dark";
 }
 
 function normalizeOverlay(
@@ -419,9 +413,14 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
   let textScheme: "light" | "dark" | null = null;
   if (design?.textColor === "light" || design?.textColor === "dark") {
     textScheme = design.textColor;
-  } else if (design?.textColor === "auto") {
+  } else if (design?.textColor === "auto" || design?.textColor === undefined) {
     if (background.kind === "color") {
       textScheme = autoTextScheme(background.color);
+    } else if (background.kind === "gradient") {
+      textScheme = bestContrastingTextColor(
+        [background.from, background.to],
+        ["#f8fafc", DARK_INK],
+      ) === "#f8fafc" ? "light" : "dark";
     } else if (background.kind === "image" || background.kind === "video") {
       // Media backgrounds read through the overlay when it is strong
       // enough; otherwise assume light text (media is usually dark).

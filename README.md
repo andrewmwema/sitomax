@@ -44,6 +44,14 @@ the requested content to the configured AI provider; each attempt is metered.
 Review generated content and placeholders before accepting or publishing it.
 AI-created sections use stock photos when configured, otherwise image placeholders.
 
+### Build an empty page
+
+Choose **Build this page with AI** in the editor's **Pages** panel or on an empty
+canvas. Generation uses the site's saved business information, current theme and
+page links, retaining shared navigation/footer styling. It saves only a draft;
+review the result before publishing. Nonempty pages are never replaced, and a
+concurrent draft change cancels the save. Each AI attempt is metered.
+
 ### Ask AI to edit
 
 Apply [0022_editor_ai_history.sql](./supabase/migrations/0022_editor_ai_history.sql)
@@ -107,6 +115,12 @@ section calls and repairs are metered against the same generation. To verify
 with synthetic details and no database writes, run
 `node scripts/test-anthropic.mjs --custom --home-only` and then
 `node scripts/test-anthropic.mjs --custom` (four pages with FAQ and Pricing).
+Apply [`0025_page_menu_labels.sql`](supabase/migrations/0025_page_menu_labels.sql)
+before deploying automatic site menus. Edit a page's short **Menu label** in
+the editor's **Pages → Page settings**; this does not change the page or SEO
+title. Live menus only list published pages; draft previews can link to other
+drafts. New custom drafts use the shared footer and saved business contact
+details. The editor displays automatic checks under **AI draft review notes**.
 The diagnostic prints validation paths, codes, messages, and truncated received
 values. Production logs use the request reference and record the received type
 or length instead of generated text. Only super admins see validation issues in

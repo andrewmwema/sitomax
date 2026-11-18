@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { safeHexColor, safeUploadedVideoUrl, videoEmbedUrl, type BlockDesign } from "@/lib/sections/design";
 import { contrastRatio, DEFAULT_COLORS, type SiteTheme } from "@/lib/theme/presets";
+import { nearestContrast } from "@/lib/theme/contrast";
 import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
 
 const hex = z.string().regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -53,7 +54,7 @@ export const themePatchSchema = z.strictObject({
 
 export function readableText(text: string, background: string) {
   if (contrastRatio(text, background) >= 4.5) return text;
-  return contrastRatio("#000", background) >= contrastRatio("#fff", background) ? "#000" : "#fff";
+  return nearestContrast(text, [background]) ?? text;
 }
 
 export function editTheme(theme: SiteTheme, patch: z.infer<typeof themePatchSchema>, warnings: Set<string>): SiteTheme {
@@ -101,9 +102,7 @@ export function editDesign(design: BlockDesign, patch: z.infer<typeof designPatc
         const wanted = appearance.textColor ?? base?.textColor ?? theme.colors?.text ?? DEFAULT_COLORS.text;
         const end = next.background?.type === "gradient" && !appearance.backgroundColor && !base?.backgroundColor ? next.background.to : undefined;
         const color = end && contrastRatio(wanted, end) < 4.5
-          ? [readableText(wanted, bg), "#000", "#fff"].find((ink) =>
-            contrastRatio(ink, bg) >= 4.5 && contrastRatio(ink, end) >= 4.5) ?? readableText(wanted, bg)
-          : readableText(wanted, bg);
+          ? nearestContrast(wanted, [bg, end]) ?? readableText(wanted, bg) : readableText(wanted, bg);
         appearance.textColor = color;
         if (color !== wanted) warnings.add("Section text color was adjusted to meet WCAG AA contrast.");
       }

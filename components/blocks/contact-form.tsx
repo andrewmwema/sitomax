@@ -9,6 +9,7 @@ import { Card } from "./ui/card";
 import { EnquiryForm, enquiryFieldsField } from "./ui/enquiry-form";
 import { RichTextContent } from "./ui/rich-text";
 import { BlockIcon } from "./ui/icon";
+import { businessContactDetails, type SiteMenu } from "@/lib/page-navigation";
 
 export type ContactFormProps = {
   design?: BlockDesign;
@@ -75,8 +76,18 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     details: [],
     note: "",
   },
-  render: ({ eyebrow, heading, formName, submitText, formFields, variant, text, details, image, imageAlt, note }) => {
+  render: ({ eyebrow, heading, formName, submitText, formFields, variant, text, details, image, imageAlt, note, puck }) => {
     const split = variant === "split" || variant === "visit";
+    const menu = puck.metadata?.siteMenu as SiteMenu | undefined;
+    const info = menu ? businessContactDetails(menu.contacts) : (details ?? []).map((detail) => ({ ...detail, href: "" }));
+    const contactDetails = info.length ? <dl className="mt-[var(--content-gap)] grid gap-5 border-t pt-6 sm:grid-cols-2" style={{ borderColor: "var(--color-border)" }}>
+      {info.map((detail, i) => <div key={i} className="flex flex-col gap-2">
+        <dt className="flex items-center gap-2 text-sm font-semibold"><BlockIcon name={detail.icon} size={18} />{detail.label}</dt>
+        <dd className="whitespace-pre-line text-sm" style={{ color: "var(--color-muted)" }}>
+          {detail.href ? <a href={detail.href} className="underline">{detail.value}</a> : detail.value}
+        </dd>
+      </div>)}
+    </dl> : null;
 
     const form = (
       <Card className="gap-0 p-6 sm:p-8">
@@ -87,7 +98,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     if (split) {
       return (
         <Section background={variant === "visit" ? "default" : "soft"}>
-          <div className="grid items-start gap-10 md:grid-cols-2 md:gap-16">
+          <div id="contact" className="grid items-start gap-10 md:grid-cols-2 md:gap-16">
             <div className="flex flex-col gap-3">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <Heading level={2}>{heading}</Heading>
@@ -96,13 +107,9 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={image} alt={imageAlt || ""} loading="lazy" className="mt-[var(--content-gap)] aspect-[16/9] w-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
               ) : null}
-              {details?.length ? <dl className="mt-[var(--content-gap)] grid gap-5 border-t pt-6 sm:grid-cols-2" style={{ borderColor: "var(--color-border)" }}>
-                {details.map((detail, i) => <div key={i} className="flex flex-col gap-2">
-                  <dt className="flex items-center gap-2 text-sm font-semibold"><BlockIcon name={detail.icon} size={18} />{detail.label}</dt>
-                  <dd className="whitespace-pre-line text-sm" style={{ color: "var(--color-muted)" }}>{detail.value}</dd>
-                </div>)}
-              </dl> : null}
+              {contactDetails}
             </div>
+            {contactDetails}
             {form}
           </div>
         </Section>
@@ -111,7 +118,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
 
     return (
       <Section background="soft">
-        <div className="mx-auto flex w-full max-w-xl flex-col gap-10">
+        <div id="contact" className="mx-auto flex w-full max-w-xl flex-col gap-10">
           <div className="flex flex-col items-center gap-3 text-center">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
             <Heading level={2}>{heading}</Heading>

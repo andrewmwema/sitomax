@@ -5,7 +5,7 @@ type Variant = "primary" | "secondary" | "ghost";
 const VARIANTS: Record<Variant, CSSProperties> = {
   // --btn-* vars are set by dark/primary Sections and by SectionShell's
   // light text scheme (photo/video backgrounds), so primary buttons use
-  // the accent (or white) and secondary buttons a white outline there.
+  // the accent (or white). Outlines follow the readable foreground.
   primary: {
     backgroundColor: "var(--btn-bg, var(--color-primary))",
     color: "var(--btn-fg, var(--color-on-primary))",
@@ -14,11 +14,11 @@ const VARIANTS: Record<Variant, CSSProperties> = {
   secondary: {
     backgroundColor: "transparent",
     color: "inherit",
-    border: "1px solid var(--btn-outline, var(--color-border))",
+    border: "1px solid currentColor",
   },
   ghost: {
     backgroundColor: "transparent",
-    color: "var(--color-primary)",
+    color: "inherit",
     border: "1px solid transparent",
   },
 };
@@ -53,7 +53,7 @@ export function Button({
       style={{
         borderRadius: "var(--button-radius, var(--radius-sm))",
         fontFamily: "var(--font-body)",
-        outlineColor: "var(--color-secondary)",
+        outlineColor: "currentColor",
         ...VARIANTS[variant],
         ...style,
       }}
