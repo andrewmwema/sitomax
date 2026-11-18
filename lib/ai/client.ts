@@ -25,18 +25,25 @@ const requestSchema = z.object({
   tools: z.array(z.strictObject({
     name: z.string().regex(/^[a-zA-Z0-9_-]+$/),
     description: z.string().optional(),
-    strict: z.literal(true),
+    strict: z.boolean(),
     input_schema: z.looseObject({ type: z.literal("object") }),
   })).optional(),
   toolName: z.string().optional(),
   system: z.string().min(1).optional(),
   cacheTtl: z.enum(["5m", "1h"]).optional(),
   messages: z.array(z.object({
-    role: z.enum(["user", "assistant"]), content: z.string().min(1),
+    role: z.enum(["user", "assistant"]),
+    content: z.union([z.string().min(1), z.array(z.discriminatedUnion("type", [
+      z.looseObject({ type: z.literal("text"), text: z.string() }),
+      z.looseObject({ type: z.literal("thinking"), thinking: z.string(), signature: z.string() }),
+      z.looseObject({ type: z.literal("redacted_thinking"), data: z.string() }),
+      z.looseObject({ type: z.literal("tool_use"), id: z.string().min(1), name: z.string().min(1), input: z.unknown() }),
+      z.looseObject({ type: z.literal("tool_result"), tool_use_id: z.string().min(1), is_error: z.boolean(), content: z.string().min(1) }),
+    ])).min(1)]),
   })).min(1),
   maxTokens: z.number().int().min(1).max(64_000),
 });
-export type AiRequest = z.input<typeof requestSchema>;
+export type AiRequest = Omit<z.input<typeof requestSchema>, "messages"> & { messages: Anthropic.MessageParam[] };
 
 /** The only SDK call entry point: authenticated reservation -> provider -> ledger. */
 export async function requestAi(raw: AiRequest): Promise<Anthropic.Message> {

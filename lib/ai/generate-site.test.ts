@@ -13,7 +13,7 @@ vi.mock("@/lib/auth", () => ({ requireUser: async () => ({
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
 vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGeneration: mocks.finish }));
-import { buildGeneratedSite, safeDefaultSection } from "./generate-site";
+import { buildGeneratedSite } from "./generate-site";
 import { aiCatalog, blockFields, blockSchemas, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
@@ -51,7 +51,9 @@ function section(designId: string) {
   return Object.fromEntries(Object.entries(blockFields(design.blockType)).filter(([key]) => key !== "design" && key !== "variant")
     .map(([key, field]) => [key, fieldValue(field)]));
 }
-const message = (name: string, value: unknown) => ({ stop_reason: "tool_use", content: [{ type: "tool_use", name, input: value }] });
+const message = (name: string, value: unknown) => ({ stop_reason: "tool_use", content: [
+  { type: "tool_use", id: "toolu_test", name, input: value },
+] });
 function answer(request: { toolName: string; messages: { content: string }[] }) {
   if (request.toolName === "plan_site") return message("plan_site", structuredClone(plan));
   const page = JSON.parse(request.messages[0].content.split("\n")[1]) as {
@@ -68,17 +70,19 @@ beforeEach(() => {
   mocks.begin.mockResolvedValue(generationId); mocks.finish.mockResolvedValue(undefined);
   mocks.request.mockImplementation(answer);
   vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
 describe("catalog site generation", () => {
-  it("uses one strict tool per call with a shared cached prompt, sanitizes and saves only drafts", async () => {
+  it("uses a strict plan and non-strict fills with a shared cached prompt, sanitizes and saves only drafts", async () => {
     const progress: string[] = [];
     const result = await buildGeneratedSite(input, ({ message }) => progress.push(message));
     expect(result).toMatchObject({ siteId, pageId });
     expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId);
     expect(mocks.request).toHaveBeenCalledTimes(5);
     for (const [request] of mocks.request.mock.calls) expect(request).toMatchObject({
-      generationId, action: "generate_site", tools: [{ name: request.toolName, strict: true }], cacheTtl: "5m", system: SITE_SYSTEM_PROMPT,
+      generationId, action: "generate_site", tools: [{ name: request.toolName, strict: request.toolName === "plan_site" }],
+      cacheTtl: "5m", system: SITE_SYSTEM_PROMPT,
     });
     expect(mocks.request.mock.calls.map(([request]) => request.toolName)).toEqual(["plan_site", ...Array(4).fill("fill_page")]);
     const save = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1];
@@ -122,22 +126,37 @@ describe("catalog site generation", () => {
     expect(mocks.request).toHaveBeenCalledTimes(3);
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
-  it("repairs excess sections without throwing outside validation, and ignores unplanned content", async () => {
+  it("repairs invalid props once in the same conversation and saves only corrected content", async () => {
+    let originalTurn: object[] = [];
     mocks.request.mockImplementation((request) => {
       const response = answer(request);
-      if (request.toolName === "fill_page") {
-        const page = response.content[0].input as { sections: Record<string, unknown> };
-        page.sections.unplanned = { code: "<script>bad()</script>" };
+      if (request.toolName !== "fill_page" || !request.messages[0].content.includes('"slug":"about"')) return response;
+      if (request.messages.length === 1) {
+        const page = response.content[0].input as { sections: { section_1: Record<string, unknown> } };
+        page.sections.section_1.heading = 123;
+        originalTurn = [{ type: "thinking", thinking: "private reasoning", signature: "signed" }, ...response.content];
+        return { ...response, content: originalTurn };
       }
+      expect(request.messages).toEqual([
+        { role: "user", content: expect.stringContaining('"slug":"about"') },
+        { role: "assistant", content: originalTurn },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_test", is_error: true,
+          content: expect.stringMatching(/sections\.section_1\.heading: .+[\s\S]+Call fill_page exactly once/) }] },
+      ]);
       return response;
     });
     await buildGeneratedSite(input);
-    expect(mocks.request).toHaveBeenCalledTimes(9);
-    const saved = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1].p_pages;
-    expect(JSON.stringify(saved)).not.toContain("<script>");
-    expect(saved[0].data.content).toHaveLength(3);
+    expect(mocks.request).toHaveBeenCalledTimes(6);
+    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, true, siteId);
+    for (const repairAttempt of [false, true]) {
+      expect(console.info).toHaveBeenCalledWith("AI site tool call", {
+        tool: "fill_page", strict: false, schemaBytes: expect.any(Number), stop_reason: "tool_use",
+        repairAttempt, repairNeeded: !repairAttempt,
+      });
+    }
+    expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toMatch(/private reasoning|Local Plumbing/);
   });
-  it("falls back only the failing section after one repair, discloses it and removes unverifiable sample copy", async () => {
+  it("stops after the second invalid page response without saving any drafts", async () => {
     mocks.request.mockImplementation((request) => {
       if (request.toolName === "plan_site") return answer(request);
       const { slug, sections } = JSON.parse(request.messages[0].content.split("\n")[1]);
@@ -145,13 +164,24 @@ describe("catalog site generation", () => {
         .map(([key, entry]) => [key, { ...section((entry as { designId: string }).designId),
           ...(slug === "about" && key === "section_1" ? { heading: 123 } : {}) }])) });
     });
-    const result = await buildGeneratedSite(input);
-    expect(mocks.request).toHaveBeenCalledTimes(6);
-    expect(result.warnings.some((warning) => warning.includes("validation failed twice"))).toBe(true);
-    const saved = mocks.rpc.mock.calls.find(([name]) => name === "replace_ai_site_drafts_with_business")![1].p_pages;
-    expect(saved.find((page: { slug: string }) => page.slug === "about").data.content[1].props.heading).toMatch(/\[Add /);
-    const fallback = safeDefaultSection("hero-centered-badge");
-    expect(fallback.props.badgeText).toMatch(/^\[Add /);
+    const progress: string[] = [];
+    await expect(buildGeneratedSite(input, ({ message }) => progress.push(message)))
+      .rejects.toThrow("Page About failed validation after repair. No drafts were changed.");
+    expect(mocks.request).toHaveBeenCalledTimes(4);
+    expect(progress).toEqual(["Planning your site…", "Writing Home…", "Writing About…"]);
+    expect(mocks.rpc.mock.calls.some(([name]) => name === "replace_ai_site_drafts_with_business")).toBe(false);
+    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
+  });
+  it("asks for the expected tool again without inventing a tool ID for a text-only reply", async () => {
+    mocks.request.mockImplementationOnce(answer).mockResolvedValueOnce({
+      stop_reason: "end_turn", content: [{ type: "text", text: "No tool used." }],
+    });
+    await expect(buildGeneratedSite(input)).resolves.toMatchObject({ siteId, pageId });
+    expect(mocks.request.mock.calls[2][0].messages).toEqual([
+      { role: "user", content: expect.stringContaining('"slug":""') },
+      { role: "assistant", content: [{ type: "text", text: "No tool used." }] },
+      { role: "user", content: expect.stringContaining("Call fill_page exactly once") },
+    ]);
   });
   it("denies editors and unconfirmed replacement before any quota or provider work", async () => {
     await expect(buildGeneratedSite({ ...input, confirmReplace: false })).rejects.toThrow();

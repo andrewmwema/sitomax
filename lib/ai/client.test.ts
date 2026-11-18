@@ -100,6 +100,24 @@ describe("metered AI entry point", () => {
       model: SMALL_EDIT_MODEL, tool_choice: { type: "tool", name: "rewrite_text", disable_parallel_tool_use: true },
     }));
   });
+  it("passes the exact Sonnet assistant tool turn and its error result to the SDK", async () => {
+    mocks.check.mockResolvedValueOnce({ id, model: SITE_GENERATION_MODEL });
+    mocks.create.mockResolvedValueOnce({ model: SITE_GENERATION_MODEL, usage: { input_tokens: 10, output_tokens: 10 } });
+    const tool = { name: "fill_page", strict: false, input_schema: { type: "object" as const } };
+    const previous = { role: "assistant" as const, content: [
+      { type: "thinking" as const, thinking: "internal reasoning", signature: "signed" },
+      { type: "tool_use" as const, id: "toolu_123", name: tool.name, input: {} },
+    ] };
+    const result = { role: "user" as const, content: [
+      { type: "tool_result" as const, tool_use_id: "toolu_123", is_error: true, content: "Send valid props." },
+    ] };
+    await requestAi({ ...input, action: "generate_site", tools: [tool], toolName: tool.name,
+      messages: [...input.messages, previous, result] });
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ tools: [tool], messages: [
+      { role: "user", content: expect.stringMatching(/^Call the fill_page tool exactly once[\s\S]+Rewrite this$/) },
+      previous, result,
+    ] }));
+  });
   it("logs provider type, message and both references without credentials or raw SDK errors", async () => {
     const message = 'tool_choice: type "tool" and "any" are not supported for this model.';
     const cause = Anthropic.APIError.generate(400, {

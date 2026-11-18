@@ -16,8 +16,8 @@ export function anthropicRequestParams(model: string, input: RequestOptions): An
   return {
     model,
     max_tokens: input.maxTokens,
-    messages: autoTool ? input.messages.map((message, index) =>
-      index === input.messages.length - 1 && message.role === "user" && typeof message.content === "string"
+    messages: autoTool ? input.messages.map((message) =>
+      message.role === "user" && typeof message.content === "string"
         ? { ...message, content: `Call the ${toolName} tool exactly once to return your result. Do not reply with text alone.\n\n${message.content}` }
         : message) : input.messages,
     system: input.cacheTtl && input.system

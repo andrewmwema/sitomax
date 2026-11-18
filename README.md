@@ -49,7 +49,9 @@ To diagnose the provider locally with a configured API key, run
 Add `--generation` to test planning and four page requests with synthetic
 details and no database writes (this uses provider credits). Add `--dry-run`
 to check the planner and four synthetic page schemas without sending requests.
-The diagnostic prints schema sizes, not prompts, business details or keys.
+The planner is strict; page fills are non-strict and get one Zod-driven repair
+before the run stops without saving drafts. The diagnostic prints tool metadata,
+not prompts, business details or keys.
 Provider errors are logged centrally and sanitized details are shown only to
 super admins.
 

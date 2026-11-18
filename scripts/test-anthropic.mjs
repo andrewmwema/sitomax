@@ -30,31 +30,29 @@ try {
     vite = await createServer({ root, configFile: `${root}vitest.config.ts`, server: { middlewareMode: true, ws: false, watch: null } });
     const { anthropicRequestParams } = await vite.ssrLoadModule("/lib/ai/request-params.ts");
     const { aiCatalog, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema } = await vite.ssrLoadModule("/lib/ai/site-schemas.ts");
+    const { fillPage, runSiteTool } = await vite.ssrLoadModule("/lib/ai/site-tool.ts");
     const { SITE_SYSTEM_PROMPT } = await vite.ssrLoadModule("/lib/ai/site-prompt.ts");
     const business = JSON.stringify({ businessName: "Example Plumbing", businessType: "Plumber",
       city: "Example City", services: ["Pipe repairs"], style: "modern" });
-    async function send(tool, task, maxTokens) {
-      const toolName = tool.name;
-      const content = `${task}\nBUSINESS DATA:\n${business}`;
+    const prompt = (task) => `${task}\nBUSINESS DATA:\n${business}`;
+    async function send(tool, messages) {
       const params = anthropicRequestParams(SITE_GENERATION_MODEL, {
-        maxTokens, system: SITE_SYSTEM_PROMPT, cacheTtl: "5m", toolName,
-        tools: [tool], messages: [{ role: "user", content }],
+        maxTokens: tool.name === "plan_site" ? 6000 : 16000,
+        system: SITE_SYSTEM_PROMPT, cacheTtl: "5m", toolName: tool.name, tools: [tool], messages,
       });
-      const headers = { "anthropic-version": "2023-06-01" };
-      console.log(JSON.stringify({ model: params.model, tool: toolName, strict: tool.strict,
-        schemaBytes: Buffer.byteLength(JSON.stringify(tool.input_schema)), maxTokens: params.max_tokens,
-        cacheTtl: params.system[0].cache_control.ttl }));
-      if (!sdk) return;
-      const result = await sdk.messages.create(params, { headers });
-      const calls = result.content.filter((block) => block.type === "tool_use");
-      if (result.stop_reason !== "tool_use" || calls.length !== 1 || calls[0].name !== toolName) {
-        throw new Error(`Expected exactly one ${toolName} call; received stop_reason=${result.stop_reason}.`);
+      if (!sdk) {
+        console.log(JSON.stringify({ model: params.model, tool: tool.name, strict: tool.strict,
+          schemaBytes: Buffer.byteLength(JSON.stringify(tool.input_schema)), maxTokens: params.max_tokens,
+          cacheTtl: params.system[0].cache_control.ttl }));
+        return;
       }
-      console.log(JSON.stringify({ model: result.model, stop_reason: result.stop_reason, tool: toolName, usage: result.usage }));
-      return calls[0].input;
+      return sdk.messages.create(params);
     }
-    const plan = await send(PLAN_SITE_TOOL, "Plan the complete site.", 6000);
-    const pages = sdk ? planSchema.parse(plan).pages : PAGE_SLUGS.map((slug) => ({
+    const planMessages = [{ role: "user", content: prompt("Plan the complete site.") }];
+    const plan = sdk ? (await runSiteTool(send, PLAN_SITE_TOOL, planSchema, planMessages)).result : null;
+    if (plan && !plan.success) throw new Error("Generated plan failed local schema validation.");
+    if (!sdk) await send(PLAN_SITE_TOOL, planMessages);
+    const pages = plan ? plan.data.pages : PAGE_SLUGS.map((slug) => ({
       slug, title: slug || "Home", sections: ["Hero", "Services", "Footer"].map((blockType) => ({
         blockType, designId: aiCatalog.find((design) => design.blockType === blockType && design.styles.includes("modern")).id,
       })),
@@ -62,8 +60,11 @@ try {
     pages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
     for (const page of pages) {
       const { tool, task, schema } = pageFillContract(page);
-      const result = await send(tool, task, 16000);
-      if (sdk && !schema.safeParse(result).success) throw new Error(`Generated page failed local schema validation (${page.slug || "home"}).`);
+      if (!sdk) {
+        await send(tool, [{ role: "user", content: prompt(task) }]);
+      } else if (!(await fillPage(send, tool, schema, prompt(task))).success) {
+        throw new Error(`Page ${page.title} failed validation after repair.`);
+      }
     }
     if (sdk) console.log("Validated one plan and four generated pages (no database writes).");
   }

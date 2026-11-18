@@ -132,7 +132,8 @@ export function pageFillContract(page: PlannedPage) {
     slug: page.slug, title: page.title,
     sections: Object.fromEntries(slots.map(({ key, designId, blockType }) => [key, { blockType, designId }])),
   })}`;
-  return { slots, schema, task, tool: strictTool("fill_page", "Return props for the planned page's section slots.", schema) };
+  const tool = { ...strictTool("fill_page", "Return props for the planned page's section slots.", schema), strict: false };
+  return { slots, schema, task, tool };
 }
 
 export function defaultSection(designId: string) {

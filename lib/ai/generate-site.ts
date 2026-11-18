@@ -1,8 +1,6 @@
 import "server-only";
 
 import { z } from "zod";
-import type { Message } from "@anthropic-ai/sdk/resources/messages";
-import type { Field } from "@puckeditor/core";
 import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { puckConfig } from "@/lib/puck/config";
@@ -14,18 +12,13 @@ import { requestAi } from "./client";
 import { AiProviderError } from "./provider-error";
 import { beginSiteGeneration, finishSiteGeneration } from "./usage";
 import { createGenerationInputSchema, type GenerationInput, type GenerationProgress, type GenerationResult } from "./site-input";
-import { aiCatalog, blockFields, defaultSection, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema } from "./site-schemas";
+import { defaultSection, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema } from "./site-schemas";
+import { fillPage, runSiteTool, validationMessage, type SiteToolCall } from "./site-tool";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
 import { brand } from "@/lib/brand";
 
 export class SiteGenerationError extends Error {}
-
-function toolInput(message: Message, name: string): unknown {
-  const tools = message.content.filter((part) => part.type === "tool_use");
-  if (message.stop_reason !== "tool_use" || tools.length !== 1 || tools[0].name !== name) return undefined;
-  return tools[0].input;
-}
 
 async function authorize(input: GenerationInput) {
   const { supabase, user } = await requireUser();
@@ -54,36 +47,12 @@ async function authorize(input: GenerationInput) {
   return { supabase, user, isAdmin: Boolean(admin) };
 }
 
-function validationMessage(error: z.ZodError) {
-  return error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n").slice(0, 8000);
-}
-
 function planValidator(input: GenerationInput) {
   return planSchema.superRefine((plan, ctx) => {
     if (input.style !== "auto" && plan.style !== input.style) ctx.addIssue({ code: "custom", path: ["style"], message: "Respect the requested style." });
     const bg = plan.colors.background, fg = plan.colors.text;
     if (contrastRatio(bg, fg) < 4.5) ctx.addIssue({ code: "custom", path: ["colors"], message: "Body text/background contrast must be at least 4.5:1." });
   });
-}
-
-/** Keep the preset's layout, replacing unverifiable sample copy with placeholders. */
-export function safeDefaultSection(designId: string) {
-  const item = defaultSection(designId);
-  const walk = (props: Record<string, unknown>, fields: Record<string, Field>) => {
-    for (const [key, field] of Object.entries(fields)) {
-      const value = props[key];
-      if (["text", "textarea", "richtext"].includes(field.type) && typeof value === "string") {
-        props[key] = /(?:link|href)$/i.test(key) ? "/contact" : value ? `[Add ${field.label || key}]` : "";
-      } else if (field.type === "custom" && key !== "design") props[key] = "";
-      else if (field.type === "array" && Array.isArray(value)) {
-        for (const entry of value) if (entry && typeof entry === "object") walk(entry, field.arrayFields as Record<string, Field>);
-      } else if (field.type === "object" && value && typeof value === "object" && !Array.isArray(value)) {
-        walk(value as Record<string, unknown>, field.objectFields as Record<string, Field>);
-      }
-    }
-  };
-  walk(item.props, blockFields(item.type));
-  return item;
 }
 
 export async function buildGeneratedSite(
@@ -109,21 +78,23 @@ export async function buildGeneratedSite(
     services: input.services, difference: input.difference, tone: input.tone,
     phone: input.phone, email: input.email, address: input.address, openingHours: input.openingHours,
   });
-  const call = async (tool: typeof PLAN_SITE_TOOL, task: string, errors?: string) => {
-    const response = await requestAi({
+  const call: SiteToolCall = (tool, messages) => requestAi({
       accountId: input.accountId, siteId: input.siteId, action: "generate_site", generationId,
       system: SITE_SYSTEM_PROMPT, cacheTtl: "5m",
       tools: [tool], toolName: tool.name,
       maxTokens: tool.name === "plan_site" ? 6000 : 16000,
-      messages: [{ role: "user", content: `${task}\nBUSINESS DATA:\n${business}${errors ? `\nThe previous response was invalid. Correct these validation errors:\n${errors}` : ""}` }],
-    });
-    return toolInput(response, tool.name);
-  };
+      messages,
+  });
+  const prompt = (task: string) => `${task}\nBUSINESS DATA:\n${business}`;
   try {
     emit({ message: "Planning your site…" });
     const validator = planValidator(input);
-    let planResult = validator.safeParse(await call(PLAN_SITE_TOOL, "Plan the complete site."));
-    if (!planResult.success) planResult = validator.safeParse(await call(PLAN_SITE_TOOL, "Repair the site plan.", validationMessage(planResult.error)));
+    let { result: planResult } = await runSiteTool(call, PLAN_SITE_TOOL, validator, [{ role: "user", content: prompt("Plan the complete site.") }]);
+    if (!planResult.success) {
+      ({ result: planResult } = await runSiteTool(call, PLAN_SITE_TOOL, validator, [{
+        role: "user", content: prompt(`Repair the site plan. Correct these validation errors:\n${validationMessage(planResult.error)}`),
+      }], true));
+    }
     if (!planResult.success) throw new SiteGenerationError("The site plan was invalid twice. No drafts were changed. Please contact your agency.");
     const plan = planResult.data;
     plan.pages.sort((a, b) => PAGE_SLUGS.indexOf(a.slug) - PAGE_SLUGS.indexOf(b.slug));
@@ -135,23 +106,12 @@ export async function buildGeneratedSite(
       const label = { "": "Home", about: "About", services: "Services", contact: "Contact" }[page.slug];
       emit({ message: `Writing ${label}…` });
       const { slots, schema, task, tool } = pageFillContract(page);
-      let rawPage = await call(tool, task);
-      let parsed = schema.safeParse(rawPage);
-      if (!parsed.success) {
-        rawPage = await call(tool, task, validationMessage(parsed.error));
-        parsed = schema.safeParse(rawPage);
-      }
-      const candidates = parsed.success ? parsed.data.sections
-        : z.object({ slug: z.literal(page.slug), sections: z.record(z.string(), z.unknown()) }).safeParse(rawPage).data?.sections;
-      const content = slots.map(({ key, designId, schema: propsSchema, imageField }) => {
-        const result = propsSchema.safeParse(candidates?.[key]);
-        if (!result.success) {
-          warnings.add(`${page.title}: "${aiCatalog.find((design) => design.id === designId)!.name}" used its default layout with placeholder copy after validation failed twice.`);
-          return safeDefaultSection(designId);
-        }
+      const parsed = await fillPage(call, tool, schema, prompt(task));
+      if (!parsed.success) throw new SiteGenerationError(`Page ${label} failed validation after repair. No drafts were changed.`);
+      const content = slots.map(({ key, designId, imageField }) => {
         const item = defaultSection(designId);
         if (imageField) item.props[imageField] = "";
-        item.props = { ...item.props, ...result.data };
+        item.props = { ...item.props, ...parsed.data.sections[key] };
         return item;
       });
       const seo = plan.seo[page.slug || "home"];
