@@ -1,41 +1,21 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { EmailDeliveryError, isEmailConfigured, sendEmail } from "@/lib/email";
+import { emailBody } from "@/lib/email/message";
+import { getAccountOwnerEmails } from "@/lib/email/recipients";
 import type { DnsRecord } from "@/lib/domains";
 import { getProvider } from "./providers";
 import { brand } from "@/lib/brand";
 
 export class DomainEmailError extends Error {}
 
-export async function sendDomainEmail(to: string[], subject: string, text: string, key: string): Promise<void> {
-  const token = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
-  if (!token || !from) throw new DomainEmailError("Email is not configured. Ask your agency to enable domain emails.");
-  let response: Response;
-  try {
-    response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json",
-        "Idempotency-Key": createHash("sha256").update(key).digest("hex") },
-      body: JSON.stringify({ from, to, subject, text }),
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch (error) {
-    if (!(error instanceof Error)) throw error;
-    throw new DomainEmailError("Could not send the email. Please try again.");
-  }
-  if (!response.ok) throw new DomainEmailError("Could not send the email. Please try again or contact your agency.");
-  let result: unknown;
-  try { result = await response.json(); }
-  catch (error) {
-    if (!(error instanceof SyntaxError || error instanceof TypeError)) throw error;
-    throw new DomainEmailError("The email service returned an invalid response. Please try again.");
-  }
-  if (!z.object({ id: z.string().min(1) }).safeParse(result).success) {
-    throw new DomainEmailError("The email service did not confirm delivery. Please try again.");
-  }
+export async function sendDomainEmail(to: string[], subject: string, text: string, reference: string): Promise<void> {
+  await sendEmail({
+    to, subject, ...emailBody(text), tag: "domain",
+    metadata: { notification_ref: createHash("sha256").update(reference).digest("hex") },
+  });
 }
 
 export function instructionEmail(domain: string, providerId: string, records: DnsRecord[]) {
@@ -53,19 +33,8 @@ export function instructionEmail(domain: string, providerId: string, records: Dn
   ].join("\n");
 }
 
-export async function getAccountOwnerEmails(admin: ReturnType<typeof createAdminClient>, accountId: string): Promise<string[]> {
-  const members = await admin.from("account_members").select("user_id").eq("account_id", accountId).eq("role", "owner");
-  if (members.error || !members.data?.length) throw new DomainEmailError("No account owner could be found for the domain email.");
-  const profiles = await admin.from("profiles").select("email").in("id", members.data.map((member) => member.user_id));
-  if (profiles.error) throw new DomainEmailError("Could not load domain email recipients.");
-  const recipients = [...new Set((profiles.data ?? []).map((profile) => profile.email))]
-    .filter((email): email is string => z.email().safeParse(email).success).sort();
-  if (!recipients.length || recipients.length > 50) throw new DomainEmailError("Check the account owners' email addresses before sending.");
-  return recipients;
-}
-
 export async function notifyDomainLive(siteId: string): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!isEmailConfigured()) return;
   const admin = createAdminClient();
   const now = new Date();
   const claimed = await admin.from("sites").update({ domain_notification_claimed_at: now.toISOString() })
@@ -90,6 +59,7 @@ export async function notifyDomainLive(siteId: string): Promise<void> {
     const released = await admin.from("sites").update({ domain_notification_claimed_at: null })
       .eq("id", site.id).eq("domain_notification_claimed_at", now.toISOString());
     if (released.error) console.error("Could not release domain email claim", { siteId });
+    if (error instanceof EmailDeliveryError) throw new DomainEmailError(error.message);
     throw error;
   }
 }

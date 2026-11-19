@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ site: vi.fn(), rpc: vi.fn() }));
+const mocks = vi.hoisted(() => ({ site: vi.fn(), rpc: vi.fn(), after: vi.fn(), send: vi.fn(), owners: vi.fn(), configured: vi.fn() }));
+vi.mock("next/server", () => ({ after: mocks.after }));
+vi.mock("@/lib/email", async (original) => ({ ...await original<typeof import("@/lib/email")>(),
+  sendEmail: mocks.send, isEmailConfigured: mocks.configured }));
+vi.mock("@/lib/email/recipients", () => ({ getAccountOwnerEmails: mocks.owners }));
 vi.mock("@/lib/tenant", () => ({
   getTenantKeyFromHost: (host: string) => host === "agency.test" ? "sitomax" : host,
   getSiteByHost: mocks.site,
@@ -19,8 +23,9 @@ const valid = { _form_name: "contact", _website: "", _page_path: "/contact", Nam
 
 beforeEach(() => {
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-secret");
-  mocks.site.mockResolvedValue({ id: "site-1" });
+  mocks.site.mockResolvedValue({ id: "site-1", account_id: "account-1", name: "Acme" });
   mocks.rpc.mockResolvedValue({ data: true, error: null });
+  mocks.configured.mockReturnValue(false);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 
@@ -67,5 +72,26 @@ describe("form submission endpoint", () => {
     const req = new Request("https://client.test/api/forms/submit", { method: "POST", headers: { host: "client.test", "x-forwarded-for": "203.0.113.10" }, body });
     expect((await POST(req)).status).toBe(200);
     expect(mocks.rpc.mock.calls[0][1].p_data.Name).toBe("Alex\nSam");
+  });
+
+  it("notifies only the saved site's owners without including submitted fields", async () => {
+    mocks.configured.mockReturnValue(true);
+    mocks.owners.mockResolvedValue(["owner@example.test"]);
+    expect((await POST(request(valid))).status).toBe(200);
+    expect(mocks.send).not.toHaveBeenCalled();
+    await mocks.after.mock.calls[0][0]();
+    expect(mocks.owners).toHaveBeenCalledWith(expect.anything(), "account-1");
+    expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({
+      to: ["owner@example.test"], tag: "form-notification",
+      text: expect.stringContaining("/dashboard/forms"), html: expect.stringContaining("/dashboard/forms"),
+    }));
+    expect(JSON.stringify(mocks.send.mock.calls)).not.toContain(valid.Email);
+  });
+
+  it("does not schedule an email for a rejected submission", async () => {
+    mocks.configured.mockReturnValue(true);
+    mocks.rpc.mockResolvedValue({ data: false, error: null });
+    expect((await POST(request(valid))).status).toBe(429);
+    expect(mocks.after).not.toHaveBeenCalled();
   });
 });

@@ -73,7 +73,7 @@ Build auth and the dashboard shell:
 1. /login page: email magic link via Supabase Auth, plus an auth callback route. Branded with agency_settings (name, logo, primary color). No mention of Supabase anywhere in the UI.
 2. Protect /dashboard and /editor: redirect to /login if not signed in.
 3. Dashboard layout with sidebar: Sites, Forms, Analytics, Settings. Super admins also see Clients.
-4. Clients page (super admin only): list accounts, create an account, and invite an owner by email (use supabase.auth.admin.inviteUserByEmail on the server, then add the account_members row).
+4. Clients page (super admin only): list accounts, create an account, and invite an owner by email (generate the invite link on the server, add the account_members row, and send the invitation through `lib/email`).
 5. Sites page: super admin sees all sites grouped by client; clients see only their own sites. Each site card shows name, live URL, Edit button, and Domain status.
 6. Settings page (super admin): edit agency_settings (name, logo upload to Supabase Storage bucket "branding", primary color).
 Use clean, modern Tailwind styling with the agency primary color as a CSS variable.
@@ -402,7 +402,7 @@ Make the ContactForm block work:
 1. Public POST /api/forms/submit: validate with zod, include a hidden honeypot field and a simple rate limit by IP, resolve the site from the host, insert into form_submissions with the admin client.
 2. The block shows success/error states.
 3. Dashboard Forms page: table of submissions per site, mark as read, view details, export CSV. Unread count badge in the sidebar.
-4. Optional: email the account owner on new submissions using Resend (behind a RESEND_API_KEY env var; skip quietly if not set).
+4. Optional: email the account owners on new submissions through `lib/email` when email delivery is configured.
 ```
 **Check:** submit the form on a live site and see it in the dashboard.
 
@@ -487,7 +487,7 @@ Upgrade the domain settings page into a guided "Connect your domain" wizard:
 1. Provider detection (server only): use Node's dns module (dns.promises.resolveNs) to look up the domain's nameservers and map them to a provider in lib/domains/providers.ts: GoDaddy, Namecheap, Cloudflare, Squarespace Domains (formerly Google Domains), Wix, Bluehost, HostGator, Hostinger, IONOS, Network Solutions, Porkbun, Amazon Route 53, Vercel, plus "Other". Each provider entry has: name, logo, a link to its DNS management page, and 4–6 plain-English steps for adding an A record and a CNAME (e.g. "Log in to GoDaddy → My Products → next to your domain click DNS → Add New Record").
 2. Wizard steps: (1) Enter domain → (2) "We detected your domain is managed by GoDaddy" (with a "Not right? Choose your provider" dropdown) → (3) provider-specific steps with the exact records to add and copy buttons on each value, and an "Open GoDaddy DNS settings" button → (4) "Waiting for your domain…" with a live status check.
 3. Conflict check: look up existing A and CNAME records for the root and www (dns.promises.resolve4 / resolveCname). If old records point elsewhere (e.g. an old Wix or GoDaddy site), show a clear warning: "Delete this old record: A @ 23.x.x.x".
-4. Automatic checking: while the wizard is open, check every 30 seconds (verify + config). Also add a Vercel cron job (vercel.json) that runs every 15 minutes, checks all sites where custom_domain is set and domain_verified is false, updates them, and emails the account owner "Your domain is live" when connected (Resend, if RESEND_API_KEY is set). Stop checking domains that have been pending for over 14 days and mark them "Needs attention".
+4. Automatic checking: while the wizard is open, check every 30 seconds (verify + config). Also add a Vercel cron job (vercel.json) that runs every 15 minutes, checks all sites where custom_domain is set and domain_verified is false, updates them, and emails the account owners "Your domain is live" through `lib/email` when configured. Stop checking domains that have been pending for over 14 days and mark them "Needs attention".
 5. Short help video slot per provider (optional URL field) and a "Send these instructions to my web person" button that emails the steps and records to any email address.
 6. Rate-limit DNS lookups (max 20 per minute per user) and validate domains with zod before any lookup.
 ```

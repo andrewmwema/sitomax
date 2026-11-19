@@ -5,7 +5,8 @@ import { z } from "zod";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionState } from "@/lib/form-state";
-import { brand } from "@/lib/brand";
+import { EmailDeliveryError, sendEmail } from "@/lib/email";
+import { passwordEmail } from "@/lib/email/auth";
 
 const createAccountSchema = z.object({
   name: z
@@ -86,16 +87,16 @@ export async function inviteOwner(
   }
 
   let userId: string;
-  let invited = false;
+  let tokenHash: string | undefined;
 
   const { data: inviteData, error: inviteError } =
-    await admin.auth.admin.inviteUserByEmail(email, {
-      // Invited users land on /set-password to choose their password.
-      redirectTo: `${brand.appUrl}/auth/callback?next=/set-password`,
-    });
+    await admin.auth.admin.generateLink({ type: "invite", email });
 
   if (inviteError) {
-    // Likely already registered: fall back to the existing profile.
+    if (inviteError.code !== "email_exists" && inviteError.code !== "user_already_exists") {
+      console.error("Could not generate owner invitation", { code: inviteError.code, status: inviteError.status });
+      return { status: "error", message: "Could not create an invitation. Please try again." };
+    }
     const { data: existing } = await admin
       .from("profiles")
       .select("id")
@@ -110,8 +111,9 @@ export async function inviteOwner(
     }
     userId = existing.id;
   } else {
+    tokenHash = inviteData.properties.hashed_token;
+    if (!tokenHash) return { status: "error", message: "Could not create the invitation link. Please try again." };
     userId = inviteData.user.id;
-    invited = true;
   }
 
   const { error: memberError } = await admin
@@ -126,9 +128,21 @@ export async function inviteOwner(
   }
 
   revalidatePath("/dashboard/clients");
+  if (tokenHash) {
+    try {
+      await sendEmail({
+        to: email, subject: "You're invited to manage your website", tag: "invite",
+        ...passwordEmail("invite", tokenHash),
+        metadata: { account_id: accountId },
+      });
+    } catch (error) {
+      if (!(error instanceof EmailDeliveryError)) throw error;
+      return { status: "error", message: `Owner access was saved, but the invitation was not sent. ${error.message}` };
+    }
+  }
   return {
     status: "success",
-    message: invited
+    message: tokenHash
       ? `Invitation sent to ${email}.`
       : `${email} added as owner.`,
   };

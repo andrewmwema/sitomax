@@ -15,7 +15,8 @@ const site: DomainSite = { id: "00000000-0000-4000-8000-000000000001", name: "Cl
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("CRON_SECRET", "test-cron-secret");
-  vi.stubEnv("RESEND_API_KEY", "");
+  vi.stubEnv("POSTMARK_SERVER_TOKEN", "");
+  vi.stubEnv("POSTMARK_FROM_EMAIL", "sender@example.test");
   vi.spyOn(console, "error").mockImplementation(() => {});
   mocks.batches.mockResolvedValue({ data: [], error: null });
   mocks.emails.mockResolvedValue({ data: [], error: null });
@@ -53,7 +54,7 @@ describe("scheduled domain checks", () => {
   });
 
   it("retries unsent live notifications even when no pending sites remain", async () => {
-    vi.stubEnv("RESEND_API_KEY", "test-token");
+    vi.stubEnv("POSTMARK_SERVER_TOKEN", "test-token");
     mocks.emails.mockResolvedValueOnce({ data: [{ id: site.id }], error: null });
     expect((await GET(request())).status).toBe(200);
     expect(mocks.check).not.toHaveBeenCalled();
@@ -70,7 +71,7 @@ describe("scheduled domain checks", () => {
   });
 
   it("retries completed request emails separately from live-domain notifications", async () => {
-    vi.stubEnv("RESEND_API_KEY", "test-token");
+    vi.stubEnv("POSTMARK_SERVER_TOKEN", "test-token");
     mocks.requestEmails.mockResolvedValueOnce({ data: [{ id: site.id }], error: null });
     expect((await GET(request())).status).toBe(200);
     expect(mocks.notifyRequest).toHaveBeenCalledWith(site.id);

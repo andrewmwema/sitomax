@@ -4,6 +4,7 @@ import { customDomainSchema, type DomainSite } from "@/lib/domains";
 import { checkAndSaveDomain, domainSiteColumns } from "@/lib/domains/check";
 import { notifyDomainLive } from "@/lib/domains/email";
 import { notifyDomainRequestDone } from "@/lib/domains/request-email";
+import { isEmailConfigured } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
     // Avoid a tight retry loop if the database could not record a check.
     if (failed) break;
   }
-  if (process.env.RESEND_API_KEY) {
+  if (isEmailConfigured()) {
     let afterRequestId = "00000000-0000-0000-0000-000000000000";
     while (Date.now() - started < 255_000) {
       const requests = await admin.from("domain_requests").select("id").eq("status", "done")

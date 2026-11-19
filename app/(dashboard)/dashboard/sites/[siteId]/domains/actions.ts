@@ -10,6 +10,7 @@ import { conflictingRecords, DnsLookupError, inspectDns } from "@/lib/domains/dn
 import { providerIdSchema } from "@/lib/domains/providers";
 import { checkAndSaveDomain, DomainCheckError, domainSiteColumns, expiredDomainIssue } from "@/lib/domains/check";
 import { DomainEmailError, instructionEmail, notifyDomainLive, sendDomainEmail } from "@/lib/domains/email";
+import { EmailDeliveryError } from "@/lib/email";
 import { brand } from "@/lib/brand";
 
 const columns = domainSiteColumns;
@@ -41,7 +42,7 @@ function state(site: DomainSite | null, error = "", success = ""): DomainSetting
 }
 
 function serviceError(error: unknown): string {
-  if (error instanceof DnsLookupError || error instanceof DomainEmailError || error instanceof DomainCheckError) return error.message;
+  if (error instanceof DnsLookupError || error instanceof DomainEmailError || error instanceof DomainCheckError || error instanceof EmailDeliveryError) return error.message;
   if (!(error instanceof DomainApiError)) throw error;
   if (error.code === "not_configured" || error.status === 401 || error.status === 403) {
     return "Domain connections are not available. Ask your agency to check the hosting configuration.";

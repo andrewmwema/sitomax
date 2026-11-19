@@ -1,9 +1,14 @@
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
+import { after } from "next/server";
 import { contactSubmissionSchema, submissionData } from "@/lib/contact-submission";
 import { readTextBody } from "@/lib/request-body";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSiteByHost, getTenantKeyFromHost } from "@/lib/tenant";
+import { brand } from "@/lib/brand";
+import { EmailDeliveryError, isEmailConfigured, sendEmail } from "@/lib/email";
+import { emailBody } from "@/lib/email/message";
+import { getAccountOwnerEmails } from "@/lib/email/recipients";
 
 export async function POST(request: Request) {
   const host = request.headers.get("host") ?? "";
@@ -44,7 +49,8 @@ export async function POST(request: Request) {
   const site = await getSiteByHost(key);
   if (!site) return new Response("Site not found.", { status: 404 });
   const ipHash = createHmac("sha256", secret).update(ip).digest("hex");
-  const { data, error } = await createAdminClient().rpc("submit_contact_form", {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("submit_contact_form", {
     p_site_id: site.id, p_ip_hash: ipHash, p_path: input.data.path,
     p_form_name: input.data.formName, p_data: submissionData(input.data.fields),
   });
@@ -53,5 +59,25 @@ export async function POST(request: Request) {
     return new Response("Form temporarily unavailable.", { status: 500 });
   }
   if (!data) return new Response("Too many submissions. Please try again later.", { status: 429 });
+  if (isEmailConfigured()) after(async () => {
+    try {
+      const recipients = await getAccountOwnerEmails(admin, site.account_id);
+      await sendEmail({
+        to: recipients,
+        subject: "New website form submission",
+        ...emailBody(`A new form submission was saved for ${site.name ?? site.subdomain}. Sign in to view it.`, {
+          label: "View form submissions",
+          url: `${brand.appUrl}/dashboard/forms`,
+        }),
+        tag: "form-notification",
+        metadata: { site_id: site.id },
+      });
+    } catch (error) {
+      console.error("Could not notify owners of a saved form submission", {
+        siteId: site.id,
+        reason: error instanceof EmailDeliveryError ? error.message : "Unexpected email error.",
+      });
+    }
+  });
   return new Response("Thank you. Your message has been sent.");
 }

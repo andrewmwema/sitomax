@@ -270,12 +270,13 @@ DNS instructions. If the domain is in use elsewhere, the wizard shows the TXT
 ownership record when one is available. If no challenge is available, ask the
 current project owner to release the domain before retrying.
 
-Optional email: set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to a verified
-agency sender (for example `SitoMax <support@sitomax.com>`). Connected domains
-notify account owners; delivery failures are logged and retried by later jobs
-with a short database claim and provider idempotency key. Existing live domains
-are marked notified by the migration to avoid retroactive emails. Without an
-API key, live notifications are skipped. The **Send these instructions to my
+Connected domains notify account owners through Postmark. Send failures are
+logged and retried by later jobs with a short database claim. Postmark's send
+API does not deduplicate retries: if it accepts a message but the acknowledgement
+or the database update fails, a retry may send a duplicate. The same opaque
+notification reference is recorded in message metadata for troubleshooting.
+Existing live domains are marked notified by the migration to avoid retroactive
+emails. Without email configuration, live notifications are skipped. The **Send these instructions to my
 web person** form sends server-generated steps and current DNS records to a
 validated address, limited to three sends per minute per user. Missing email
 configuration is shown explicitly for this on-demand action.
@@ -303,10 +304,35 @@ An open request for the same site/domain cannot be submitted twice.
 
 The agency's **Domain requests** sidebar entry lists requests with client-visible
 status and notes updates. Only super admins can update them. Marking **Done**
-emails current account owners using the existing Resend settings. Failed
+emails current account owners through Postmark. Failed
 completion emails stay pending for the secret-authenticated 15-minute domain
 job to retry. Missing email configuration is reported to the admin after saving
 the status. Completion status does not bypass DNS verification or set a site's
 `domain_verified` flag. Clients can refresh the status on their domain page and
 should revoke delegated access after setup. Never put passwords, recovery codes,
 API keys or transfer codes in update notes.
+
+## Transactional email
+
+1. In Postmark, verify the sender address or domain and make sure the account
+   is approved for external recipients. On the app server (including Vercel
+   production), set `POSTMARK_SERVER_TOKEN`, `POSTMARK_FROM_EMAIL` (for example
+   `SitoMax <support@sitomax.com>`), and `POSTMARK_MESSAGE_STREAM` (defaults to
+   `outbound`; use a transactional stream). Remove the old provider's variables.
+2. In Supabase **Authentication → Hooks**, generate an HTTP secret for the
+   **Send Email Hook**. Set `SUPABASE_SEND_EMAIL_HOOK_SECRET` to the full generated
+   value (`v1,whsec_…`) on the app server and deploy it before enabling the hook.
+   Set the hook URL to `https://app.sitomax.com/api/auth/send-email` (use your
+   actual platform host). The hook handles password recovery and keeps Supabase's
+   reset throttling and generic public response. App invitations use Supabase
+   to generate the link and send it directly through Postmark. If other Auth
+   email flows are enabled in the future, extend the hook before using them.
+3. Verify an invite, a password reset, and a form notification with a controlled
+   mailbox. Postmark activity uses `invite`, `password-reset`, `domain`, and
+   `form-notification` tags. Admin actions show actionable send errors; background
+   failures are reported in server logs without bodies, recipient addresses, or
+   tokens.
+
+With email configured, saved public form submissions notify the site's account
+owners after the response. The email links to the Forms dashboard and does not
+include submitted fields. A mail failure never rolls back the submission.

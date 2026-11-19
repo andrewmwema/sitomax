@@ -1,11 +1,13 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DomainEmailError, getAccountOwnerEmails, sendDomainEmail } from "./email";
+import { DomainEmailError, sendDomainEmail } from "./email";
+import { EmailDeliveryError, isEmailConfigured } from "@/lib/email";
+import { getAccountOwnerEmails } from "@/lib/email/recipients";
 import { brand } from "@/lib/brand";
 
 export async function notifyDomainRequestDone(requestId: string): Promise<void> {
-  if (!process.env.RESEND_API_KEY) throw new DomainEmailError("Completion emails are not configured. Ask your agency to enable domain emails.");
+  if (!isEmailConfigured()) throw new DomainEmailError("Completion emails are not configured. Ask your agency to enable domain emails.");
   const admin = createAdminClient();
   const now = new Date();
   const claimed = await admin.from("domain_requests").update({ notification_claimed_at: now.toISOString() })
@@ -31,6 +33,7 @@ export async function notifyDomainRequestDone(requestId: string): Promise<void> 
     const released = await admin.from("domain_requests").update({ notification_claimed_at: null })
       .eq("id", request.id).eq("notification_claimed_at", now.toISOString());
     if (released.error) console.error("Could not release domain request notification", { requestId });
+    if (error instanceof EmailDeliveryError) throw new DomainEmailError(error.message);
     throw error;
   }
 }

@@ -32,6 +32,7 @@ components/
   dashboard/              dashboard UI
 lib/
   supabase/               server.ts, client.ts, admin.ts (service role, server only)
+  email/                  server-only sendEmail interface, Postmark adapter and email templates
   vercel/domains.ts       Vercel domain API wrapper
   puck/config.tsx         Puck config, registers every block
   tenant.ts               resolve site from hostname
@@ -83,5 +84,10 @@ NEXT_PUBLIC_AGENCY_NAME=SitoMax
 VERCEL_API_TOKEN=                 # server only
 VERCEL_PROJECT_ID=
 VERCEL_TEAM_ID=                   # optional
+POSTMARK_SERVER_TOKEN=            # server only
+POSTMARK_FROM_EMAIL=              # verified sender
+POSTMARK_MESSAGE_STREAM=outbound  # transactional stream
+SUPABASE_SEND_EMAIL_HOOK_SECRET=  # server only; signed Auth email hook secret
 ```
+- Route transactional mail through `lib/email` with HTML and plain text, a type tag, and no credentials, links containing auth tokens, or message bodies in logs. The signed Supabase Send Email Hook forwards password resets to this sender.
 - Changes to sites.subdomain, sites.custom_domain, sites.domain_verified or sites.account_id must be done in server actions with lib/supabase/admin.ts after checking the user's permission. Regular users can only update sites.name and sites.theme.
