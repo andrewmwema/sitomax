@@ -125,6 +125,7 @@ create table public.posts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (site_id, slug),
+  unique (site_id, id),
   foreign key (site_id, author_id) references public.blog_authors(site_id, id) on delete set null (author_id),
   foreign key (site_id, category_id) references public.post_categories(site_id, id) on delete set null (category_id)
 );
