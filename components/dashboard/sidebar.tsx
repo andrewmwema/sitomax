@@ -8,7 +8,7 @@ import { BarChart3, CircleDollarSign, Globe2, HandHelping, Inbox, LayoutDashboar
 const groups = [
   { label: "Workspace", items: [
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-    { href: "/dashboard#sites", label: "Sites", icon: Globe2 },
+    { href: "/dashboard/sites", label: "Sites", icon: Globe2 },
     { href: "/dashboard/clients", label: "Clients", icon: Users, admin: true },
   ] },
   { label: "Operations", items: [

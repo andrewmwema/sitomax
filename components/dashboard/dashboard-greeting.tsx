@@ -16,9 +16,9 @@ export function DashboardGreeting({ displayName }: { displayName: string }) {
     <p className="platform-eyebrow">{now ? new Intl.DateTimeFormat("en", {
       weekday: "long", month: "long", day: "numeric",
     }).format(now) : "\u00a0"}</p>
-    <h1 className="mt-2 text-[32px] leading-tight font-semibold tracking-[-0.8px]">
+    <h1 className="mt-2 text-[28px] leading-tight font-semibold tracking-[-0.7px]">
       {now ? `Good ${greeting}` : "Welcome"}, {displayName}
     </h1>
-    <p className="mt-2 text-[13px] text-[#6B6A66]">A clear view of your websites, clients and what&apos;s next.</p>
+    <p className="mt-2 text-[13px] text-[#6B6A66]">A clear view of your websites and what needs attention.</p>
   </div>;
 }
