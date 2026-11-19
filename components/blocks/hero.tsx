@@ -1,6 +1,6 @@
-import type { ComponentConfig } from "@puckeditor/core";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
 import type { CSSProperties, ReactNode } from "react";
-import { designField, linkField, imageField, iconField } from "@/lib/puck/fields";
+import { designField, linkField, imageField, iconField, richTextField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
 import type { IconValue } from "@/lib/icons";
 import type { BlockDesign } from "@/lib/sections/design";
@@ -13,6 +13,7 @@ import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { BlockIcon } from "./ui/icon";
 import { FormSubmission } from "./ui/form-submission";
+import { RichTextContent } from "./ui/rich-text";
 
 export type HeroStat = { value: string; label: string };
 
@@ -30,7 +31,7 @@ export type HeroProps = {
   badgeText?: string;
   badgeIcon: IconValue;
   heading: string;
-  subheading: string;
+  subheading: RichText;
   buttonText: string;
   buttonLink: LinkValue;
   secondaryButtonText?: string;
@@ -109,12 +110,16 @@ function Subheading({
   style?: CSSProperties;
 }) {
   return (
-    <p
+    <RichTextContent
+      value={children}
       className={`max-w-[60ch] text-lg ${className}`}
-      style={{ color: "var(--color-muted)", lineHeight: 1.6, ...style }}
-    >
-      {children}
-    </p>
+      style={{
+        color: "var(--color-muted)",
+        lineHeight: 1.6,
+        ...style,
+        ...(style?.color ? { "--color-muted": style.color } : {}),
+      } as CSSProperties}
+    />
   );
 }
 
@@ -141,7 +146,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     },
     badgeIcon: iconField("Badge icon"),
     heading: { type: "text", label: "Heading", contentEditable: true },
-    subheading: { type: "textarea", label: "Subheading", contentEditable: true },
+    subheading: richTextField("Subheading"),
     buttonText: { type: "text", label: "Button text", contentEditable: true },
     buttonLink: linkField("Button link"),
     secondaryButtonText: {

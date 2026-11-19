@@ -771,6 +771,7 @@ export function PageEditor({
             </aside> : null}
             <Puck
               height="100%"
+              dnd={{ enableDragHandle: true }}
               config={config}
               data={data}
               ui={initialUi}

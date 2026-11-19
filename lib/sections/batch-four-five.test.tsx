@@ -52,6 +52,51 @@ describe("Batches 4 and 5", () => {
     }
   });
 
+  describe("inline body copy in designed sections", () => {
+    const cases = [
+      { type: "Hero", field: "subheading", variants: ["centered", "split", "overlay", "lead-form", "stats"] },
+      { type: "CallToAction", field: "text", variants: ["dark", "primary", "split", "image", "form"] },
+      { type: "Gallery", field: "text", variants: ["grid", "masonry", "featured", "portfolio-rows", "portfolio-cards", "portfolio-feature"] },
+      { type: "Logos", field: "text", variants: ["strip", "grid"] },
+    ] as const;
+
+    it.each(cases)("renders formatted and legacy $type copy in every layout", ({ type, field, variants }) => {
+      for (const variant of variants) {
+        const formatted = render(type, {
+          variant,
+          [field]: '<p>Editable <strong>body copy</strong></p><script>alert(1)</script>',
+        });
+        expect(formatted, `${type}:${variant}`).toContain("<strong>body copy</strong>");
+        expect(formatted).not.toContain("<script>");
+        expect(formatted).not.toContain("&lt;p&gt;");
+        expect(render(type, { variant, [field]: "Legacy copy & more" })).toContain("Legacy copy &amp; more");
+      }
+    });
+
+    it.each(cases)("keeps $type's inline rich-text editor mounted instead of stringifying it", ({ type, field }) => {
+      const html = renderToStaticMarkup(createElement(Render, {
+        config: puckConfig,
+        data: dataFor(type, { [field]: "<p>Editable body copy</p>" }),
+        fieldTransforms: {
+          richtext: ({ value }) => createElement("div", {
+            contentEditable: true,
+            suppressContentEditableWarning: true,
+            "data-inline-editor": "body-copy",
+          }, typeof value === "string" ? value : ""),
+        },
+      }));
+      expect(html).toContain('data-inline-editor="body-copy"');
+      expect(html).not.toContain("[object Object]");
+    });
+
+    it.each(cases)("sanitizes $type body formatting before persistence", ({ type, field }) => {
+      const clean = sanitizePuckData(dataFor(type, {
+        [field]: '<p onclick="alert(1)">Keep <strong>formatting</strong></p><script>alert(1)</script>',
+      }));
+      expect(clean.content[0].props).toMatchObject({ [field]: "<p>Keep <strong>formatting</strong></p>" });
+    });
+  });
+
   it("keeps every sample endorsement bracketed and warns even after names and roles are replaced", () => {
     for (const design of designs.filter((entry) => entry.category === "Testimonials")) {
       const reviews = design.props.testimonials as { quote: string; name: string; role: string }[];

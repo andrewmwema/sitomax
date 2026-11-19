@@ -1,5 +1,5 @@
-import type { ComponentConfig } from "@puckeditor/core";
-import { designField, linkField, imageField } from "@/lib/puck/fields";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
+import { designField, linkField, imageField, richTextField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
@@ -7,13 +7,14 @@ import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
+import { RichTextContent } from "./ui/rich-text";
 import { EnquiryForm, enquiryFields, enquiryFieldsField, type EnquiryField } from "./ui/enquiry-form";
 
 export type CallToActionProps = {
   design?: BlockDesign;
   eyebrow: string;
   heading: string;
-  text: string;
+  text: RichText;
   buttonText: string;
   buttonLink: LinkValue;
   variant: "dark" | "primary" | "split" | "image" | "form";
@@ -32,7 +33,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
-    text: { type: "textarea", label: "Text", contentEditable: true },
+    text: richTextField("Text"),
     buttonText: { type: "text", label: "Button text", contentEditable: true },
     buttonLink: linkField("Button link"),
     secondaryButtonText: { type: "text", label: "Secondary button text" },
@@ -80,7 +81,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
             <div className="flex flex-col gap-5">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <Heading level={2}>{heading}</Heading>
-              <p className="max-w-[48ch] text-lg" style={{ color: "var(--color-muted)" }}>{text}</p>
+              <RichTextContent value={text} className="max-w-[48ch] text-lg" style={{ color: "var(--color-muted)" }} />
               <div className="mt-[var(--content-gap)] border-t pt-6 text-sm" style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>A little detail now helps us make our first conversation more useful.</div>
             </div>
             <Card className="p-6 sm:p-8">
@@ -98,9 +99,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
             <div className="flex max-w-2xl flex-col gap-4">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <Heading level={2}>{heading}</Heading>
-              <p className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-                {text}
-              </p>
+              <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />
             </div>
             {buttonText ? (
               <Button href={buttonLink} className="shrink-0">
@@ -124,9 +123,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
         <div className={`mx-auto flex flex-col gap-6 ${layout === "image" ? "min-h-80 max-w-3xl items-start justify-center" : layout === "primary" ? "max-w-4xl items-center text-center" : "max-w-3xl items-center text-center"}`}>
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
           <Heading level={2}>{heading}</Heading>
-          <p className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
-            {text}
-          </p>
+          <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />
           <div className="flex w-full flex-col gap-3 min-[480px]:w-auto min-[480px]:flex-row">
           {buttonText ? (
             <Button href={buttonLink}>

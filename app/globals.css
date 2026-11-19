@@ -100,9 +100,13 @@ body {
   max-width: 65ch;
 }
 
-/* Puck's runtime iframe styles disable selection on draggable descendants. */
-[data-puck-component] [contenteditable]:not([contenteditable="false"]),
-[data-puck-component] [contenteditable]:not([contenteditable="false"]) * {
+/* Canvas text edits directly; sections move using their drag handles. */
+.site-content [data-puck-component] {
+  cursor: default;
+}
+
+.site-content [contenteditable]:not([contenteditable="false"]),
+.site-content [contenteditable]:not([contenteditable="false"]) * {
   cursor: text;
   user-select: text;
   -webkit-user-select: text;

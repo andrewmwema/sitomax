@@ -67,9 +67,11 @@ shared detail drawer; the media picker is a native modal so it also works above
 other dialogs. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
 
-Select words directly inside editable canvas text to format or replace them.
-The text cursor stays separate from section dragging; drag a section's
-non-text area to reposition it.
+Select words directly inside editable canvas text to replace them. Body copy
+opens the floating formatting toolbar, including Hero subheadings and call-to-action,
+gallery and logo introductions. Headings and button labels remain plain-text fields.
+Use the section toolbar's drag handle to reposition a section instead of dragging
+its content.
 
 ## Internal agency sites
 

@@ -1,10 +1,11 @@
-import type { ComponentConfig } from "@puckeditor/core";
-import { designField, imageField } from "@/lib/puck/fields";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
+import { designField, imageField, richTextField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { SiteImage } from "./ui/site-image";
+import { RichTextContent } from "./ui/rich-text";
 
 export type GalleryProps = {
   design?: BlockDesign;
@@ -13,7 +14,7 @@ export type GalleryProps = {
   images: { url: string; alt: string; caption?: string }[];
   columns: "2" | "3" | "4";
   variant: "grid" | "masonry" | "featured" | "portfolio-rows" | "portfolio-cards" | "portfolio-feature";
-  text?: string;
+  text?: RichText;
 };
 
 const COLUMN_CLASSES: Record<GalleryProps["columns"], string> = {
@@ -37,7 +38,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
-    text: { type: "textarea", label: "Introduction", contentEditable: true },
+    text: richTextField("Introduction"),
     images: {
       type: "array",
       label: "Images",
@@ -85,7 +86,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
       <div className="flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         {heading ? <Heading level={2}>{heading}</Heading> : null}
-        {text ? <p className="max-w-[55ch]" style={{ color: "var(--color-muted)" }}>{text}</p> : null}
+        {text ? <RichTextContent value={text} className="max-w-[55ch]" style={{ color: "var(--color-muted)" }} /> : null}
       </div>
       {variant === "portfolio-rows" ? (
         <div className="mt-[var(--section-gap)] flex flex-col gap-10 md:gap-16">

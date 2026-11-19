@@ -1,16 +1,17 @@
-import type { ComponentConfig } from "@puckeditor/core";
-import { designField, imageField } from "@/lib/puck/fields";
+import type { ComponentConfig, RichText } from "@puckeditor/core";
+import { designField, imageField, richTextField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { Heading } from "./ui/heading";
 import { BlockIcon } from "./ui/icon";
+import { RichTextContent } from "./ui/rich-text";
 
 export type LogosProps = {
   design?: BlockDesign;
   eyebrow: string;
   heading: string;
-  text: string;
+  text: RichText;
   variant: "strip" | "grid";
   logos: { name: string; image: string; imageAlt?: string }[];
 };
@@ -21,7 +22,7 @@ export const Logos: ComponentConfig<LogosProps> = {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow", contentEditable: true },
     heading: { type: "text", label: "Heading", contentEditable: true },
-    text: { type: "textarea", label: "Introduction", contentEditable: true },
+    text: richTextField("Introduction"),
     variant: { type: "radio", label: "Layout", options: [{ label: "Wordmark strip", value: "strip" }, { label: "Partner grid", value: "grid" }] },
     logos: {
       type: "array", label: "Partner logos", getItemSummary: (item) => item.name || "Partner",
@@ -42,7 +43,7 @@ export const Logos: ComponentConfig<LogosProps> = {
         <div className={`flex flex-col gap-3 ${variant === "grid" ? "items-start" : "items-center text-center"}`}>
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
           <Heading level={2}>{heading}</Heading>
-          {text ? <p className="max-w-[50ch]" style={{ color: "var(--color-muted)" }}>{text}</p> : null}
+          {text ? <RichTextContent value={text} className="max-w-[50ch]" style={{ color: "var(--color-muted)" }} /> : null}
         </div>
         <ul className={`grid grid-cols-2 ${variant === "grid" ? "gap-3" : "mt-[var(--section-gap)] gap-x-8 gap-y-4 md:grid-cols-4"}`}>
           {logos.map((logo, i) => (
