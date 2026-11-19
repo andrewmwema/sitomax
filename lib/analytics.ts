@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+const reportCount = z.number().int().nonnegative();
+export const siteAnalyticsReportSchema = z.object({
+  visits: reportCount,
+  unique_visitors: reportCount,
+  form_submissions: reportCount,
+  daily: z.array(z.object({ day: z.string(), visits: reportCount })),
+  pages: z.array(z.object({ label: z.string(), count: reportCount })),
+  referrers: z.array(z.object({ label: z.string(), count: reportCount })),
+  devices: z.array(z.object({ label: z.string(), count: reportCount })),
+});
+export type SiteAnalyticsReport = z.infer<typeof siteAnalyticsReportSchema>;
+
 export const beaconSchema = z.object({
   path: z.string().min(1).max(2048).regex(/^\/(?!\/)[^?#]*$/),
   referrer: z.string().max(2048),

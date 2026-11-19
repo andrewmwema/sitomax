@@ -36,6 +36,18 @@ on the server because PostgREST cannot filter a JSON-to-text cast; only the
 requested result page is sent to the browser. At larger submission volumes,
 indexed full-text search would require a separate migration.
 
+Analytics keeps UTC reporting and labels visitor counts as the sum of daily
+uniques, not a deduplicated monthly audience. Empty periods do not show synthetic
+traffic charts or conversion rates. AI Usage & Costs shows recorded client costs
+for the selected UTC month separately from current-month allocation and held
+reservations. All spending is estimated from configured token rates, not confirmed
+billing charges; internal agency usage is excluded from client reports.
+
+Agency Settings groups the existing profile, logo and accent controls with a live
+branding preview. Unsaved changes warn on refresh/close and ordinary navigation
+links; successful saves establish a new discard baseline. Reporting timezone and
+account access are shown as information rather than unsupported preferences.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
