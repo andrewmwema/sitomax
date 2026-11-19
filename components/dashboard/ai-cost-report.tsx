@@ -3,6 +3,7 @@ import { Activity, CircleDollarSign, Clock3, Info, Sparkles, Users } from "lucid
 import type { AiUsageSummary, MonthlyAiCost } from "@/lib/ai/reporting";
 import { formatAiCost } from "@/lib/ai/cost-format";
 import { WorkspaceMetrics } from "./workspace-metrics";
+import { TableScrollArea } from "./table-scroll-area";
 
 export type AiCostSite = { id: string; account_id: string; name: string | null; subdomain: string };
 
@@ -52,7 +53,7 @@ export function AiCostReport({ rows, usage, sites, month, currentMonth }: {
         <div><h2 className="text-[15px] font-semibold">Client usage &amp; allocation</h2><p className="mt-1 text-xs text-[var(--platform-muted)]">Costs and API requests: {month}. Included allocation and reservations: current UTC month ({currentMonth}).</p></div>
         <Link href="/dashboard/clients" className="platform-button">Client directory</Link>
       </header>
-      {rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm">
+      {rows.length ? <TableScrollArea label="Client AI usage and allocation"><table className="w-full min-w-[980px] text-left text-sm">
         <caption className="sr-only">Estimated client AI costs for {month} and current month allowances for {currentMonth}</caption>
         <thead><tr>{["Client / websites", "Recorded API requests", "Estimated cost (USD)", "Current included allocation", "Extra credits / held requests"].map((heading) => <th key={heading} className="px-5 font-medium">{heading}</th>)}</tr></thead>
         <tbody>{rows.map((row) => {
@@ -73,7 +74,7 @@ export function AiCostReport({ rows, usage, sites, month, currentMonth }: {
             <td className="px-5 text-xs">{allocation ? <><p className="font-medium tabular-nums">{allocation.extra_credits} extra credits</p><p className="mt-2 text-[var(--platform-muted)]">{allocation.pending_requests} held / awaiting reconciliation</p></> : <span className="text-[var(--platform-muted)]">Not available</span>}</td>
           </tr>;
         })}</tbody>
-      </table></div> : <div className="px-6 py-10 text-center"><Users size={24} className="mx-auto text-[var(--platform-muted)]" /><h3 className="mt-3 text-sm font-semibold">No client accounts yet</h3><p className="mt-2 text-sm text-[var(--platform-muted)]">Create a client account to start tracking its usage and allocation.</p><Link href="/dashboard/clients" className="platform-button mt-4">Add a client</Link></div>}
+      </table></TableScrollArea> : <div className="px-6 py-10 text-center"><Users size={24} className="mx-auto text-[var(--platform-muted)]" /><h3 className="mt-3 text-sm font-semibold">No client accounts yet</h3><p className="mt-2 text-sm text-[var(--platform-muted)]">Create a client account to start tracking its usage and allocation.</p><Link href="/dashboard/clients" className="platform-button mt-4">Add a client</Link></div>}
       <p className="border-t border-[var(--platform-line)] px-5 py-4 text-xs leading-relaxed text-[var(--platform-muted)]">Included allocation counts include held reservations; they are not completed-task counts. Extra credits never expire: 10 per site generation or 1 per edit after the included allowance. Historical allocation snapshots and confirmed billing charges are not available in this report.</p>
     </section>
   </>;

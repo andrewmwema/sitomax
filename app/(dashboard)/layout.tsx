@@ -54,6 +54,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* Fonts are scoped to platform chrome rather than client sites. */}
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap" />
+      <a href="#dashboard-content" className="platform-skip-link">Skip to content</a>
       <Sidebar
         agencyName={settings.name}
         logoUrl={settings.logoUrl}
@@ -63,7 +64,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         unreadCount={unread.error ? null : unread.count ?? 0}
         signOutAction={signOut}
       />
-      <main className="min-w-0 flex-1">
+      <main id="dashboard-content" tabIndex={-1} className="min-w-0 flex-1">
         <div className="platform-header flex min-h-16 items-center justify-between gap-3 pl-16 pr-4 sm:pr-8 md:px-8 lg:px-10">
           <div className="flex min-w-0 items-center gap-2 text-xs text-[#6B6A66]">
             <Layers2 size={15} className="shrink-0" />

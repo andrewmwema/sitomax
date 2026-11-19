@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, CircleDollarSign, Globe2, HandHelping, Inbox, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Users, X } from "lucide-react";
@@ -32,6 +32,9 @@ export function Sidebar(props: SidebarProps) {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileId = useId();
+  const searchId = useId();
   const searchDialog = useRef<HTMLDialogElement>(null);
   const mobileDialog = useRef<HTMLDialogElement>(null);
   const items = groups.flatMap((group) => group.items).filter((item) => !("admin" in item) || props.isSuperAdmin);
@@ -74,7 +77,7 @@ export function Sidebar(props: SidebarProps) {
       {!compact ? <span className="min-w-0 flex-1"><strong className="block truncate text-sm font-semibold tracking-tight">{props.agencyName}</strong><span className="block text-xs text-[var(--platform-muted)]">{props.isSuperAdmin ? "Agency workspace" : "Client workspace"}</span></span> : null}
       {mobile ? <button type="button" onClick={closeMobile} aria-label="Close navigation" className="platform-icon-button"><X size={17} /></button> : null}
     </div>
-    <button type="button" onClick={openSearch} title="Search or jump to" aria-label="Search or jump to" className={`platform-search-trigger mt-5 ${compact ? "justify-center px-0" : "px-3"}`}>
+    <button type="button" onClick={openSearch} title="Search or jump to" aria-label="Search or jump to" aria-haspopup="dialog" aria-controls={searchId} className={`platform-search-trigger mt-5 ${compact ? "justify-center px-0" : "px-3"}`}>
       <Search size={16} className="shrink-0" />
       {!compact ? <><span className="min-w-0 flex-1 truncate text-left">Search or jump to...</span><kbd className="platform-keyboard">Ctrl K</kbd></> : null}
     </button>
@@ -116,12 +119,12 @@ export function Sidebar(props: SidebarProps) {
     <aside className="sticky top-0 hidden h-dvh shrink-0 border-r border-[var(--platform-line)] md:block">
       {navigation(collapsed, false)}
     </aside>
-    <button type="button" onClick={() => mobileDialog.current?.showModal()} aria-label="Open navigation"
+    <button type="button" onClick={() => { mobileDialog.current?.showModal(); setMobileOpen(true); }} aria-label="Open navigation" aria-haspopup="dialog" aria-controls={mobileId} aria-expanded={mobileOpen}
       className="platform-icon-button absolute left-4 top-3 z-10 md:hidden"><Menu size={19} /></button>
-    <dialog ref={mobileDialog} aria-label="Workspace navigation" className="platform-mobile-nav md:hidden">
+    <dialog ref={mobileDialog} id={mobileId} onClose={() => setMobileOpen(false)} aria-label="Workspace navigation" className="platform-mobile-nav md:hidden">
       {navigation(false, true)}
     </dialog>
-    <dialog ref={searchDialog} onClose={() => { setSearchOpen(false); setSearch(""); }} aria-label="Search navigation" className="platform-search-dialog">
+    <dialog ref={searchDialog} id={searchId} onClose={() => { setSearchOpen(false); setSearch(""); }} aria-label="Search navigation" className="platform-search-dialog">
       <label className="flex items-center gap-3 rounded-lg border border-[var(--platform-line)] px-3">
         <Search size={18} /><span className="sr-only">Search pages</span>
         <input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search pages..." className="h-11 w-full outline-none" />

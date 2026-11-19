@@ -6,6 +6,7 @@ import { ArrowUpRight, Search, Users } from "lucide-react";
 import { WorkspaceDialog } from "./workspace-dialog";
 import { InviteOwnerForm } from "./invite-owner-form";
 import { inviteOwner } from "@/app/(dashboard)/dashboard/clients/actions";
+import { TableScrollArea } from "./table-scroll-area";
 
 export type ClientAccount = {
   id: string;
@@ -42,7 +43,8 @@ export function ClientDirectory({ accounts }: { accounts: ClientAccount[] }) {
       </label>
       <p aria-live="polite" className="pb-3 text-xs text-[var(--platform-muted)]">{visible.length} {visible.length === 1 ? "client" : "clients"}</p>
     </div>
-    {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm">
+    {visible.length ? <TableScrollArea label="Client accounts"><table className="w-full min-w-[760px] text-left text-sm">
+      <caption className="sr-only">Client accounts and owner access</caption>
       <thead><tr>{["Client / business", "Account owner", "Websites", "Account access", "Joined", "Actions"].map((label) => <th key={label} className="px-5 font-medium">{label}</th>)}</tr></thead>
       <tbody>{rows.map((account) => {
         const owners = account.account_members.filter((member) => member.role === "owner");
@@ -82,13 +84,13 @@ export function ClientDirectory({ accounts }: { accounts: ClientAccount[] }) {
                   <div className="flex justify-between gap-3"><dt>Edits / month</dt><dd className="font-medium tabular-nums">{account.ai_limits.monthly_edits}</dd></div>
                   <div className="flex justify-between gap-3"><dt>Extra credits</dt><dd className="font-medium tabular-nums">{account.ai_limits.extra_credits}</dd></div>
                 </dl> : <p className="mt-2 text-sm text-[var(--platform-muted)]">No allowance configured.</p>}
-                <Link href="/dashboard/ai-usage" className="mt-3 inline-block text-xs font-medium text-[var(--platform-accent)] hover:underline">Manage AI usage and allowances</Link>
+                <Link href="/dashboard/ai-usage" className="mt-3 inline-block text-xs font-medium text-[var(--platform-accent)] hover:underline">View AI usage and allowances</Link>
               </section>
             </WorkspaceDialog>
           </td>
         </tr>;
       })}</tbody>
-    </table></div> : <div className="px-6 py-10 text-center"><Users size={24} className="mx-auto text-[var(--platform-muted)]" />
+    </table></TableScrollArea> : <div className="px-6 py-10 text-center"><Users size={24} className="mx-auto text-[var(--platform-muted)]" />
       <h2 className="mt-3 text-sm font-semibold">{accounts.length ? "No clients match your search" : "Build your client workspace"}</h2>
       <p className="mt-2 text-sm text-[var(--platform-muted)]">{accounts.length ? "Try another name, email or access filter." : "Add a client account, then invite an owner and create their first website."}</p>
     </div>}

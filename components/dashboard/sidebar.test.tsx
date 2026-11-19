@@ -45,10 +45,14 @@ describe("dashboard navigation", () => {
     const drawer = container.querySelector<HTMLDialogElement>('[aria-label="Workspace navigation"]')!;
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!.click());
     expect(drawer.open).toBe(true);
+    const opener = container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!;
+    expect(opener.getAttribute("aria-controls")).toBe(drawer.id);
+    expect(opener.getAttribute("aria-expanded")).toBe("true");
     const forms = drawer.querySelector<HTMLAnchorElement>('a[href="/dashboard/forms"]')!;
     forms.addEventListener("click", (event) => event.preventDefault());
     await act(async () => forms.click());
     expect(drawer.open).toBe(false);
+    expect(opener.getAttribute("aria-expanded")).toBe("false");
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!.click());
     await act(async () => window.dispatchEvent(new Event("resize")));
     expect(drawer.open).toBe(false);
@@ -57,6 +61,15 @@ describe("dashboard navigation", () => {
     expect(search.open).toBe(true);
     expect(search.querySelector('a[href="/dashboard/clients"]')).toBeNull();
     expect(search.querySelector('a[href="/dashboard/ai-usage"]')).toBeNull();
+    const input = search.querySelector("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "unmatched");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(search.textContent).toContain("No matching pages");
+    await act(async () => search.close());
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true })));
+    expect(search.querySelector("input")?.value).toBe("");
     await act(async () => search.querySelector<HTMLButtonElement>("button")!.click());
     expect(search.open).toBe(false);
     await act(async () => root.unmount()); container.remove();

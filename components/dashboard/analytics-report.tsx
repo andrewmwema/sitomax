@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BarChart3, Globe2, Inbox, Info, Users } from "lucide-react";
 import type { SiteAnalyticsReport } from "@/lib/analytics";
 import { WorkspaceMetrics } from "./workspace-metrics";
+import { TableScrollArea } from "./table-scroll-area";
 
 export function AnalyticsReport({ report, siteId, siteName, days }: {
   report: SiteAnalyticsReport; siteId: string; siteName: string; days: number;
@@ -40,7 +41,7 @@ export function AnalyticsReport({ report, siteId, siteName, days }: {
   </>;
 }
 
-function VisitsChart({ daily, visits }: { daily: SiteAnalyticsReport["daily"]; visits: number }) {
+export function VisitsChart({ daily, visits }: { daily: SiteAnalyticsReport["daily"]; visits: number }) {
   const max = Math.max(0, ...daily.map((day) => day.visits));
   if (!visits || !max) return <div className="px-6 py-10 text-center">
     <BarChart3 size={26} className="mx-auto text-[var(--platform-muted)]" /><h3 className="mt-3 text-sm font-semibold">No traffic recorded in this period</h3>
@@ -59,10 +60,10 @@ function VisitsChart({ daily, visits }: { daily: SiteAnalyticsReport["daily"]; v
     <div className="flex justify-between gap-3 text-xs text-[var(--platform-muted)]"><span>{daily[0]?.day}</span><span>{daily[daily.length - 1]?.day}</span></div>
     <details className="mt-4 border-t border-[var(--platform-line)] pt-3">
       <summary className="w-fit text-xs font-medium text-[var(--platform-secondary)]">View daily values</summary>
-      <div className="mt-3 max-h-64 overflow-auto"><table className="w-full text-left text-xs"><caption className="sr-only">Daily recorded visits in UTC</caption>
+      <TableScrollArea label="Daily traffic values" className="mt-3 max-h-64"><table className="w-full text-left text-xs"><caption className="sr-only">Daily recorded visits in UTC</caption>
         <thead><tr><th className="px-3">Date (UTC)</th><th className="px-3 text-right">Visits</th></tr></thead>
         <tbody>{daily.map((day) => <tr key={day.day}><td className="px-3">{day.day}</td><td className="px-3 text-right tabular-nums">{day.visits.toLocaleString("en")}</td></tr>)}</tbody>
-      </table></div>
+      </table></TableScrollArea>
     </details>
   </div>;
 }

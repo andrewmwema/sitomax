@@ -26,7 +26,7 @@ export function WorkspaceDialog({
     {trigger ? <button type="button" className={triggerClassName} onClick={() => dialog.current?.showModal()} aria-haspopup="dialog">{trigger}</button> : null}
     <dialog ref={dialog} onClose={onClose} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
       className={`platform-detail-dialog ${drawer ? "platform-detail-drawer" : ""}`}>
-      <header className="flex items-start justify-between gap-4 border-b border-[var(--platform-line)] px-6 py-5">
+      <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--platform-line)] bg-[var(--platform-surface)] px-6 py-5">
         <div className="min-w-0"><h2 id={titleId} className="break-words text-lg font-semibold tracking-tight">{title}</h2>
           {description ? <p id={descriptionId} className="mt-1 text-sm text-[var(--platform-muted)]">{description}</p> : null}
         </div>

@@ -7,6 +7,7 @@ import { SubmissionDetails } from "@/components/dashboard/submission-details";
 import { MarkSubmissionRead } from "@/components/dashboard/mark-submission-read";
 import { getSubmissionPage, SUBMISSION_PAGE_SIZE } from "@/lib/forms/queries";
 import { submissionContact, submissionFiltersSchema, submissionQueryString } from "@/lib/forms/submissions";
+import { TableScrollArea } from "@/components/dashboard/table-scroll-area";
 
 export default function FormsPage({ searchParams }: PageProps<"/dashboard/forms">) {
   return <section className="flex flex-col gap-6">
@@ -71,7 +72,8 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--platform-line)] px-5 py-3 text-xs text-[var(--platform-muted)]">
         <p>{results.count.toLocaleString("en")} matching {results.count === 1 ? "submission" : "submissions"}</p><p>CSV includes all matches, not just this page.</p>
       </div>
-      {results.rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm">
+      {results.rows.length ? <TableScrollArea label="Form submissions"><table className="w-full min-w-[980px] text-left text-sm">
+        <caption className="sr-only">Matching website inquiries and available actions</caption>
         <thead><tr>{["Contact", "Email", "Source website", "Form", "Submitted (UTC)", "Status", "Actions"].map((heading) => <th key={heading} className="px-5 font-medium">{heading}</th>)}</tr></thead>
         <tbody>{results.rows.map((row) => {
           const site = allowed.find((item) => item.id === row.site_id);
@@ -87,7 +89,7 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
             <td className="px-5"><div className="flex flex-col items-start gap-2"><SubmissionDetails submission={row} siteName={siteName} />{!row.is_read ? <MarkSubmissionRead id={row.id} /> : null}</div></td>
           </tr>;
         })}</tbody>
-      </table></div> : <div className="px-6 py-10 text-center"><Inbox size={24} className="mx-auto text-[var(--platform-muted)]" />
+      </table></TableScrollArea> : <div className="px-6 py-10 text-center"><Inbox size={24} className="mx-auto text-[var(--platform-muted)]" />
         <h2 className="mt-3 text-sm font-semibold">{total ? "No submissions match these filters" : "Ready for your next conversation"}</h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--platform-muted)]">{total ? "Try a different search, website, date range or status." : "Add a form to a website in the editor and publish it. New inquiries will appear here, ready to review and export."}</p>
         <Link href={total ? "/dashboard/forms" : "/dashboard/sites"} className="platform-button mt-4">{total ? "Clear filters" : "Manage websites"}</Link>

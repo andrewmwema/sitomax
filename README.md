@@ -23,6 +23,13 @@ display shade when needed for contrast. Desktop navigation can be collapsed;
 on phones it opens as a keyboard-accessible drawer. Agency-only navigation
 remains restricted to super admins.
 
+Dashboard keyboard users can skip directly to the main content. Wide management
+tables use named, focusable scroll regions, including on mobile; screen-reader
+labels remain contained inside those regions. Navigation and detail dialogs use
+native modal focus handling and prevent background scrolling. Loading skeletons
+respect reduced-motion preferences. Overview and Analytics share the same traffic
+chart and accessible daily-values table.
+
 The Clients, Domain Requests, and Forms workspaces share accessible detail
 drawers and compact management tables. Client access labels reflect actual owner
 memberships, not invitation acceptance (which is not tracked). Completing a domain

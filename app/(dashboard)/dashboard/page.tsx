@@ -7,6 +7,7 @@ import { getDashboardSites } from "@/lib/dashboard/sites";
 import { getSiteUrl } from "@/lib/site-url";
 import { AiUsageCards } from "@/components/dashboard/ai-usage-cards";
 import { DashboardGreeting } from "@/components/dashboard/dashboard-greeting";
+import { VisitsChart } from "@/components/dashboard/analytics-report";
 
 const analyticsSchema = z.object({
   visits: z.number(),
@@ -24,7 +25,7 @@ type Lead = {
 type Activity = { id: string; label: string; detail: string; date: string; href: string };
 
 export default function DashboardPage() {
-  return <Suspense fallback={<div className="h-72 animate-pulse rounded-2xl bg-[#EFEEEA]" />}><Overview /></Suspense>;
+  return <Suspense fallback={<div role="status" aria-label="Loading overview" className="h-72 animate-pulse rounded-2xl bg-[#EFEEEA]" />}><Overview /></Suspense>;
 }
 
 async function Overview() {
@@ -85,7 +86,7 @@ async function Overview() {
       </div>
     </header>
 
-    <section aria-label="Workspace metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <section aria-label="Workspace metrics" className={`grid gap-3 sm:grid-cols-2 ${isAdmin ? "xl:grid-cols-5" : "xl:grid-cols-3"}`}>
       {metrics.map((metric) => <Link key={metric.label} href={metric.href} className="platform-panel platform-metric block min-w-0 p-4 hover:border-[#D5D3CD]">
         <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-[#6B6A66]">{metric.label}</p><metric.icon size={16} strokeWidth={1.5} className="shrink-0 text-[#9A978E]" /></div>
         <p className="mt-3 truncate text-[27px] leading-tight font-semibold tracking-[-0.8px] tabular-nums">{metric.value}</p>
@@ -136,26 +137,17 @@ function PerformanceSnapshot({
   analytics: z.infer<typeof analyticsSchema> | null;
   error: boolean;
 }) {
-  const daily = analytics?.daily ?? [];
-  const max = Math.max(0, ...daily.map((day) => day.visits));
-  const points = daily.map((day, index) => `${20 + index * 560 / Math.max(1, daily.length - 1)},${150 - day.visits * 125 / Math.max(1, max)}`).join(" ");
   return <section className="platform-panel overflow-hidden">
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EFEEEA] px-5 py-4">
       <div><h2 className="text-[15px] font-semibold">Performance snapshot</h2><p className="mt-1 text-xs text-[#6B6A66]">{siteName ? `Daily visits · ${siteName} · last 30 days (UTC)` : "Website traffic over the last 30 days"}</p></div>
       {siteId && canSeeReporting ? <Link href={`/dashboard/analytics?site=${encodeURIComponent(siteId)}`} className="inline-flex items-center gap-1 text-xs font-medium text-[#55534E] hover:text-[#121212]">Analytics<ArrowUpRight size={13} /></Link> : null}
     </div>
-    <div className="p-5">
-      {!canSeeReporting ? <p className="py-8 text-center text-sm text-[#6B6A66]">Traffic reporting is available to account owners.</p> :
-        error ? <p role="alert" className="py-8 text-center text-sm text-red-700">Could not load the traffic snapshot. Open Analytics to retry.</p> :
-          !analytics || !analytics.visits ? <div className="py-8 text-center"><BarChart3 size={22} className="mx-auto text-[#A6A39C]" /><p className="mt-3 text-sm font-medium">No visits recorded yet</p><p className="mt-1 text-xs text-[#6B6A66]">Visits will appear after analytics is enabled on a published website.</p></div> :
-            <><div className="flex items-baseline gap-2"><strong className="text-2xl tabular-nums">{analytics.visits.toLocaleString()}</strong><span className="text-xs text-[#6B6A66]">visits on this site</span></div>
-              <svg viewBox="0 0 600 170" role="img" aria-label={`${analytics.visits.toLocaleString()} visits over 30 days. Daily visits from ${daily[0]?.day} to ${daily[daily.length - 1]?.day}.`} className="mt-3 h-36 w-full" preserveAspectRatio="none">
-                <path d="M20 20V150H580" fill="none" stroke="#E8E7E3" />
-                <polyline points={points} fill="none" stroke="#4B3FE0" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-              </svg>
-              <div className="flex justify-between text-[11px] text-[#6B6A66]"><span>{daily[0]?.day}</span><span>{daily[daily.length - 1]?.day}</span></div>
-            </>}
-    </div>
+    {!canSeeReporting ? <p className="px-5 py-10 text-center text-sm text-[#6B6A66]">Traffic reporting is available to account owners.</p> :
+      error ? <p role="alert" className="px-5 py-10 text-center text-sm text-red-700">Could not load the traffic snapshot. Open Analytics to retry.</p> :
+        !analytics ? <div className="px-5 py-10 text-center"><BarChart3 size={22} className="mx-auto text-[#A6A39C]" /><p className="mt-3 text-sm font-medium">No visits recorded yet</p><p className="mt-1 text-xs text-[#6B6A66]">Visits will appear after analytics is enabled on a published website.</p></div> :
+          <>{analytics.visits > 0 ? <div className="flex items-baseline gap-2 px-5 pt-5"><strong className="text-2xl tabular-nums">{analytics.visits.toLocaleString()}</strong><span className="text-xs text-[#6B6A66]">visits on this site</span></div> : null}
+            <VisitsChart daily={analytics.daily} visits={analytics.visits} />
+          </>}
   </section>;
 }
 

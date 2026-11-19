@@ -9,6 +9,7 @@ import { getProvider } from "@/lib/domains/providers";
 import { DomainRequestUpdate } from "./domain-request-update";
 import { WorkspaceDialog } from "./workspace-dialog";
 import { WorkspaceMetrics } from "./workspace-metrics";
+import { TableScrollArea } from "./table-scroll-area";
 
 export type ManagedDomainRequest = DomainRequest & {
   done_at: string | null;
@@ -59,7 +60,8 @@ export function DomainRequestsWorkspace({ requests, initialPage = 1 }: { request
         </label>
         <p aria-live="polite" className="pb-3 text-xs text-[var(--platform-muted)]">{visible.length} {visible.length === 1 ? "request" : "requests"}</p>
       </div>
-      {rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[880px] text-left text-sm">
+      {rows.length ? <TableScrollArea label="Domain setup requests"><table className="w-full min-w-[880px] text-left text-sm">
+        <caption className="sr-only">Domain requests and DNS verification status</caption>
         <thead><tr>{["Domain", "Website / client", "Request status", "Domain connection", "Requested (UTC)", "Actions"].map((label) => <th key={label} className="px-5 font-medium">{label}</th>)}</tr></thead>
         <tbody>{rows.map((request) => {
           const verified = request.site.custom_domain === request.domain && request.site.domain_verified;
@@ -74,7 +76,7 @@ export function DomainRequestsWorkspace({ requests, initialPage = 1 }: { request
             </td>
           </tr>;
         })}</tbody>
-      </table></div> : <div className="px-6 py-10 text-center"><Globe2 size={24} className="mx-auto text-[var(--platform-muted)]" />
+      </table></TableScrollArea> : <div className="px-6 py-10 text-center"><Globe2 size={24} className="mx-auto text-[var(--platform-muted)]" />
         <h2 className="mt-3 text-sm font-semibold">{requests.length ? "No requests match these filters" : "No domain requests yet"}</h2>
         <p className="mt-2 text-sm text-[var(--platform-muted)]">{requests.length ? "Try another domain, client or status." : "Requests from your client websites will appear here."}</p>
         {!requests.length ? <Link href="/dashboard/sites" className="platform-button mt-4">Manage websites</Link> : null}

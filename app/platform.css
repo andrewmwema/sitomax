@@ -27,6 +27,36 @@
   background: var(--platform-ground);
 }
 
+.platform-content {
+  overflow-wrap: anywhere;
+}
+
+.platform-content :where(.flex, .grid) > * {
+  min-width: 0;
+}
+
+.platform-skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  transform: translateY(calc(-100% - 24px));
+  border-radius: var(--platform-radius-control);
+  padding: 12px 16px;
+  background: var(--platform-ink);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.platform-skip-link:focus {
+  transform: none;
+}
+
+:root:has(.platform-ui dialog[open]) {
+  overflow: hidden;
+}
+
 :where(.platform-ui, .platform-editor) :where(h1, h2, h3) {
   font-family: "Inter Tight", Inter, system-ui, sans-serif;
   text-wrap: balance;
@@ -57,6 +87,7 @@
 
 .platform-ui :where(input:not([type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="hidden"]), textarea, select) {
   min-height: 42px;
+  max-width: 100%;
   border-color: var(--platform-line);
   border-radius: var(--platform-radius-control);
   background-color: var(--platform-surface);
@@ -66,12 +97,12 @@
 
 .platform-ui :where(input, textarea, select):focus {
   border-color: var(--platform-accent);
-  outline: none;
-  box-shadow: 0 0 0 3px rgb(75 63 224 / 9%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--platform-accent) 9%, transparent);
 }
 
 .platform-ui :where(input, textarea)::placeholder {
-  color: #85837d;
+  color: var(--platform-muted);
+  opacity: 1;
 }
 
 .platform-panel {
@@ -152,6 +183,17 @@
   border-bottom: 0;
 }
 
+.platform-ui tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.platform-table-scroll {
+  /* Keep absolute screen-reader labels inside the scrolled table. */
+  position: relative;
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
 .platform-ui tbody tr {
   transition: background-color 160ms ease;
 }
@@ -222,6 +264,8 @@
 .platform-search-dialog {
   margin: auto;
   width: min(520px, 90vw);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   border: 1px solid var(--platform-line);
   border-radius: var(--platform-radius-panel);
   background: var(--platform-surface);
@@ -239,6 +283,9 @@
   margin: auto;
   width: min(540px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
   padding: 0;
   border: 1px solid var(--platform-line);
   border-radius: var(--platform-radius-panel);
@@ -317,12 +364,6 @@
 .platform-site-preview {
   aspect-ratio: 16 / 10;
   border-bottom: 1px solid var(--platform-line);
-}
-
-.platform-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
-  gap: 14px;
 }
 
 .platform-metric {
@@ -485,6 +526,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .platform-ui .animate-pulse {
+    animation: none;
+  }
   :where(.platform-ui, .platform-editor) :where(button, a, input, textarea, select),
   .platform-site-card,
   .platform-ui tbody tr {

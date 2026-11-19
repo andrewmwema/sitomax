@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUpRight, ExternalLink, LayoutGrid, List, Pencil, Plus } from "lucide-react";
 import { getSiteUrl } from "@/lib/site-url";
 import { SiteCard, type SiteCardSite } from "./site-card";
+import { TableScrollArea } from "./table-scroll-area";
 
 type StatusFilter = "all" | "live" | "draft";
 type SortOrder = "recent" | "name";
@@ -102,8 +103,9 @@ export function SiteGrid({
 
     {visible.length ? view === "grid" ?
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((site) => <SiteCard key={site.id} site={site} marketingSubdomain={marketingSubdomain} />)}</div> :
-      <div className="platform-panel overflow-x-auto">
+      <TableScrollArea label="Website directory" className="platform-panel">
         <table className="w-full min-w-[720px] text-left text-sm">
+          <caption className="sr-only">Websites and available management actions</caption>
           <thead><tr><th className="px-5">Website</th><th className="px-4">Client</th><th className="px-4">Status</th><th className="px-4">Domain</th><th className="px-4">Added</th><th className="px-5 text-right">Actions</th></tr></thead>
           <tbody>{visible.map((site) => {
             const home = site.pages.find((page) => page.slug === "") ?? site.pages[0];
@@ -124,7 +126,7 @@ export function SiteGrid({
             </tr>;
           })}</tbody>
         </table>
-      </div>
+      </TableScrollArea>
       : <div className="platform-panel border-dashed p-10 text-center">
         <h2 className="font-semibold">{sites.length ? "No websites match these filters" : "Your workspace is ready for its first website"}</h2>
         <p className="mt-2 text-sm text-[#6B6A66]">{sites.length ? "Try a different search or filter." : "Create a site to start building your online presence."}</p>

@@ -46,6 +46,10 @@ describe("Phase 3 operations workspaces", () => {
     await act(async () => changeControl(search, "alex@example.test"));
     expect(container.querySelector("tbody")?.textContent).toContain("North Studio");
     expect(container.querySelector("tbody")?.textContent).not.toContain("South Studio");
+    const tableRegion = container.querySelector<HTMLElement>('[role="region"][aria-label="Client accounts"]');
+    expect(tableRegion?.tabIndex).toBe(0);
+    tableRegion?.focus();
+    expect(document.activeElement).toBe(tableRegion);
     await act(async () => container.querySelector<HTMLButtonElement>("tbody button")!.click());
     const dialog = container.querySelector<HTMLDialogElement>("dialog")!;
     expect(dialog.open).toBe(true);
@@ -62,6 +66,7 @@ describe("Phase 3 operations workspaces", () => {
   it("keeps a completed request separate from domain verification and retains the update workflow", async () => {
     await act(async () => root.render(<DomainRequestsWorkspace requests={[request]} />));
     const row = container.querySelector("tbody tr")!;
+    expect(row.closest('[role="region"]')?.getAttribute("aria-label")).toBe("Domain setup requests");
     expect(row.textContent).toContain("Done");
     expect(row.textContent).toContain("Not verified");
     await act(async () => row.querySelector<HTMLButtonElement>("button")!.click());
