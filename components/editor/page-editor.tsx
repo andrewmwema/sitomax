@@ -2,6 +2,7 @@
 
 import { linkContext } from "@/lib/links";
 import { PagesManager } from "./pages-panel";
+import { EditorIconPicker } from "./editor-icon-picker";
 import { findBrokenLinks, type LinkIssue } from "@/lib/link-qa";
 import {
   createContext,
@@ -725,6 +726,7 @@ export function PageEditor({
           <SectionLibraryPanel />
           <SaveDesignDialog />
           <EditorInteractions />
+          <EditorIconPicker />
         </EditorAiProvider></EditorRuntime>
       ),
     }),

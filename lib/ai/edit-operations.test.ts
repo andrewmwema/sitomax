@@ -14,6 +14,12 @@ const page: Data = { root: { props: { title: "Home" } }, content: [
 const allowed = (url: string) => url === "/samples/tools.jpg";
 
 describe("editor AI operations", () => {
+  it("validates contextual icon names and preserves existing icon styling during AI edits", () => {
+    const original = { icon: { name: "star", size: 48, color: "primary" } };
+    expect(updateEditableProps("Icon", original, { icon: "wrench" }).icon)
+      .toEqual({ name: "wrench", size: 48, color: "primary" });
+    expect(() => updateEditableProps("Icon", original, { icon: "invented-icon" })).toThrow();
+  });
   it("edits nested custom-layout props and design while keeping structure changes top-level", () => {
     const custom: Data = { root: {}, content: [{
       type: "Section", props: { id: "custom-section", design: {}, rows: [{

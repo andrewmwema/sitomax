@@ -11,11 +11,12 @@ import {
 } from "@/lib/layout/guardrails";
 import type { BlockDesign } from "@/lib/sections/design";
 import { BlockIcon } from "../ui/icon";
+import type { IconValue } from "@/lib/icons";
 
 export type BadgeElementProps = {
   design?: BlockDesign;
   text: string;
-  icon: string;
+  icon: IconValue;
   showIcon: boolean;
   style: "soft" | "solid" | "outline";
   color: ColorChoice;
@@ -64,7 +65,7 @@ export const BadgeElement: ComponentConfig<BadgeElementProps> = {
       Object.entries(fields).filter(([key]) => key !== "icon"),
     ) as typeof fields;
   },
-  render: ({ text, icon, showIcon, style, color, align }) => {
+  render: ({ text, icon, showIcon, style, color, align, puck }) => {
     const tint = colorCss(color, "primary") ?? "var(--color-primary)";
     const variant = oneOf(style, ["soft", "solid", "outline"], "soft");
     const look = {
@@ -82,7 +83,7 @@ export const BadgeElement: ComponentConfig<BadgeElementProps> = {
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
           style={{ ...look, fontFamily: "var(--font-body)" }}
         >
-          {showIcon !== false ? <BlockIcon name={icon} size={14} /> : null}
+          {showIcon !== false ? <BlockIcon name={icon} size={14} editPath={puck.isEditing ? "icon" : undefined} /> : null}
           {text}
         </span>
       </div>

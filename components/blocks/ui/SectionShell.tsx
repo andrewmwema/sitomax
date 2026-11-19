@@ -70,6 +70,7 @@ export function SectionShell({
   isEditing = false,
   level = "section",
   dragRef,
+  blockId,
   children,
 }: {
   design?: BlockDesign;
@@ -78,6 +79,7 @@ export function SectionShell({
   level?: DesignLevel;
   /** Puck's drag handle ref for `inline` components (layout system). */
   dragRef?: ((element: Element | null) => void) | null;
+  blockId?: string;
   children: ReactNode;
 }) {
   const normalized = normalizeDesign(design);
@@ -205,7 +207,7 @@ export function SectionShell({
     .join(" ");
 
   return (
-    <div ref={setRef} id={anchorId ?? undefined} className={`${classes} shell-responsive`} style={style}>
+    <div ref={setRef} id={anchorId ?? undefined} data-editor-block={isEditing ? blockId : undefined} className={`${classes} shell-responsive`} style={style}>
       {hasBackground ? (
         <SectionBackground background={background} isEditing={isEditing} />
       ) : null}

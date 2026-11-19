@@ -6,6 +6,7 @@ import { DesignField } from "@/components/editor/design-field";
 import { RichTextToolbar } from "@/components/editor/rich-text-toolbar";
 import { LinkFieldControl } from "@/components/editor/link-picker";
 import type { LinkValue, SiteLink } from "@/lib/links";
+import type { IconValue } from "@/lib/icons";
 import { editorTextExtensions } from "./richtext-extensions";
 
 /**
@@ -40,7 +41,7 @@ export function linkField(label: string): CustomField<LinkValue> & { aiKind: "li
 }
 
 /** Reusable icon field: searchable picker over the curated lucide set. */
-export function iconField(label: string): CustomField<string> & { aiKind: "icon" } {
+export function iconField(label: string): CustomField<IconValue> & { aiKind: "icon" } {
   return {
     type: "custom",
     aiKind: "icon",
@@ -73,7 +74,7 @@ export function richTextField(label: string): RichtextField {
       link: { openOnClick: false, HTMLAttributes: { target: null, rel: "noopener noreferrer" } },
     },
     tiptap: { extensions: editorTextExtensions },
-    renderMenu: (props) => <RichTextToolbar {...props} />,
+    renderMenu: (props) => <RichTextToolbar {...props} floating />,
     renderInlineMenu: (props) => <RichTextToolbar {...props} floating />,
   };
 }

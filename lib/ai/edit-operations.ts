@@ -11,6 +11,7 @@ import { fitColumns, safeRowLayout } from "@/lib/layout/structure";
 import { designPatchSchema, editDesign, editTheme, themePatchSchema } from "./edit-design";
 import type { SiteTheme } from "@/lib/theme/presets";
 import type { BlockDesign } from "@/lib/sections/design";
+import { iconNameSchema, readIcon } from "@/lib/icons";
 
 export const editScopes = ["section", "page", "theme"] as const;
 export type EditScope = (typeof editScopes)[number];
@@ -47,6 +48,7 @@ const linkField = /(?:href|link|url)$/i;
 const factualField = /^(?:testimonials|reviews|email|phone|address|hours|price|rating|latitude|longitude|value)$/i;
 function fieldSchema(key: string, field: Field): z.ZodType | undefined {
   if (factualField.test(key)) return;
+  if (field.type === "custom" && "aiKind" in field && field.aiKind === "icon") return iconNameSchema;
   if (field.type === "custom" && key === "layout") return z.enum(["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]);
   const isLink = field.type === "custom" && "aiKind" in field && field.aiKind === "link";
   if (isLink || ["text", "textarea", "richtext"].includes(field.type)) {
@@ -90,6 +92,8 @@ function mergeProps(fields: Fields, old: Props, patch: Props): Props {
     } else if (field.type === "object") next[key] = mergeProps(field.objectFields as Fields, record(old[key]), record(value));
     else if (field.type === "richtext" && typeof value === "string") {
       next[key] = value.split(/\n{2,}/).map((text) => `<p>${escapeText(text).replaceAll("\n", "<br>")}</p>`).join("");
+    } else if (field.type === "custom" && "aiKind" in field && field.aiKind === "icon") {
+      next[key] = typeof old[key] === "object" ? { ...readIcon(old[key]), name: value } : value;
     } else next[key] = typeof value === "string" && linkField.test(key) && value ? safeHref(value) : value;
   }
   return next;
@@ -108,6 +112,7 @@ export function updateEditableProps(type: string, previous: Props, patch: unknow
 function readableProps(fields: Fields, props: Props): Props {
   return Object.fromEntries(Object.entries(fields).flatMap<[string, unknown]>(([key, field]) => {
     const value = props[key];
+    if (field.type === "custom" && "aiKind" in field && field.aiKind === "icon") return [[key, readIcon(value).name]];
     if (field.type === "array" && Array.isArray(value)) return [[key, value.slice(0, 12).map((entry) => readableProps(field.arrayFields as Fields, record(entry)))]];
     if (field.type === "object") return [[key, readableProps(field.objectFields as Fields, record(value))]];
     if (typeof value === "string" && (fieldSchema(key, field) || ("aiKind" in field && field.aiKind === "image"))) {
@@ -137,7 +142,7 @@ export function sectionContext(data: Data, scope: EditScope, selected?: string) 
     editableProps: Object.fromEntries(Object.entries(fieldsFor(item.type)).flatMap(([key, field]) =>
       fieldSchema(key, field) ? [[key, field.type === "select" || field.type === "radio" ? field.options.map(({ value }) => value)
         : field.type === "custom" && key === "layout" ? ["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]
-          : field.type === "custom" ? "link" : field.type]] : [])),
+          : field.type === "custom" && "aiKind" in field ? field.aiKind : field.type]] : [])),
     canUseSectionTools: !parentId && !collectEmbeds(item).length,
   }));
 }

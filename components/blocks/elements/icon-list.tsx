@@ -11,10 +11,11 @@ import {
 } from "@/lib/layout/guardrails";
 import type { BlockDesign } from "@/lib/sections/design";
 import { BlockIcon } from "../ui/icon";
+import type { IconValue } from "@/lib/icons";
 
 export type IconListElementProps = {
   design?: BlockDesign;
-  items: { icon: string; text: string }[];
+  items: { icon: IconValue; text: string }[];
   iconColor: ColorChoice;
   size: TypeSize | "auto";
   gap: SpacingStep;
@@ -50,7 +51,7 @@ export const IconListElement: ComponentConfig<IconListElementProps> = {
     size: "base",
     gap: 12,
   },
-  render: ({ items, iconColor, size, gap }) => {
+  render: ({ items, iconColor, size, gap, puck }) => {
     const text = typeSizeStyle(size, "base");
     return (
       <ul
@@ -63,7 +64,7 @@ export const IconListElement: ComponentConfig<IconListElementProps> = {
               className="inline-flex shrink-0 items-center"
               style={{ color: colorCss(iconColor, "primary"), height: `${text.lineHeight}em` }}
             >
-              <BlockIcon name={item.icon} size={18} />
+              <BlockIcon name={item.icon} size={18} editPath={puck.isEditing ? `items.${i}.icon` : undefined} />
             </span>
             <span>{item.text}</span>
           </li>

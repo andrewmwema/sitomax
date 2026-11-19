@@ -11,13 +11,14 @@ import {
 } from "@/lib/layout/guardrails";
 import type { BlockDesign } from "@/lib/sections/design";
 import { BlockIcon } from "../ui/icon";
+import { readIcon, type IconValue } from "@/lib/icons";
 
 type IconSize = "24" | "32" | "48" | "64";
 type IconStyle = "plain" | "soft" | "solid";
 
 export type IconElementProps = {
   design?: BlockDesign;
-  icon: string;
+  icon: IconValue;
   size: IconSize;
   style: IconStyle;
   color: ColorChoice;
@@ -60,10 +61,11 @@ export const IconElement: ComponentConfig<IconElementProps> = {
     color: "primary",
     align: "left",
   },
-  render: ({ icon, size, style, color, align }) => {
-    const px = Number(oneOf(size, ["24", "32", "48", "64"], "32"));
+  render: ({ icon, size, style, color, align, puck }) => {
+    const appearance = readIcon(icon);
+    const px = appearance.size ?? Number(oneOf(size, ["24", "32", "48", "64"], "32"));
     const variant = oneOf(style, ["plain", "soft", "solid"], "soft");
-    const tint = colorCss(color, "primary") ?? "var(--color-primary)";
+    const tint = colorCss(appearance.color ?? color, "primary") ?? "var(--color-primary)";
     const tile =
       variant === "plain"
         ? { color: tint }
@@ -78,7 +80,7 @@ export const IconElement: ComponentConfig<IconElementProps> = {
     return (
       <div className="flex" style={{ justifyContent: JUSTIFY[safeAlign(align)] }}>
         <span className="inline-flex shrink-0 items-center justify-center" style={tile}>
-          <BlockIcon name={icon} size={px} />
+          <BlockIcon name={appearance.name} size={px} editPath={puck.isEditing ? "icon" : undefined} />
         </span>
       </div>
     );

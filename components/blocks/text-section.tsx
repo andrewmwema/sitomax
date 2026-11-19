@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { ComponentConfig, RichText } from "@puckeditor/core";
 import { designField, linkField, iconField, richTextField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
+import type { IconValue } from "@/lib/icons";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
@@ -34,7 +35,7 @@ export type TextSectionProps = {
   /** Small attribution line under the "mission" statement. */
   attribution: string;
   /** Highlighted side box shown by the "callout" variant. */
-  calloutIcon: string;
+  calloutIcon: IconValue;
   calloutTitle: string;
   calloutText: RichText;
   /** Large quote breaking the text in the "pull-quote" variant. */
@@ -176,6 +177,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     secondaryButtonLink,
     ctaAlign,
     align,
+    puck,
   }) => {
     const layout: TextSectionVariant =
       variant ?? (align === "center" ? "centered" : "standard");
@@ -319,7 +321,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
                 borderRadius: "var(--radius-lg)",
               }}
             >
-              <IconTile name={calloutIcon || "shield-check"} />
+              <IconTile name={calloutIcon || "shield-check"} editPath={puck.isEditing ? "calloutIcon" : undefined} />
               {calloutTitle ? (
                 <p className="text-lg" style={headingFont}>
                   {calloutTitle}

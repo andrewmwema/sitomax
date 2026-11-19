@@ -1,5 +1,6 @@
 import { escapeHtml, toRichTextHtml } from "@/lib/richtext";
 import { linkHref, parseSiteLink } from "@/lib/links";
+import { iconValueSchema } from "@/lib/icons";
 import type { BlockDesign } from "@/lib/sections/design";
 import {
   ROW_LAYOUTS,
@@ -31,6 +32,7 @@ type Builder = {
 const str = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 /** Keeps typed (picker) links intact; legacy strings stay strings. */
 const linkValue = (value: unknown): unknown => parseSiteLink(value) ?? (str(value) || "#");
+const iconValue = (value: unknown, fallback: string) => iconValueSchema.safeParse(value).data ?? fallback;
 /** Anchor attributes for a link embedded in rich text; page links resolve by id at render time. */
 function richTextLinkAttrs(value: unknown): string {
   const link = parseSiteLink(value);
@@ -184,7 +186,7 @@ const CONVERTERS: Record<string, Converter> = {
     const badge = str(p.badgeText);
     const lead = (align: Align, onDark = false) =>
       compact([
-        badge ? b.el("Badge", { text: badge, icon: "star", align }) : null,
+        badge ? b.el("Badge", { text: badge, icon: iconValue(p.badgeIcon, "star"), align }) : null,
         ...intro(b, { ...p, text: p.subheading }, align, "h1", onDark),
         ...buttons(
           b,
@@ -240,7 +242,7 @@ const CONVERTERS: Record<string, Converter> = {
     ]);
     if (variant === "callout") {
       const callout = compact([
-        b.el("Icon", { icon: str(p.calloutIcon) || "lightbulb" }),
+        b.el("Icon", { icon: iconValue(p.calloutIcon, "lightbulb") }),
         str(p.calloutTitle) && b.el("Heading", { text: str(p.calloutTitle), level: "h3", size: "xl" }),
         html(p.calloutText) && b.el("Text", { text: html(p.calloutText) }),
       ]);
@@ -262,7 +264,7 @@ const CONVERTERS: Record<string, Converter> = {
     const withImages = p.variant === "image-cards" || p.variant === "image-rows";
     const cards = list(p.services).map((s) =>
       compact([
-        withImages ? imageEl(b, s.image, s.imageAlt, { aspect: "3/2" }) : b.el("Icon", { icon: str(s.icon) || "star" }),
+        withImages ? imageEl(b, s.image, s.imageAlt, { aspect: "3/2" }) : b.el("Icon", { icon: iconValue(s.icon, "star") }),
         b.el("Heading", { text: str(s.title), level: "h3", size: "xl" }),
         html(s.text) && b.el("Text", { text: html(s.text) }),
       ]),
@@ -348,7 +350,7 @@ const CONVERTERS: Record<string, Converter> = {
   Process(b, p) {
     const steps = list(p.steps).map((s, i) =>
       compact([
-        b.el("Badge", { text: `Step ${i + 1}`, icon: str(s.icon) || "check" }),
+        b.el("Badge", { text: `Step ${i + 1}`, icon: iconValue(s.icon, "check") }),
         b.el("Heading", { text: str(s.title), level: "h3", size: "xl" }),
         html(s.text) && b.el("Text", { text: html(s.text) }),
       ]),
@@ -459,7 +461,7 @@ const CONVERTERS: Record<string, Converter> = {
       details.length > 0 &&
         b.el("IconList", {
           items: details.map((d) => ({
-            icon: str(d.icon) || "check",
+            icon: iconValue(d.icon, "check"),
             text: [str(d.label), str(d.value)].filter(Boolean).join(": "),
           })),
         }),

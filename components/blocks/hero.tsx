@@ -1,7 +1,8 @@
 import type { ComponentConfig } from "@puckeditor/core";
 import type { CSSProperties, ReactNode } from "react";
-import { designField, linkField, imageField } from "@/lib/puck/fields";
+import { designField, linkField, imageField, iconField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
+import type { IconValue } from "@/lib/icons";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
@@ -25,8 +26,9 @@ export type HeroVariant = "centered" | "split" | "overlay" | "lead-form" | "stat
 
 export type HeroProps = {
   eyebrow: string;
-  /** Pill badge with a star icon; replaces the eyebrow when set. */
+  /** Pill badge; replaces the eyebrow when set. */
   badgeText?: string;
+  badgeIcon: IconValue;
   heading: string;
   subheading: string;
   buttonText: string;
@@ -54,12 +56,14 @@ export type HeroProps = {
 /* Shared pieces                                                       */
 /* ------------------------------------------------------------------ */
 
-/** Badge (with star) when set, otherwise the eyebrow label. */
-function HeroLabel({ badgeText, eyebrow }: { badgeText?: string; eyebrow: string }) {
+/** Badge when set, otherwise the eyebrow label. */
+function HeroLabel({ badgeText, badgeIcon = "star", eyebrow, editing }: {
+  badgeText?: string; badgeIcon?: IconValue; eyebrow: string; editing: boolean;
+}) {
   if (badgeText) {
     return (
       <Badge>
-        <BlockIcon name="star" size={13} />
+        <BlockIcon name={badgeIcon} size={13} editPath={editing ? "badgeIcon" : undefined} />
         {badgeText}
       </Badge>
     );
@@ -135,6 +139,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       label: "Badge (replaces eyebrow)",
       contentEditable: true,
     },
+    badgeIcon: iconField("Badge icon"),
     heading: { type: "text", label: "Heading", contentEditable: true },
     subheading: { type: "textarea", label: "Subheading", contentEditable: true },
     buttonText: { type: "text", label: "Button text", contentEditable: true },
@@ -217,6 +222,7 @@ export const Hero: ComponentConfig<HeroProps> = {
   defaultProps: {
     eyebrow: "Trusted local experts",
     badgeText: "",
+    badgeIcon: "star",
     heading: "Grow your business with us",
     subheading: "We make it easy for your customers to find and contact you.",
     buttonText: "Get in touch",
@@ -246,6 +252,7 @@ export const Hero: ComponentConfig<HeroProps> = {
   render: ({
     eyebrow,
     badgeText,
+    badgeIcon,
     heading,
     subheading,
     buttonText,
@@ -262,6 +269,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     submitText,
     formFields,
     layout,
+    puck,
   }) => {
     const resolved: HeroVariant = variant ?? layout ?? "centered";
     const buttons = (center = false) => (
@@ -280,7 +288,7 @@ export const Hero: ComponentConfig<HeroProps> = {
         <Section container={false}>
           <Container className="grid items-center gap-12 md:grid-cols-2 lg:gap-16">
             <div className="flex flex-col items-start gap-5">
-              <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+              <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
               <Heading level={1}>{heading}</Heading>
               <Subheading>{subheading}</Subheading>
               {buttons()}
@@ -352,7 +360,7 @@ export const Hero: ComponentConfig<HeroProps> = {
           ) : null}
           <Container className="relative flex min-h-[380px] flex-col justify-center gap-6 sm:min-h-[460px]">
             <div className="flex max-w-2xl flex-col items-start gap-5">
-              <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+              <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
               <Heading
                 level={1}
                 style={backgroundImage ? { color: "#ffffff" } : undefined}
@@ -380,7 +388,7 @@ export const Hero: ComponentConfig<HeroProps> = {
         <Section background="dark" container={false}>
           <Container className="grid items-center gap-12 lg:grid-cols-[1.05fr_minmax(0,30rem)] lg:gap-16">
             <div className="flex flex-col items-start gap-5">
-              <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+              <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
               <Heading level={1}>{heading}</Heading>
               <Subheading>{subheading}</Subheading>
               {buttons()}
@@ -452,7 +460,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       const items = stats ?? [];
       const content = (
         <div className="flex max-w-2xl flex-col items-start gap-5">
-          <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+          <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
           <Heading level={1}>{heading}</Heading>
           <Subheading>{subheading}</Subheading>
           {buttons()}
@@ -551,7 +559,7 @@ export const Hero: ComponentConfig<HeroProps> = {
           />
         ) : null}
         <Container className="relative flex max-w-3xl flex-col items-center gap-6 text-center">
-          <HeroLabel badgeText={badgeText} eyebrow={eyebrow} />
+          <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
           <Heading level={1} style={backgroundImage ? { color: "#ffffff" } : undefined}>
             {heading}
           </Heading>

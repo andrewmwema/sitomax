@@ -7,6 +7,7 @@ import { Eyebrow } from "./ui/eyebrow";
 import { Card } from "./ui/card";
 import { BlockIcon } from "./ui/icon";
 import { RichTextContent } from "./ui/rich-text";
+import type { IconValue } from "@/lib/icons";
 
 export type ProcessProps = {
   design?: BlockDesign;
@@ -16,7 +17,7 @@ export type ProcessProps = {
   variant: "steps" | "timeline" | "checklist";
   image: string;
   imageAlt: string;
-  steps: { title: string; text: RichText; icon: string }[];
+  steps: { title: string; text: RichText; icon: IconValue }[];
 };
 
 export const Process: ComponentConfig<ProcessProps> = {
@@ -44,7 +45,7 @@ export const Process: ComponentConfig<ProcessProps> = {
       { title: "Bring the details together", text: "<p>See the plan take shape, then walk through the result and discuss how to care for it.</p>", icon: "sparkles" },
     ],
   },
-  render: ({ eyebrow, heading, text, steps, variant, image, imageAlt }) => (
+  render: ({ eyebrow, heading, text, steps, variant, image, imageAlt, puck }) => (
     <Section background={variant === "steps" ? "soft" : "default"}>
       <div className={`grid gap-12 ${variant === "checklist" ? "items-center lg:grid-cols-2" : ""}`}>
         <div className="flex flex-col gap-4">
@@ -63,7 +64,7 @@ export const Process: ComponentConfig<ProcessProps> = {
             const content = <>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-sm font-semibold tracking-widest" style={{ color: "var(--color-muted)" }}>{String(i + 1).padStart(2, "0")}</span>
-                <BlockIcon name={step.icon} size={26} />
+                <BlockIcon name={step.icon} size={26} editPath={puck.isEditing ? `steps.${i}.icon` : undefined} />
               </div>
               <Heading level={3}>{step.title}</Heading>
               <RichTextContent value={step.text} />

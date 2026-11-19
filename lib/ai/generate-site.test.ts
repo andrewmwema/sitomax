@@ -48,6 +48,7 @@ const plan = {
 };
 
 function fieldValue(field: Field): unknown {
+  if (field.type === "custom" && "aiKind" in field && field.aiKind === "icon") return "wrench";
   if (field.type === "select" || field.type === "radio") return field.options[0].value;
   if (field.type === "array") return [];
   if (field.type === "object") return Object.fromEntries(Object.entries(field.objectFields).map(([key, child]) => [key, fieldValue(child)]));
@@ -93,6 +94,12 @@ beforeEach(() => {
 });
 
 describe("catalog site generation", () => {
+  it("rejects unknown AI icon names instead of silently rendering the fallback star", () => {
+    const design = aiCatalog.find((entry) => entry.blockType === "TextSection")!;
+    const props = section(design.id);
+    expect(blockSchemas.TextSection.safeParse({ ...props, variant: "standard", calloutIcon: "wrench" }).success).toBe(true);
+    expect(blockSchemas.TextSection.safeParse({ ...props, variant: "standard", calloutIcon: "plumbing-tool-made-up" }).success).toBe(false);
+  });
   it("drops extra proposals and fills a missing custom page in user-selected order", async () => {
     mocks.request.mockResolvedValueOnce(message("plan_site", { ...plan, pages: [
       { ...plan.pages[0], slug: "pricing" }, { slug: "unexpected", sections: [{ designId: "not-a-design" }] },

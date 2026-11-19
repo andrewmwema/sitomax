@@ -1,5 +1,5 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, iconField, imageField, richTextField } from "@/lib/puck/fields";
 import type { RichText } from "@puckeditor/core";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
@@ -10,6 +10,7 @@ import { EnquiryForm, enquiryFieldsField } from "./ui/enquiry-form";
 import { RichTextContent } from "./ui/rich-text";
 import { BlockIcon } from "./ui/icon";
 import { businessContactDetails, type SiteMenu } from "@/lib/page-navigation";
+import type { IconValue } from "@/lib/icons";
 
 export type ContactFormProps = {
   design?: BlockDesign;
@@ -24,7 +25,7 @@ export type ContactFormProps = {
   }[];
   variant: "centered" | "split" | "visit";
   text?: RichText;
-  details?: { icon: string; label: string; value: string }[];
+  details?: { icon: IconValue; label: string; value: string }[];
   image: string;
   imageAlt?: string;
   note?: string;
@@ -45,7 +46,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     details: {
       type: "array", label: "Contact details", getItemSummary: (item) => item.label,
       defaultItemProps: { icon: "map-pin", label: "Visit", value: "[Street address, town]" },
-      arrayFields: { icon: { type: "text", label: "Icon name" }, label: { type: "text", label: "Label" }, value: { type: "text", label: "Details" } },
+      arrayFields: { icon: iconField("Icon"), label: { type: "text", label: "Label" }, value: { type: "text", label: "Details" } },
     },
     formFields: enquiryFieldsField,
     variant: {
@@ -82,7 +83,8 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     const info = menu ? businessContactDetails(menu.contacts) : (details ?? []).map((detail) => ({ ...detail, href: "" }));
     const contactDetails = info.length ? <dl className="mt-[var(--content-gap)] grid gap-5 border-t pt-6 sm:grid-cols-2" style={{ borderColor: "var(--color-border)" }}>
       {info.map((detail, i) => <div key={i} className="flex flex-col gap-2">
-        <dt className="flex items-center gap-2 text-sm font-semibold"><BlockIcon name={detail.icon} size={18} />{detail.label}</dt>
+        <dt className="flex items-center gap-2 text-sm font-semibold"><BlockIcon name={detail.icon} size={18}
+          editPath={puck.isEditing && !menu ? `details.${i}.icon` : undefined} />{detail.label}</dt>
         <dd className="whitespace-pre-line text-sm" style={{ color: "var(--color-muted)" }}>
           {detail.href ? <a href={detail.href} className="underline">{detail.value}</a> : detail.value}
         </dd>

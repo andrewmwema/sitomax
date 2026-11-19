@@ -8,8 +8,9 @@ import { Heading } from "./ui/heading";
 import { IconTile } from "./ui/icon-tile";
 import { RichTextContent } from "./ui/rich-text";
 import { Section } from "./ui/section";
+import type { IconValue } from "@/lib/icons";
 
-export type StatItem = { value: string; label: string; detail: string; icon: string };
+export type StatItem = { value: string; label: string; detail: string; icon: IconValue };
 
 export type StatsProps = {
   design?: BlockDesign;
@@ -83,7 +84,7 @@ export const Stats: ComponentConfig<StatsProps> = {
     imageAlt: "Sample of a team planning a project together",
     variant: "row",
   },
-  render: ({ eyebrow, heading, text, stats, image, imageAlt, variant = "row" }) => {
+  render: ({ eyebrow, heading, text, stats, image, imageAlt, variant = "row", puck }) => {
     const intro = (
       <div className={`flex min-w-0 flex-col gap-4 ${variant === "cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
@@ -132,7 +133,7 @@ export const Stats: ComponentConfig<StatsProps> = {
               <Card className="h-full">
                 <dl className="flex flex-col gap-3">
                   <dt className="flex flex-col items-start gap-5 text-sm font-semibold">
-                    <IconTile name={stat.icon} />
+                    <IconTile name={stat.icon} editPath={puck.isEditing ? `stats.${i}.icon` : undefined} />
                     {stat.label}
                   </dt>
                   <StatNumber value={stat.value} />

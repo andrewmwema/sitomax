@@ -201,6 +201,25 @@ pages' drafts when a slug changes, except when you swap the homepage. Give a
 section an anchor in **Design → Settings → Anchor ID**. Publishing first lists
 links to deleted pages, missing sections or invalid URLs.
 
+The rich text toolbar appears on field focus, stays anchored above the text box
+(or below when space is limited), and hides on blur, outside click or Escape.
+Only one toolbar is visible at a time. Icon controls have shortcut tooltips
+and wrap on smaller screens. Typography, alignment and line height stay in
+dropdowns; the palette contains colors and custom sizes. With no selection,
+font, size and color apply to the current paragraph; inline formatting and
+highlight affect the next typed text. Select text and use **Link** or
+Ctrl/Cmd+K to open the picker. Without a selection, a hint explains what to do.
+Click a linked word to view its destination and Edit, Open or Remove it.
+**Rewrite with AI** remains a separate accent action for selected text.
+
+Click a configurable content icon (hero badges, service cards, process steps,
+statistics, callouts, icon lists or standalone icons) to open the searchable
+icon library. The same picker is available in the inspector, with optional
+size and theme/custom color overrides. Apply records one undoable draft edit;
+Cancel leaves the icon unchanged. Existing name-only icons keep their design's
+size and color. AI generation uses validated curated icon names and chooses
+them by the item's meaning rather than relying on a generic star fallback.
+
 Apply [`0027_site_files.sql`](supabase/migrations/0027_site_files.sql) to allow
 PDF and Office file uploads and file links (20 MB limit).
 

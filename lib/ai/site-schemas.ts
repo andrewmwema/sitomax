@@ -7,6 +7,7 @@ import { puckConfig } from "@/lib/puck/config";
 import { sectionCatalog } from "@/lib/sections/catalog";
 import { buildDesignItem } from "@/lib/sections/library";
 import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
+import { iconNameSchema } from "@/lib/icons";
 
 type Fields = Record<string, Field>;
 export const PAGE_SLUGS = ["", "about", "services", "contact"] as const;
@@ -53,7 +54,7 @@ function fieldSchema(field: Field, key: string): z.ZodType {
       return fieldsSchema(field.objectFields as Fields);
     case "custom":
       if (isImageField(field)) return z.string().max(160).describe("Photo search query, NOT a URL; empty for no photo.");
-      if ("aiKind" in field && field.aiKind === "icon") return z.string().max(60);
+      if ("aiKind" in field && field.aiKind === "icon") return iconNameSchema;
       if ("aiKind" in field && field.aiKind === "link") return link;
       throw new Error(`Unsupported custom AI field: ${key}.`);
     default: throw new Error(`Unsupported AI field: ${key} (${field.type}).`);

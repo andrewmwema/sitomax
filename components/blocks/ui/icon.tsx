@@ -1,156 +1,19 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  Award,
-  BadgeCheck,
-  Bath,
-  Bed,
-  Bike,
-  Briefcase,
-  Building,
-  Calendar,
-  Camera,
-  Car,
-  Check,
-  ChefHat,
-  Clock,
-  Coffee,
-  Croissant,
-  Dog,
-  Droplet,
-  Droplets,
-  Dumbbell,
-  Fan,
-  Flame,
-  Flower,
-  Gem,
-  Gift,
-  GraduationCap,
-  Hammer,
-  Heart,
-  HeartHandshake,
-  Home,
-  Key,
-  Leaf,
-  Lightbulb,
-  Lock,
-  Mail,
-  MapPin,
-  Music,
-  Paintbrush,
-  PawPrint,
-  Phone,
-  Pizza,
-  Plug,
-  Plus,
-  Recycle,
-  Ruler,
-  Scissors,
-  ShieldCheck,
-  ShowerHead,
-  Smile,
-  Snowflake,
-  Sofa,
-  Sparkles,
-  Star,
-  Stethoscope,
-  Store,
-  Sun,
-  Thermometer,
-  ThumbsUp,
-  TreePine,
-  Trophy,
-  Truck,
-  Users,
-  Utensils,
-  Wine,
-  Wrench,
-  Zap,
-} from "lucide-react";
+import { ICONS, readIcon, type IconValue } from "@/lib/icons";
+import { colorCss } from "@/lib/layout/guardrails";
 
-/**
- * Curated icon set for blocks (trades, salons, restaurants, services...).
- * Blocks store the icon NAME; the IconPicker field offers this list.
- */
-export const ICONS: Record<string, LucideIcon> = {
-  wrench: Wrench,
-  hammer: Hammer,
-  paintbrush: Paintbrush,
-  ruler: Ruler,
-  plug: Plug,
-  plus: Plus,
-  lightbulb: Lightbulb,
-  flame: Flame,
-  droplet: Droplet,
-  droplets: Droplets,
-  "shower-head": ShowerHead,
-  bath: Bath,
-  thermometer: Thermometer,
-  snowflake: Snowflake,
-  fan: Fan,
-  zap: Zap,
-  scissors: Scissors,
-  sparkles: Sparkles,
-  gem: Gem,
-  flower: Flower,
-  leaf: Leaf,
-  "tree-pine": TreePine,
-  sun: Sun,
-  utensils: Utensils,
-  "chef-hat": ChefHat,
-  coffee: Coffee,
-  pizza: Pizza,
-  croissant: Croissant,
-  wine: Wine,
-  home: Home,
-  building: Building,
-  store: Store,
-  sofa: Sofa,
-  bed: Bed,
-  key: Key,
-  lock: Lock,
-  "shield-check": ShieldCheck,
-  "badge-check": BadgeCheck,
-  check: Check,
-  star: Star,
-  award: Award,
-  trophy: Trophy,
-  "thumbs-up": ThumbsUp,
-  heart: Heart,
-  "heart-handshake": HeartHandshake,
-  smile: Smile,
-  clock: Clock,
-  calendar: Calendar,
-  phone: Phone,
-  mail: Mail,
-  "map-pin": MapPin,
-  truck: Truck,
-  car: Car,
-  bike: Bike,
-  dog: Dog,
-  "paw-print": PawPrint,
-  dumbbell: Dumbbell,
-  stethoscope: Stethoscope,
-  "graduation-cap": GraduationCap,
-  briefcase: Briefcase,
-  users: Users,
-  camera: Camera,
-  music: Music,
-  gift: Gift,
-  recycle: Recycle,
-};
+export { ICONS, ICON_NAMES } from "@/lib/icons";
 
-export const ICON_NAMES = Object.keys(ICONS);
-
-/** Renders a named icon; falls back to a star for unknown names. */
-export function BlockIcon({
-  name,
-  size = 22,
-  className,
-}: {
-  name: string;
-  size?: number;
-  className?: string;
+/** Editor targets are emitted only for content icons, never navigation controls. */
+export function BlockIcon({ name, size = 22, className, editPath }: {
+  name: IconValue; size?: number; className?: string; editPath?: string;
 }) {
-  const Icon = ICONS[name] ?? Star;
-  return <Icon size={size} className={className} aria-hidden="true" />;
+  const icon = readIcon(name);
+  const Icon = ICONS[icon.name];
+  return <Icon size={icon.size ?? size}
+    style={icon.color ? { color: colorCss(icon.color) } : undefined}
+    className={`${className ?? ""}${editPath ? " cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-offset-4" : ""}`}
+    {...(editPath ? {
+      "data-icon-path": editPath, "data-icon-name": icon.name, role: "button", tabIndex: 0,
+      "aria-label": `Change ${icon.name.replaceAll("-", " ")} icon`, "aria-hidden": false,
+    } : { "aria-hidden": true })} />;
 }

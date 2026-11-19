@@ -151,6 +151,14 @@ describe("embed element", () => {
 });
 
 describe("convert to custom layout", () => {
+  it("keeps chosen icons, size and theme color when converting a service section", () => {
+    const icon = { name: "droplets", size: 48, color: "primary" };
+    const converted = convertToLayout(el("Services", { variant: "grid", services: [{ title: "Plumbing", text: "Repairs", icon }] }), defaults)!;
+    expect(JSON.stringify(converted)).toContain(JSON.stringify(icon));
+    const html = render([converted]);
+    expect(html).toContain('width="48"');
+    expect(html).toContain("var(--color-primary)");
+  });
   it("keeps AI photo attribution and image alt text when converting a designed hero", () => {
     const photoCredits = [{ url: "https://images.unsplash.com/photo-1", alt: "Stock photo of plumbing tools",
       photographer: "Photographer", photographerUrl: "https://unsplash.com/@photographer", sourceUrl: "https://unsplash.com/photos/photo-1" }];

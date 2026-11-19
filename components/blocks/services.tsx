@@ -8,9 +8,10 @@ import { Card } from "./ui/card";
 import { IconTile } from "./ui/icon-tile";
 import { RichTextContent } from "./ui/rich-text";
 import { Tabs } from "./ui/tabs";
+import type { IconValue } from "@/lib/icons";
 
 export type ServiceItem = {
-  icon: string;
+  icon: IconValue;
   title: string;
   text: RichText;
   image: string;
@@ -92,7 +93,7 @@ export const Services: ComponentConfig<ServicesProps> = {
     ],
     variant: "grid",
   },
-  render: ({ eyebrow, heading, text, services, variant = "grid" }) => {
+  render: ({ eyebrow, heading, text, services, variant = "grid", puck }) => {
     const intro = (
       <div className={`flex min-w-0 flex-col gap-4 ${variant === "grid" || variant === "image-cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
@@ -113,7 +114,7 @@ export const Services: ComponentConfig<ServicesProps> = {
                   className="flex items-start gap-4 border-b py-6 first:pt-0 last:border-b-0 last:pb-0 sm:gap-6"
                   style={{ borderColor: "var(--color-border)" }}
                 >
-                  <IconTile name={service.icon} />
+                  <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
                   <div className="flex min-w-0 flex-col gap-2">
                     <Heading level={3}>{service.title}</Heading>
                     <RichTextContent value={service.text} className="w-full text-base" />
@@ -135,7 +136,7 @@ export const Services: ComponentConfig<ServicesProps> = {
               <div key={i} className="grid items-center gap-7 md:grid-cols-2 md:gap-12">
                 <ServiceImage service={service} className={i % 2 === 1 ? "md:order-2" : ""} />
                 <div className="flex min-w-0 flex-col gap-4 md:py-6">
-                  <IconTile name={service.icon} />
+                  <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
                   <Heading level={3} style={{ fontSize: "clamp(1.5rem, 2.4vw, 2rem)" }}>
                     {service.title}
                   </Heading>
@@ -156,13 +157,13 @@ export const Services: ComponentConfig<ServicesProps> = {
             <Tabs
               label={typeof heading === "string" ? heading : "Our services"}
               vertical={variant === "tabs-vertical"}
-              items={services.map((service) => ({
+              items={services.map((service, i) => ({
                 label: service.title,
                 content: (
                   <div className={`grid items-center gap-7 md:gap-12 ${variant === "tabs-simple" ? "" : "md:grid-cols-2"}`}>
                     {variant !== "tabs-simple" ? <ServiceImage service={service} /> : null}
                     <div className="flex min-w-0 flex-col gap-4">
-                      <IconTile name={service.icon} />
+                      <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
                       <Heading level={3} style={{ fontSize: "clamp(1.5rem, 2.4vw, 2rem)" }}>
                         {service.title}
                       </Heading>
@@ -192,7 +193,7 @@ export const Services: ComponentConfig<ServicesProps> = {
             {services.map((service, i) => (
               <div key={i} className="flex min-w-0 flex-col gap-4 p-6 sm:p-8" style={{ backgroundColor: "var(--color-bg)" }}>
                 <div className="flex items-center justify-between gap-4">
-                  <IconTile name={service.icon} />
+                  <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
                   <span aria-hidden="true" className="text-xs tabular-nums" style={{ color: "var(--color-muted)" }}>
                     {String(i + 1).padStart(2, "0")}
                   </span>
@@ -226,7 +227,7 @@ export const Services: ComponentConfig<ServicesProps> = {
                 </>
               ) : (
                 <>
-                  <IconTile name={service.icon} />
+                  <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
                   <Heading level={3}>{service.title}</Heading>
                   <RichTextContent value={service.text} className="w-full text-sm" />
                 </>

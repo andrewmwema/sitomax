@@ -148,6 +148,7 @@ function withSectionShell<C extends ComponentConfig<any>>(
     <SectionShell
       design={props.design}
       isEditing={props.puck.isEditing}
+      blockId={props.id}
       level={level}
       dragRef={config.inline ? props.puck.dragRef : undefined}
     >
