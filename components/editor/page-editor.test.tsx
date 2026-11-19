@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   forward: vi.fn(),
   openLibrary: vi.fn(),
   header: false,
+  isSuperAdmin: false,
 }));
 
 function puckState() {
@@ -67,7 +68,7 @@ vi.mock("./section-library", () => ({
   ROOT_ZONE: "root:default-zone",
   SectionLibraryContext: { Provider: ({ children }: { children: ReactNode }) => children },
   SectionLibraryPanel: () => null,
-  useSectionLibrary: () => ({ openLibrary: mocks.openLibrary }),
+  useSectionLibrary: () => ({ openLibrary: mocks.openLibrary, isSuperAdmin: mocks.isSuperAdmin }),
 }));
 vi.mock("./save-design-dialog", () => ({ SaveDesignDialog: () => null }));
 vi.mock("./editor-interactions", () => ({ EditorInteractions: () => null }));
@@ -100,6 +101,7 @@ beforeEach(() => {
   mocks.busy = null;
   mocks.dirty = false;
   mocks.header = false;
+  mocks.isSuperAdmin = false;
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   mocks.save.mockResolvedValue(true);
 });
@@ -131,6 +133,16 @@ describe("empty-page AI entry point", () => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it.each([false, true])("only shows the temporary check to super admins (admin: %s)", async (isSuperAdmin) => {
+  mocks.header = true;
+  mocks.isSuperAdmin = isSuperAdmin;
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  await act(async () => root.render(<PageEditor {...props} isSuperAdmin={isSuperAdmin} />));
+  expect(container.textContent?.includes("Check text editing")).toBe(isSuperAdmin);
+  await act(async () => root.unmount());
+});
 
 describe("SEO page navigation", () => {
   it("opens SEO on arrival and keeps SEO selected when switching pages after saving", async () => {

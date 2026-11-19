@@ -70,6 +70,7 @@ import { canonicalUrl } from "@/lib/seo-public";
 
 import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
 import { isEmptyPage } from "@/lib/editor/empty-page";
+import { TextEditingDiagnostics } from "./text-editing-diagnostics";
 
 type EditorUi = {
   pageId: string;
@@ -373,6 +374,7 @@ const BLOCK_LABELS = Object.fromEntries(
 /** Header buttons: Save draft, Preview, Publish and the theme panel toggle. */
 function HeaderActions() {
   const getPuck = useGetPuck();
+  const { isSuperAdmin } = useSectionLibrary();
   const askAi = useAskAi();
   const { siteId, previewUrl, openThemePanel } = useEditorUi();
   const persistence = usePersistence();
@@ -428,6 +430,7 @@ function HeaderActions() {
           <VersionHistory persistence={persistence} siteId={siteId} />
           <button type="button" onClick={openThemePanel} className="platform-button"><Palette size={14} />Site theme</button>
           <EditorCommands persistence={persistence} onPublish={requestPublish} onTheme={openThemePanel} />
+          {isSuperAdmin ? <TextEditingDiagnostics /> : null}
         </div>
       </details>
       <button

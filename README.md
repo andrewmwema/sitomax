@@ -73,6 +73,10 @@ gallery and logo introductions. Headings and button labels remain plain-text fie
 Use the section toolbar's drag handle to reposition a section instead of dragging
 its content.
 
+Temporarily, super admins can use **More → Check text editing** to record one
+canvas click and copy an on-screen DOM/focus diagnostic. It does not collect
+site text or page JSON, send a report, or modify drafts.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
