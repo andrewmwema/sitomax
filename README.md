@@ -59,7 +59,8 @@ The website editor uses save-aware page switching, a compact action bar and
 keyboard-accessible tool rail and Content / Design / Motion tabs. History,
 theme and commands live in More; Puck's native device and zoom strip remains
 directly below the header. Panels retain native resizing with bounded widths;
-tablets show one side panel at a time. Phones offer a saved-draft preview
+tablets show one side panel at a time. **Dashboard** in the editor header
+saves changes before returning to the workspace. Phones offer a saved-draft preview
 instead of squeezing in the desktop workspace. Empty pages can use the existing
 AI builder or section library, including saved designs. Theme editing uses the
 shared detail drawer; the media picker is a native modal so it also works above

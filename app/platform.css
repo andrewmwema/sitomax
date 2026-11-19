@@ -532,6 +532,33 @@
 
 .editor-topbar-location {
   flex: 1;
+  gap: 12px;
+}
+
+.editor-back-button {
+  display: inline-flex;
+  min-height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--platform-line);
+  border-radius: 9px;
+  padding: 0 11px;
+  background: var(--platform-surface);
+  color: var(--platform-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.editor-back-button:not(:disabled):hover {
+  background: var(--platform-subtle);
+  color: var(--platform-ink);
+}
+
+.editor-back-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .editor-page-location {
@@ -592,6 +619,28 @@
 .editor-icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+
+/* Puck's rail sizes SVGs to their wrapper; keep icons compact without shrinking hit targets. */
+.platform-editor [class*="_NavItem-linkIcon_"] {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+}
+
+.platform-editor [class*="_NavItem-linkIcon_"] .editor-rail-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.platform-editor [class*="_NavItem-link_"] {
+  gap: 2px;
+}
+
+.platform-editor [data-block-thumbnail] {
+  max-height: 88px;
 }
 
 .editor-toolbar-separator {

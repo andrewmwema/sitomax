@@ -163,6 +163,38 @@ describe("SEO page navigation", () => {
 });
 
 describe("editor navigation", () => {
+    it("shows a dashboard exit, saving changes first and staying put on save failure", async () => {
+      mocks.header = true;
+      mocks.dirty = true;
+      let finishSave!: (saved: boolean) => void;
+      mocks.save.mockReturnValueOnce(new Promise<boolean>((resolve) => { finishSave = resolve; }));
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      const exit = container.querySelector<HTMLButtonElement>('[aria-label="Back to dashboard"]')!;
+      expect(exit.textContent).toContain("Dashboard");
+      expect(container.querySelector('.editor-phone-notice a[href="/dashboard"]')?.textContent).toContain("Back to dashboard");
+      await act(async () => exit.click());
+      expect(mocks.save).toHaveBeenCalledOnce();
+      expect(mocks.push).not.toHaveBeenCalled();
+      await act(async () => finishSave(false));
+      expect(mocks.push).not.toHaveBeenCalled();
+      mocks.save.mockResolvedValueOnce(true);
+      await act(async () => exit.click());
+      expect(mocks.push).toHaveBeenCalledWith("/dashboard");
+      mocks.push.mockClear();
+      mocks.dirty = false;
+      await act(async () => root.render(<PageEditor {...props} />));
+      mocks.save.mockClear();
+      await act(async () => exit.click());
+      expect(mocks.save).not.toHaveBeenCalled();
+      expect(mocks.push).toHaveBeenCalledWith("/dashboard");
+      mocks.busy = "save";
+      await act(async () => root.render(<PageEditor {...props} />));
+      expect(exit.disabled).toBe(true);
+      await act(async () => root.unmount());
+    });
+
     it("uses the existing design library for an empty page", async () => {
       mocks.renderedPanel = "pages";
       const container = document.createElement("div");

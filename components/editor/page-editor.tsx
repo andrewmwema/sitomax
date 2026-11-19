@@ -171,10 +171,10 @@ function EditorHeader({ actions }: { actions: React.ReactNode }) {
   };
   return <header ref={header} className="editor-topbar" aria-label="Website editor">
     <div className="editor-topbar-location">
-      <button type="button" className="editor-icon-button" aria-label="Back to dashboard" title="Back to dashboard"
+      <button type="button" className="editor-back-button" aria-label="Back to dashboard" title="Save changes and return to dashboard"
         disabled={persistence.busy !== null} onClick={async () => {
           if (!persistence.dirty || await persistence.save()) router.push("/dashboard");
-        }}><ArrowLeft size={17} /></button>
+        }}><ArrowLeft size={16} /><span>Dashboard</span></button>
       <div className="editor-page-location">
         <span className="editor-site-name" title={siteName}>{siteName}</span>
         <select aria-label="Switch page" value={pageId} disabled={persistence.busy !== null}
@@ -732,6 +732,7 @@ export function PageEditor({
               <h1>Editing works best on a larger screen.</h1>
               <p>Open a tablet or computer to shape your site. You can still preview your last saved draft here.</p>
               <a href={previewUrl} target="_blank" rel="noreferrer" className="platform-button platform-button-primary"><Eye size={16} />Preview website</a>
+              <a href="/dashboard" className="platform-button"><ArrowLeft size={16} />Back to dashboard</a>
             </section>
             <div className="editor-desktop-workspace">
             {showGenerationWarnings && generationWarnings.length ? <aside role="status" className="fixed bottom-12 left-4 z-[100] max-h-56 w-[min(420px,90vw)] overflow-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950 shadow-lg">
