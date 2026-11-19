@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, iconField, richTextField } from "@/lib/puck/fields";
+import { designField, linkField, iconField, richTextField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
@@ -40,9 +41,9 @@ export type TextSectionProps = {
   pullQuote: string;
   /** Buttons and alignment for the "cta" variant. */
   buttonText: string;
-  buttonLink: string;
+  buttonLink: LinkValue;
   secondaryButtonText: string;
-  secondaryButtonLink: string;
+  secondaryButtonLink: LinkValue;
   ctaAlign: "left" | "center";
   /** @deprecated legacy prop, replaced by variant. */
   align?: "left" | "center";
@@ -96,17 +97,13 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     calloutText: richTextField("Callout text"),
     pullQuote: { type: "textarea", label: "Pull quote", contentEditable: true },
     buttonText: { type: "text", label: "Button text", contentEditable: true },
-    buttonLink: { type: "text", label: "Button link", placeholder: "/contact" },
+    buttonLink: linkField("Button link"),
     secondaryButtonText: {
       type: "text",
       label: "Second button text",
       contentEditable: true,
     },
-    secondaryButtonLink: {
-      type: "text",
-      label: "Second button link",
-      placeholder: "#services",
-    },
+    secondaryButtonLink: linkField("Second button link"),
     ctaAlign: {
       type: "radio",
       label: "Alignment",

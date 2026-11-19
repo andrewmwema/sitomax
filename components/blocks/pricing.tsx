@@ -1,6 +1,7 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
 import type { CSSProperties } from "react";
-import { designField, richTextField } from "@/lib/puck/fields";
+import { designField, linkField, richTextField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
@@ -21,7 +22,7 @@ export type PricingPlan = {
   yearlyPeriod?: string;
   features: string;
   buttonText: string;
-  buttonLink: string;
+  buttonLink: LinkValue;
   highlighted: boolean;
 };
 
@@ -222,7 +223,7 @@ export const Pricing: ComponentConfig<PricingProps> = {
         yearlyPeriod: { type: "text", label: "Yearly period", placeholder: "per year" },
         features: { type: "textarea", label: "Features (one per line; identical names share a comparison row)" },
         buttonText: { type: "text", label: "Button text", contentEditable: true },
-        buttonLink: { type: "text", label: "Button link" },
+        buttonLink: linkField("Button link"),
         highlighted: {
           type: "radio",
           label: "Highlighted (also selects the single plan)",

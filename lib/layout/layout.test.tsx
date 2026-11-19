@@ -145,7 +145,8 @@ describe("embed element", () => {
     expect(visible).not.toContain("Embed");
     const allow = (client.components.Column.fields?.content as { allow?: string[] }).allow;
     expect(allow).not.toContain("Embed");
-    expect(editorConfig(true)).toBe(puckConfig);
+    expect(editorConfig(true).components.Embed.permissions).toEqual(puckConfig.components.Embed.permissions);
+    expect(Object.keys(editorConfig(true).components)).toEqual(Object.keys(puckConfig.components));
   });
 });
 

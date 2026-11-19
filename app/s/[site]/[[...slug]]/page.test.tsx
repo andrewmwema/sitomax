@@ -8,6 +8,8 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/tenant", () => ({
   getSiteByHost: async () => ({ id: "site", name: "Example", subdomain: "client", custom_domain: "example.com", domain_verified: true, theme: {}, business: {}, seo: { socialImage: "/share.jpg", googleVerification: "verify123" } }),
   getSitePage: async () => ({ id: "page", slug: "about", title: "About", seo: { title: "Search title", description: "Search description", noindex: true }, draft_data: { content: [] }, published_data: { content: [] } }),
+  getTenantMenuPages: async () => [],
+  getTenantLinkPages: async () => [],
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: {} }));
 vi.mock("@puckeditor/core/rsc", () => ({ Render: () => null }));

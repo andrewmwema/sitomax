@@ -1,5 +1,6 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField } from "@/lib/puck/fields";
+import { designField, linkField } from "@/lib/puck/fields";
+import { linkAttributes, type LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
@@ -15,7 +16,7 @@ export type FooterProps = {
   tagline?: string;
   email?: string;
   hours?: string;
-  navigation?: { label: string; href: string }[];
+  navigation?: { label: string; href: LinkValue }[];
   socialLinks: {
     platform: "facebook" | "instagram" | "x" | "linkedin" | "youtube" | "tiktok";
     url: string;
@@ -45,7 +46,7 @@ export const Footer: ComponentConfig<FooterProps> = {
     navigation: {
       type: "array", label: "Navigation", getItemSummary: (item) => item.label,
       defaultItemProps: { label: "Contact", href: "#contact" },
-      arrayFields: { label: { type: "text", label: "Label" }, href: { type: "text", label: "Link" } },
+      arrayFields: { label: { type: "text", label: "Label" }, href: linkField("Link") },
     },
     socialLinks: {
       type: "array",
@@ -154,7 +155,7 @@ export const Footer: ComponentConfig<FooterProps> = {
           >
             {brand}
             {links?.length ? <nav aria-label={`${name} footer`} className={`flex flex-wrap gap-x-6 ${centered ? "justify-center" : variant === "columns" ? "flex-col" : ""}`}>
-              {links.map((link, i) => <a key={i} href={safeHref(link.href)} className="inline-flex min-h-12 items-center text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2">{link.label}</a>)}
+              {links.map((link, i) => <a key={i} {...linkAttributes(link.href)} className="inline-flex min-h-12 items-center text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2">{link.label}</a>)}
             </nav> : null}
             {contact}
             {social}

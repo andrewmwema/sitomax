@@ -1,6 +1,7 @@
 import type { ComponentConfig } from "@puckeditor/core";
 import type { CSSProperties, ReactNode } from "react";
-import { designField, imageField } from "@/lib/puck/fields";
+import { designField, linkField, imageField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
@@ -29,9 +30,9 @@ export type HeroProps = {
   heading: string;
   subheading: string;
   buttonText: string;
-  buttonLink: string;
+  buttonLink: LinkValue;
   secondaryButtonText?: string;
-  secondaryButtonLink?: string;
+  secondaryButtonLink?: LinkValue;
   backgroundImage: string;
   backgroundImageAlt?: string;
   /** Second photo for the collage shown by the "stats" variant. */
@@ -137,17 +138,13 @@ export const Hero: ComponentConfig<HeroProps> = {
     heading: { type: "text", label: "Heading", contentEditable: true },
     subheading: { type: "textarea", label: "Subheading", contentEditable: true },
     buttonText: { type: "text", label: "Button text", contentEditable: true },
-    buttonLink: { type: "text", label: "Button link", placeholder: "/contact" },
+    buttonLink: linkField("Button link"),
     secondaryButtonText: {
       type: "text",
       label: "Second button text",
       contentEditable: true,
     },
-    secondaryButtonLink: {
-      type: "text",
-      label: "Second button link",
-      placeholder: "#services",
-    },
+    secondaryButtonLink: linkField("Second button link"),
     backgroundImage: imageField("Image"),
     backgroundImageAlt: { type: "text", label: "Image alt text" },
     secondaryImage: imageField("Second image (collage)"),

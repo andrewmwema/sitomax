@@ -1,6 +1,7 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField, imageField } from "@/lib/puck/fields";
-import { JUSTIFY, oneOf, safeAlign, safeHref, type Align } from "@/lib/layout/guardrails";
+import { designField, imageField, linkField } from "@/lib/puck/fields";
+import { linkAttributes, type LinkValue } from "@/lib/links";
+import { JUSTIFY, oneOf, safeAlign, type Align } from "@/lib/layout/guardrails";
 import { safeMediaUrl, type BlockDesign } from "@/lib/sections/design";
 import { ElementPlaceholder, RADIUS, WIDTH_OPTIONS, type RadiusChoice } from "./shared";
 import { SiteImage } from "../ui/site-image";
@@ -11,7 +12,7 @@ export type ImageElementProps = {
   design?: BlockDesign;
   src: string;
   alt: string;
-  link: string;
+  link?: LinkValue;
   aspect: Aspect;
   fit: "cover" | "contain";
   radius: RadiusChoice;
@@ -25,7 +26,7 @@ export const ImageElement: ComponentConfig<ImageElementProps> = {
   fields: {
     src: imageField("Image"),
     alt: { type: "text", label: "Alt text (describe the image)" },
-    link: { type: "text", label: "Link (optional)", placeholder: "/services or https://…" },
+    link: linkField("Link (optional)"),
     aspect: {
       type: "select",
       label: "Shape",
@@ -102,7 +103,7 @@ export const ImageElement: ComponentConfig<ImageElementProps> = {
       <div className="flex" style={{ justifyContent: JUSTIFY[safeAlign(align, "center")] }}>
         <div style={{ width: `${widthPct}%` }}>
           {link && url ? (
-            <a href={safeHref(link)} onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}>
+            <a {...linkAttributes(link)} onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}>
               {image}
             </a>
           ) : (

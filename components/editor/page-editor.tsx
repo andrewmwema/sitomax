@@ -1,5 +1,8 @@
 "use client";
 
+import { linkContext } from "@/lib/links";
+import { PagesManager } from "./pages-panel";
+import { findBrokenLinks, type LinkIssue } from "@/lib/link-qa";
 import {
   createContext,
   useCallback,
@@ -239,18 +242,11 @@ function BuildEmptyPage({ canvas = false }: { canvas?: boolean }) {
 
 function PagesPanel() {
   const { pages, pageId } = useInteractions();
+  const { siteId } = useEditorUi();
   const persistence = usePersistence();
-  const router = useRouter();
   return <div className="editor-panel">
     <header className="editor-panel-header mb-4"><p className="platform-eyebrow mb-1">Site structure</p><h2 className="font-semibold">Pages</h2></header>
-    <div className="flex flex-col gap-1">
-      {pages.map((page) => <button key={page.id} type="button" aria-current={page.id === pageId ? "page" : undefined}
-        disabled={page.id === pageId || persistence.busy !== null}
-        className="rounded-lg px-3 py-2 text-left text-sm hover:bg-[#F7F7F5] disabled:opacity-60"
-        onClick={async () => {
-          if (!persistence.dirty || await persistence.save()) router.push(`/editor/${page.id}`);
-        }}>{page.nav_label ?? defaultMenuLabel(page.slug)}</button>)}
-    </div>
+    <PagesManager siteId={siteId} pageId={pageId} pages={pages} persistence={persistence} />
     <MenuLabelSettings key={pageId} page={pages.find((page) => page.id === pageId)} />
     <BuildEmptyPage />
     {persistence.buildNotes?.length ? <ul role="status" className="mt-3 list-disc pl-4 text-xs text-amber-800">{persistence.buildNotes.map((note) => <li key={note}>{note}</li>)}</ul> : null}
@@ -262,24 +258,38 @@ function MenuLabelSettings({ page }: { page?: EditorPageLink }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState(page?.nav_label ?? defaultMenuLabel(page?.slug ?? ""));
-  const [hidden, setHidden] = useState(page?.hide_from_menu ?? false);
   if (!page) return null;
   return <form className="mt-4 border-t border-zinc-200 pt-4" action={async (formData) => {
-    const result = await savePageMenuLabel(page.id, String(formData.get("menuLabel") ?? ""), hidden);
+    const result = await savePageMenuLabel(page.id, String(formData.get("menuLabel") ?? ""), page.hide_from_menu ?? false);
     if (result.status !== "idle") setMessage(result.message);
     if (result.status === "success") router.refresh();
   }}>
-    <h3 className="mb-2 text-sm font-semibold">Page settings</h3>
+    <h3 className="mb-2 text-sm font-semibold">This page in menus</h3>
     <label className="flex flex-col gap-1 text-xs">Menu label
       <input name="menuLabel" value={label} onChange={(event) => setLabel(event.currentTarget.value)} maxLength={40} required
         className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm" />
     </label>
-    <label className="mt-2 flex items-center gap-2 text-xs">
-      <input type="checkbox" checked={hidden} onChange={(event) => setHidden(event.currentTarget.checked)} />Hide from site menus
-    </label>
-    <button type="submit" className="platform-button mt-2">Save menu settings</button>
+    <button type="submit" className="platform-button mt-2">Save menu label</button>
     <p role="status" className="mt-1 text-xs">{message}</p>
   </form>;
+}
+
+/** New pages created with "Build with AI" open with ?build=ai; start the build once, then drop the flag. */
+function AutoBuildPage() {
+  const persistence = usePersistence();
+  const empty = usePuckStore((state) => isEmptyPage(state.appState.data));
+  const router = useRouter();
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("build") !== "ai") return;
+    started.current = true;
+    url.searchParams.delete("build");
+    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+    if (empty && persistence.busy === null) void persistence.buildEmptyPage();
+  }, [empty, persistence, router]);
+  return null;
 }
 
 function ThemeTool() {
@@ -366,19 +376,23 @@ function HeaderActions() {
   const { siteId, previewUrl, openThemePanel } = useEditorUi();
   const persistence = usePersistence();
   const { busy } = persistence;
+  const { pages, pageId } = useInteractions();
   const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
+  const [linkIssues, setLinkIssues] = useState<LinkIssue[]>([]);
   const run = persistence.save;
 
-  // Publishing first checks for leftover [placeholder] text in designs.
+  // Publishing first checks for leftover [placeholder] text and broken links.
   const requestPublish = useCallback(() => {
     const { appState } = getPuck();
     const hits = findUnreplacedPlaceholders(appState.data, BLOCK_LABELS);
-    if (hits.length > 0) {
+    const broken = findBrokenLinks(appState.data, { pages, currentPageId: pageId, labels: BLOCK_LABELS });
+    if (hits.length > 0 || broken.length > 0) {
       setPlaceholderHits(hits);
+      setLinkIssues(broken);
       return;
     }
     void run("publish");
-  }, [getPuck, run]);
+  }, [getPuck, run, pages, pageId]);
 
   const selectSection = useCallback(
     (index: number) => {
@@ -446,14 +460,26 @@ function HeaderActions() {
               <TriangleAlert size={20} className="mt-0.5 shrink-0 text-amber-500" />
               <div>
                 <h2 className="text-sm font-semibold text-zinc-900">
-                  Some placeholder text hasn&apos;t been replaced yet
+                  {placeholderHits.length ? "Some placeholder text hasn\u2019t been replaced yet" : "Some links need attention"}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Text in [brackets] or template placeholders is sample content — replace it with this
-                  business&apos;s real details before publishing.
+                  {placeholderHits.length ? "Text in [brackets] or template placeholders is sample content \u2014 replace it with this business\u2019s real details before publishing." : "Visitors would reach a missing page or section. Pick a new link target before publishing."}
                 </p>
               </div>
             </div>
+            {linkIssues.length ? <div className="mt-4">
+              <h3 className="text-xs font-semibold text-zinc-700">Broken links</h3>
+              <ul className="mt-1.5 max-h-40 space-y-1.5 overflow-y-auto">
+                {linkIssues.map((issue) => <li key={`${issue.index}-${issue.problem}`}>
+                  <button type="button" onClick={() => selectSection(issue.index)}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50">
+                    <span className="block text-sm font-medium text-zinc-800">{issue.label}<span className="font-normal text-zinc-400"> · section {issue.index + 1}</span></span>
+                    <span className="mt-0.5 block text-xs text-red-600">{issue.problem}</span>
+                  </button>
+                </li>)}
+              </ul>
+            </div> : null}
+            {placeholderHits.length && linkIssues.length ? <h3 className="mt-4 text-xs font-semibold text-zinc-700">Placeholder text</h3> : null}
             <ul className="mt-4 max-h-56 space-y-1.5 overflow-y-auto">
               {placeholderHits.map((hit) => (
                 <li key={hit.index}>
@@ -686,6 +712,7 @@ export function PageEditor({
         <AskAiCanvas>
           {children}
           <BuildEmptyPage canvas />
+          <AutoBuildPage />
           <CanvasInsertZones />
           <AddSectionEndBar />
           <SectionGhost />
@@ -745,7 +772,7 @@ export function PageEditor({
               config={config}
               data={data}
               ui={initialUi}
-              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) } }}
+              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) }, siteLinks: linkContext(sitePages) }}
               overrides={overrides}
               plugins={editorPlugins}
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}

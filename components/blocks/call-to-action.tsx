@@ -1,5 +1,6 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField, imageField } from "@/lib/puck/fields";
+import { designField, linkField, imageField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
@@ -14,12 +15,12 @@ export type CallToActionProps = {
   heading: string;
   text: string;
   buttonText: string;
-  buttonLink: string;
+  buttonLink: LinkValue;
   variant: "dark" | "primary" | "split" | "image" | "form";
   image: string;
   imageAlt?: string;
   secondaryButtonText?: string;
-  secondaryButtonLink?: string;
+  secondaryButtonLink?: LinkValue;
   formName?: string;
   formFields?: EnquiryField[];
   formNote?: string;
@@ -33,9 +34,9 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
     heading: { type: "text", label: "Heading", contentEditable: true },
     text: { type: "textarea", label: "Text", contentEditable: true },
     buttonText: { type: "text", label: "Button text", contentEditable: true },
-    buttonLink: { type: "text", label: "Button link" },
+    buttonLink: linkField("Button link"),
     secondaryButtonText: { type: "text", label: "Secondary button text" },
-    secondaryButtonLink: { type: "text", label: "Secondary button link" },
+    secondaryButtonLink: linkField("Secondary button link"),
     image: imageField("Background photo"),
     imageAlt: { type: "text", label: "Photo alt text" },
     formName: { type: "text", label: "Form name" },

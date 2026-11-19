@@ -34,11 +34,15 @@ const ALLOWED_TAGS = [
 
 // "style" is allowed but reduced to a strict allowlist of properties and
 // value shapes (see the hook below) for the text toolbar (Phase 4c).
-const ALLOWED_ATTR = ["href", "target", "rel", "style"];
+// data-page-id keeps internal links tied to a page id (see lib/links.ts).
+const ALLOWED_ATTR = ["href", "target", "rel", "style", "data-page-id"];
 
 // Block javascript:, data: and other dangerous URL schemes on links.
 const ALLOWED_URI_REGEXP =
   /^(?:(?:https?|mailto|tel):|[^a-z0-9+.-]|$)/i;
+// Links may only use http(s), mailto, tel, site-relative "/" paths or "#".
+const SAFE_LINK_HREF = /^(?:https?:|mailto:|tel:|\/(?!\/)|#)/i;
+const PAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const HEX_COLOR_REGEXP = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 // rgb()/rgba() with plain numbers only — no var(), calc(), url(), etc.
@@ -114,11 +118,20 @@ function sanitizeStyleAttribute(style: string): string | null {
 
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") {
-    // Links always open safely.
-    node.setAttribute("rel", "noopener noreferrer");
+    const href = node.getAttribute("href");
+    if (href !== null && (!SAFE_LINK_HREF.test(href.trim()) || /[\s\\]/.test(href.trim()))) {
+      node.removeAttribute("href");
+    }
+    const pageId = node.getAttribute("data-page-id");
+    if (pageId !== null && !PAGE_ID.test(pageId)) node.removeAttribute("data-page-id");
+    // Links always open safely; nofollow is the only author-controlled rel.
+    const nofollow = /(?:^|\s)nofollow(?:\s|$)/i.test(node.getAttribute("rel") ?? "");
+    node.setAttribute("rel", `noopener noreferrer${nofollow ? " nofollow" : ""}`);
     if (node.hasAttribute("target")) {
       node.setAttribute("target", "_blank");
     }
+  } else {
+    node.removeAttribute("data-page-id");
   }
 
   const style = node.getAttribute("style");
@@ -138,6 +151,9 @@ export function sanitizeRichText(html: string): string {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOWED_URI_REGEXP,
+    ALLOW_DATA_ATTR: false,
+    // Not URLs; the URI check would drop them. The hook validates both.
+    ADD_URI_SAFE_ATTR: ["rel", "data-page-id"],
   });
 }
 

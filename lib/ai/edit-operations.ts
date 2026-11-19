@@ -48,9 +48,11 @@ const factualField = /^(?:testimonials|reviews|email|phone|address|hours|price|r
 function fieldSchema(key: string, field: Field): z.ZodType | undefined {
   if (factualField.test(key)) return;
   if (field.type === "custom" && key === "layout") return z.enum(["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]);
-  if (["text", "textarea", "richtext"].includes(field.type)) {
+  const isLink = field.type === "custom" && "aiKind" in field && field.aiKind === "link";
+  if (isLink || ["text", "textarea", "richtext"].includes(field.type)) {
     if (/^(?:code|src)$/i.test(key)) return;
-    return linkField.test(key) ? plain.max(2000).refine((value) =>
+    // The AI writes plain string links; typed picker links are left alone unless it replaces them.
+    return isLink || linkField.test(key) ? plain.max(2000).refine((value) =>
       !/[\\\u0000-\u001f]/.test(value) && (value === "" || value === "#" || safeHref(value) !== "#"), "Use a safe link.") : plain;
   }
   if (field.type === "number") return z.number().min(field.min ?? -10000).max(field.max ?? 10000);
@@ -135,7 +137,7 @@ export function sectionContext(data: Data, scope: EditScope, selected?: string) 
     editableProps: Object.fromEntries(Object.entries(fieldsFor(item.type)).flatMap(([key, field]) =>
       fieldSchema(key, field) ? [[key, field.type === "select" || field.type === "radio" ? field.options.map(({ value }) => value)
         : field.type === "custom" && key === "layout" ? ["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]
-          : field.type]] : [])),
+          : field.type === "custom" ? "link" : field.type]] : [])),
     canUseSectionTools: !parentId && !collectEmbeds(item).length,
   }));
 }

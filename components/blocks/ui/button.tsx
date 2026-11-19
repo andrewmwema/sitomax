@@ -1,4 +1,5 @@
 import type { CSSProperties, MouseEventHandler, ReactNode } from "react";
+import { resolveLink } from "@/lib/links";
 
 type Variant = "primary" | "secondary" | "ghost";
 
@@ -25,10 +26,12 @@ const VARIANTS: Record<Variant, CSSProperties> = {
 
 /**
  * Block button/link. 48px minimum hit target, hover lift and a visible
- * focus ring. Rendered as an anchor because block CTAs navigate.
+ * focus ring. Rendered as an anchor because block CTAs navigate. `href`
+ * takes any stored link (typed, rendered or legacy string) and is
+ * resolved to a safe target here.
  */
 export function Button({
-  href = "#",
+  href,
   variant = "primary",
   children,
   className = "",
@@ -36,7 +39,7 @@ export function Button({
   onClick,
   newTab = false,
 }: {
-  href?: string;
+  href?: unknown;
   newTab?: boolean;
   variant?: Variant;
   children: ReactNode;
@@ -44,11 +47,14 @@ export function Button({
   style?: CSSProperties;
   onClick?: MouseEventHandler<HTMLAnchorElement>;
 }) {
+  const link = resolveLink(href);
+  const rel = [link.newTab || newTab ? "noopener noreferrer" : "", link.nofollow ? "nofollow" : ""].filter(Boolean).join(" ");
   return (
     <a
-      href={href || "#"}
+      href={link.href}
       onClick={onClick}
-      {...(newTab ? { target: "_blank", rel: "noopener noreferrer" } : null)}
+      {...(link.newTab || newTab ? { target: "_blank" } : null)}
+      {...(rel ? { rel } : null)}
       className={`site-button inline-flex min-h-12 items-center justify-center gap-2 px-6 py-3 text-center text-base font-semibold whitespace-normal no-underline transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 ${className}`}
       style={{
         borderRadius: "var(--button-radius, var(--radius-sm))",

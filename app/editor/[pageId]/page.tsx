@@ -8,6 +8,7 @@ import type { SiteTheme } from "@/lib/theme/presets";
 import { businessSchema, emptyBusiness } from "@/lib/business";
 import { siteSeoSchema } from "@/lib/seo";
 import { seoChecklist } from "@/lib/seo-checklist";
+import { pageSections } from "@/lib/links";
 import type { SeoPageSummary } from "@/components/editor/seo-panel";
 
 /**
@@ -75,12 +76,12 @@ async function EditorLoader({
   // supabase-js types to-one joins as arrays without generated DB types.
   const site = data.site as unknown as EditorSite;
   const siteSeo = siteSeoSchema.parse(site.seo);
-  const listed = await supabase.from("pages").select("id, slug, title, nav_label, hide_from_menu, ai_pending_build, draft_data, seo")
+  const listed = await supabase.from("pages").select("id, slug, title, nav_label, hide_from_menu, ai_pending_build, draft_data, seo, published_at")
     .eq("site_id", site.id).order("sort_order").order("slug");
   const menuLabelsReady = listed.error?.code !== "42703";
   if (!menuLabelsReady) console.warn("Page menu labels migration is not applied; the editor is using labels from slugs.");
   const { data: sitePages, error: pagesError } = menuLabelsReady ? listed : await supabase.from("pages")
-    .select("id, slug, title, draft_data, seo").eq("site_id", site.id).order("sort_order").order("slug");
+    .select("id, slug, title, draft_data, seo, published_at").eq("site_id", site.id).order("sort_order").order("slug");
   if (pagesError) throw new Error("Unable to load site pages", { cause: pagesError });
   const seoPages: SeoPageSummary[] = (sitePages ?? []).map((page) => {
     const { checks, score } = seoChecklist(page.draft_data, page.title, siteSeo, page.seo);
@@ -126,7 +127,8 @@ async function EditorLoader({
       sitePages={(sitePages ?? []).map((page) => ({ id: page.id, slug: page.slug, title: page.title,
         nav_label: "nav_label" in page && typeof page.nav_label === "string" ? page.nav_label : null,
         hide_from_menu: "hide_from_menu" in page && page.hide_from_menu === true,
-        ai_pending_build: "ai_pending_build" in page && page.ai_pending_build === true }))}
+        ai_pending_build: "ai_pending_build" in page && page.ai_pending_build === true,
+        sections: pageSections(page.draft_data), published: Boolean(page.published_at) }))}
       seoPages={seoPages}
       generationWarnings={generated.data?.root?.props?.generationWarnings ?? []}
     />

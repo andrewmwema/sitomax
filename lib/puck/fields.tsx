@@ -4,6 +4,8 @@ import { PuckImageField } from "@/components/editor/puck-image-field";
 import { IconPickerField } from "@/components/editor/icon-picker-field";
 import { DesignField } from "@/components/editor/design-field";
 import { RichTextToolbar } from "@/components/editor/rich-text-toolbar";
+import { LinkFieldControl } from "@/components/editor/link-picker";
+import type { LinkValue, SiteLink } from "@/lib/links";
 import { editorTextExtensions } from "./richtext-extensions";
 
 /**
@@ -17,6 +19,22 @@ export function imageField(label: string): CustomField<string> & { aiKind: "imag
     label,
     render: ({ name, value, onChange, readOnly }) => (
       <PuckImageField name={name} value={value} onChange={onChange} readOnly={readOnly} />
+    ),
+  };
+}
+
+/**
+ * Shared link field (buttons, menus, cards, images). Stores a typed
+ * SiteLink; page links keep the page id and resolve to the current slug at
+ * render time (lib/links.ts). Legacy string values still render.
+ */
+export function linkField(label: string): CustomField<LinkValue> & { aiKind: "link" } {
+  return {
+    type: "custom",
+    aiKind: "link",
+    label,
+    render: ({ value, onChange, readOnly }) => (
+      <LinkFieldControl value={value} readOnly={readOnly} onChange={(next: SiteLink | "") => onChange(next)} />
     ),
   };
 }
@@ -51,6 +69,8 @@ export function richTextField(label: string): RichtextField {
       code: false,
       codeBlock: false,
       horizontalRule: false,
+      // New tab and nofollow are opt-in through the link picker.
+      link: { openOnClick: false, HTMLAttributes: { target: null, rel: "noopener noreferrer" } },
     },
     tiptap: { extensions: editorTextExtensions },
     renderMenu: (props) => <RichTextToolbar {...props} />,

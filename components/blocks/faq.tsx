@@ -1,5 +1,6 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, linkField, imageField, richTextField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
@@ -20,7 +21,7 @@ export type FaqProps = {
   contactHeading?: string;
   contactText?: RichText;
   contactButtonText?: string;
-  contactButtonLink?: string;
+  contactButtonLink?: LinkValue;
   contactImage: string;
   contactImageAlt: string;
   variant: "accordion" | "two-column" | "sidebar";
@@ -51,7 +52,7 @@ export const Faq: ComponentConfig<FaqProps> = {
     contactHeading: { type: "text", label: "Contact sidebar heading", contentEditable: true },
     contactText: richTextField("Contact sidebar text"),
     contactButtonText: { type: "text", label: "Contact button text", contentEditable: true },
-    contactButtonLink: { type: "text", label: "Contact button link" },
+    contactButtonLink: linkField("Contact button link"),
     contactImage: imageField("Contact sidebar image"),
     contactImageAlt: { type: "text", label: "Contact image alt text" },
     variant: {

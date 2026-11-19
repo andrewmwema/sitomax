@@ -1,6 +1,7 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField } from "@/lib/puck/fields";
-import { JUSTIFY, oneOf, safeAlign, safeHref, type Align } from "@/lib/layout/guardrails";
+import { designField, linkField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
+import { JUSTIFY, oneOf, safeAlign, type Align } from "@/lib/layout/guardrails";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Button } from "../ui/button";
 
@@ -9,8 +10,9 @@ type ButtonSize = "sm" | "md" | "lg";
 export type ButtonElementProps = {
   design?: BlockDesign;
   label: string;
-  href: string;
-  newTab: boolean;
+  href: LinkValue;
+  /** Legacy: only applies to plain-string links; the link picker stores its own new-tab option. */
+  newTab?: boolean;
   variant: "primary" | "secondary" | "ghost";
   size: ButtonSize;
   align: Align | "full";
@@ -27,15 +29,7 @@ export const ButtonElement: ComponentConfig<ButtonElementProps> = {
   inline: true,
   fields: {
     label: { type: "text", label: "Label", contentEditable: true },
-    href: { type: "text", label: "Link", placeholder: "/contact or https://…" },
-    newTab: {
-      type: "radio",
-      label: "Open in",
-      options: [
-        { label: "Same tab", value: false },
-        { label: "New tab", value: true },
-      ],
-    },
+    href: linkField("Link"),
     variant: {
       type: "select",
       label: "Style",
@@ -80,8 +74,8 @@ export const ButtonElement: ComponentConfig<ButtonElementProps> = {
     return (
       <div className="flex" style={{ justifyContent: `var(--shell-justify, ${JUSTIFY[safeAlign(align)]})` }}>
         <Button
-          href={safeHref(href)}
-          newTab={newTab === true}
+          href={href}
+          newTab={newTab === true && typeof href === "string"}
           variant={oneOf(variant, ["primary", "secondary", "ghost"], "primary")}
           className={full ? "w-full" : ""}
           style={SIZES[oneOf(size, ["sm", "md", "lg"], "md")]}

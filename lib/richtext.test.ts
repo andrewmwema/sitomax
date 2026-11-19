@@ -45,6 +45,29 @@ describe("sanitizeRichText", () => {
     expect(safe).toContain('target="_blank"');
   });
 
+  it("allows only http, https, mailto, tel, relative and # link targets", () => {
+    for (const href of ["https://a.com/x", "http://a.com", "mailto:a@b.co", "tel:+15551234", "/about#team", "#pricing"]) {
+      expect(sanitizeRichText(`<a href="${href}">x</a>`)).toContain(`href="${href}"`);
+    }
+    for (const href of ["javascript:alert(1)", "JaVaScRiPt:alert(1)", "data:text/html,<b>x</b>", "vbscript:x", "//evil.com/x", "ftp://a.com", "/\\evil.com"]) {
+      expect(sanitizeRichText(`<a href="${href}">x</a>`)).not.toContain("href=");
+    }
+  });
+
+  it("keeps a valid data-page-id on links only and drops other data attributes", () => {
+    const id = "123e4567-e89b-12d3-a456-426614174000";
+    expect(sanitizeRichText(`<a href="/x" data-page-id="${id}">x</a>`)).toContain(`data-page-id="${id}"`);
+    expect(sanitizeRichText('<a href="/x" data-page-id="nope">x</a>')).not.toContain("data-page-id");
+    expect(sanitizeRichText(`<span data-page-id="${id}" data-x="1">x</span>`)).toBe("<span>x</span>");
+  });
+
+  it("forces safe rel/target and keeps nofollow", () => {
+    const clean = sanitizeRichText('<a href="https://a.com" target="_top" rel="opener nofollow">x</a>');
+    expect(clean).toContain('target="_blank"');
+    expect(clean).toContain('rel="noopener noreferrer nofollow"');
+    expect(sanitizeRichText('<a href="/x" rel="opener">x</a>')).toContain('rel="noopener noreferrer"');
+  });
+
   it('removes style="background:url(...)" payloads', () => {
     const clean = sanitizeRichText(
       '<span style="background:url(https://evil.example/x)">text</span>',

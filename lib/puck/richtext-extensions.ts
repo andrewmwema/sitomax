@@ -42,4 +42,21 @@ export const TextLayout = Extension.create({
   },
 });
 
-export const editorTextExtensions = [TextAppearance, TextLayout, UndoRedo];
+/** Keeps internal links tied to a page id so they survive slug changes (lib/links.ts). */
+export const LinkPageId = Extension.create({
+  name: "linkPageId",
+  addGlobalAttributes() {
+    return [{
+      types: ["link"],
+      attributes: {
+        pageId: {
+          default: null,
+          parseHTML: (element: HTMLElement) => element.getAttribute("data-page-id"),
+          renderHTML: (attrs: Record<string, string | null>) => attrs.pageId ? { "data-page-id": attrs.pageId } : {},
+        },
+      },
+    }];
+  },
+});
+
+export const editorTextExtensions = [TextAppearance, TextLayout, LinkPageId, UndoRedo];

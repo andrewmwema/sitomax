@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Render } from "@puckeditor/core/rsc";
+import { linkContext, resolveDataLinks } from "@/lib/links";
 import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { TenantFontHints } from "@/components/tenant-font-hints";
@@ -15,6 +16,7 @@ import { pageMenuLinks, siteContacts, type SiteMenu } from "@/lib/page-navigatio
 import {
   getSiteByHost,
   getSitePage,
+  getTenantLinkPages,
   getTenantMenuPages,
   type TenantPage,
   type TenantSite,
@@ -122,12 +124,15 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   const theme = ((isPreview ? site.draft_theme ?? site.theme : site.theme) ?? {}) as SiteTheme;
   const seo = parseSiteSeo(site);
   const jsonLd = JSON.stringify(localBusinessJsonLd(site)).replace(/</g, "\\u003c");
-  const menuPages = await getTenantMenuPages(site.id, isPreview);
+  const [menuPages, linkPages] = await Promise.all([
+    getTenantMenuPages(site.id, isPreview),
+    getTenantLinkPages(site.id, isPreview),
+  ]);
   const contacts = siteContacts(businessSchema.parse({ ...emptyBusiness, ...site.business }));
-  const siteMenu: SiteMenu = {
-    links: pageMenuLinks(menuPages, isPreview ? `/s/${encodeURIComponent((await params).site)}` : ""),
-    contacts,
-  };
+  const previewPrefix = isPreview ? `/s/${encodeURIComponent((await params).site)}` : "";
+  const siteMenu: SiteMenu = { links: pageMenuLinks(menuPages, previewPrefix), contacts };
+  // Typed page links are stored by id and resolved to current slugs here, so renames never break them.
+  const pageData = resolveDataLinks({ content: [], root: {}, ...data }, linkContext(linkPages, previewPrefix));
 
   return (
     <>
@@ -142,7 +147,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
       ) : null}
       <Render
         config={puckConfig}
-        data={{ content: [], root: {}, ...data } as unknown as PuckPageData}
+        data={pageData as unknown as PuckPageData}
         metadata={{ theme, siteMenu }}
         // Disable Puck's default richtext transform (it injects the raw
         // HTML unsanitized); pass the string through so blocks render it

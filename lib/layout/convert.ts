@@ -1,4 +1,5 @@
 import { escapeHtml, toRichTextHtml } from "@/lib/richtext";
+import { linkHref, parseSiteLink } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import {
   ROW_LAYOUTS,
@@ -28,6 +29,14 @@ type Builder = {
 };
 
 const str = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+/** Keeps typed (picker) links intact; legacy strings stay strings. */
+const linkValue = (value: unknown): unknown => parseSiteLink(value) ?? (str(value) || "#");
+/** Anchor attributes for a link embedded in rich text; page links resolve by id at render time. */
+function richTextLinkAttrs(value: unknown): string {
+  const link = parseSiteLink(value);
+  if (link?.type === "page") return `href="#${link.anchor ?? ""}" data-page-id="${escapeHtml(link.pageId)}"`;
+  return `href="${escapeHtml(link ? linkHref(link) : str(value) || "#")}"`;
+}
 const list = <T = Props>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 const html = (value: unknown): string => (str(value) ? toRichTextHtml(str(value)) : "");
 const compact = (items: (LayoutItem | null | false | "" | undefined)[]): LayoutItem[] =>
@@ -136,7 +145,7 @@ function buttons(b: Builder, pairs: [unknown, unknown, string][], align: Align =
   return compact(
     pairs.map(
       ([label, href, variant]) =>
-        str(label) && b.el("Button", { label: str(label), href: str(href) || "#", variant, align }),
+        str(label) && b.el("Button", { label: str(label), href: linkValue(href), variant, align }),
     ),
   );
 }
@@ -488,7 +497,7 @@ const CONVERTERS: Record<string, Converter> = {
       .filter((link) => str(link.label))
       .map(
         (link) =>
-          `<p><a href="${escapeHtml(str(link.href) || "#")}">${escapeHtml(str(link.label))}</a></p>`,
+          `<p><a ${richTextLinkAttrs(link.href)}>${escapeHtml(str(link.label))}</a></p>`,
       )
       .join("");
     const social = list(p.socialLinks).filter((link) => str(link.url));

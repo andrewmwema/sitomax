@@ -111,7 +111,10 @@ with checks (
     ('0026', 'RLS enabled on public.ai_page_retries', 'rls', 'public.ai_page_retries', null, null, null, true),
     ('0026', 'service_role EXECUTE on apply_selected_ai_pages', 'function_privilege', null, 'public.apply_selected_ai_pages(uuid,jsonb,uuid,uuid,jsonb)', 'service_role', 'EXECUTE', true),
     ('0026', 'authenticated EXECUTE on save_selected_ai_drafts', 'function_privilege', null, 'public.save_selected_ai_drafts(uuid)', 'authenticated', 'EXECUTE', true),
-    ('0026', 'authenticated EXECUTE on finish_ai_page_retry', 'function_privilege', null, 'public.finish_ai_page_retry(uuid,uuid)', 'authenticated', 'EXECUTE', true)
+    ('0026', 'authenticated EXECUTE on finish_ai_page_retry', 'function_privilege', null, 'public.finish_ai_page_retry(uuid,uuid)', 'authenticated', 'EXECUTE', true),
+
+    ('0027', 'function public.list_site_files(uuid,text,integer)', 'function', null, 'public.list_site_files(uuid,text,integer)', null, null, true),
+    ('0027', 'authenticated EXECUTE on list_site_files', 'function_privilege', null, 'public.list_site_files(uuid,text,integer)', 'authenticated', 'EXECUTE', true)
 )
 select
   c.migration,

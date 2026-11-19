@@ -1,10 +1,16 @@
 "use client";
 
+import type { PageSection } from "@/lib/links";
 import { createContext, useContext } from "react";
 import type { DeviceId } from "@/lib/sections/design";
 
 export type InspectorTab = "content" | "style" | "animation" | "spacing";
-export type EditorPageLink = { id: string; slug: string; title: string | null; nav_label?: string | null; hide_from_menu?: boolean; ai_pending_build?: boolean };
+export type EditorPageLink = {
+  id: string; slug: string; title: string | null; nav_label?: string | null; hide_from_menu?: boolean; ai_pending_build?: boolean;
+  /** Top-level sections with anchor IDs (link picker and link QA). */
+  sections?: PageSection[];
+  published?: boolean;
+};
 export type InteractionUi = {
   pageId: string;
   accountId: string;

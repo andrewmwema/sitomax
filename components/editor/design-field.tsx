@@ -1,6 +1,8 @@
 "use client";
 
 import { useContext, useState, type ReactNode } from "react";
+import { createUsePuck } from "@puckeditor/core";
+import { pageSections, suggestAnchor } from "@/lib/links";
 import { Smartphone } from "lucide-react";
 import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import {
@@ -270,6 +272,32 @@ function ColorControl({
 /* Settings                                                            */
 /* ------------------------------------------------------------------ */
 
+const usePuckStore = createUsePuck();
+
+/** Stable, editable section ID used by "#anchor" links and the link picker. */
+function AnchorSetting({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const selectedId = usePuckStore((state) => (state.selectedItem?.props as { id?: string } | undefined)?.id);
+  const sections = usePuckStore((state) => state.appState.data.content);
+  const all = pageSections({ content: sections });
+  const own = all.find((section) => section.id === selectedId);
+  const taken = all.filter((section) => section.id !== selectedId && section.anchor).map((section) => section.anchor as string);
+  const clash = value && taken.includes(value);
+  return <FieldRow label="Anchor ID (for links like #pricing)">
+    <div className="flex gap-1.5">
+      <span className="flex min-w-0 flex-1 items-center rounded-md border border-zinc-300 bg-white">
+        <span className="pl-2 text-xs text-zinc-400">#</span>
+        <input type="text" value={value} placeholder="pricing" maxLength={60} aria-invalid={Boolean(clash)}
+          onChange={(event) => onChange(event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+          className="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs outline-none" />
+      </span>
+      {own && !value ? <button type="button" className="platform-button text-[11px]"
+        onClick={() => onChange(suggestAnchor(own.label, taken))}>Use heading</button> : null}
+    </div>
+    {clash ? <p className="mt-1 text-[11px] text-red-600">Another section on this page uses #{value}.</p>
+      : <p className="mt-1 text-[11px] text-zinc-500">{value ? `Link to this section with #${value}.` : "Add an ID so buttons and menus can link here."}</p>}
+  </FieldRow>;
+}
+
 function SettingsTab({ design, patch }: TabProps) {
   const settings = design.settings ?? {};
   const patchSettings = (next: Partial<NonNullable<BlockDesign["settings"]>>) =>
@@ -282,22 +310,7 @@ function SettingsTab({ design, patch }: TabProps) {
         checked={settings.fullBleed !== false}
         onChange={(checked) => patchSettings({ fullBleed: checked })}
       />
-      <FieldRow label="Anchor ID (menu links, e.g. pricing)">
-        <input
-          type="text"
-          value={settings.anchorId ?? ""}
-          placeholder="pricing"
-          maxLength={60}
-          onChange={(event) =>
-            patchSettings({
-              anchorId: event.target.value
-                .toLowerCase()
-                .replace(/[^a-z0-9_-]/g, ""),
-            })
-          }
-          className="rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-xs"
-        />
-      </FieldRow>
+      <AnchorSetting value={settings.anchorId ?? ""} onChange={(anchorId) => patchSettings({ anchorId })} />
       <div className="flex flex-col gap-2 rounded-md border border-zinc-200 bg-white p-2.5">
         <p className="text-[11px] font-semibold text-zinc-700">Visibility</p>
         <Toggle

@@ -165,7 +165,7 @@ with synthetic details and no database writes, run
 `node scripts/test-anthropic.mjs --custom` (four pages with FAQ and Pricing).
 Apply [`0025_page_menu_labels.sql`](supabase/migrations/0025_page_menu_labels.sql)
 before deploying automatic site menus. Edit a page's short **Menu label** in
-the editor's **Pages → Page settings**; this does not change the page or SEO
+the editor's **Pages → This page in menus**; this does not change the page or SEO
 title. Live menus only list published pages; draft previews can link to other
 drafts. New custom drafts use the shared footer and saved business contact
 details. The editor displays automatic checks under **AI draft review notes**.
@@ -180,8 +180,29 @@ in the chosen order. One generation covers up to six pages; pages seven
 through ten cost two shared credits each. Super admins are unlimited.
 Successful drafts are saved even when another page fails. Retry unfinished
 pages for free from the summary or by reopening **Build pages with AI**.
-Unticked drafts and published content are not replaced. Use **Hide from site
-menu** in Page settings to remove a page from navigation without unpublishing it.
+Unticked drafts and published content are not replaced. Use **Hide from menus**
+in a page's **⋯** menu to remove it from navigation without unpublishing it.
+
+### Pages and links
+
+The editor's **Pages** panel creates pages (blank, a copy of another page, or
+built with AI) and has a **⋯** menu per page to rename it, edit its slug,
+duplicate it, set it as the homepage, hide it from menus, move it or delete it
+(the homepage can't be deleted). Drag pages, or press Alt + ↑/↓, to reorder
+them; the order drives header and footer menus. There are no per-plan page
+limits. Changing a slug can add a 301 redirect from the old address.
+
+Buttons, menu and footer links, image links and rich text (Link button or
+Ctrl/Cmd+K) all use one link picker: a page (with an optional section), a
+section on this page, an external URL, email, phone or a file. Page links are
+stored by page ID and resolved to the current slug when rendered, so they
+survive renames. Older typed links such as `/about` are rewritten in other
+pages' drafts when a slug changes, except when you swap the homepage. Give a
+section an anchor in **Design → Settings → Anchor ID**. Publishing first lists
+links to deleted pages, missing sections or invalid URLs.
+
+Apply [`0027_site_files.sql`](supabase/migrations/0027_site_files.sql) to allow
+PDF and Office file uploads and file links (20 MB limit).
 
 ## Analytics
 

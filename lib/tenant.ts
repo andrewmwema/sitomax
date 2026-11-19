@@ -126,6 +126,15 @@ export async function getPublishedSitePages(siteId: string): Promise<Pick<Tenant
   }
 }
 
+/** Every linkable page (menu-hidden ones included), for resolving typed page links by id. */
+export async function getTenantLinkPages(siteId: string, preview: boolean) {
+  const supabase = createAdminClient();
+  const query = supabase.from("pages").select("id, slug").eq("site_id", siteId);
+  const { data, error } = await (preview ? query : query.not("published_data", "is", null));
+  if (error) throw new Error("Could not load tenant pages.", { cause: error });
+  return data;
+}
+
 export async function getTenantMenuPages(siteId: string, preview: boolean) {
   const supabase = createAdminClient();
   const query = supabase.from("pages").select("slug, nav_label").eq("site_id", siteId).eq("hide_from_menu", false).order("sort_order").order("slug");
