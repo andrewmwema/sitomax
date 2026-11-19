@@ -67,6 +67,10 @@ shared detail drawer; the media picker is a native modal so it also works above
 other dialogs. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
 
+Select words directly inside editable canvas text to format or replace them.
+The text cursor stays separate from section dragging; drag a section's
+non-text area to reposition it.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations

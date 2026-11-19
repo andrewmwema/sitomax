@@ -100,6 +100,14 @@ body {
   max-width: 65ch;
 }
 
+/* Puck's runtime iframe styles disable selection on draggable descendants. */
+[data-puck-component] [contenteditable]:not([contenteditable="false"]),
+[data-puck-component] [contenteditable]:not([contenteditable="false"]) * {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .rich-text p,
 .rich-text li {
   color: var(--color-muted, inherit);
