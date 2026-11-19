@@ -2,11 +2,18 @@
 :where(.platform-ui, .platform-editor) {
   --platform-ground: #f7f7f5;
   --platform-surface: #ffffff;
+  --platform-subtle: #f1f0ec;
   --platform-ink: #121212;
+  --platform-secondary: #4e4d49;
   --platform-muted: #6b6a66;
   --platform-line: #e8e7e3;
   --platform-accent: #4b3fe0;
-  --platform-accent-soft: #f1efff;
+  --platform-accent-soft: color-mix(in srgb, var(--platform-accent) 5%, white);
+  --platform-success: #0f7246;
+  --platform-warning: #855500;
+  --platform-error: #b42318;
+  --platform-radius-control: 10px;
+  --platform-radius-panel: 14px;
   --platform-shadow: 0 2px 3px rgb(26 25 22 / 2%), 0 8px 28px rgb(26 25 22 / 3%);
   color-scheme: light;
   color: var(--platform-ink);
@@ -51,7 +58,7 @@
 .platform-ui :where(input:not([type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="hidden"]), textarea, select) {
   min-height: 42px;
   border-color: var(--platform-line);
-  border-radius: 10px;
+  border-radius: var(--platform-radius-control);
   background-color: var(--platform-surface);
   color: var(--platform-ink);
   box-shadow: 0 1px 2px rgb(26 25 22 / 2%);
@@ -69,7 +76,7 @@
 
 .platform-panel {
   border: 1px solid var(--platform-line);
-  border-radius: 18px;
+  border-radius: var(--platform-radius-panel);
   background: var(--platform-surface);
   box-shadow: var(--platform-shadow);
 }
@@ -90,7 +97,7 @@
   gap: 8px;
   min-height: 40px;
   border: 1px solid var(--platform-line);
-  border-radius: 10px;
+  border-radius: var(--platform-radius-control);
   padding: 9px 14px;
   background: white;
   color: var(--platform-ink);
@@ -108,7 +115,7 @@
 }
 
 .platform-button-ai {
-  border-color: #e4dfff;
+  border-color: color-mix(in srgb, var(--platform-accent) 15%, white);
   background: var(--platform-accent-soft);
   color: var(--platform-accent);
 }
@@ -151,6 +158,81 @@
 
 .platform-sidebar {
   background: #fcfcfa;
+}
+
+.platform-header {
+  border-bottom: 1px solid var(--platform-line);
+  background: var(--platform-surface);
+}
+
+.platform-icon-button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--platform-radius-control);
+  color: var(--platform-secondary);
+}
+
+.platform-search-trigger {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--platform-line);
+  border-radius: var(--platform-radius-control);
+  background: var(--platform-surface);
+  color: var(--platform-secondary);
+  font-size: 12px;
+  box-shadow: 0 1px 2px rgb(18 18 18 / 3%);
+}
+
+.platform-keyboard {
+  border: 1px solid var(--platform-line);
+  border-radius: 6px;
+  background: var(--platform-ground);
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.platform-nav-count {
+  border-radius: 999px;
+  background: var(--platform-accent-soft);
+  padding: 2px 6px;
+  color: var(--platform-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.platform-mobile-nav {
+  position: fixed;
+  inset: 0 auto 0 0;
+  max-height: 100dvh;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--platform-surface);
+  color: var(--platform-ink);
+  box-shadow: var(--platform-shadow);
+}
+
+.platform-search-dialog {
+  margin: auto;
+  width: min(520px, 90vw);
+  border: 1px solid var(--platform-line);
+  border-radius: var(--platform-radius-panel);
+  background: var(--platform-surface);
+  padding: 16px;
+  color: var(--platform-ink);
+  box-shadow: 0 16px 48px rgb(18 18 18 / 16%);
+}
+
+.platform-mobile-nav::backdrop,
+.platform-search-dialog::backdrop {
+  background: rgb(18 18 18 / 40%);
 }
 
 .platform-nav-link[aria-current="page"] {
@@ -322,8 +404,16 @@
     background: #33322f;
   }
   .platform-button-ai:not(:disabled):hover {
-    border-color: #cfc8ff;
-    background: #e9e5ff;
+    border-color: color-mix(in srgb, var(--platform-accent) 25%, white);
+    background: color-mix(in srgb, var(--platform-accent) 9%, white);
+  }
+  .platform-nav-link:not([aria-current="page"]):hover,
+  .platform-icon-button:hover {
+    background: var(--platform-subtle);
+    color: var(--platform-ink);
+  }
+  .platform-search-trigger:hover {
+    border-color: #b9b7b0;
   }
   .platform-site-card:hover {
     transform: translateY(-3px);

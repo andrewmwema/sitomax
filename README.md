@@ -18,6 +18,10 @@ and controls use the `platform-panel` and `platform-button` classes; editor
 chrome also uses Puck's documented theme tokens. Keep platform styling
 inside `.platform-ui` or `.platform-editor`. Public tenant pages and the
 editor's preview iframe retain each site's own colors, fonts and content.
+The dashboard derives its accent from the agency primary color, adjusting the
+display shade when needed for contrast. Desktop navigation can be collapsed;
+on phones it opens as a keyboard-accessible drawer. Agency-only navigation
+remains restricted to super admins.
 
 ## Internal agency sites
 

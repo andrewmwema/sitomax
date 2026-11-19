@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { signOut } from "./actions";
 import { ChevronRight, Layers2 } from "lucide-react";
+import { nearestContrast } from "@/lib/theme/contrast";
+import type { CSSProperties } from "react";
 
 /**
  * Dashboard shell: auth gate + branded sidebar. Everything dynamic
@@ -42,10 +44,12 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
     supabase.from("form_submissions").select("id", { count: "exact", head: true }).eq("is_read", false),
   ]);
   if (unread.error) console.error("Could not load unread submissions:", unread.error.message);
+  const accent = nearestContrast(settings.primaryColor, ["#ffffff", "#e5e3e1"]) ?? "#4b3fe0";
 
   return (
     <div
-      className="platform-ui flex min-h-screen w-full bg-[#F7F7F5] text-[#121212]"
+      className="platform-ui relative flex min-h-screen w-full"
+      style={{ "--platform-accent": accent } as CSSProperties}
     >
       {/* Fonts are scoped to platform chrome rather than client sites. */}
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
@@ -60,7 +64,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         signOutAction={signOut}
       />
       <main className="min-w-0 flex-1">
-        <div className="flex min-h-16 items-center justify-between gap-4 border-b border-[#E8E7E3] bg-white/70 px-4 sm:px-8 lg:px-10">
+        <div className="platform-header flex min-h-16 items-center justify-between gap-3 pl-16 pr-4 sm:pr-8 md:px-8 lg:px-10">
           <div className="flex min-w-0 items-center gap-2 text-xs text-[#6B6A66]">
             <Layers2 size={15} className="shrink-0" />
             <span className="hidden sm:inline">Workspace</span>
