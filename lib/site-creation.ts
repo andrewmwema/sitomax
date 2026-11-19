@@ -24,6 +24,7 @@ export function createSiteCreationSchema(marketingSubdomain?: string, isInternal
     template: z.enum(TEMPLATE_KEYS),
     subdomain: createSubdomainSchema(marketingSubdomain, isInternal),
     businessName: z.string().trim().min(1, "Enter a business name.").max(100),
+    timezone: z.string().trim().min(1).max(64).default("UTC"),
     phone: z.string().trim().min(1, "Enter a phone number.").max(40)
       .regex(/^[+0-9().\s-]+$/, "Enter a valid phone number.")
       .refine((value) => /\d/.test(value), "Enter a valid phone number."),

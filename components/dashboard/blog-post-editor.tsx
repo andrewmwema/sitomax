@@ -1,0 +1,592 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Eye, ImagePlus, Plus, RotateCcw, Settings2, X } from "lucide-react";
+import type { CSSProperties } from "react";
+import { MediaPicker } from "@/components/editor/media-picker";
+import { EditorSiteContext } from "@/components/editor/image-upload-field";
+import { blogContentSchema, blogSlugSchema, type BlogBlock, type BlogPostFields } from "@/lib/blog";
+import { fontFamily, googleFontsUrl, type CuratedFont } from "@/lib/theme/fonts";
+import { sanitizeRichText, escapeHtml } from "@/lib/richtext";
+import { siteDateTimeInput, siteLocalTimeToUtc } from "@/lib/blog-date";
+import {
+  createBlogTag, listBlogPostVersions, restoreBlogPostVersion, saveBlogPost, setBlogPostStatus,
+} from "@/app/(dashboard)/dashboard/sites/[siteId]/blog/actions";
+import type { BlogManagerAuthor, BlogManagerCategory, BlogManagerPost, BlogManagerTag } from "./blog-manager";
+
+type Version = { id: string; created_at: string };
+type Props = {
+  siteId: string;
+  initialTab: "status" | "details";
+  headingFont: CuratedFont;
+  bodyFont: CuratedFont;
+  post: BlogPostFields;
+  postId: string;
+  status: "draft" | "scheduled" | "published";
+  publishedAt: string | null;
+  publishAt: string | null;
+  hasUnpublishedChanges: boolean;
+  timezone: string;
+  categories: BlogManagerCategory[];
+  authors: BlogManagerAuthor[];
+  tags: BlogManagerTag[];
+  adjacentPosts: Pick<BlogManagerPost, "id" | "title">[];
+};
+
+const fieldClass = "w-full rounded-lg border border-[#E8E7E3] bg-white px-3 py-2 text-sm focus:outline-2 focus:outline-[#4B3FE0]";
+const blockKinds = ["paragraph", "heading", "list", "quote", "callout", "image", "gallery", "video", "button", "divider", "table"] as const;
+type BlockKind = (typeof blockKinds)[number];
+
+function freshBlock(kind: BlockKind): BlogBlock {
+  switch (kind) {
+    case "paragraph": return { type: kind, html: "" };
+    case "heading": return { type: kind, level: 2, text: "" };
+    case "list": return { type: kind, ordered: false, items: [""] };
+    case "quote": return { type: kind, text: "", attribution: "" };
+    case "callout": return { type: kind, title: "", text: "" };
+    case "image": return { type: kind, url: "", alt: "", caption: "" };
+    case "gallery": return { type: kind, images: [] };
+    case "video": return { type: kind, url: "", title: "" };
+    case "button": return { type: kind, text: "Learn more", href: "" };
+    case "divider": return { type: kind };
+    case "table": return { type: kind, rows: [["", ""]] };
+  }
+}
+
+function textFromHtml(html: string) {
+  return html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
+    .replace(/<[^>]*>/g, "").replaceAll("&nbsp;", " ").replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"').replaceAll("&#39;", "'");
+}
+
+export function BlogPostEditor(props: Props) {
+  const router = useRouter();
+  const [form, setForm] = useState(props.post);
+  const formRef = useRef(form);
+  const revision = useRef(0);
+  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(true);
+  const [error, setError] = useState("");
+  const [panel, setPanel] = useState(true);
+  const [blockMenuOpen, setBlockMenuOpen] = useState(false);
+  const [blockInsertAt, setBlockInsertAt] = useState<number | undefined>();
+  const [tab, setTab] = useState<"status" | "details" | "seo">(props.initialTab);
+  const [preview, setPreview] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState(() => props.publishAt
+    ? siteDateTimeInput(new Date(props.publishAt), props.timezone)
+    : siteDateTimeInput(new Date(Date.now() + 60 * 60 * 1000), props.timezone));
+  const [scheduleError, setScheduleError] = useState("");
+  const [status, setStatus] = useState(props.status);
+  const [publishedAt, setPublishedAt] = useState(props.publishedAt);
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(props.hasUnpublishedChanges);
+  const [picker, setPicker] = useState<"cover" | "thumbnail" | number | null>(null);
+  const [tagName, setTagName] = useState("");
+  const [tagError, setTagError] = useState("");
+  const [versions, setVersions] = useState<Version[]>([]);
+  const [versionOpen, setVersionOpen] = useState(false);
+
+  function change(update: (previous: BlogPostFields) => BlogPostFields) {
+    setForm((previous) => {
+      const next = update(previous);
+      formRef.current = next;
+      return next;
+    });
+    revision.current++;
+    setDirty(true);
+    setSaved(false);
+    setError("");
+    if (status === "published") setHasUnpublishedChanges(true);
+  }
+
+  const persist = useCallback(async (snapshot = formRef.current, expectedRevision = revision.current) => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await saveBlogPost(props.postId, snapshot);
+      if (result.status === "error") { setError(result.message); return false; }
+      if (revision.current === expectedRevision) {
+        setDirty(false);
+        setSaved(true);
+      }
+      return true;
+    } catch {
+      setError("Could not save your draft. Your changes are still on this page.");
+      return false;
+    } finally { setBusy(false); }
+  }, [props.postId]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const snapshot = form;
+    const expectedRevision = revision.current;
+    const timer = window.setTimeout(() => { void persist(snapshot, expectedRevision); }, 900);
+    return () => window.clearTimeout(timer);
+  }, [dirty, form, persist]);
+
+  async function changeStatus(next: "draft" | "scheduled" | "published") {
+    if (busy) return;
+    if (dirty && !(await persist())) return;
+    setBusy(true); setError(""); setScheduleError("");
+    try {
+      const result = await setBlogPostStatus(props.postId, next, next === "scheduled" ? scheduleTime : undefined);
+      if (result.status === "error") {
+        if (next === "scheduled") setScheduleError(result.message);
+        else setError(result.message);
+        return;
+      }
+      setStatus(next);
+      setHasUnpublishedChanges(next === "published" ? false : next === "scheduled" && status === "published");
+      setPublishedAt(next === "published" ? new Date().toISOString() : next === "draft" ? null : publishedAt);
+      setSaved(true);
+      setDirty(false);
+      router.refresh();
+    } catch {
+      setError("Could not update the post status.");
+    } finally { setBusy(false); }
+  }
+
+  function updateBlock(index: number, block: BlogBlock) {
+    change((previous) => ({ ...previous, draft_content: {
+      ...previous.draft_content,
+      blocks: previous.draft_content.blocks.map((item, at) => at === index ? block : item),
+    } }));
+  }
+  function addBlock(kind: BlockKind, before?: number) {
+    change((previous) => {
+      const blocks = [...previous.draft_content.blocks];
+      blocks.splice(before ?? blocks.length, 0, freshBlock(kind));
+      return { ...previous, draft_content: { version: 1, blocks } };
+    });
+  }
+  function removeBlock(index: number) {
+    change((previous) => ({ ...previous, draft_content: {
+      version: 1, blocks: previous.draft_content.blocks.filter((_, at) => at !== index),
+    } }));
+  }
+  function moveBlock(index: number, by: number) {
+    const to = index + by;
+    if (to < 0 || to >= form.draft_content.blocks.length) return;
+    change((previous) => {
+      const blocks = [...previous.draft_content.blocks];
+      [blocks[index], blocks[to]] = [blocks[to], blocks[index]];
+      return { ...previous, draft_content: { version: 1, blocks } };
+    });
+  }
+  async function addTag(event: FormEvent) {
+    event.preventDefault();
+    const name = tagName.trim();
+    if (!name) return;
+    setTagError("");
+    const result = await createBlogTag(props.siteId, name);
+    if (result.status === "error" || !result.tagId) { setTagError(result.message); return; }
+    change((previous) => ({ ...previous, tag_ids: [...new Set([...previous.tag_ids, result.tagId!])] }));
+    setTagName("");
+    router.refresh();
+  }
+  async function showVersions() {
+    try {
+      const result = await listBlogPostVersions(props.postId);
+      setVersions(result); setVersionOpen(true);
+    } catch { setError("Could not load revision history."); }
+  }
+  async function restore(versionId: string) {
+    const result = await restoreBlogPostVersion(props.postId, versionId);
+    if (result.status === "error") { setError(result.message); return; }
+    if (result.content) change((previous) => ({ ...previous, draft_content: result.content! }));
+    setVersionOpen(false);
+  }
+  const blocks = form.draft_content.blocks;
+  const siteHref = `/dashboard/sites/${props.siteId}/blog`;
+  const slugMessage = blogSlugSchema.safeParse(form.slug);
+  const utcSchedule = siteLocalTimeToUtc(scheduleTime, props.timezone);
+
+  return <EditorSiteContext.Provider value={{ siteId: props.siteId }}>
+    <>
+    <link rel="stylesheet" href={googleFontsUrl([props.headingFont, props.bodyFont])} />
+    <main className="platform-ui min-h-screen bg-[#FBFBFA]"
+      style={{ "--font-heading": fontFamily(props.headingFont), "--font-body": fontFamily(props.bodyFont), fontFamily: "var(--font-body)" } as CSSProperties}>
+      <header className="sticky top-0 z-30 flex min-h-16 flex-wrap items-center gap-3 border-b border-[#E8E7E3] bg-white/95 px-4 backdrop-blur sm:px-7">
+        <Link href={siteHref} className="platform-button" aria-label="Back to posts"><ArrowLeft size={15} /><span className="hidden sm:inline">Posts</span></Link>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{form.title || "Untitled post"}</p>
+          <p role={error ? "alert" : "status"} className={`text-xs ${error ? "text-red-700" : "text-zinc-500"}`}>
+            {error || (busy ? "Saving…" : dirty ? "Unsaved changes" : saved ? <><Check size={11} className="mr-1 inline" />Saved</> : "")}
+          </p>
+        </div>
+        <button type="button" className="platform-button" onClick={() => setPreview(!preview)}><Eye size={14} />{preview ? "Continue editing" : "Preview"}</button>
+        <button type="button" disabled={busy || !dirty} onClick={() => void persist()} className="platform-button">Save draft</button>
+        <button type="button" onClick={() => setPanel(!panel)} aria-label="Toggle post settings" aria-expanded={panel} className="platform-button"><Settings2 size={15} /></button>
+        <button type="button" disabled={busy || (status === "published" && !hasUnpublishedChanges)} onClick={() => void changeStatus("published")} className="platform-button platform-button-primary">
+          {status === "published" ? hasUnpublishedChanges ? "Republish" : "Published" : "Publish"}
+        </button>
+      </header>
+      <div className={`mx-auto grid min-h-[calc(100vh-64px)] max-w-[1480px] ${panel ? "lg:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}>
+        <section className="min-w-0 px-4 py-8 sm:px-8 lg:py-12">
+          <div className="mx-auto max-w-[760px]">
+            {preview ? <PostPreview form={form} /> : <>
+              <label className="mb-4 block text-xs font-medium uppercase tracking-wide text-zinc-500">Post title
+                <input value={form.title} maxLength={200} onChange={(event) => change((previous) => ({ ...previous, title: event.target.value }))}
+                  placeholder="Give your post a title" className="mt-2 w-full border-0 bg-transparent p-0 text-4xl font-semibold tracking-tight text-zinc-900 placeholder:text-zinc-300 focus:outline-none sm:text-5xl"
+                  style={{ fontFamily: "var(--font-heading)" }} />
+                <span className="mt-2 block text-right text-xs font-normal tracking-normal text-zinc-400">{form.title.length}/200</span>
+              </label>
+              <label className="mb-8 block"><span className="sr-only">Subtitle</span>
+                <input value={form.subtitle} maxLength={300} onChange={(event) => change((previous) => ({ ...previous, subtitle: event.target.value }))}
+                  placeholder="Add a subtitle…" className="w-full border-0 bg-transparent p-0 text-xl leading-relaxed text-zinc-500 placeholder:text-zinc-300 focus:outline-none" />
+              </label>
+              <div className="mb-7 border-y border-[#E8E7E3] py-3 text-xs text-zinc-500">
+                {form.cover_image ? <span>Main image selected</span> : <span>No cover image</span>}
+                <span className="px-2">·</span><span>{blocks.length} {blocks.length === 1 ? "block" : "blocks"}</span>
+                {form.cover_image ? <button type="button" onClick={() => setPicker("cover")} className="ml-3 text-[#4B3FE0] underline">Edit image</button> : null}
+              </div>
+              <div className="space-y-4">
+                {blocks.map((block, index) => <BlockEditor key={`${index}-${block.type}`} block={block} index={index}
+                  count={blocks.length} onChange={(next) => updateBlock(index, next)}
+                  onMove={(by) => moveBlock(index, by)} onRemove={() => removeBlock(index)}
+                  onChooseImage={() => setPicker(index)} onSlash={() => {
+                    setBlockInsertAt(index + 1); setBlockMenuOpen(true);
+                  }} />)}
+              </div>
+              <BlockMenu open={blockMenuOpen} onToggle={setBlockMenuOpen} onAdd={(kind) => {
+                addBlock(kind, blockInsertAt); setBlockInsertAt(undefined);
+              }} />
+              {!blocks.length ? <p className="mt-5 text-sm text-zinc-400">Start writing, type / for blocks, or ✨ Draft with AI</p> : null}
+              <label className="mt-10 block border-t border-[#E8E7E3] pt-5 text-sm">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Excerpt</span>
+                <textarea value={form.excerpt} maxLength={500} rows={3} onChange={(event) => change((previous) => ({ ...previous, excerpt: event.target.value }))}
+                  placeholder="Write a short summary for your post…" className={`${fieldClass} resize-y`} />
+                <span className="mt-1 block text-right text-xs text-zinc-400">{form.excerpt.length}/500</span>
+              </label>
+            </>}
+          </div>
+        </section>
+        {panel ? <aside className="border-t border-[#E8E7E3] bg-white lg:border-t-0 lg:border-l">
+          <div className="sticky top-16 max-h-[calc(100vh-64px)] overflow-y-auto p-4 sm:p-5">
+            <header className="flex items-center justify-between">
+              <div><p className="text-xs text-zinc-500">Post settings</p><h2 className="font-semibold">Details</h2></div>
+              <div className="flex items-center gap-1">
+                <button type="button" disabled={props.adjacentPosts.findIndex(({ id }) => id === props.postId) <= 0} onClick={() => void stepPost(-1)} aria-label="Previous post" className="rounded-lg p-2 hover:bg-zinc-100"><ChevronLeft size={17} /></button>
+                <button type="button" disabled={props.adjacentPosts.findIndex(({ id }) => id === props.postId) < 0 || props.adjacentPosts.findIndex(({ id }) => id === props.postId) === props.adjacentPosts.length - 1}
+                  onClick={() => void stepPost(1)} aria-label="Next post" className="rounded-lg p-2 hover:bg-zinc-100"><ChevronRight size={17} /></button>
+              </div>
+            </header>
+            <nav aria-label="Post settings tabs" className="mt-4 grid grid-cols-3 border-b border-[#E8E7E3] text-xs">
+              {(["status", "details", "seo"] as const).map((name) => <button key={name} type="button" onClick={() => setTab(name)}
+                aria-current={tab === name ? "page" : undefined} className={`border-b-2 py-2 capitalize ${tab === name ? "border-[#4B3FE0] font-semibold text-[#3025B8]" : "border-transparent text-zinc-500"}`}>{name}</button>)}
+            </nav>
+            {tab === "status" ? <StatusSettings status={status} publishedAt={publishedAt}
+              hasUnpublishedChanges={hasUnpublishedChanges} slug={form.slug} slugMessage={slugMessage.success ? "" : slugMessage.error.issues[0]?.message ?? ""}
+              onSlug={(slug) => change((previous) => ({ ...previous, slug }))} timezone={props.timezone}
+              scheduleTime={scheduleTime} setScheduleTime={setScheduleTime} utcSchedule={utcSchedule}
+              scheduleError={scheduleError} busy={busy} versions={versions} onChangeStatus={changeStatus}
+              onVersions={() => void showVersions()} versionOpen={versionOpen} closeVersions={() => setVersionOpen(false)}
+              restore={restore} /> : null}
+            {tab === "details" ? <DetailsSettings form={form} change={change} categories={props.categories}
+              authors={props.authors} tags={props.tags} onPickCover={() => setPicker("cover")}
+              onCreateTag={addTag} tagName={tagName} setTagName={setTagName} tagError={tagError} /> : null}
+            {tab === "seo" ? <SeoSettings form={form} change={change} onPickThumbnail={() => setPicker("thumbnail")} /> : null}
+          </div>
+        </aside> : null}
+      </div>
+      {picker !== null ? <MediaPicker scope={{ siteId: props.siteId }}
+        value={picker === "cover" ? form.cover_image : picker === "thumbnail" ? form.thumbnail_image : ""}
+        onClose={() => setPicker(null)}
+        onSelect={(image) => {
+          if (picker === "cover") change((previous) => ({ ...previous, cover_image: image.url, cover_alt: image.alt }));
+          else if (picker === "thumbnail") change((previous) => ({ ...previous, thumbnail_image: image.url, thumbnail_alt: image.alt }));
+          else if (typeof picker === "number") {
+            const target = form.draft_content.blocks[picker];
+            if (target?.type === "image") updateBlock(picker, { ...target, url: image.url, alt: image.alt });
+            else if (target?.type === "gallery") updateBlock(picker, { ...target, images: [...target.images, { url: image.url, alt: image.alt, caption: "" }].slice(0, 20) });
+          }
+        }} /> : null}
+    </main>
+    </>
+  </EditorSiteContext.Provider>;
+
+  async function stepPost(by: number) {
+    const index = props.adjacentPosts.findIndex(({ id }) => id === props.postId);
+    const next = props.adjacentPosts[index + by];
+    if (next && (!dirty || await persist())) router.push(`/dashboard/sites/${props.siteId}/blog/${next.id}`);
+  }
+}
+
+function BlockMenu({ open, onToggle, onAdd }: {
+  open: boolean; onToggle: (open: boolean) => void; onAdd: (kind: BlockKind) => void;
+}) {
+  const add = (kind: BlockKind) => { onAdd(kind); onToggle(false); };
+  return <div className="relative mt-5">
+    <button type="button" onClick={() => onToggle(!open)} aria-expanded={open} className="flex items-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:border-[#4B3FE0] hover:text-[#4B3FE0]">
+      <Plus size={15} />Add a block <span className="text-xs text-zinc-400">(/)</span>
+    </button>
+    {open ? <div role="menu" aria-label="Insert block" className="absolute left-0 top-full z-10 mt-2 grid w-full grid-cols-2 gap-1 rounded-xl border border-[#E8E7E3] bg-white p-2 shadow-lg sm:w-96">
+      {blockKinds.map((kind) => <button key={kind} type="button" role="menuitem" onClick={() => add(kind)}
+        className="rounded-lg px-3 py-2 text-left text-sm capitalize hover:bg-zinc-50">{kind}</button>)}
+    </div> : null}
+  </div>;
+}
+
+function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChooseImage, onSlash }: {
+  block: BlogBlock; index: number; count: number; onChange: (block: BlogBlock) => void;
+  onMove: (by: number) => void; onRemove: () => void; onChooseImage: () => void; onSlash: () => void;
+}) {
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [link, setLink] = useState("");
+  const paragraphRef = useRef<HTMLTextAreaElement>(null);
+  function setText(text: string) {
+    if (block.type !== "paragraph") return;
+    onChange({ ...block, html: escapeHtml(text).replaceAll("\n", "<br>") });
+  }
+  function applyLink() {
+    const editor = paragraphRef.current;
+    const text = textFromHtml(block.type === "paragraph" ? block.html : "");
+    const start = editor?.selectionStart ?? text.length;
+    const end = editor && editor.selectionEnd > editor.selectionStart ? editor.selectionEnd : start;
+    const selected = end > start ? text.slice(start, end) : link;
+    if (!selected || !/^(https?:\/\/|mailto:|tel:|\/(?!\/))/i.test(link.trim())) return;
+    if (block.type === "paragraph") {
+      const html = `${escapeHtml(text.slice(0, start))}<a href="${escapeHtml(link.trim())}">${escapeHtml(selected)}</a>${escapeHtml(text.slice(end))}`;
+      onChange({ ...block, html: sanitizeRichText(html) });
+    }
+    setLinkOpen(false);
+  }
+  return <article className="group relative rounded-xl border border-[#E8E7E3] bg-white p-4 shadow-sm focus-within:border-[#C8C3FF]">
+    <div className="mb-3 flex items-center justify-between">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{block.type}</span>
+      <div className="flex items-center gap-1">
+        <button type="button" aria-label="Move block up" disabled={index === 0} onClick={() => onMove(-1)} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30"><ArrowUp size={14} /></button>
+        <button type="button" aria-label="Move block down" disabled={index === count - 1} onClick={() => onMove(1)} className="rounded p-1 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30"><ArrowDown size={14} /></button>
+        <button type="button" aria-label="Remove block" onClick={onRemove} className="rounded p-1 text-zinc-500 hover:bg-red-50 hover:text-red-700"><X size={14} /></button>
+      </div>
+    </div>
+    {block.type === "paragraph" ? <>
+      <textarea ref={paragraphRef} value={textFromHtml(block.html)} onKeyDown={(event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setLinkOpen(true); }
+        if (event.key === "/" && !event.currentTarget.value) { event.preventDefault(); onSlash(); }
+      }} onChange={(event) => setText(event.target.value)} rows={4}
+        placeholder="Write a paragraph…" className="w-full resize-y border-0 p-0 text-base leading-7 text-zinc-800 outline-none placeholder:text-zinc-300" />
+      <div className="mt-2 flex items-center gap-2 border-t border-zinc-100 pt-2">
+        <button type="button" onClick={() => setLinkOpen(!linkOpen)} className="text-xs text-[#4B3FE0] underline">Link (Ctrl/Cmd+K)</button>
+        {linkOpen ? <form onSubmit={(event) => { event.preventDefault(); applyLink(); }} className="flex flex-1 gap-2">
+          <input autoFocus type="url" value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://…" className="min-w-0 flex-1 rounded border px-2 py-1 text-xs" />
+          <button type="submit" className="text-xs font-medium">Add link</button>
+        </form> : null}
+      </div>
+    </> : null}
+    {block.type === "heading" ? <div className="flex gap-2"><select value={block.level} onChange={(event) => onChange({ ...block, level: Number(event.target.value) as 2 | 3 | 4 })} className="rounded border px-2 text-sm">
+      <option value={2}>H2</option><option value={3}>H3</option><option value={4}>H4</option></select>
+      <input value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} maxLength={1000} placeholder="Heading text" className="min-w-0 flex-1 text-lg font-semibold outline-none" /></div> : null}
+    {block.type === "list" ? <div className="space-y-2"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={block.ordered} onChange={(event) => onChange({ ...block, ordered: event.target.checked })} />Numbered list</label>
+      <textarea value={block.items.join("\n")} onChange={(event) => onChange({ ...block, items: event.target.value.split("\n").slice(0, 100) })} rows={4} placeholder="One item per line" className={`${fieldClass} resize-y`} /></div> : null}
+    {block.type === "quote" ? <div className="space-y-2"><textarea value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} rows={3} placeholder="Quoted text" className={`${fieldClass} resize-y`} />
+      <input value={block.attribution} onChange={(event) => onChange({ ...block, attribution: event.target.value })} placeholder="Attribution (optional)" className={fieldClass} /></div> : null}
+    {block.type === "callout" ? <div className="space-y-2"><input value={block.title} onChange={(event) => onChange({ ...block, title: event.target.value })} placeholder="Callout title" className={fieldClass} />
+      <textarea value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} rows={3} placeholder="Callout text" className={`${fieldClass} resize-y`} /></div> : null}
+    {block.type === "image" ? <div>
+      {block.url ? <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={block.url} alt={block.alt} className="mb-3 max-h-80 w-full rounded-lg object-cover" />
+      </> : <p className="mb-3 rounded-lg bg-zinc-50 p-8 text-center text-sm text-zinc-400">Choose an image from the media library.</p>}
+      <button type="button" onClick={onChooseImage} className="platform-button"><ImagePlus size={14} />{block.url ? "Replace image" : "Choose image"}</button>
+      <input value={block.alt} onChange={(event) => onChange({ ...block, alt: event.target.value })} maxLength={500} placeholder="Alt text" className={`${fieldClass} mt-2`} />
+      <input value={block.caption} onChange={(event) => onChange({ ...block, caption: event.target.value })} maxLength={500} placeholder="Caption" className={`${fieldClass} mt-2`} />
+    </div> : null}
+    {block.type === "gallery" ? <div><div className="grid grid-cols-3 gap-2">
+      {block.images.map((item, at) => <div key={`${item.url}-${at}`} className="relative">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={item.url} alt={item.alt} className="aspect-square w-full rounded-lg object-cover" />
+        <button type="button" onClick={() => onChange({ ...block, images: block.images.filter((_, i) => i !== at) })}
+          aria-label={`Remove image ${at + 1}`} className="absolute right-1 top-1 rounded-full bg-white p-1 text-zinc-700"><X size={12} /></button>
+      </div>)}
+      </div><button type="button" disabled={block.images.length >= 20} onClick={onChooseImage} className="platform-button mt-3"><ImagePlus size={14} />Add image</button></div> : null}
+    {block.type === "video" ? <div className="space-y-2"><input value={block.url} onChange={(event) => onChange({ ...block, url: event.target.value })} placeholder="YouTube or Vimeo URL" className={fieldClass} />
+      <input value={block.title} onChange={(event) => onChange({ ...block, title: event.target.value })} placeholder="Video title" className={fieldClass} /></div> : null}
+    {block.type === "button" ? <div className="grid gap-2 sm:grid-cols-2"><input value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} placeholder="Button text" className={fieldClass} />
+      <input value={block.href} onChange={(event) => onChange({ ...block, href: event.target.value })} placeholder="Button URL" className={fieldClass} /></div> : null}
+    {block.type === "divider" ? <hr className="border-zinc-200" /> : null}
+    {block.type === "table" ? <div><p className="mb-2 text-xs text-zinc-500">One row per line; separate cells with |.</p>
+      <textarea value={block.rows.map((row) => row.join(" | ")).join("\n")} onChange={(event) => onChange({
+        ...block, rows: event.target.value.split("\n").slice(0, 30).map((row) => row.split("|").map((cell) => cell.trim()).slice(0, 8)),
+      })} rows={5} className={`${fieldClass} resize-y font-mono`} /></div> : null}
+  </article>;
+}
+
+function StatusSettings({ status, publishedAt, hasUnpublishedChanges, slug, slugMessage, onSlug, timezone,
+  scheduleTime, setScheduleTime, utcSchedule, scheduleError, busy, versions, onChangeStatus, onVersions,
+  versionOpen, closeVersions, restore }: {
+  status: Props["status"]; publishedAt: string | null; hasUnpublishedChanges: boolean;
+  slug: string; slugMessage: string; onSlug: (slug: string) => void; timezone: string;
+  scheduleTime: string; setScheduleTime: (value: string) => void; utcSchedule: string | null; scheduleError: string;
+  busy: boolean; versions: Version[]; onChangeStatus: (status: "draft" | "scheduled" | "published") => void;
+  onVersions: () => void; versionOpen: boolean; closeVersions: () => void; restore: (id: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try { await navigator.clipboard.writeText(slug); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }
+    catch { setCopied(false); }
+  }
+  return <div className="space-y-5 py-5">
+    <section><label className="block text-xs font-semibold">URL slug
+      <div className="mt-1 flex gap-2"><input value={slug} onChange={(event) => onSlug(event.target.value)} className={`${fieldClass} min-w-0`} />
+        <button type="button" onClick={() => void copy()} aria-label="Copy post slug" className="rounded-lg border px-3"><Copy size={14} /></button></div>
+    </label><p className={`mt-1 text-[11px] ${slugMessage ? "text-red-700" : "text-zinc-500"}`}>{slugMessage || (copied ? "Copied" : "Nested slugs are supported.")}</p></section>
+    <section className="rounded-xl bg-[#F8F8F6] p-3">
+      <p className="text-xs font-semibold">Status</p>
+      <p className="mt-1 text-sm capitalize">{status}{status === "published" && hasUnpublishedChanges ? " · Changes not published" : ""}</p>
+      {publishedAt ? <p className="mt-1 text-xs text-zinc-500">Published {new Date(publishedAt).toLocaleString(undefined, { timeZone: timezone, timeZoneName: "short" })}</p> : null}
+    </section>
+    <section><label className="block text-xs font-semibold">Schedule date and time ({timezone})
+      <input type="datetime-local" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} className={`${fieldClass} mt-1`} />
+    </label>
+      <p className="mt-1 text-[11px] text-zinc-500">UTC: {utcSchedule ? new Date(utcSchedule).toISOString() : "Choose a valid local date and time."}</p>
+      {scheduleError ? <p role="alert" className="mt-1 text-xs text-red-700">{scheduleError}</p> : null}
+      <button type="button" disabled={busy} onClick={() => onChangeStatus("scheduled")} className="platform-button mt-2 w-full">Schedule</button>
+    </section>
+    <div className="grid grid-cols-2 gap-2">
+      <button type="button" disabled={busy || status === "draft"} onClick={() => onChangeStatus("draft")} className="platform-button">Unpublish</button>
+      <button type="button" disabled={busy || (status === "published" && !hasUnpublishedChanges)} onClick={() => onChangeStatus("published")} className="platform-button platform-button-primary">
+        {status === "published" ? hasUnpublishedChanges ? "Republish" : "Published" : "Publish now"}
+      </button>
+    </div>
+    <section className="border-t border-[#E8E7E3] pt-4">
+      <button type="button" onClick={onVersions} className="platform-button w-full"><RotateCcw size={14} />Revision history</button>
+      {versionOpen ? <div className="mt-3 rounded-xl border p-3">
+        <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold">Previous drafts</p><button type="button" onClick={closeVersions} aria-label="Close revision history"><X size={13} /></button></div>
+        {versions.length ? versions.map((version) => <div key={version.id} className="flex items-center justify-between gap-2 border-t py-2 text-xs">
+          <time>{new Date(version.created_at).toLocaleString(undefined, { timeZone: timezone, timeZoneName: "short" })}</time><button type="button" onClick={() => restore(version.id)} className="text-[#4B3FE0] underline">Restore</button>
+        </div>) : <p className="text-xs text-zinc-500">No saved revisions yet.</p>}
+      </div> : null}
+    </section>
+  </div>;
+}
+
+function DetailsSettings({ form, change, categories, authors, tags, onPickCover, onCreateTag, tagName, setTagName, tagError }: {
+  form: BlogPostFields; change: (update: (previous: BlogPostFields) => BlogPostFields) => void;
+  categories: BlogManagerCategory[]; authors: BlogManagerAuthor[]; tags: BlogManagerTag[];
+  onPickCover: () => void; onCreateTag: (event: FormEvent) => void;
+  tagName: string; setTagName: (value: string) => void; tagError: string;
+}) {
+  return <div className="space-y-4 py-5">
+    <label className="block text-xs font-semibold">Subtitle<input value={form.subtitle} maxLength={300} onChange={(event) => change((old) => ({ ...old, subtitle: event.target.value }))} className={`${fieldClass} mt-1 font-normal`} /></label>
+    <label className="block text-xs font-semibold">Author<select value={form.author_id ?? ""} onChange={(event) => change((old) => ({ ...old, author_id: event.target.value || null }))} className={`${fieldClass} mt-1 font-normal`}>
+      <option value="">No author</option>{authors.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
+    </select></label>
+    <label className="block text-xs font-semibold">Category<select value={form.category_id ?? ""} onChange={(event) => change((old) => ({ ...old, category_id: event.target.value || null }))} className={`${fieldClass} mt-1 font-normal`}>
+      <option value="">No category</option>{categories.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
+    </select></label>
+    <section><p className="text-xs font-semibold">Main image</p>
+      {form.cover_image ? <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={form.cover_image} alt={form.cover_alt} className="mt-2 aspect-video w-full rounded-lg object-cover" />
+      </> : null}
+      <button type="button" onClick={onPickCover} className="platform-button mt-2 w-full"><ImagePlus size={14} />{form.cover_image ? "Replace image" : "Choose image"}</button>
+      <label className="mt-2 block text-xs">Alt text<input value={form.cover_alt} onChange={(event) => change((old) => ({ ...old, cover_alt: event.target.value }))} maxLength={500} className={`${fieldClass} mt-1 font-normal`} /></label>
+    </section>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.featured} onChange={(event) => change((old) => ({ ...old, featured: event.target.checked }))} />Featured post</label>
+    <label className="block text-xs font-semibold">Post layout<select value={form.layout_override ?? ""} onChange={(event) => change((old) => ({ ...old, layout_override: (event.target.value || null) as BlogPostFields["layout_override"] }))} className={`${fieldClass} mt-1 font-normal`}>
+      <option value="">Use blog default</option><option value="classic">Classic</option><option value="wide">Wide</option><option value="minimal">Minimal</option>
+    </select></label>
+    <section className="border-t border-[#E8E7E3] pt-4"><p className="text-xs font-semibold">Tags</p>
+      <div className="mt-2 max-h-40 space-y-2 overflow-auto">{tags.map(({ id, name }) => <label key={id} className="flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={form.tag_ids.includes(id)} onChange={(event) => change((old) => ({ ...old, tag_ids: event.target.checked ? [...old.tag_ids, id] : old.tag_ids.filter((tagId) => tagId !== id) }))} />{name}
+      </label>)}</div>
+      <form onSubmit={onCreateTag} className="mt-3 flex gap-2"><input value={tagName} onChange={(event) => setTagName(event.target.value)} maxLength={80} placeholder="Create tag" className={`${fieldClass} min-w-0`} />
+        <button type="submit" className="platform-button"><Plus size={14} />Add</button></form>
+      {tagError ? <p role="alert" className="mt-1 text-xs text-red-700">{tagError}</p> : null}
+    </section>
+  </div>;
+}
+
+function SeoSettings({ form, change, onPickThumbnail }: {
+  form: BlogPostFields; change: (update: (previous: BlogPostFields) => BlogPostFields) => void; onPickThumbnail: () => void;
+}) {
+  const thumbnail = form.thumbnail_image || form.cover_image;
+  return <div className="space-y-4 py-5">
+    <label className="block text-xs font-semibold">Meta title
+      <input value={form.seo_title} onChange={(event) => change((old) => ({ ...old, seo_title: event.target.value }))} maxLength={200} className={`${fieldClass} mt-1 font-normal`} />
+      <span className={`mt-1 block text-right font-normal ${form.seo_title.length > 60 ? "text-amber-700" : "text-zinc-500"}`}>
+        {form.seo_title.length}/60 ideal{form.seo_title.length > 60 ? " · longer than recommended" : ""}
+      </span>
+    </label>
+    <label className="block text-xs font-semibold">Meta description
+      <textarea value={form.seo_description} onChange={(event) => change((old) => ({ ...old, seo_description: event.target.value }))} maxLength={500} rows={3} className={`${fieldClass} mt-1 font-normal`} />
+      <span className={`mt-1 block text-right font-normal ${form.seo_description.length > 0 && (form.seo_description.length < 140 || form.seo_description.length > 160) ? "text-amber-700" : "text-zinc-500"}`}>
+        {form.seo_description.length}/160 ideal{form.seo_description.length > 0 && (form.seo_description.length < 140 || form.seo_description.length > 160) ? " · outside recommended range" : ""}
+      </span>
+    </label>
+    <section><p className="text-xs font-semibold">Social image</p>
+      {thumbnail ? <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={thumbnail} alt={form.thumbnail_alt || form.cover_alt} className="mt-2 aspect-video w-full rounded-lg object-cover" />
+      </> : null}
+      <button type="button" onClick={onPickThumbnail} className="platform-button mt-2 w-full"><ImagePlus size={14} />{form.thumbnail_image ? "Replace image" : "Use or replace main image"}</button>
+      <label className="mt-2 block text-xs">Alt text<input value={form.thumbnail_alt} onChange={(event) => change((old) => ({ ...old, thumbnail_alt: event.target.value }))} maxLength={500} className={`${fieldClass} mt-1 font-normal`} /></label>
+    </section>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.noindex} onChange={(event) => change((old) => ({ ...old, noindex: event.target.checked }))} />Ask search engines not to index</label>
+    <details><summary className="cursor-pointer text-xs font-semibold">Advanced canonical URL</summary>
+      <input value={form.canonical_url} onChange={(event) => change((old) => ({ ...old, canonical_url: event.target.value }))} maxLength={2048} placeholder="https://…" className={`${fieldClass} mt-2 font-normal`} />
+    </details>
+    <div className="rounded-xl border border-[#E8E7E3] bg-[#F8F8F6] p-3">
+      <p className="text-xs font-semibold">Search preview</p>
+      <p className="mt-2 truncate text-sm text-[#1a0dab]">{form.seo_title || form.title || "Post title"}</p>
+      <p className="mt-1 line-clamp-2 text-xs text-zinc-600">{form.seo_description || form.excerpt || "Your post description will appear here."}</p>
+      <p className="mt-2 text-[11px] text-zinc-500">Schema markup and Open Graph tags are generated automatically.</p>
+    </div>
+    <div className="overflow-hidden rounded-xl border border-[#E8E7E3] bg-white">
+      {thumbnail ? <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={thumbnail} alt="" className="aspect-[1.91/1] w-full object-cover" />
+      </> : null}
+      <div className="p-3"><p className="text-[11px] text-zinc-500">Social preview</p>
+        <p className="mt-1 line-clamp-2 text-sm font-semibold">{form.seo_title || form.title || "Post title"}</p>
+        <p className="mt-1 line-clamp-2 text-xs text-zinc-600">{form.seo_description || form.excerpt || "Your post description will appear here."}</p>
+      </div>
+    </div>
+  </div>;
+}
+
+function PostPreview({ form }: { form: BlogPostFields }) {
+  const content = blogContentSchema.safeParse(form.draft_content);
+  if (!content.success) return <p role="alert" className="text-sm text-red-700">This draft cannot be previewed because its content is invalid.</p>;
+  return <article className="prose mx-auto max-w-[70ch]">
+    {form.cover_image ? <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={form.cover_image} alt={form.cover_alt} className="mb-8 aspect-[16/9] w-full rounded-2xl object-cover" />
+    </> : null}
+    <h1 className="text-4xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-heading)" }}>{form.title}</h1>
+    {form.subtitle ? <p className="mt-4 text-xl text-zinc-500">{form.subtitle}</p> : null}
+    <div className="mt-10 space-y-6 text-base leading-8">
+      {content.data.blocks.map((block, index) => <PreviewBlock key={`${index}-${block.type}`} block={block} />)}
+    </div>
+  </article>;
+}
+
+function PreviewBlock({ block }: { block: BlogBlock }) {
+  if (block.type === "paragraph") return <div dangerouslySetInnerHTML={{ __html: sanitizeRichText(block.html) }} />;
+  if (block.type === "heading") {
+    const Tag = `h${block.level}` as "h2" | "h3" | "h4";
+    return <Tag className="font-semibold">{block.text}</Tag>;
+  }
+  if (block.type === "list") {
+    const Tag = block.ordered ? "ol" : "ul";
+    return <Tag className={block.ordered ? "list-decimal pl-6" : "list-disc pl-6"}>{block.items.map((item, i) => <li key={i}>{item}</li>)}</Tag>;
+  }
+  if (block.type === "quote") return <blockquote className="border-l-4 border-zinc-300 pl-5 italic">{block.text}<footer className="mt-2 text-sm not-italic text-zinc-500">{block.attribution}</footer></blockquote>;
+  if (block.type === "callout") return <aside className="rounded-xl border border-zinc-200 bg-zinc-50 p-5"><strong>{block.title}</strong><p>{block.text}</p></aside>;
+  if (block.type === "image") return block.url ? <figure>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={block.url} alt={block.alt} className="w-full rounded-xl" />{block.caption ? <figcaption className="mt-2 text-center text-sm text-zinc-500">{block.caption}</figcaption> : null}
+  </figure> : null;
+  if (block.type === "gallery") return <div className="grid grid-cols-2 gap-3">{block.images.map((image, i) => <div key={i}>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={image.url} alt={image.alt} className="rounded-xl" />
+  </div>)}</div>;
+  if (block.type === "video") return <p className="rounded-xl bg-zinc-100 p-5 text-sm">Video: {block.title || block.url}</p>;
+  if (block.type === "button") return <a href={block.href} className="inline-flex rounded-lg bg-[var(--color-primary,#4B3FE0)] px-5 py-3 text-sm font-medium text-white">{block.text}</a>;
+  if (block.type === "divider") return <hr />;
+  if (block.type === "table") return <table className="w-full border-collapse">{block.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} className="border p-2">{cell}</td>)}</tr>)}</table>;
+  return null;
+}

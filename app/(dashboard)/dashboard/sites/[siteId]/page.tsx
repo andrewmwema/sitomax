@@ -103,6 +103,7 @@ async function SiteDetail({
 
       <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm">
         <span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">Pages</span>
+        <Link href={`/dashboard/sites/${siteId}/blog`} className="pb-3 hover:underline">Blog</Link>
         <Link href={`/dashboard/sites/${siteId}/seo`} className="pb-3 hover:underline">SEO</Link>
         {canGenerate ? <Link href={`/dashboard/sites/${siteId}/domains`} className="pb-3 hover:underline">Domains</Link> : null}
       </nav>

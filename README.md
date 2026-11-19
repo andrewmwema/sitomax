@@ -118,6 +118,13 @@ preview/apply, history and credit accounting. Templates and both AI generation
 modes are normalized at the database boundary so their Navigation initializes
 a missing header without replacing an existing site header.
 
+### Blog management
+
+Apply `supabase/migrations/0029_blog_phase_a.sql` in the Supabase SQL Editor
+after `0028_global_headers.sql`. Each site's dashboard includes a Blog manager
+for posts, categories, authors, SEO settings and site-local scheduling. Public
+blog pages and automatic scheduled publishing are not part of Phase A.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations

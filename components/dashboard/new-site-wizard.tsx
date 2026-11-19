@@ -13,6 +13,7 @@ type FormValues = Omit<SiteCreationInput, "template"> & { template: string };
 const initial: FormValues = {
   accountId: "", template: "", subdomain: "", businessName: "", phone: "",
   city: "", services: "", email: "", address: "",
+  timezone: typeof window === "undefined" ? "UTC" : Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
 };
 const inputClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
 

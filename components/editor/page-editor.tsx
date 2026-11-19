@@ -2,6 +2,7 @@
 
 import { linkContext } from "@/lib/links";
 import { PagesManager } from "./pages-panel";
+import Link from "next/link";
 import { EditorIconPicker } from "./editor-icon-picker";
 import { findBrokenLinks, type LinkIssue } from "@/lib/link-qa";
 import {
@@ -24,7 +25,7 @@ import {
   type Overrides,
   type Plugin,
 } from "@puckeditor/core";
-import { ArrowLeft, ArrowUpRight, Bookmark, Check, Eye, FileText, Layers, LayoutGrid, Monitor, MoreHorizontal, Palette, PanelLeft, PanelRight, Plus, Redo2, Search, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BookOpen, Bookmark, Check, Eye, FileText, Layers, LayoutGrid, Monitor, MoreHorizontal, Palette, PanelLeft, PanelRight, Plus, Redo2, Search, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { savePageMenuLabel } from "@/app/editor/[pageId]/actions";
 import { defaultMenuLabel, pageMenuLinks, siteContacts } from "@/lib/page-navigation";
@@ -263,6 +264,20 @@ function PagesPanel() {
   </div>;
 }
 
+function BlogPanel() {
+  const { siteId } = useEditorUi();
+  return <section className="editor-panel">
+    <header className="editor-panel-header mb-4">
+      <p className="platform-eyebrow mb-1">Publishing</p>
+      <h2 className="font-semibold">Blog</h2>
+      <p className="mt-2 text-xs leading-relaxed text-zinc-500">Write and manage posts for this site.</p>
+    </header>
+    <Link href={`/dashboard/sites/${siteId}/blog`} className="platform-button platform-button-primary w-full">
+      <BookOpen size={14} />Open blog manager
+    </Link>
+  </section>;
+}
+
 function MenuLabelSettings({ page }: { page?: EditorPageLink }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -359,6 +374,7 @@ const editorPlugins: Plugin[] = [
   blocksPlugin({ label: "Add", icon: <EditorTool name="blocks" label="Add sections"><Plus size={18} /></EditorTool> }),
   outlinePlugin({ label: "Layers", icon: <EditorTool name="outline" label="Layers"><Layers size={18} /></EditorTool> }),
   { name: "pages", label: "Pages", icon: <EditorTool name="pages" label="Pages"><FileText size={18} /></EditorTool>, render: () => <PagesPanel /> },
+  { name: "blog", label: "Blog", icon: <EditorTool name="blog" label="Blog"><BookOpen size={18} /></EditorTool>, render: () => <BlogPanel /> },
   { name: "theme", label: "Theme", icon: <EditorTool name="theme" label="Theme"><Palette size={18} /></EditorTool>, render: () => <ThemeTool /> },
   { name: "ai", label: "AI", icon: <EditorTool name="ai" label="AI"><Sparkles size={18} /></EditorTool>, render: () => <AiTool /> },
   { name: "seo", label: "SEO", icon: <EditorTool name="seo" label="SEO"><Search size={18} /></EditorTool>, render: () => <SeoTool /> },

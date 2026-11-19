@@ -36,6 +36,11 @@ export async function createSite(raw: unknown): Promise<{ status: "success"; sit
   const parsed = createSiteCreationSchema(brand.marketingSiteSubdomain, true).safeParse(raw);
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Invalid site information." };
   const input = parsed.data;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: input.timezone });
+  } catch {
+    return { status: "error", message: "Choose a valid site timezone." };
+  }
   const { data: account, error: accountError } = await supabase.from("accounts").select("id, is_internal").eq("id", input.accountId).maybeSingle();
   if (accountError) {
     console.error("Could not load client account", accountError);
@@ -54,6 +59,7 @@ export async function createSite(raw: unknown): Promise<{ status: "success"; sit
   const { data: siteId, error } = await admin.rpc("create_template_site", {
     p_account_id: input.accountId, p_name: input.businessName, p_subdomain: input.subdomain,
     p_template_key: input.template, p_theme: template.theme, p_pages: pages,
+    p_timezone: input.timezone,
   });
   if (error || typeof siteId !== "string") {
     console.error("Could not create template site", error);

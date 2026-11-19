@@ -39,12 +39,14 @@ describe("site wizard actions", () => {
     const [name, params] = mocks.rpc.mock.calls[0];
     expect(name).toBe("create_template_site");
     expect(params.p_pages.map((page: { slug: string }) => page.slug)).toEqual(["", "about", "services", "contact"]);
+    expect(params.p_timezone).toBe("UTC");
     expect(JSON.stringify(params.p_pages)).toContain("Acme");
     expect(JSON.stringify(params.p_pages)).not.toContain("{{");
   });
   it("rejects invalid input, missing clients and duplicate subdomains", async () => {
     expect(await createSite({ ...input, subdomain: "www" })).toMatchObject({ status: "error" });
     expect(await createSite({ ...input, subdomain: "api" })).toMatchObject({ status: "error" });
+    expect(await createSite({ ...input, timezone: "Not/A_Timezone" })).toMatchObject({ status: "error", message: expect.stringContaining("timezone") });
     expect(mocks.admin).not.toHaveBeenCalled();
     mocks.lookup.mockResolvedValueOnce({ data: null, error: null });
     expect(await createSite(input)).toMatchObject({ status: "error" });
