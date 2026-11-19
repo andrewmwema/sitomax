@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useGetPuck } from "@puckeditor/core";
 import { listPageVersions } from "@/app/editor/[pageId]/actions";
+import { Command, History } from "lucide-react";
 import { useSectionLibrary } from "./section-library";
 import { useInteractions } from "./interaction-context";
 import type { useDraftPersistence } from "./use-draft-persistence";
@@ -32,8 +33,8 @@ export function EditorCommands({ persistence, onPublish, onTheme }: {
     })),
   ].filter((command) => command.label.toLowerCase().includes(query.toLowerCase()));
   return <>
-    <button type="button" onClick={() => { setQuery(""); ref.current?.showModal(); }} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs">Commands</button>
-    <dialog ref={ref} aria-label="Command palette" className="m-auto w-[min(520px,94vw)] rounded-xl border border-zinc-200 p-4 shadow-xl backdrop:bg-zinc-950/30">
+    <button type="button" onClick={() => { setQuery(""); ref.current?.showModal(); }} className="platform-button"><Command size={14} />Commands</button>
+    <dialog ref={ref} aria-label="Command palette" className="editor-modal m-auto w-[min(520px,94vw)] rounded-xl border border-zinc-200 p-4 shadow-xl backdrop:bg-zinc-950/30">
       <label className="block text-xs font-semibold">Commands
         <input aria-label="Search commands" autoFocus value={query} onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -70,8 +71,8 @@ export function VersionHistory({ persistence, siteId }: { persistence: Persisten
     finally { setLoading(false); }
   };
   return <>
-    <button type="button" onClick={() => void load()} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs">History</button>
-    <dialog ref={ref} aria-label="Version history" className="m-auto w-[min(480px,94vw)] rounded-xl border border-zinc-200 p-5 shadow-xl backdrop:bg-zinc-950/30">
+    <button type="button" onClick={() => void load()} className="platform-button"><History size={14} />History</button>
+    <dialog ref={ref} aria-label="Version history" className="editor-modal m-auto w-[min(480px,94vw)] rounded-xl border border-zinc-200 p-5 shadow-xl backdrop:bg-zinc-950/30">
       <h2 className="text-sm font-semibold">Version history</h2>
       <p className="my-2 text-xs text-zinc-500">The last 20 published versions and AI edits. Restore updates the draft, not the live site.</p>
       <Link href={`/dashboard/sites/${siteId}#ai-history`} className="my-2 block text-xs underline">Site-wide AI draft backups (account owners)</Link>

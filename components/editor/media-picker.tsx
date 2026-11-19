@@ -31,7 +31,7 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
   const [page, setPage] = useState(0);
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState("");
-  const dialog = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
@@ -44,9 +44,12 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
     const overflow = document.body.style.overflow;
     const requests = latest;
     const uploadPreview = preview;
+    const element = dialog.current;
     document.body.style.overflow = "hidden";
-    dialog.current?.focus();
+    element?.showModal();
+    element?.focus();
     return () => {
+      element?.close();
       document.body.style.overflow = overflow; previous?.focus(); requests.current++;
       if (uploadPreview.current) URL.revokeObjectURL(uploadPreview.current);
     };
@@ -144,12 +147,12 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
     { key: "stock", label: "Stock photos" }, { key: "upload", label: "Upload" }, { key: "library", label: "Media library" },
     ...(isAdmin ? [{ key: "url" as const, label: "Paste URL" }] : []),
   ];
-  return createPortal(<div className="platform-ui fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-3 sm:p-6"
-    onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-    <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} tabIndex={-1}
-      className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-[#FAFAF8] text-[#121212] shadow-2xl"
+  return createPortal(<dialog ref={dialog} role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`} tabIndex={-1}
+      className="platform-ui platform-media-dialog"
+      onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
+      onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}
       onKeyDown={(event) => {
-        if (event.key === "Escape") { event.stopPropagation(); if (!busy) onClose(); }
+        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); if (!busy) onClose(); }
         if (event.key === "Tab") {
           const nodes = [...(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]') ?? [])]
             .filter((node) => !node.hidden && node.getAttribute("type") !== "file");
@@ -158,8 +161,10 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
           else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
         }
       }}>
+    <div className="flex max-h-[92dvh] flex-col overflow-hidden">
       <header className="flex items-center justify-between border-b border-[#E8E7E3] bg-white px-5 py-4">
-        <h2 id={`${id}-title`} className="text-lg font-semibold">Choose image</h2>
+        <div><p className="platform-eyebrow mb-1">Media studio</p><h2 id={`${id}-title`} className="text-lg font-semibold">Choose image</h2>
+          <p id={`${id}-description`} className="mt-1 text-xs text-zinc-500">Find, upload or reuse an image. Changes apply when you choose Use image.</p></div>
         <button type="button" disabled={busy} onClick={onClose} aria-label="Close media picker" className="rounded-lg p-2 hover:bg-zinc-100"><X size={20} /></button>
       </header>
       <div role="tablist" aria-label="Image source" className="flex overflow-x-auto border-b border-[#E8E7E3] bg-white px-3">
@@ -227,5 +232,5 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
           {busy ? "Working..." : "Use image"}</button>
       </footer>
     </div>
-  </div>, document.body);
+  </dialog>, document.body);
 }

@@ -224,7 +224,7 @@ function AddSectionPill({
       onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       aria-label="Add section here"
-      className={`inline-flex items-center gap-1.5 rounded-full bg-[#121212] font-medium text-white shadow-lg transition hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4B3FE0] ${
+      className={`platform-ui editor-add-section inline-flex items-center gap-1.5 rounded-full bg-[#121212] font-medium text-white shadow-lg transition hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4B3FE0] ${
         small ? "px-3 py-1 text-xs" : "px-4 py-2 text-sm"
       }`}
     >

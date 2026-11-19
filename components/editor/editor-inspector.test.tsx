@@ -39,6 +39,13 @@ describe("editor inspector", () => {
     expect(container.querySelector(".editor-placeholder-field")?.textContent).toContain("Replace placeholder");
     const tab = (name: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((item) => item.textContent === name)!;
     expect([...container.querySelectorAll('[role="tab"]')].map((item) => item.textContent)).toEqual(["Content", "Design", "Motion"]);
+    expect(tab("Content").tabIndex).toBe(0);
+    expect(tab("Design").tabIndex).toBe(-1);
+    await act(async () => tab("Content").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
+    expect(document.activeElement).toBe(tab("Motion"));
+    expect(container.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby")).toBe(tab("Motion").id);
+    await act(async () => tab("Motion").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+    expect(document.activeElement).toBe(tab("Content"));
     await act(async () => tab("Design").click());
     expect(container.textContent).toContain("WCAG AA recommends");
     const spacing = [...container.querySelectorAll("button")].find((item) => item.textContent === "spacing")!;

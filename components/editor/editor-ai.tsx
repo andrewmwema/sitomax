@@ -124,7 +124,7 @@ function AiDialog({ target, pageId, onClose }: { target: Target; pageId: string;
   };
   const output = result?.status === "success" ? result.result : null;
   return <dialog ref={ref} aria-label="AI editor" onCancel={onClose}
-    className="m-auto max-h-[90vh] w-[min(760px,94vw)] overflow-y-auto rounded-xl border border-[#E8E7E3] bg-white p-5 shadow-xl backdrop:bg-black/40">
+    className="editor-modal m-auto max-h-[90vh] w-[min(760px,94vw)] overflow-y-auto rounded-xl border border-[#E8E7E3] bg-white p-5 shadow-xl backdrop:bg-black/40">
     <h2 className="text-base font-semibold">{target.kind === "add" ? "Add a section with AI" : target.kind === "text" ? "Rewrite selected text" : "Edit section with AI"}</h2>
     <p className="mt-1 text-xs text-zinc-500">Business info and the selected content are sent to the AI provider. Each attempt uses your AI allowance.</p>
     {target.kind === "section" ? <label className="mt-4 block text-xs font-medium">Action

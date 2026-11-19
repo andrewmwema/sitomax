@@ -14,26 +14,41 @@ const mocks = vi.hoisted(() => ({
   build: vi.fn(),
   busy: null as string | null,
   ui: undefined as unknown,
+  dispatch: vi.fn(),
+  back: vi.fn(),
+  forward: vi.fn(),
+  openLibrary: vi.fn(),
+  header: false,
 }));
+
+function puckState() {
+  return {
+    appState: { data: mocks.data, ui: { leftSideBarVisible: true, rightSideBarVisible: false, leftSideBarWidth: 280, rightSideBarWidth: 300 } },
+    history: { hasPast: true, hasFuture: false, back: mocks.back, forward: mocks.forward },
+    dispatch: mocks.dispatch,
+  };
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams(mocks.panel ? { panel: mocks.panel } : {}),
 }));
 vi.mock("@puckeditor/core", () => ({
-  createUsePuck: () => (selector: (value: unknown) => unknown) => selector({ appState: { data: mocks.data } }),
-  useGetPuck: vi.fn(),
+  createUsePuck: () => (selector: (value: unknown) => unknown) => selector(puckState()),
+  useGetPuck: () => puckState,
   blocksPlugin: () => ({ name: "blocks" }),
   outlinePlugin: () => ({ name: "outline" }),
   Puck: ({ ui, overrides, plugins }: {
     ui: unknown;
-    overrides: { puck: (props: { children: ReactNode }) => ReactNode };
+    overrides: { puck: (props: { children: ReactNode }) => ReactNode; header: (props: { actions: ReactNode }) => ReactNode; headerActions: () => ReactNode };
     plugins: { name: string; render?: () => ReactNode }[];
   }) => {
     mocks.ui = ui;
     const Wrapper = overrides.puck;
+    const Header = overrides.header;
+    const Actions = overrides.headerActions;
     const Panel = plugins.find((plugin) => plugin.name === mocks.renderedPanel)!.render!;
-    return <Wrapper><Panel /></Wrapper>;
+    return <Wrapper>{mocks.header ? <Header actions={<Actions />} /> : null}<Panel /></Wrapper>;
   },
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: { components: {} } }));
@@ -52,6 +67,7 @@ vi.mock("./section-library", () => ({
   ROOT_ZONE: "root:default-zone",
   SectionLibraryContext: { Provider: ({ children }: { children: ReactNode }) => children },
   SectionLibraryPanel: () => null,
+  useSectionLibrary: () => ({ openLibrary: mocks.openLibrary }),
 }));
 vi.mock("./save-design-dialog", () => ({ SaveDesignDialog: () => null }));
 vi.mock("./editor-interactions", () => ({ EditorInteractions: () => null }));
@@ -83,6 +99,8 @@ beforeEach(() => {
   mocks.data = { content: [], root: { props: {} } };
   mocks.busy = null;
   mocks.dirty = false;
+  mocks.header = false;
+  vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   mocks.save.mockResolvedValue(true);
 });
 
@@ -123,7 +141,7 @@ describe("SEO page navigation", () => {
     const root = createRoot(container);
     await act(async () => root.render(<PageEditor {...props} />));
     expect(mocks.ui).toEqual({ plugin: { current: "seo" }, leftSideBarVisible: true });
-    await act(async () => container.querySelector("button")!.click());
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Select About")!.click());
     expect(mocks.save).toHaveBeenCalledOnce();
     expect(mocks.push).not.toHaveBeenCalled();
     await act(async () => finishSave(true));
@@ -137,11 +155,80 @@ describe("SEO page navigation", () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     await act(async () => root.render(<PageEditor {...props} />));
-    await act(async () => container.querySelector("button")!.click());
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Select About")!.click());
     expect(mocks.push).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
+});
+
+describe("editor navigation", () => {
+    it("uses the existing design library for an empty page", async () => {
+      mocks.renderedPanel = "pages";
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Browse designs")!.click());
+      expect(mocks.openLibrary).toHaveBeenCalledWith(0);
+      expect(container.querySelector('.editor-phone-notice a')?.getAttribute("href")).toBe(props.previewUrl);
+      await act(async () => root.unmount());
+    });
+
+    it("saves before switching pages and preserves the current page when saving fails", async () => {
+      mocks.header = true;
+      mocks.dirty = true;
+      mocks.save.mockResolvedValue(false);
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      const sitePages = [
+        { id: "home-page", slug: "", title: "Home" },
+        { id: "about-page", slug: "about", title: "About" },
+      ];
+      await act(async () => root.render(<PageEditor {...props} sitePages={sitePages} />));
+      const select = container.querySelector<HTMLSelectElement>('[aria-label="Switch page"]')!;
+      await act(async () => { select.value = "about-page"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+      expect(mocks.save).toHaveBeenCalledOnce();
+      expect(mocks.push).not.toHaveBeenCalled();
+      mocks.save.mockResolvedValue(true);
+      await act(async () => { select.value = "about-page"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+      expect(mocks.push).toHaveBeenCalledWith("/editor/about-page");
+      await act(async () => root.unmount());
+    });
+
+    it("connects history and tablet panel controls to Puck without modifying page data", async () => {
+      mocks.header = true;
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click());
+      expect(mocks.back).toHaveBeenCalledOnce();
+      expect(container.querySelector<HTMLButtonElement>('[aria-label="Redo"]')!.disabled).toBe(true);
+      const width = window.innerWidth;
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 768 });
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Toggle inspector"]')!.click());
+      expect(mocks.dispatch).toHaveBeenLastCalledWith({ type: "setUi", ui: { rightSideBarVisible: true, leftSideBarVisible: false } });
+      expect(mocks.dispatch.mock.calls.every(([action]) => action.type === "setUi")).toBe(true);
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      await act(async () => root.unmount());
+    });
+
+    it("keeps save and publish wired to persistence and still requires placeholder review", async () => {
+      mocks.header = true;
+      mocks.data = { content: [{ type: "Hero", props: { id: "hero", heading: "[Add your headline]" } }], root: { props: {} } };
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      const button = (text: string) => [...container.querySelectorAll("button")].find((item) => !item.closest("dialog") && item.textContent === text)!;
+      await act(async () => button("Save draft").click());
+      expect(mocks.save).toHaveBeenLastCalledWith("save");
+      mocks.save.mockClear();
+      await act(async () => button("Publish").click());
+      expect(mocks.save).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("Some placeholder text");
+      await act(async () => button("Publish anyway").click());
+      expect(mocks.save).toHaveBeenLastCalledWith("publish");
+      await act(async () => root.unmount());
+    });
   it("keeps the normal editor default when no SEO panel was requested", async () => {
     mocks.panel = "";
     const container = document.createElement("div");

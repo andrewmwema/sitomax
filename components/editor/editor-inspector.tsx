@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, type ReactNode } from "react";
+import { useContext, useEffect, useId, useRef, type ReactNode } from "react";
 import { createUsePuck, useGetPuck } from "@puckeditor/core";
 import { Monitor, Smartphone, Tablet } from "lucide-react";
 import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
@@ -18,6 +18,9 @@ import { SectionLibraryContext } from "./section-library";
 const usePuck = createUsePuck();
 export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<string, ReactNode>>; isLoading: boolean }) {
   const ui = useInteractions();
+  const id = useId();
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const activeTab = ui.tab === "spacing" ? "style" : ui.tab;
   const library = useContext(SectionLibraryContext);
   const selected = usePuck((state) => state.selectedItem);
   const rootProps = usePuck((state) => state.appState.data.root.props);
@@ -44,9 +47,9 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
   });
   const appearanceText = safeHexColor(appearance.textColor) ?? safeHexColor(base.textColor) ??
     safeHexColor(library?.theme.colors?.text) ?? DEFAULT_COLORS.text;
-  const mobileIndicator = (key: keyof typeof appearance) =>
-    design.appearance?.mobile?.[key] !== undefined && design.appearance.mobile[key] !== base[key]
-      ? <Smartphone className="inline" size={12} aria-label="Mobile override" /> : null;
+  const overrideIndicator = (key: keyof typeof appearance) => device !== "desktop" &&
+    appearance[key] !== undefined && appearance[key] !== base[key]
+      ? <span className="editor-override-indicator" title={`${device} override`}>{device === "mobile" ? <Smartphone size={12} /> : <Tablet size={12} />}<span className="sr-only">{device} override</span></span> : null;
   const patchAppearance = (patch: typeof appearance) => change({
     ...design, appearance: { ...design.appearance, [device]: { ...appearance, ...patch } },
   });
@@ -67,10 +70,17 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
         { id: "content", label: "Content" },
         { id: "style", label: "Design" },
         { id: "animation", label: "Motion" },
-      ] as const).map(({ id, label }) =>
-        <button key={id} type="button" role="tab" aria-selected={ui.tab === id || (id === "style" && ui.tab === "spacing")}
-          onClick={() => ui.setTab(id)} className={`border-b-2 py-2 text-xs font-medium ${ui.tab === id || (id === "style" && ui.tab === "spacing") ? "border-[#4B3FE0] text-[#4B3FE0]" : "border-transparent text-zinc-500"}`}>{label}</button>)}
+      ] as const).map(({ id: tab, label }, index, tabs) =>
+        <button key={tab} ref={(node) => { tabRefs.current[index] = node; }} type="button" role="tab"
+          id={`${id}-${tab}`} aria-controls={`${id}-panel`} aria-selected={activeTab === tab} tabIndex={activeTab === tab ? 0 : -1}
+          onKeyDown={(event) => {
+            const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length :
+              event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+            if (next >= 0) { event.preventDefault(); ui.setTab(tabs[next].id); tabRefs.current[next]?.focus(); }
+          }}
+          onClick={() => ui.setTab(tab)} className={`border-b-2 py-2 text-xs font-medium ${activeTab === tab ? "border-[#4B3FE0] text-[#4B3FE0]" : "border-transparent text-zinc-500"}`}>{label}</button>)}
     </div>
+    <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${activeTab}`} className="editor-inspector-content" aria-busy={isLoading}>
     {isLoading ? <p role="status" className="text-xs">Loading controls...</p> : null}
     {ui.tab === "content" || !selected ? <>
       {Object.entries(fields).filter(([key]) => key !== "design").map(([key, field]) => {
@@ -91,13 +101,13 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
         <legend className="px-1 capitalize">{device} appearance</legend>
         {(["backgroundColor", "textColor"] as const).map((key) => <label key={key} className="flex items-center justify-between gap-2">
           {key === "backgroundColor" ? "Background" : "Text color"}
-          {mobileIndicator(key)}
+          {overrideIndicator(key)}
           <input type="color" aria-label={`${device} ${key}`} value={appearance[key] ?? base[key] ?? (key === "backgroundColor" ? "#ffffff" : "#1c2b3a")}
             onChange={(event) => patchAppearance({ [key]: event.target.value })} />
         </label>)}
-        <label>Corner radius {mobileIndicator("borderRadius")} <input aria-label="Corner radius" type="range" min={0} max={48} value={appearance.borderRadius ?? base.borderRadius ?? 0}
+        <label>Corner radius {overrideIndicator("borderRadius")} <input aria-label="Corner radius" type="range" min={0} max={48} value={appearance.borderRadius ?? base.borderRadius ?? 0}
           onChange={(event) => patchAppearance({ borderRadius: Number(event.target.value) })} /></label>
-        <label>Alignment {mobileIndicator("align")} <select aria-label="Block alignment" value={appearance.align ?? base.align ?? "left"}
+        <label>Alignment {overrideIndicator("align")} <select aria-label="Block alignment" value={appearance.align ?? base.align ?? "left"}
           onChange={(event) => patchAppearance({ align: event.target.value as "left" | "center" | "right" })}>
           <option>left</option><option>center</option><option>right</option>
         </select></label>
@@ -109,5 +119,6 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
       {ui.tab !== "style" || device === "desktop" ? <DesignField value={design} onChange={change} level={level} panelTab={ui.tab} /> :
         <p className="text-xs text-zinc-500">Other style controls use the desktop design.</p>}
     </>}
+    </div>
   </section>;
 }

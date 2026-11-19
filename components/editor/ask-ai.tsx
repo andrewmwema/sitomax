@@ -130,7 +130,7 @@ export function AskAiProvider({ children, pageId, theme, persistence }: {
 
   return <Context.Provider value={{ open, proposal: proposal?.changes.length ? proposal : null }}>
     {children}
-    {visible ? <aside aria-label="Ask AI to edit" className="platform-ui fixed right-3 top-20 bottom-12 z-[170] flex w-[min(360px,calc(100vw-1.5rem))] flex-col overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 shadow-xl"
+    {visible ? <aside aria-label="Ask AI to edit" className="platform-ui editor-ai-drawer fixed right-3 top-20 bottom-12 z-[170] flex w-[min(360px,calc(100vw-1.5rem))] flex-col overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 shadow-xl"
       onKeyDown={(event) => { if (event.key === "Escape" && !applying) { event.stopPropagation(); close(); } }}>
       <header className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 font-semibold"><Sparkles size={16} />Ask AI to edit</h2>
         <button type="button" aria-label="Close Ask AI" disabled={applying} className="rounded p-1 hover:bg-zinc-100" onClick={close}><X size={18} /></button></header>

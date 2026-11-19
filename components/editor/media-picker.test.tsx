@@ -34,6 +34,8 @@ async function open(onSelect = vi.fn()) {
 }
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
   mocks.options.mockResolvedValue({ status: "success", isAdmin: false });
   mocks.search.mockResolvedValue({ status: "success", photos: [photo] });
   mocks.select.mockResolvedValue({ status: "success", url: imported, alt: "Tools" });
@@ -61,6 +63,7 @@ describe("unified media picker", () => {
   it("opens Stock by default, imports on confirmation with edited alt, and returns focus", async () => {
     const onSelect = await open();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector("dialog[open].platform-media-dialog")).not.toBeNull();
     expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Stock photos");
     expect(document.querySelector('a[href="https://pixabay.com/"]')).not.toBeNull();
     expect(button("Paste URL")).toBeUndefined();

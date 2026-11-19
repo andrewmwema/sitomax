@@ -55,6 +55,17 @@ branding preview. Unsaved changes warn on refresh/close and ordinary navigation
 links; successful saves establish a new discard baseline. Reporting timezone and
 account access are shown as information rather than unsupported preferences.
 
+The website editor uses save-aware page switching, a compact action bar and
+keyboard-accessible tool rail and Content / Design / Motion tabs. History,
+theme and commands live in More; Puck's native device and zoom strip remains
+directly below the header. Panels retain native resizing with bounded widths;
+tablets show one side panel at a time. Phones offer a saved-draft preview
+instead of squeezing in the desktop workspace. Empty pages can use the existing
+AI builder or section library, including saved designs. Theme editing uses the
+shared detail drawer; the media picker is a native modal so it also works above
+other dialogs. These changes do not alter tenant rendering, AI requests, credits,
+autosave, undo history, or publishing.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations

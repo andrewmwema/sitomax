@@ -4,7 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -18,7 +20,7 @@ import {
   type Overrides,
   type Plugin,
 } from "@puckeditor/core";
-import { ArrowLeft, ArrowUpRight, Bookmark, Check, Eye, FileText, Layers, LayoutGrid, Palette, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Bookmark, Check, Eye, FileText, Layers, LayoutGrid, Monitor, MoreHorizontal, Palette, PanelLeft, PanelRight, Plus, Redo2, Search, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { savePageMenuLabel } from "@/app/editor/[pageId]/actions";
 import { defaultMenuLabel, pageMenuLinks, siteContacts } from "@/lib/page-navigation";
@@ -68,6 +70,7 @@ import { isEmptyPage } from "@/lib/editor/empty-page";
 type EditorUi = {
   pageId: string;
   siteId: string;
+  siteName: string;
   siteSeo: SiteSeo;
   seoPages: SeoPageSummary[];
   pageTitle: string;
@@ -102,9 +105,100 @@ function EditorRuntime({ children }: { children: React.ReactNode }) {
   const { pageId, theme } = useEditorUi();
   const persistence = useDraftPersistence(pageId, theme);
   return <PersistenceContext.Provider value={persistence}><AskAiProvider pageId={pageId} theme={theme} persistence={persistence}>
+    <EditorPanelLayout />
     {children}
     <EditorThemePanel />
   </AskAiProvider></PersistenceContext.Provider>;
+}
+
+function EditorPanelLayout() {
+  const getPuck = useGetPuck();
+  const ui = usePuckStore((state) => state.appState.ui);
+  const previousRightVisible = useRef(ui.rightSideBarVisible);
+  useEffect(() => {
+    const fitPanels = () => {
+      const { appState, dispatch } = getPuck();
+      const current = appState.ui;
+      const inspectorOpened = current.rightSideBarVisible && !previousRightVisible.current;
+      previousRightVisible.current = current.rightSideBarVisible;
+      const maxWidth = Math.min(360, Math.max(240, window.innerWidth * 0.3));
+      const widths = {
+        leftSideBarWidth: Math.min(current.leftSideBarWidth ?? 280, maxWidth),
+        rightSideBarWidth: Math.min(current.rightSideBarWidth ?? 300, maxWidth),
+      };
+      if (current.leftSideBarWidth !== widths.leftSideBarWidth || current.rightSideBarWidth !== widths.rightSideBarWidth ||
+        (window.innerWidth < 1024 && current.leftSideBarVisible && current.rightSideBarVisible)) {
+        dispatch({ type: "setUi", ui: {
+          ...widths,
+          ...(window.innerWidth < 1024 && current.leftSideBarVisible && current.rightSideBarVisible ?
+            inspectorOpened ? { leftSideBarVisible: false } : { rightSideBarVisible: false } : {}),
+        } });
+      }
+    };
+    fitPanels();
+    window.addEventListener("resize", fitPanels);
+    return () => window.removeEventListener("resize", fitPanels);
+  }, [getPuck, ui.leftSideBarWidth, ui.rightSideBarWidth, ui.leftSideBarVisible, ui.rightSideBarVisible]);
+  return null;
+}
+
+function EditorHeader({ actions }: { actions: React.ReactNode }) {
+  const { pageId, siteName } = useEditorUi();
+  const { pages } = useInteractions();
+  const persistence = usePersistence();
+  const router = useRouter();
+  const getPuck = useGetPuck();
+  const ui = usePuckStore((state) => state.appState.ui);
+  const history = usePuckStore((state) => state.history);
+  const header = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = header.current;
+    if (!element) return;
+    const update = () => element.closest<HTMLElement>(".platform-editor")?.style.setProperty("--editor-header-height", `${element.getBoundingClientRect().height}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const togglePanel = (side: "left" | "right") => {
+    getPuck().dispatch({ type: "setUi", ui: side === "left" ? {
+      leftSideBarVisible: !ui.leftSideBarVisible,
+      ...(window.innerWidth < 1024 ? { rightSideBarVisible: false } : {}),
+    } : {
+      rightSideBarVisible: !ui.rightSideBarVisible,
+      ...(window.innerWidth < 1024 ? { leftSideBarVisible: false } : {}),
+    } });
+  };
+  return <header ref={header} className="editor-topbar" aria-label="Website editor">
+    <div className="editor-topbar-location">
+      <button type="button" className="editor-icon-button" aria-label="Back to dashboard" title="Back to dashboard"
+        disabled={persistence.busy !== null} onClick={async () => {
+          if (!persistence.dirty || await persistence.save()) router.push("/dashboard");
+        }}><ArrowLeft size={17} /></button>
+      <div className="editor-page-location">
+        <span className="editor-site-name" title={siteName}>{siteName}</span>
+        <select aria-label="Switch page" value={pageId} disabled={persistence.busy !== null}
+          onChange={async (event) => {
+            const nextPageId = event.currentTarget.value;
+            if (nextPageId !== pageId && (!persistence.dirty || await persistence.save())) router.push(`/editor/${nextPageId}`);
+          }}>
+          {pages.map((page) => <option key={page.id} value={page.id}>{page.nav_label ?? defaultMenuLabel(page.slug)}</option>)}
+        </select>
+      </div>
+    </div>
+    <div className="editor-topbar-tools" aria-label="Canvas tools">
+      <button type="button" className="editor-icon-button" aria-label="Toggle library panel" title="Toggle library panel"
+        aria-pressed={ui.leftSideBarVisible} onClick={() => togglePanel("left")}><PanelLeft size={17} /></button>
+      <button type="button" className="editor-icon-button" aria-label="Toggle inspector" title="Toggle inspector"
+        aria-pressed={ui.rightSideBarVisible} onClick={() => togglePanel("right")}><PanelRight size={17} /></button>
+      <span className="editor-toolbar-separator" />
+      <button type="button" className="editor-icon-button" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled={!history.hasPast || persistence.busy !== null}
+        onClick={() => history.back()}><Undo2 size={17} /></button>
+      <button type="button" className="editor-icon-button" aria-label="Redo" title="Redo (⌘/Ctrl+Shift+Z)" disabled={!history.hasFuture || persistence.busy !== null}
+        onClick={() => history.forward()}><Redo2 size={17} /></button>
+    </div>
+    {actions}
+  </header>;
 }
 
 function EditorThemePanel() {
@@ -128,14 +222,17 @@ function EditorThemePanel() {
 function BuildEmptyPage({ canvas = false }: { canvas?: boolean }) {
   const empty = usePuckStore((state) => isEmptyPage(state.appState.data));
   const persistence = usePersistence();
+  const { openLibrary } = useSectionLibrary();
   if (!empty) return canvas && persistence.buildNotes?.length ? <aside role="status" className="platform-ui m-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
     <p className="mb-2 font-semibold">AI draft review notes</p>
     <ul className="list-disc pl-4">{persistence.buildNotes.map((note) => <li key={note}>{note}</li>)}</ul>
   </aside> : null;
-  return <section className={canvas ? "platform-ui mx-auto my-8 max-w-sm rounded-xl border border-zinc-200 bg-white p-5 text-center" : "mt-5 border-t border-zinc-200 pt-4"}>
+  return <section className={canvas ? "platform-ui editor-empty-page" : "mt-5 border-t border-zinc-200 pt-4"}>
+    {canvas ? <><span className="editor-empty-icon"><LayoutGrid size={24} /></span><h2 className="text-lg font-semibold">Your next idea starts here</h2></> : null}
     <p className="mb-3 text-xs leading-relaxed text-zinc-500">Build this empty page using your saved business, site theme and page links. Review the draft before publishing.</p>
     <button type="button" className="platform-button platform-button-ai w-full" disabled={persistence.busy !== null}
       onClick={() => void persistence.buildEmptyPage()}><Sparkles size={14} />{persistence.busy ? "Building page…" : "Build this page with AI"}</button>
+    <button type="button" className="platform-button mt-2 w-full" onClick={() => openLibrary(0)}><LayoutGrid size={14} />Browse designs</button>
     {canvas && persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
   </section>;
 }
@@ -240,13 +337,19 @@ function EditorDrawer({ children }: { children: React.ReactNode }) {
 }
 
 const editorPlugins: Plugin[] = [
-  blocksPlugin({ label: "Add", icon: <Plus size={18} /> }),
-  outlinePlugin({ label: "Layers", icon: <Layers size={18} /> }),
-  { name: "pages", label: "Pages", icon: <FileText size={18} />, render: () => <PagesPanel /> },
-  { name: "theme", label: "Theme", icon: <Palette size={18} />, render: () => <ThemeTool /> },
-  { name: "ai", label: "AI", icon: <Sparkles size={18} />, render: () => <AiTool /> },
-  { name: "seo", label: "SEO", icon: <Search size={18} />, render: () => <SeoTool /> },
+  blocksPlugin({ label: "Add", icon: <EditorTool name="blocks" label="Add sections"><Plus size={18} /></EditorTool> }),
+  outlinePlugin({ label: "Layers", icon: <EditorTool name="outline" label="Layers"><Layers size={18} /></EditorTool> }),
+  { name: "pages", label: "Pages", icon: <EditorTool name="pages" label="Pages"><FileText size={18} /></EditorTool>, render: () => <PagesPanel /> },
+  { name: "theme", label: "Theme", icon: <EditorTool name="theme" label="Theme"><Palette size={18} /></EditorTool>, render: () => <ThemeTool /> },
+  { name: "ai", label: "AI", icon: <EditorTool name="ai" label="AI"><Sparkles size={18} /></EditorTool>, render: () => <AiTool /> },
+  { name: "seo", label: "SEO", icon: <EditorTool name="seo" label="SEO"><Search size={18} /></EditorTool>, render: () => <SeoTool /> },
 ];
+
+function EditorTool({ name, label, children }: { name: string; label: string; children: React.ReactNode }) {
+  const active = usePuckStore((state) => state.appState.ui.plugin?.current === name && state.appState.ui.leftSideBarVisible);
+  // Clicks bubble to Puck's rail item, preserving its plugin and collapse behavior.
+  return <button type="button" className="editor-rail-button" title={label} aria-label={label} aria-pressed={active}>{children}</button>;
+}
 
 /** Labels for the placeholder warning, from the block config. */
 const BLOCK_LABELS = Object.fromEntries(
@@ -262,7 +365,6 @@ function HeaderActions() {
   const askAi = useAskAi();
   const { siteId, previewUrl, openThemePanel } = useEditorUi();
   const persistence = usePersistence();
-  const router = useRouter();
   const { busy } = persistence;
   const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
   const run = persistence.save;
@@ -293,30 +395,31 @@ function HeaderActions() {
     "rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:opacity-50";
 
   return (
-    <div data-editor-header-actions className="flex flex-wrap items-center justify-end gap-1.5">
-      <button type="button" disabled={busy !== null} onClick={async () => {
-        if (!persistence.dirty || await persistence.save()) router.push("/dashboard");
-      }} className="platform-button"><ArrowLeft size={13} />Dashboard</button>
-      <span role={persistence.error ? "alert" : "status"} className={`mx-1.5 inline-flex max-w-64 items-center gap-1.5 text-[11px] ${persistence.error ? "text-red-600" : "text-zinc-500"}`}>
+    <div data-editor-header-actions className="editor-header-actions">
+      <span role={persistence.error ? "alert" : "status"} title={persistence.error ?? undefined} className={`editor-save-status ${persistence.error ? "text-red-600" : "text-zinc-500"}`}>
         {!persistence.error && !busy && !persistence.dirty ? <Check size={12} className="shrink-0 text-[#6B6A66]" /> : null}
         {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
       </span>
-      <EditorCommands persistence={persistence} onPublish={requestPublish} onTheme={openThemePanel} />
       <button type="button" onClick={() => askAi?.open()} disabled={!!askAi?.proposal} aria-keyshortcuts="Control+K Meta+K"
         className="platform-button platform-button-ai"><Sparkles size={13} />Ask AI</button>
-      <VersionHistory persistence={persistence} siteId={siteId} />
-      <button
-        type="button"
-        onClick={openThemePanel}
-        className="platform-button"
-      >
-        <Palette size={13} />Theme
-      </button>
+      <details className="editor-more" onKeyDown={(event) => {
+        if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); }
+      }} onBlur={(event) => {
+        if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+      }}>
+        <summary className="editor-icon-button" aria-label="More editor actions" title="More editor actions"><MoreHorizontal size={19} /></summary>
+        <div className="editor-more-content">
+          <p className="platform-eyebrow">Editor actions</p>
+          <VersionHistory persistence={persistence} siteId={siteId} />
+          <button type="button" onClick={openThemePanel} className="platform-button"><Palette size={14} />Site theme</button>
+          <EditorCommands persistence={persistence} onPublish={requestPublish} onTheme={openThemePanel} />
+        </div>
+      </details>
       <button
         type="button"
         disabled={busy !== null}
         onClick={() => void run("save")}
-        className="platform-button"
+        className="platform-button editor-save-button"
       >
         {busy === "save" ? "Saving…" : "Save draft"}
       </button>
@@ -324,7 +427,7 @@ function HeaderActions() {
         href={previewUrl}
         target="_blank"
         rel="noreferrer"
-        className="platform-button"
+        className="platform-button editor-preview-button"
       >
         <Eye size={13} />Preview
       </a>
@@ -334,7 +437,7 @@ function HeaderActions() {
         onClick={requestPublish}
         className="platform-button platform-button-primary"
       >
-        {busy === "publish" ? "Publishing…" : "Publish"}
+        <ArrowUpRight size={14} />{busy === "publish" ? "Publishing…" : "Publish"}
       </button>
       {placeholderHits ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4">
@@ -547,10 +650,11 @@ export function PageEditor({
       closeThemePanel: () => setThemePanelOpen(false),
       themePanelOpen, updateTheme: setTheme,
       siteId: site.id,
+      siteName: site.name ?? site.subdomain,
       siteSeo,
       business, theme,
     }),
-    [page.id, page.title, page.slug, previewUrl, site.id, site.subdomain, site.custom_domain, site.domain_verified, siteSeo, seoPages, business, theme, themePanelOpen],
+    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, siteSeo, seoPages, business, theme, themePanelOpen],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
@@ -572,6 +676,7 @@ export function PageEditor({
   // Stable overrides (Puck requirement); components read React context.
   const overrides = useMemo<Partial<Overrides>>(
     () => ({
+      header: ({ actions }) => <EditorHeader actions={actions} />,
       headerActions: () => <HeaderActions />,
       actionBar: (props) => <EditorActionBar {...props} />,
       drawerItem: (props) => <EditorDrawerItem {...props} />,
@@ -620,13 +725,22 @@ export function PageEditor({
       <EditorUiContext.Provider value={editorUi}>
         <SectionLibraryContext.Provider value={sectionLibraryUi}>
           <InteractionContext.Provider value={interactionUi}>
-          <div className="platform-editor h-screen pb-9">
+          <div className="platform-editor editor-workspace">
+            <section className="platform-ui editor-phone-notice" aria-label="Mobile website preview">
+              <span className="editor-empty-icon"><Monitor size={28} /></span>
+              <p className="platform-eyebrow">Website editor</p>
+              <h1>Editing works best on a larger screen.</h1>
+              <p>Open a tablet or computer to shape your site. You can still preview your last saved draft here.</p>
+              <a href={previewUrl} target="_blank" rel="noreferrer" className="platform-button platform-button-primary"><Eye size={16} />Preview website</a>
+            </section>
+            <div className="editor-desktop-workspace">
             {showGenerationWarnings && generationWarnings.length ? <aside role="status" className="fixed bottom-12 left-4 z-[100] max-h-56 w-[min(420px,90vw)] overflow-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950 shadow-lg">
               <p className="font-semibold">AI draft review notes</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">{generationWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
               <button type="button" className="mt-3 underline" onClick={() => setShowGenerationWarnings(false)}>Dismiss</button>
             </aside> : null}
             <Puck
+              height="100%"
               config={config}
               data={data}
               ui={initialUi}
@@ -636,6 +750,7 @@ export function PageEditor({
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}
               headerPath={page.slug ? `/${page.slug}` : "/"}
             />
+            </div>
           </div>
           </InteractionContext.Provider>
         </SectionLibraryContext.Provider>

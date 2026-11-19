@@ -147,7 +147,7 @@ function LibraryContent() {
 
   const clearPreview = () => setPreview(null);
   return (
-    <aside ref={panelRef} tabIndex={-1} aria-label="Section library" className="section-library-panel">
+    <aside ref={panelRef} tabIndex={-1} aria-label="Section library" className="section-library-panel editor-library">
       <header className="flex items-center justify-between border-b border-[#E8E7E3] px-5 py-5">
         <div>
           <p className="platform-eyebrow mb-1">Build beautifully</p>
@@ -160,9 +160,18 @@ function LibraryContent() {
         {(["designed", "saved"] as const).map((value) => (
           <button key={value} type="button" role="tab" id={`library-tab-${value}`}
             aria-selected={tab === value} aria-controls="library-designs"
+            tabIndex={tab === value ? 0 : -1}
+            onKeyDown={(event) => {
+              const next = event.key === "ArrowRight" || event.key === "ArrowLeft" ? (value === "designed" ? "saved" : "designed") :
+                event.key === "Home" ? "designed" : event.key === "End" ? "saved" : null;
+              if (next) {
+                event.preventDefault(); setTab(next); clearPreview();
+                panelRef.current?.querySelector<HTMLButtonElement>(`#library-tab-${next}`)?.focus();
+              }
+            }}
             className={`border-b-2 px-4 py-2 text-sm font-medium ${tab === value ? "border-[#4B3FE0] text-[#4B3FE0]" : "border-transparent text-zinc-500"}`}
             onClick={() => { setTab(value); clearPreview(); }}>
-            {value === "designed" ? "Designed" : "Saved"}
+            {value === "designed" ? "Designed" : "Saved designs"}
           </button>
         ))}
       </div>
@@ -199,7 +208,7 @@ function LibraryContent() {
         </nav>
       <div className="flex min-h-0 flex-1">
         <div id="library-designs" role="tabpanel" aria-labelledby={`library-tab-${tab}`}
-          className="min-w-0 flex-1 overflow-y-auto p-3" onMouseLeave={clearPreview}>
+          className="editor-library-results min-w-0 flex-1 overflow-y-auto p-3" onMouseLeave={clearPreview}>
           <p role="status" className="mb-3 text-xs text-zinc-500">
             {blank ? "Start with a column layout" : `${designs.length} ${searching ? "search results" : "designs"}`}
             {savedDesigns === null && !error ? " · Loading saved designs..." : ""}

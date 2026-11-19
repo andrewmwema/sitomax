@@ -17,6 +17,7 @@ import {
 } from "@/lib/theme/fonts";
 import { saveSiteTheme } from "@/app/editor/[pageId]/actions";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
+import { WorkspaceDialog } from "@/components/dashboard/workspace-dialog";
 
 const COLOR_LABELS = [
   ["primary", "Primary"],
@@ -156,29 +157,11 @@ export function ThemePanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
-      <button
-        type="button"
-        aria-label="Close theme panel"
-        onClick={onClose}
-        className="flex-1 cursor-default"
-      />
-      <aside className="flex h-full w-[min(400px,100vw)] flex-col gap-7 overflow-y-auto border-l border-[#E8E7E3] bg-white p-6 shadow-2xl">
+    <WorkspaceDialog title="Site theme" description="Your site's visual identity. Preview changes live, then save your theme." open={open} onClose={onClose}>
         <link rel="stylesheet" href={googleFontsUrl(themeFonts(theme))} />
         {previewFonts ? (
           <link rel="stylesheet" href={googleFontsUrl(CURATED_FONTS.map((font) => font.name))} />
         ) : null}
-        <div className="editor-panel-header flex items-center justify-between">
-          <div><p className="platform-eyebrow mb-1">Visual identity</p><h2 className="text-lg font-semibold text-zinc-900">Site theme</h2></div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100"
-          >
-            ✕
-          </button>
-        </div>
-
         <section className="flex flex-col gap-3">
           <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
             Style
@@ -315,17 +298,16 @@ export function ThemePanel({
         </section>
 
         <div className="mt-auto flex flex-col gap-2">
-          {message ? <p className="text-xs text-zinc-500">{message}</p> : null}
+          {message ? <p role="status" className="text-xs text-zinc-500">{message}</p> : null}
           <button
             type="button"
             disabled={saving}
             onClick={() => void handleSave()}
-            className="rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-50"
+            className="platform-button platform-button-primary"
           >
             {saving ? "Saving…" : "Save theme"}
           </button>
         </div>
-      </aside>
-    </div>
+    </WorkspaceDialog>
   );
 }
