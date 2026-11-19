@@ -1,38 +1,39 @@
 import { Suspense } from "react";
+import { z } from "zod";
+import { Globe2, Plus, UserCheck, UserPlus, Users } from "lucide-react";
 import { requireSuperAdmin } from "@/lib/auth";
 import { CreateAccountForm } from "@/components/dashboard/create-account-form";
-import { InviteOwnerForm } from "@/components/dashboard/invite-owner-form";
-import { createAccount, inviteOwner } from "./actions";
+import { ClientDirectory, type ClientAccount } from "@/components/dashboard/client-directory";
+import { WorkspaceDialog } from "@/components/dashboard/workspace-dialog";
+import { WorkspaceMetrics } from "@/components/dashboard/workspace-metrics";
+import { createAccount } from "./actions";
 
-type AccountRow = {
-  id: string;
-  name: string;
-  created_at: string;
-  account_members: {
-    role: string;
-    profile: { email: string | null; full_name: string | null } | null;
-  }[];
-  sites: { id: string }[];
-};
+const accountSchema: z.ZodType<ClientAccount> = z.object({
+  id: z.uuid(), name: z.string(), created_at: z.string(),
+  account_members: z.array(z.object({
+    role: z.enum(["owner", "editor"]),
+    profile: z.object({ email: z.string().nullable(), full_name: z.string().nullable() }).nullable(),
+  })),
+  sites: z.array(z.object({ id: z.uuid(), name: z.string().nullable(), subdomain: z.string() })),
+  ai_limits: z.object({ monthly_site_generations: z.number(), monthly_edits: z.number(), extra_credits: z.number() }).nullable(),
+});
 
-/**
- * Clients page (super admin only): list accounts, create accounts,
- * invite owners by email.
- */
 export default function ClientsPage() {
   return (
-    <section className="flex flex-col gap-8">
-      <header>
+    <section className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-end justify-between gap-4"><div>
+        <p className="platform-eyebrow mb-1">Workspace</p>
         <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
-        <p className="mt-1 text-sm text-zinc-600">
-          Manage client accounts and their team members.
+        <p className="mt-2 text-sm text-[var(--platform-muted)]">
+          Manage client relationships, websites, and account access.
         </p>
+      </div>
+        <WorkspaceDialog title="Add a client" description="A dedicated account for your client's websites and team." drawer={false}
+          trigger={<><Plus size={15} />Add client</>} triggerClassName="platform-button platform-button-primary">
+          <CreateAccountForm action={createAccount} />
+        </WorkspaceDialog>
       </header>
-      <Suspense
-        fallback={<div className="h-48 animate-pulse rounded-2xl bg-zinc-200" />}
-      >
-        <ClientsContent />
-      </Suspense>
+      <Suspense fallback={<div role="status" aria-label="Loading client directory" className="h-64 animate-pulse rounded-2xl bg-[var(--platform-subtle)]" />}><ClientsContent /></Suspense>
     </section>
   );
 }
@@ -40,82 +41,24 @@ export default function ClientsPage() {
 async function ClientsContent() {
   const { supabase } = await requireSuperAdmin();
 
-  const { data, error } = await supabase
-    .from("accounts")
-    .select(
-      "id, name, created_at, account_members(role, profile:profiles(email, full_name)), sites(id)",
-    )
-    .eq("is_internal", false)
-    .order("created_at", { ascending: true });
-  if (error) throw new Error("Could not load client accounts.", { cause: error });
-
-  // Without generated DB types, supabase-js infers to-one joins (profile)
-  // as arrays; at runtime they are single objects, so cast through unknown.
-  const accounts = (data ?? []) as unknown as AccountRow[];
-
-  return (
-    <div className="flex flex-col gap-6">
-      <CreateAccountForm action={createAccount} />
-
-      {accounts.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center">
-          <p className="font-medium text-zinc-900">No clients yet</p>
-          <p className="mt-1 text-sm text-zinc-600">
-            Create your first client account above.
-          </p>
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {accounts.map((account) => (
-            <li
-              key={account.id}
-              className="platform-panel p-6"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold text-zinc-900">
-                    {account.name}
-                  </h2>
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    {account.sites.length}{" "}
-                    {account.sites.length === 1 ? "site" : "sites"} · since{" "}
-                    {new Date(account.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-
-              {account.account_members.length > 0 && (
-                <ul className="mt-4 flex flex-col gap-1.5">
-                  {account.account_members.map((member, index) => (
-                    <li
-                      key={index}
-                      className="flex items-center justify-between gap-3 text-sm"
-                    >
-                      <span className="truncate text-zinc-700">
-                        {member.profile?.full_name ??
-                          member.profile?.email ??
-                          "Pending user"}
-                        {member.profile?.full_name && member.profile?.email && (
-                          <span className="ml-2 text-zinc-400">
-                            {member.profile.email}
-                          </span>
-                        )}
-                      </span>
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 capitalize">
-                        {member.role}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <div className="mt-4 border-t border-zinc-100 pt-4">
-                <InviteOwnerForm accountId={account.id} action={inviteOwner} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  const accounts: ClientAccount[] = [];
+  for (let from = 0; ; from += 500) {
+    const { data, error } = await supabase.from("accounts")
+      .select("id, name, created_at, account_members(role, profile:profiles(email, full_name)), sites(id, name, subdomain), ai_limits(monthly_site_generations, monthly_edits, extra_credits)")
+      .eq("is_internal", false).order("created_at", { ascending: false }).order("id").range(from, from + 499);
+    if (error) throw new Error("Could not load client accounts.", { cause: error });
+    const batch = z.array(accountSchema).parse(data ?? []);
+    accounts.push(...batch);
+    if (batch.length < 500) break;
+  }
+  const ownersAssigned = accounts.filter((account) => account.account_members.some((member) => member.role === "owner")).length;
+  return <>
+    <WorkspaceMetrics metrics={[
+      { label: "Total clients", value: accounts.length, detail: "Client accounts only", icon: Users },
+      { label: "Owner assigned", value: ownersAssigned, detail: "Accounts with an owner membership", icon: UserCheck },
+      { label: "Needs owner", value: accounts.length - ownersAssigned, detail: "Ready for an owner invitation", icon: UserPlus },
+      { label: "Assigned websites", value: accounts.reduce((count, account) => count + account.sites.length, 0), detail: "Across client accounts", icon: Globe2 },
+    ]} />
+    <ClientDirectory accounts={accounts} />
+  </>;
 }

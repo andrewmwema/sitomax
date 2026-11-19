@@ -23,6 +23,19 @@ display shade when needed for contrast. Desktop navigation can be collapsed;
 on phones it opens as a keyboard-accessible drawer. Agency-only navigation
 remains restricted to super admins.
 
+The Clients, Domain Requests, and Forms workspaces share accessible detail
+drawers and compact management tables. Client access labels reflect actual owner
+memberships, not invitation acceptance (which is not tracked). Completing a domain
+request remains separate from verifying its DNS.
+
+Forms supports website, rolling date-range, read-status and text filters.
+Search checks all submitted JSON fields, including custom forms; CSV exports use
+the same filters and include all matches. Normal browsing uses database
+pagination. Arbitrary-field searches scan authorized, filtered records in batches
+on the server because PostgREST cannot filter a JSON-to-text cast; only the
+requested result page is sent to the browser. At larger submission volumes,
+indexed full-text search would require a separate migration.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations

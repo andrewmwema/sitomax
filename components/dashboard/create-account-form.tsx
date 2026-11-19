@@ -11,20 +11,23 @@ export function CreateAccountForm({
   const [state, formAction, pending] = useActionState(action, idleState);
 
   return (
-    <div className="platform-panel p-6">
-      <h2 className="font-semibold text-zinc-900">New client</h2>
-      <form action={formAction} className="mt-3 flex flex-col gap-3 sm:flex-row">
+    <div>
+      <form action={formAction} className="flex flex-col gap-4">
+        <label className="flex flex-col gap-2 text-sm font-medium">Client or business name
         <input
           type="text"
           name="name"
           required
+          maxLength={100}
           placeholder="Client or business name"
-          className="flex-1 rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
+          className="w-full border px-3.5 py-2.5 text-sm font-normal"
         />
+        </label>
+        <p className="text-xs leading-relaxed text-[var(--platform-muted)]">Create the account first, then open its details to invite an owner and assign websites.</p>
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="platform-button platform-button-primary self-start"
         >
           {pending ? "Creating…" : "Create account"}
         </button>
@@ -35,7 +38,7 @@ export function CreateAccountForm({
         </p>
       )}
       {state.status === "success" && (
-        <p className="mt-2 text-sm text-emerald-600">{state.message}</p>
+        <p role="status" className="mt-3 text-sm text-[var(--platform-success)]">{state.message}</p>
       )}
     </div>
   );
