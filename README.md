@@ -73,9 +73,10 @@ gallery and logo introductions. Headings and button labels remain plain-text fie
 Use the section toolbar's drag handle to reposition a section instead of dragging
 its content.
 
-Temporarily, super admins can use **More → Check text editing** to record one
-canvas click and copy an on-screen DOM/focus diagnostic. It does not collect
-site text or page JSON, send a report, or modify drafts.
+Rich-text editors opt out of Grammarly overlays, which can intercept canvas
+clicks and focus the draggable block instead of its text. Existing injected
+layers are hidden only inside editable canvas fields. These protections do
+not change saved content or disable native browser spell checking.
 
 ## Internal agency sites
 

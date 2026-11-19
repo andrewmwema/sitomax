@@ -112,6 +112,11 @@ body {
   -webkit-user-select: text;
 }
 
+/* Already-injected writing-assistant layers can intercept canvas text clicks. */
+.site-content [data-puck-overlay-portal] grammarly-extension {
+  display: none !important;
+}
+
 .rich-text p,
 .rich-text li {
   color: var(--color-muted, inherit);

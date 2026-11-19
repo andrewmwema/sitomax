@@ -9,7 +9,7 @@ import Text from "@tiptap/extension-text";
 import { UndoRedo } from "@tiptap/extensions";
 import Link from "@tiptap/extension-link";
 import Bold from "@tiptap/extension-bold";
-import { TextAppearance, TextLayout } from "@/lib/puck/richtext-extensions";
+import { TextAppearance, TextLayout, WritingAssistantOptOut } from "@/lib/puck/richtext-extensions";
 
 const mocks = vi.hoisted(() => ({
   request: vi.fn(), dispatch: vi.fn(),
@@ -70,6 +70,26 @@ beforeEach(() => {
 });
 
 describe("editor AI preview", () => {
+  it.each(["object", "function"])("opts out of writing overlays before mounting without replacing %s editor attributes or saved HTML", (kind) => {
+    const attributes = { role: "textbox", "data-existing": "preserved" };
+    const editor = new Editor({
+      extensions: [Document, Paragraph, Text, Bold, WritingAssistantOptOut],
+      editorProps: { attributes: kind === "function" ? () => attributes : attributes },
+      content: "<p>Existing <strong>formatted</strong> copy</p>",
+    });
+    expect(editor.view.dom.getAttribute("data-existing")).toBe("preserved");
+    expect(editor.view.dom.getAttribute("role")).toBe("textbox");
+    expect(editor.view.dom.getAttribute("data-gramm")).toBe("false");
+    expect(editor.view.dom.getAttribute("data-gramm_editor")).toBe("false");
+    expect(editor.view.dom.getAttribute("data-enable-grammarly")).toBe("false");
+    expect(editor.getHTML()).toBe("<p>Existing <strong>formatted</strong> copy</p>");
+    editor.commands.setTextSelection({ from: 1, to: 10 });
+    editor.commands.toggleBold();
+    expect(editor.getHTML()).toContain("<strong>Existing formatted</strong>");
+    expect(editor.getHTML()).not.toContain("data-gramm");
+    editor.destroy();
+  });
+
   it("only replaces the section when accepted, recording undo history", async () => {
     mocks.request.mockResolvedValue({ status: "success", result: { kind: "section", section: { type: "Hero", props: { id: "hero-1", heading: "Revised" } } } });
     const container = document.createElement("div"); document.body.append(container);

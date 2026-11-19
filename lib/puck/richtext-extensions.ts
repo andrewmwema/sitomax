@@ -59,4 +59,23 @@ export const LinkPageId = Extension.create({
   },
 });
 
-export const editorTextExtensions = [TextAppearance, TextLayout, LinkPageId, UndoRedo];
+export const WritingAssistantOptOut = Extension.create({
+  name: "writingAssistantOptOut",
+  onBeforeCreate() {
+    const editorProps = this.editor.options.editorProps;
+    const attributes = editorProps.attributes;
+    this.editor.setOptions({
+      editorProps: {
+        ...editorProps,
+        attributes: (state) => ({
+          ...(typeof attributes === "function" ? attributes(state) : attributes),
+          "data-gramm": "false",
+          "data-gramm_editor": "false",
+          "data-enable-grammarly": "false",
+        }),
+      },
+    });
+  },
+});
+
+export const editorTextExtensions = [TextAppearance, TextLayout, LinkPageId, WritingAssistantOptOut, UndoRedo];
