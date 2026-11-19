@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeExternalUrl } from "@/lib/links";
 
 export const businessSchema = z.strictObject({
   businessName: z.string().trim().max(100),
@@ -11,6 +12,10 @@ export const businessSchema = z.strictObject({
   email: z.union([z.literal(""), z.email().max(254)]),
   address: z.string().trim().max(250),
   openingHours: z.string().trim().max(1000),
+  socialLinks: z.array(z.strictObject({
+    label: z.string().trim().min(1).max(40),
+    url: z.string().max(2000).refine(value => normalizeExternalUrl(value) !== null, "Enter a valid social profile URL."),
+  })).max(8).optional(),
 });
 
 export type Business = z.infer<typeof businessSchema>;

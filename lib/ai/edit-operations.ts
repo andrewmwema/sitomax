@@ -12,14 +12,16 @@ import { designPatchSchema, editDesign, editTheme, themePatchSchema } from "./ed
 import type { SiteTheme } from "@/lib/theme/presets";
 import type { BlockDesign } from "@/lib/sections/design";
 import { iconNameSchema, readIcon } from "@/lib/icons";
+import { editHeader, headerSchema, headerEditSchema, headerColors, headerDesign, editorHeader } from "@/lib/header";
 
-export const editScopes = ["section", "page", "theme"] as const;
+export const editScopes = ["section", "page", "theme", "header"] as const;
 export type EditScope = (typeof editScopes)[number];
 const id = z.string().min(1).max(200);
 const MAX_SECTIONS = 60;
 export const editInput = z.strictObject({
   pageId: z.uuid(), scope: z.enum(editScopes), sectionId: id.optional(),
   instruction: z.string().trim().min(1).max(2000), refinement: z.string().max(4000).optional(),
+  header: headerSchema.optional(),
   sections: z.array(z.strictObject({ type: id, props: z.looseObject({ id }) })).max(MAX_SECTIONS).optional(),
   sectionPosition: z.strictObject({ index: z.number().int().min(0).max(MAX_SECTIONS - 1), count: z.number().int().min(1).max(MAX_SECTIONS) })
     .refine(({ index, count }) => index < count).optional(),
@@ -28,6 +30,7 @@ const plain = z.string().max(8000).refine((value) => !/<(?:[a-z!/][^>]*|\/[a-z][
 export const editToolSchemas = {
   report_plan: z.strictObject({ plan: plain.min(1).max(600) }),
   update_theme: z.strictObject({ patch: themePatchSchema }),
+  update_header: headerEditSchema,
   update_section_design: z.strictObject({ sectionId: id, patch: designPatchSchema }),
   switch_section_design: z.strictObject({ sectionId: id, designId: id }),
   update_section_props: z.strictObject({ sectionId: id, patch: z.record(z.string(), z.unknown()) }),
@@ -123,7 +126,7 @@ function readableProps(fields: Fields, props: Props): Props {
 }
 
 export function scopedSections(data: Data, scope: EditScope, selected?: string) {
-  if (scope === "theme") return [];
+  if (scope === "theme" || scope === "header") return [];
   const entries = editorTree(data);
   const root = scope === "section" ? entries.find(({ item, parentId }) => !parentId && item.props.id === selected) : undefined;
   if (scope === "section" && !root) throw new Error("Select a top-level section first.");
@@ -159,6 +162,26 @@ export function applyEditOperations(base: Data, theme: SiteTheme, scope: EditSco
   let insertion = false;
   for (const { name, input } of operations) {
     if (name === "report_plan") continue;
+    if (scope === "header") {
+      if (name !== "update_header") throw new Error("Only header layout and style edits are allowed in this scope.");
+      const { device, settings } = headerEditSchema.parse(input);
+      if (settings.image && !mediaAllowed(settings.image)) throw new Error("Choose an existing header image.");
+      const header = headerSchema.parse(editorHeader(next));
+      const updated = editHeader(header, input);
+      const design = headerDesign(updated, device);
+      const colors = headerColors(design);
+      if (colors.foreground.toLowerCase() !== design.textColor.toLowerCase() ||
+        colors.panel.toLowerCase() !== design.panelTextColor.toLowerCase() ||
+        colors.hover.toLowerCase() !== design.hoverColor.toLowerCase() ||
+        colors.scrolled.toLowerCase() !== design.textColor.toLowerCase() ||
+        colors.scrollHover.toLowerCase() !== design.hoverColor.toLowerCase()) {
+        warnings.add("Header text colors are automatically adjusted for WCAG AA readability.");
+      }
+      const props = { ...next.root.props, __editorHeader: updated };
+      next.root = { ...next.root, props };
+      changes.push(`Update ${device} header: ${Object.keys(settings).join(", ")}.`);
+      continue;
+    }
     if (scope === "theme") {
       if (name !== "update_theme") throw new Error("Only theme edits are allowed in this scope.");
       const { patch } = editToolSchemas.update_theme.parse(input);

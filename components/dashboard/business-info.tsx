@@ -12,7 +12,7 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
-  const set = (key: Exclude<keyof Business, "services">, value: string) =>
+  const set = (key: Exclude<keyof Business, "services" | "socialLinks">, value: string) =>
     setValues((previous) => ({ ...previous, [key]: value }));
   const control = "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm";
   return <form className="platform-panel p-5" onSubmit={async (event) => {
@@ -47,6 +47,17 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
       <label key={key} className="block text-xs font-medium">{label}
         <textarea className={control} maxLength={1000} rows={2} value={values[key]} onChange={(event) => set(key, event.target.value)} />
       </label>)}
+    <fieldset className="space-y-3 rounded-lg border p-3"><legend className="px-1 text-xs font-medium">Social profiles</legend>
+      {(values.socialLinks ?? []).map((social, index) => <div key={index} className="space-y-2">
+        <input aria-label={`Social profile label ${index + 1}`} className={control} maxLength={40} value={social.label}
+          onChange={event => setValues(previous => ({ ...previous, socialLinks: previous.socialLinks?.map((value, i) => i === index ? { ...value, label: event.target.value } : value) }))} />
+        <input aria-label={`Social profile URL ${index + 1}`} className={control} maxLength={2000} value={social.url}
+          placeholder="https://..." onChange={event => setValues(previous => ({ ...previous, socialLinks: previous.socialLinks?.map((value, i) => i === index ? { ...value, url: event.target.value } : value) }))} />
+        <button type="button" className="text-xs text-red-700" onClick={() => setValues(previous => ({ ...previous, socialLinks: previous.socialLinks?.filter((_, i) => i !== index) }))}>Remove profile</button>
+      </div>)}
+      <button type="button" className="platform-button" disabled={(values.socialLinks?.length ?? 0) >= 8}
+        onClick={() => setValues(previous => ({ ...previous, socialLinks: [...(previous.socialLinks ?? []), { label: "Social profile", url: "" }] }))}>Add social profile</button>
+    </fieldset>
     <button disabled={busy} className="rounded-lg bg-[#121212] px-4 py-2 text-xs font-medium text-white disabled:opacity-50">{busy ? "Saving..." : "Save business info"}</button>
     {message ? <p role={error ? "alert" : "status"} className={`text-xs ${error ? "text-red-700" : "text-zinc-600"}`}>{message}</p> : null}
     </fieldset>

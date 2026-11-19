@@ -35,7 +35,9 @@ export async function runEditAssistant(raw: unknown) {
   const theme = themeSchema.parse(site.draft_theme ?? site.theme ?? {});
   const sections = input.sections ?? [];
   if (input.scope === "section" && (sections.length !== 1 || sections[0].props.id !== input.sectionId || !input.sectionPosition)) throw new Error("Select a section first.");
-  if (input.scope === "theme" && sections.length) throw new Error("Theme edits cannot include page content.");
+  if ((input.scope === "theme" || input.scope === "header") && sections.length) throw new Error("Site settings edits cannot include page content.");
+  if (input.scope === "header" && !input.header) throw new Error("The current header is required.");
+  if (input.scope !== "header" && input.header) throw new Error("Header context is only allowed in header scope.");
   const context = sectionContext({ root: {}, content: sections }, input.scope, input.sectionId);
   const customInsertion = customSectionContract();
   const catalog = input.scope === "theme" ? undefined : aiCatalog.map(({ id, name, blockType, props }) => ({
@@ -43,7 +45,7 @@ export async function runEditAssistant(raw: unknown) {
   }));
   const payload = JSON.stringify({ instruction: input.instruction, refinement: input.refinement, business, scope: input.scope,
     selected: input.sectionId, position: input.sectionPosition,
-    ...(input.scope === "theme" ? { theme } : { sections: context, catalog,
+    ...(input.scope === "header" ? { header: input.header } : input.scope === "theme" ? { theme } : { sections: context, catalog,
       insertProps: Object.fromEntries(Object.entries(blockSchemas).map(([type, schema]) =>
         [type, z.toJSONSchema(schema, { io: "input", unrepresentable: "any" })])),
       customLayout: z.toJSONSchema(customInsertion.schema, { io: "input", unrepresentable: "any" }) }) });
@@ -51,6 +53,7 @@ export async function runEditAssistant(raw: unknown) {
   const descriptions = {
     report_plan: "Summarize your plan, or explain what cannot be done and offer an alternative.",
     update_theme: "Patch selected whole-site theme settings.",
+    update_header: "Change global header layout or device styling. Desktop layouts: balanced, right, stacked, split, topbar, contact, minimal, overlay. Mobile/tablet layouts: left-toggle, right-toggle, center-logo. Tablet follows mobile by default. Keep all existing content; only use images already in the header.",
     update_section_design: "Patch styling on any in-scope component, including custom layout elements. Use only visible media references or a valid YouTube/Vimeo link.",
     switch_section_design: "Switch an existing section to a catalog design of the same block type.",
     update_section_props: "Patch listed editable props, using plain text and valid links/options.",
@@ -58,12 +61,12 @@ export async function runEditAssistant(raw: unknown) {
     duplicate_section: "Make a copy immediately after a top-level section.",
     delete_section: "Propose removing a top-level section.",
   } satisfies Record<keyof typeof editToolSchemas, string>;
-  const names = input.scope === "theme" ? ["report_plan", "update_theme"] as const
+  const names = input.scope === "header" ? ["report_plan", "update_header"] as const : input.scope === "theme" ? ["report_plan", "update_theme"] as const
     : ["report_plan", "update_section_design", "switch_section_design", "update_section_props", "move_section", "duplicate_section", "delete_section"] as const;
   const tools = names.map((name) => tool(name, editToolSchemas[name], descriptions[name]));
-  if (input.scope !== "theme") tools.push(tool("insert_section", insertInput,
+  if (input.scope !== "theme" && input.scope !== "header") tools.push(tool("insert_section", insertInput,
     "Add one section using the standard AI section generator. Pass blockType, matching designId, and that block's complete content props; use the supplied catalog prop names and preserve its variant."));
-  if (input.scope !== "theme") tools.push(tool("insert_custom_section", customInsertion.schema,
+  if (input.scope !== "theme" && input.scope !== "header") tools.push(tool("insert_custom_section", customInsertion.schema,
     "Add one original layout using only the supplied Section, Row, Column and element schema."));
   const message = await requestAi({ accountId: site.account_id, siteId: site.id, action: "edit_section",
     largeRewrite: input.scope !== "section", maxTokens: 6000, system: SYSTEM, cacheTtl: "5m", tools,
@@ -86,13 +89,15 @@ export async function runEditAssistant(raw: unknown) {
     else if (value && typeof value === "object") Object.values(value).forEach(collectStrings);
   };
   collectStrings(context);
+  if (input.scope === "header") collectStrings(input.header);
   const mediaAllowed = (url: string) => strings.has(url) &&
     (url.startsWith("/samples/") || new URL(url).pathname.startsWith(`/storage/v1/object/public/site-assets/${site.id}/`));
   const rawEdits = operations.filter(({ name }) => name !== "report_plan");
   const insertions = rawEdits.filter(({ name }) => name === "insert_section" || name === "insert_custom_section");
   if (insertions.length > 1) throw new Error("Add only one new section per request.");
   const edits = rawEdits;
-  applyEditOperations({ root: {}, content }, theme, input.scope, input.sectionId, edits, mediaAllowed);
+  const rootProps = input.header ? { title: "", __editorHeader: input.header } : {};
+  applyEditOperations({ root: { props: rootProps }, content }, theme, input.scope, input.sectionId, edits, mediaAllowed);
   const warnings = new Set<string>();
   let inserted: { type: string; props: Record<string, unknown> } | undefined;
   if (insertions[0]?.name === "insert_custom_section") {

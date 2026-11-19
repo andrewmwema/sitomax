@@ -7,6 +7,7 @@ import { sanitizePuckData } from "@/lib/richtext";
 import { themeSchema } from "@/lib/theme/schema";
 import { rootSeoSchema } from "@/lib/seo";
 import { menuLabelSchema } from "@/lib/page-navigation";
+import { headerSchema, headerPageSchema, headerMigrationMissing } from "@/lib/header";
 import {
   EMBED_MAX_LENGTH,
   collectEmbeds,
@@ -44,6 +45,12 @@ async function updatePage(
   }
   const parsedRoot = rootSeoSchema.safeParse(parsedData.data.root.props ?? {});
   if (!parsedRoot.success) return { status: "error", message: "Invalid page SEO settings." };
+  if (!headerPageSchema.safeParse(parsedData.data.root.props ?? {}).success)
+    return { status: "error", message: "Invalid page header settings." };
+  const rawHeader = parsedData.data.root.props?.__editorHeader;
+  const expectedHeader = parsedData.data.root.props?.__expectedHeader ?? null;
+  const header = rawHeader === undefined ? undefined : headerSchema.safeParse(rawHeader);
+  if (header && !header.success) return { status: "error", message: "Invalid header settings." };
 
   const { supabase, user } = await requireUser();
 
@@ -96,7 +103,28 @@ async function updatePage(
   // Rich text props are client-authored HTML: sanitize before storing so
   // malicious markup never reaches site visitors or other editors.
   const cleanData = sanitizePuckData(parsedData.data);
-  if (cleanData.root.props) delete cleanData.root.props.__editorTheme;
+  if (cleanData.root.props) {
+    delete cleanData.root.props.__editorTheme;
+    delete cleanData.root.props.__editorHeader;
+    delete cleanData.root.props.__expectedHeader;
+  }
+
+  if (header?.success) {
+    const { error } = await supabase.rpc("save_page_with_header", {
+      p_page_id: parsedId.data, p_data: cleanData, p_header: header.data,
+      p_expected_header: expectedHeader,
+      p_publish: publish, p_title: root.title || page.title, p_seo: seo,
+      p_snapshot: ai?.snapshot ?? false, p_theme: ai?.theme ?? null,
+      p_expected_theme: ai?.expectedTheme ?? null,
+    });
+    if (error) {
+      console.error("Could not save page and global header", { code: error.code });
+      return { status: "error", message: error.code === "40001"
+        ? "The site header or theme changed in another editor. Reload before saving."
+        : "Could not save the page and header. Check that the global header migration has been applied." };
+    }
+    return { status: "success", message: publish ? "Page and site header published." : "Draft saved." };
+  }
 
   if (ai) {
     const { data: saved, error } = await supabase.rpc("save_editor_ai_draft", {
@@ -162,7 +190,7 @@ export async function publishPage(pageId: string, data: unknown): Promise<Action
   return updatePage(pageId, data, true);
 }
 
-export async function listPageVersions(pageId: string): Promise<{ id: string; published_at: string; kind: "published" | "ai_edit" }[]> {
+export async function listPageVersions(pageId: string): Promise<{ id: string; published_at: string; kind: "published" | "ai_edit" | "header_edit" | "header_migration" }[]> {
   const id = z.uuid().parse(pageId);
   const { supabase } = await requireUser();
   const { data, error } = await supabase.from("page_versions").select("id, published_at, kind")
@@ -175,16 +203,53 @@ export async function restorePageVersion(pageId: string, versionId: string) {
   const parsed = z.object({ pageId: z.uuid(), versionId: z.uuid() }).safeParse({ pageId, versionId });
   if (!parsed.success) return { status: "error" as const, message: "Invalid page version." };
   const { supabase } = await requireUser();
-  const { data: version, error } = await supabase.from("page_versions").select("data, theme")
+  const loaded = await supabase.from("page_versions").select("data, theme, header")
+    .eq("page_id", parsed.data.pageId).eq("id", parsed.data.versionId).maybeSingle();
+  const headersReady = !headerMigrationMissing(loaded.error);
+  if (!headersReady) console.warn("Global header migration is not applied; restoring legacy page history.");
+  const { data: version, error } = headersReady ? loaded : await supabase.from("page_versions").select("data, theme")
     .eq("page_id", parsed.data.pageId).eq("id", parsed.data.versionId).maybeSingle();
   if (error || !version) {
     console.error("Unable to load page version", error);
     return { status: "error" as const, message: "This version is unavailable." };
   }
+  if (!headersReady) {
+    const theme = version.theme ? themeSchema.parse(version.theme) : undefined;
+    let expectedTheme;
+    if (theme) {
+      const { data, error } = await supabase.from("pages").select("site:sites(theme, draft_theme)").eq("id", parsed.data.pageId).maybeSingle();
+      if (error || !data) return { status: "error" as const, message: "Could not load the current site theme." };
+      const site = z.object({ theme: z.unknown(), draft_theme: z.unknown() }).parse(data.site);
+      expectedTheme = themeSchema.parse(site.draft_theme ?? site.theme ?? {});
+    }
+    const result = await updatePage(pageId, version.data, false, theme ? { theme, expectedTheme, snapshot: false } : undefined);
+    return result.status === "success" ? {
+      status: "success" as const, message: "Version restored to draft.", data: version.data, theme,
+    } : result;
+  }
+  const { data: page, error: pageError } = await supabase.from("pages").select("site:sites(draft_header, theme, draft_theme, business)")
+    .eq("id", parsed.data.pageId).maybeSingle();
+  if (pageError || !page) {
+    console.error("Unable to load site for header restoration", { code: pageError?.code });
+    return { status: "error" as const, message: "Could not load the current site header." };
+  }
+  const site = z.object({ draft_header: z.unknown(), theme: z.unknown(), draft_theme: z.unknown(), business: z.unknown().optional() }).parse(page.site);
   const theme = version.theme ? themeSchema.parse(version.theme) : undefined;
-  const result = await updatePage(pageId, version.data, false, theme ? { theme, snapshot: false } : undefined);
+  const previous = puckDataSchema.parse(version.data);
+  const legacy = previous.content.some(item => item.type === "Navigation");
+  const restoredHeader = headerSchema.parse(legacy ? site.draft_header ?? {} :
+    ("header" in version ? version.header : undefined) ?? site.draft_header ?? {});
+  const restoredProps: Record<string, unknown> = { ...previous.root.props,
+    __editorHeader: restoredHeader, __expectedHeader: site.draft_header ?? null,
+    ...(legacy ? { __legacyNavigation: true } : {}),
+  };
+  const data = { ...previous, root: { ...previous.root, props: restoredProps } };
+  const result = await updatePage(pageId, data, false, { snapshot: false, ...(theme ? {
+    theme, expectedTheme: themeSchema.parse(site.draft_theme ?? site.theme ?? {}),
+  } : {}) });
+  delete data.root.props.__expectedHeader;
   return result.status === "success"
-    ? { status: "success" as const, message: "Version restored to draft. Publish to make it live.", data: version.data, theme }
+    ? { status: "success" as const, message: "Version restored to draft. Publish to make it live.", data, theme, header: restoredHeader }
     : result;
 }
 /**

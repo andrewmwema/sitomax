@@ -51,6 +51,11 @@ beforeEach(() => {
 });
 
 describe("building an empty page", () => {
+  it("preserves shared legacy Navigation until the header migration is installed", async () => {
+    mocks.lookup.mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column sites.draft_header does not exist" } });
+    const result = await generateEmptyPage(pageId);
+    expect(result.data.content[0]).toMatchObject({ type: "Navigation", props: { variant: "dark" } });
+  });
   it("uses RLS-loaded business, theme and actual page links while sharing chrome and preserving root settings", async () => {
     const result = await generateEmptyPage(pageId);
     const request = mocks.request.mock.calls[0][0];
@@ -58,9 +63,9 @@ describe("building an empty page", () => {
     expect(request.messages[0].content).toContain('"businessName":"Example"');
     expect(request.messages[0].content).toContain('"primary":"#123456"');
     expect(request.messages[0].content).toContain('"label":"Team","href":"/our-team"');
-    expect(result.data.content[0]).toMatchObject({ type: "Navigation", props: { variant: "dark", brandLink: "/" } });
+    expect(result.data.content.some(item => item.type === "Navigation")).toBe(false);
     expect(result.data.content.at(-1)).toMatchObject({ type: "Footer", props: { variant: "centered" } });
-    expect(result.data.content[0].props.id).not.toBe("shared-nav");
+    expect(result.data.content.at(-1)?.props.id).not.toBe("shared-footer");
     expect(result.data.root).toEqual(draft.root);
     expect(result.expectedDraft).toEqual(draft);
     expect(mocks.update).not.toHaveBeenCalled();

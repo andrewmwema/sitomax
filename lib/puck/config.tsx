@@ -29,6 +29,9 @@ import { Map, type MapProps } from "@/components/blocks/map";
 import { Spacer, type SpacerProps } from "@/components/blocks/spacer";
 import { Footer, type FooterProps } from "@/components/blocks/footer";
 import { Navigation, type NavigationProps } from "@/components/blocks/navigation";
+import { SiteHeader } from "@/components/header/site-header";
+import { headerSchema, type SiteHeaderData } from "@/lib/header";
+import { emptyBusiness } from "@/lib/business";
 import { LayoutSection, type LayoutSectionProps } from "@/components/blocks/layout/section";
 import { Row, type RowProps } from "@/components/blocks/layout/row";
 import { Column, type ColumnProps } from "@/components/blocks/layout/column";
@@ -101,6 +104,10 @@ type Components = {
 
 export type RootProps = {
   __editorTheme?: SiteTheme;
+  __editorHeader?: SiteHeaderData;
+  hideHeader?: boolean;
+  transparentHeader?: boolean;
+  __legacyNavigation?: boolean;
   title?: string;
   seoTitle?: string;
   description?: string;
@@ -172,7 +179,7 @@ export const puckConfig: PuckConfig = {
   categories: {
     layout: {
       title: "Layout",
-      components: ["Navigation", "Hero", "Spacer", "Footer"],
+      components: ["Hero", "Spacer", "Footer"],
     },
     content: {
       title: "Content",
@@ -223,13 +230,15 @@ export const puckConfig: PuckConfig = {
     // Columns are managed by their row's column preset.
     internal: {
       title: "Internal",
-      components: ["Column"],
+      components: ["Column", "Navigation"],
       visible: false,
     },
   },
   root: {
     fields: {
       title: { type: "text", label: "Page title" },
+      hideHeader: { type: "radio", label: "Hide header on this page", options: [{ label: "No", value: false }, { label: "Yes", value: true }] },
+      transparentHeader: { type: "radio", label: "Transparent header over hero", options: [{ label: "No", value: false }, { label: "Yes", value: true }] },
       seoTitle: { type: "text", label: "SEO title (optional)" },
       description: {
         type: "textarea",
@@ -248,14 +257,21 @@ export const puckConfig: PuckConfig = {
       socialImage: "",
       indexing: "inherit",
     },
-    render: ({ children, puck, __editorTheme }) => {
+    render: ({ children, puck, __editorTheme, __editorHeader, hideHeader, transparentHeader, __legacyNavigation }) => {
       const theme = (puck.isEditing && __editorTheme) || (puck.metadata?.theme ?? {}) as SiteTheme;
+      const rawHeader = puck.isEditing ? __editorHeader : puck.metadata?.siteHeader;
+      const header = rawHeader ? headerSchema.parse(rawHeader) : undefined;
+      const headerView = header && !hideHeader && !__legacyNavigation ? <SiteHeader header={header}
+        menu={puck.metadata?.siteMenu ?? { links: [], contacts: emptyBusiness }}
+        links={puck.metadata?.siteLinks ?? { pages: {} }} path={puck.metadata?.pagePath}
+        transparent={transparentHeader} editing={puck.isEditing} /> : null;
       return (
         <div
           className="site-content flex min-h-screen min-w-0 flex-col antialiased"
           data-site-style={theme.style === "modern" ? "modern" : "classic"}
           style={{
             ...buildThemeStyle(theme),
+            position: "relative",
             backgroundColor: "var(--color-bg)",
             color: "var(--color-text)",
             fontFamily: "var(--font-body)",
@@ -263,7 +279,9 @@ export const puckConfig: PuckConfig = {
           }}
         >
           <link rel="stylesheet" href={googleFontsUrl(themeFonts(theme))} />
-          {children}
+          {puck.isEditing && typeof puck.metadata?.renderHeader === "function"
+            ? puck.metadata.renderHeader(headerView) : headerView}
+          <main id={header ? "site-main-content" : undefined} className="flex flex-1 flex-col" tabIndex={-1}>{children}</main>
         </div>
       );
     },

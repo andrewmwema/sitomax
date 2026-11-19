@@ -15,6 +15,7 @@ import { requestAi } from "./client";
 import { createPhotoResolver, fillSectionPhotos } from "./photos";
 import { fillSiteTool } from "./site-tool";
 import { reviewGeneratedPage } from "./site-quality";
+import { headerMigrationMissing } from "@/lib/header";
 
 const record = z.record(z.string(), z.unknown());
 const storedDraft = record.refine(isEmptyPage, "Only empty pages can be built with AI.");
@@ -31,9 +32,13 @@ const siteSchema = z.object({
 export async function generateEmptyPage(pageId: string) {
   const id = z.uuid().parse(pageId);
   const { supabase } = await requireUser();
-  const { data: raw, error } = await supabase.from("pages")
-    .select("id, slug, title, draft_data, site:sites(id, account_id, business, theme, draft_theme)")
+  const loaded = await supabase.from("pages")
+    .select("id, slug, title, draft_data, site:sites(id, account_id, business, theme, draft_theme, draft_header)")
     .eq("id", id).maybeSingle();
+  const headersReady = !headerMigrationMissing(loaded.error);
+  if (!headersReady) console.warn("Global header migration is not applied; retaining Navigation on the generated page.");
+  const { data: raw, error } = headersReady ? loaded : await supabase.from("pages")
+    .select("id, slug, title, draft_data, site:sites(id, account_id, business, theme, draft_theme)").eq("id", id).maybeSingle();
   if (error || !raw) throw new Error("This page is unavailable to your account.");
   const page = pageSchema.parse(raw);
   const expectedDraft = storedDraft.parse(page.draft_data);
@@ -62,7 +67,7 @@ export async function generateEmptyPage(pageId: string) {
     strict: false, input_schema: { ...inputSchema, type: "object" as const } };
   const result = await fillSiteTool((selectedTool, messages) => requestAi({
     accountId: site.account_id, siteId: site.id, action: "edit_section", largeRewrite: true,
-    system: `${customSystemPrompt()}\nFor this body-only task, do not plan a site or generate header/footer content: shared Navigation and Footer blocks are added by the application. Return the requested sections array.`,
+    system: `${customSystemPrompt()}\nFor this body-only task, do not plan a site or generate header/footer content: the global header and shared Footer are provided by the application. Return the requested sections array.`,
     tools: [selectedTool], toolName: selectedTool.name, messages, maxTokens: 16000,
   }), tool, schema, `Build this one empty page using the stored business and theme. Do not change the theme.
 Create a complete, responsive page body appropriate to its title and URL; no navigation or footer (the application adds shared chrome).
@@ -89,7 +94,7 @@ ${JSON.stringify({ page: { title: page.title, slug: page.slug }, business, theme
     return { type, props: { ...puckConfig.components[type].defaultProps, id: `${type}-${crypto.randomUUID()}` } };
   };
   const root = z.object({ root: z.looseObject({ props: record.optional() }).optional() }).parse(expectedDraft).root ?? {};
-  const reviewed = reviewGeneratedPage([chrome("Navigation"), ...sections, chrome("Footer")], {
+  const reviewed = reviewGeneratedPage([...(headersReady ? [] : [chrome("Navigation")]), ...sections, chrome("Footer")], {
     slug: page.slug, pages, business,
   });
   reviewed.notes.forEach((note) => warnings.add(note));
@@ -119,7 +124,11 @@ export async function saveEmptyPage(pageId: string, rawData: unknown, rawExpecte
   };
   validateTypes(data);
   const clean = sanitizePuckData(data);
-  if (clean.root.props) delete clean.root.props.__editorTheme;
+  if (clean.root.props) {
+    delete clean.root.props.__editorTheme;
+    delete clean.root.props.__editorHeader;
+    delete clean.root.props.__expectedHeader;
+  }
   const { supabase } = await requireUser();
   // The empty snapshot and update are one SQL statement: another tab's edits
   // (including root settings) must never be replaced by an AI result.

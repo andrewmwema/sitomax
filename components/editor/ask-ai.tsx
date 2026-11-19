@@ -9,25 +9,31 @@ import { puckConfig } from "@/lib/puck/config";
 import { ROOT_ZONE } from "@/lib/editor/tree";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { editorTheme, type useDraftPersistence } from "./use-draft-persistence";
+import { editorHeader } from "@/lib/header";
 
 const Context = createContext<{
-  open: (sectionId?: string) => void; proposal: { data: Data; theme: SiteTheme } | null;
+  open: (sectionId?: string, scope?: EditScope) => void; proposal: { data: Data; theme: SiteTheme } | null;
+  metadata?: Record<string, unknown>;
 } | null>(null);
 export const useAskAi = () => useContext(Context);
 
 export function AskAiCanvas({ children }: { children: ReactNode }) {
-  const proposal = useAskAi()?.proposal;
-  return proposal ? <div data-ai-preview inert><Render config={puckConfig} data={proposal.data} metadata={{ theme: proposal.theme }} /></div> : children;
+  const context = useAskAi();
+  const proposal = context?.proposal;
+  return proposal ? <div data-ai-preview inert><Render config={puckConfig} data={proposal.data}
+    metadata={{ ...context?.metadata, theme: proposal.theme, siteHeader: editorHeader(proposal.data) }} /></div> : children;
 }
 
 const examples: { text: string; scope?: EditScope }[] = [
   { text: "Make the footer lighter", scope: "page" }, { text: "Use a green accent", scope: "theme" },
   { text: "Add more spacing" }, { text: "Switch hero to a split layout", scope: "page" }, { text: "Shorten this text" },
+  { text: "Use a split header layout", scope: "header" },
 ];
 type Proposal = ReturnType<typeof applyEditOperations> & { plan: string; base: Data; operations: Parameters<typeof applyEditOperations>[4] };
 
-export function AskAiProvider({ children, pageId, theme, persistence }: {
+export function AskAiProvider({ children, pageId, theme, persistence, metadata }: {
   children: ReactNode; pageId: string; theme: SiteTheme; persistence: ReturnType<typeof useDraftPersistence>;
+  metadata?: Record<string, unknown>;
 }) {
   const getPuck = useGetPuck();
   const [visible, setVisible] = useState(false);
@@ -45,11 +51,12 @@ export function AskAiProvider({ children, pageId, theme, persistence }: {
   const focusReturn = useRef<HTMLElement | null>(null);
   const request = useRef(0);
 
-  const open = useCallback((targetId?: string) => {
+  const open = useCallback((targetId?: string, requestedScope?: EditScope) => {
     const { selectedItem, appState } = getPuck();
     const zone = appState.ui.itemSelector?.zone;
     const id = targetId ?? ((!zone || zone === ROOT_ZONE) ? selectedItem?.props.id : undefined);
-    if (typeof id === "string" && appState.data.content.some((item) => item.props.id === id && item.type !== "Embed")) {
+    if (requestedScope === "header") { setSectionId(undefined); setScope("header"); }
+    else if (typeof id === "string" && appState.data.content.some((item) => item.props.id === id && item.type !== "Embed")) {
       setSectionId(id); setScope("section");
     } else { setSectionId(undefined); setScope("page"); }
     if (document.activeElement instanceof HTMLElement) focusReturn.current = document.activeElement;
@@ -94,10 +101,11 @@ export function AskAiProvider({ children, pageId, theme, persistence }: {
     const sequence = ++request.current;
     setError(""); setPending(true); setConfirmed(false);
     const base = structuredClone(getPuck().appState.data);
-    const sections = scope === "theme" ? undefined : scope === "page" ? base.content
+    const sections = scope === "theme" || scope === "header" ? undefined : scope === "page" ? base.content
       : base.content.filter((item) => item.props.id === sectionId);
     try {
       const response = await suggestEditorEdits({ pageId, scope, sectionId: scope === "section" ? sectionId : undefined, instruction,
+        header: scope === "header" ? editorHeader(base) : undefined,
         sectionPosition: scope === "section" ? { index: base.content.findIndex((item) => item.props.id === sectionId), count: base.content.length } : undefined,
         sections: sections?.map(({ type, props }) => ({ type, props })),
         refinement: refining && proposal
@@ -128,7 +136,7 @@ export function AskAiProvider({ children, pageId, theme, persistence }: {
     } finally { setApplying(false); }
   }
 
-  return <Context.Provider value={{ open, proposal: proposal?.changes.length ? proposal : null }}>
+  return <Context.Provider value={{ open, proposal: proposal?.changes.length ? proposal : null, metadata }}>
     {children}
     {visible ? <aside aria-label="Ask AI to edit" className="platform-ui editor-ai-drawer fixed right-3 top-20 bottom-12 z-[170] flex w-[min(360px,calc(100vw-1.5rem))] flex-col overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 shadow-xl"
       onKeyDown={(event) => { if (event.key === "Escape" && !applying) { event.stopPropagation(); close(); } }}>
@@ -139,6 +147,7 @@ export function AskAiProvider({ children, pageId, theme, persistence }: {
           <select className="mt-1 w-full rounded-lg border border-zinc-300 p-2 text-sm" value={scope} disabled={pending || applying || refining}
             onChange={(event) => { setScope(event.target.value as EditScope); setProposal(null); setError(""); setConfirmed(false); }}>
             <option value="section" disabled={!sectionId}>Selected section</option><option value="page">This page</option><option value="theme">Whole site theme</option>
+            <option value="header" disabled={metadata?.headersReady === false}>Whole site header</option>
           </select>
         </label>
         <label className="block text-xs font-medium">{refining ? "What should change in this proposal?" : "What would you like to change?"}
@@ -147,7 +156,7 @@ export function AskAiProvider({ children, pageId, theme, persistence }: {
             onChange={(event) => refining ? setRefinement(event.target.value) : setPrompt(event.target.value)} />
         </label>
         {!refining && !proposal ? <div className="flex flex-wrap gap-1">{examples.map((example) =>
-          <button key={example.text} type="button" disabled={pending} className="rounded-full border border-zinc-200 px-2 py-1 text-[11px] hover:bg-zinc-100"
+          <button key={example.text} type="button" disabled={pending || (example.scope === "header" && metadata?.headersReady === false)} className="rounded-full border border-zinc-200 px-2 py-1 text-[11px] hover:bg-zinc-100"
             onClick={() => { setPrompt(example.text); if (example.scope) setScope(example.scope); field.current?.focus(); }}>{example.text}</button>)}</div> : null}
         <button type="submit" className="platform-button platform-button-ai" disabled={pending || applying || !(refining ? refinement : prompt).trim()}>
           {pending ? "Preparing preview..." : refining ? "Update preview" : "Generate preview"}</button>

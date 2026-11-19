@@ -13,6 +13,7 @@ import { absoluteImage, rootSeoSchema } from "@/lib/seo";
 import { createClient } from "@/lib/supabase/server";
 import { businessSchema, emptyBusiness } from "@/lib/business";
 import { pageMenuLinks, siteContacts, type SiteMenu } from "@/lib/page-navigation";
+import { defaultHeader, headerSchema } from "@/lib/header";
 import {
   getSiteByHost,
   getSitePage,
@@ -131,6 +132,9 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   const contacts = siteContacts(businessSchema.parse({ ...emptyBusiness, ...site.business }));
   const previewPrefix = isPreview ? `/s/${encodeURIComponent((await params).site)}` : "";
   const siteMenu: SiteMenu = { links: pageMenuLinks(menuPages, previewPrefix), contacts };
+  const rawHeader = isPreview ? site.draft_header : site.published_header;
+  const siteHeader = site.headers_ready === false ? undefined :
+    rawHeader ? headerSchema.parse(rawHeader) : defaultHeader(contacts.businessName || site.name || "", theme.logoUrl);
   // Typed page links are stored by id and resolved to current slugs here, so renames never break them.
   const pageData = resolveDataLinks({ content: [], root: {}, ...data }, linkContext(linkPages, previewPrefix));
 
@@ -148,7 +152,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
       <Render
         config={puckConfig}
         data={pageData as unknown as PuckPageData}
-        metadata={{ theme, siteMenu }}
+        metadata={{ theme, siteMenu, siteHeader, siteLinks: linkContext(linkPages, previewPrefix), pagePath: `${previewPrefix}/${page.slug}` }}
         // Disable Puck's default richtext transform (it injects the raw
         // HTML unsanitized); pass the string through so blocks render it
         // via <RichTextContent>, which sanitizes with DOMPurify.

@@ -78,6 +78,46 @@ clicks and focus the draggable block instead of its text. Existing injected
 layers are hidden only inside editable canvas fields. These protections do
 not change saved content or disable native browser spell checking.
 
+### Site-wide headers
+
+Run `supabase/migrations/0028_global_headers.sql` after `0027`, then reload the
+editor. Until it is applied, the app logs the missing migration, shows an editor
+notice and preserves legacy Navigation rendering, editing and generation.
+Headers live in `sites.draft_header` /
+`sites.published_header`, using the versioned contract in `lib/header.ts`.
+The migration independently chooses draft and published Navigation (Home first,
+then page order), removes per-page copies, and keeps untouched drafts as
+**Before global header migration** entries in editor History. Restoring a version
+with Navigation recovers that original block, including its design, in page-local
+compatibility mode and suppresses the global header so it cannot appear twice.
+**Use site-wide header again** returns that page to the shared header in one undoable
+step. Restoring newer header versions affects the site's draft header across all
+pages; Publish makes it live.
+
+Click or right-click the header in the canvas for Content, Design, layout,
+hide-on-page and clear-padding actions. The settings drawer follows the current
+desktop/tablet/mobile canvas. Eight desktop layouts and three compact layouts
+preserve content and colors when switched. Tablet follows desktop or mobile,
+with independent style overrides. Custom menus support one level of sub-items
+and the shared Link Picker; automatic menus follow Pages labels, order and
+visibility. Business info supplies contact details and social profiles.
+
+Page settings also offer **Hide header on this page** and **Transparent header
+over hero**. Saving is draft-only; publishing any page promotes the shared
+header, matching the existing shared-theme behavior. Header saves use an atomic,
+permission-checked RPC and reject conflicting edits from other tabs. Header
+changes are included in version history and undo. Native modal mobile menus
+trap focus, close with Escape and return focus to their trigger; dropdowns
+support Tab, Arrow Down and Escape. Header text/hover/menu-panel/scroll colors
+are contrast-adjusted; image, gradient and transparent backgrounds use solid
+text backings for predictable AA contrast.
+
+**Ask AI → Whole site header** changes only validated layout/style settings.
+It sends header and business context, not page content, and uses the existing
+preview/apply, history and credit accounting. Templates and both AI generation
+modes are normalized at the database boundary so their Navigation initializes
+a missing header without replacing an existing site header.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations

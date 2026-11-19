@@ -10,6 +10,7 @@ import { siteSeoSchema } from "@/lib/seo";
 import { seoChecklist } from "@/lib/seo-checklist";
 import { pageSections } from "@/lib/links";
 import type { SeoPageSummary } from "@/components/editor/seo-panel";
+import { headerMigrationMissing } from "@/lib/header";
 
 /**
  * Full-screen visual editor for a page.
@@ -41,6 +42,7 @@ type EditorSite = {
   domain_verified: boolean;
   theme: SiteTheme | null;
   draft_theme: SiteTheme | null;
+  draft_header: unknown;
   business: unknown;
   seo: unknown;
 };
@@ -53,11 +55,11 @@ async function EditorLoader({
   const { pageId } = await params;
   const { supabase, user } = await requireUser();
 
-  const [{ data }, { data: profile }] = await Promise.all([
+  const [loaded, { data: profile }] = await Promise.all([
     supabase
       .from("pages")
       .select(
-        "id, slug, title, seo, draft_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, business, seo)",
+        "id, slug, title, seo, draft_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, draft_header, business, seo)",
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -67,6 +69,13 @@ async function EditorLoader({
       .eq("id", user.id)
       .maybeSingle(),
   ]);
+  const headersReady = !headerMigrationMissing(loaded.error);
+  if (!headersReady) console.warn("Global header migration is not applied; the editor is preserving per-page Navigation.");
+  const result = headersReady ? loaded : await supabase.from("pages").select(
+    "id, slug, title, seo, draft_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, business, seo)",
+  ).eq("id", pageId).maybeSingle();
+  if (result.error) throw new Error("Unable to load the editor.", { cause: result.error });
+  const data = result.data;
 
   if (!data) {
     // No row = page missing or the user is not a member (RLS).
@@ -123,6 +132,7 @@ async function EditorLoader({
       initialData={initialData}
       previewUrl={previewUrl}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
+      headersReady={headersReady}
       userId={user.id}
       sitePages={(sitePages ?? []).map((page) => ({ id: page.id, slug: page.slug, title: page.title,
         nav_label: "nav_label" in page && typeof page.nav_label === "string" ? page.nav_label : null,

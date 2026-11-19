@@ -9,8 +9,22 @@ import { colorCss, safeHref, snapSpacing, typeSizeStyle } from "./guardrails";
 import { blankSection, fitColumns, type LayoutItem } from "./structure";
 import { hasUnauthorizedEmbeds } from "./embed";
 import { CONVERTIBLE_TYPES, canConvertToLayout, convertToLayout } from "./convert";
+import { defaultHeader } from "@/lib/header";
 
 type Item = { type: string; props: Record<string, unknown> };
+
+it("restores original Navigation without rendering a second global header", () => {
+  const html = renderToStaticMarkup(createElement(Render, {
+    config: puckConfig,
+    data: { root: { props: { title: "", __legacyNavigation: true } }, content: [{
+      type: "Navigation", props: { ...puckConfig.components.Navigation.defaultProps, id: "original", businessName: "Original" },
+    }] },
+    metadata: { siteHeader: defaultHeader("Global") },
+  }));
+  expect(html).not.toContain("data-site-header");
+  expect(html).toContain("Original");
+  expect(html).toContain("<nav");
+});
 
 function el(type: string, props: Record<string, unknown> = {}): Item {
   const defaults = puckConfig.components[type as keyof typeof puckConfig.components].defaultProps;

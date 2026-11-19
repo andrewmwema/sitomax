@@ -6,6 +6,7 @@ vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: {
 } }) }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
 import { runEditAssistant } from "./edit-assistant";
+import { defaultHeader } from "@/lib/header";
 
 const pageId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
@@ -20,6 +21,22 @@ beforeEach(() => {
 });
 
 describe("Ask AI server boundary", () => {
+  it("sends only header/business context and validated header tools for global header edits", async () => {
+    mocks.request.mockResolvedValueOnce({ stop_reason: "tool_use", content: [plan, {
+      type: "tool_use", name: "update_header", input: { device: "desktop", settings: { layout: "split", color: "#123456" } },
+    }] });
+    const result = await runEditAssistant({ pageId, scope: "header", instruction: "Use a split menu", header: defaultHeader("Example") });
+    expect(result.operations[0].name).toBe("update_header");
+    const args = mocks.request.mock.calls[0][0];
+    expect(args.tools.map((entry: { name: string }) => entry.name)).toEqual(["report_plan", "update_header"]);
+    expect(args).toMatchObject({ action: "edit_section", largeRewrite: true, cacheTtl: "5m" });
+    const payload = JSON.parse(args.messages[0].content);
+    expect(payload).toHaveProperty("header");
+    for (const key of ["sections", "theme", "catalog", "customLayout"]) expect(payload).not.toHaveProperty(key);
+    await expect(runEditAssistant({ pageId, scope: "header", instruction: "Change header", header: defaultHeader(), sections: [
+      { type: "Text", props: { id: "secret", text: "Do not send" } },
+    ] })).rejects.toThrow("cannot include page");
+  });
   it("uses one cached Haiku request with scoped context and non-strict section tools", async () => {
     mocks.request.mockResolvedValueOnce({ stop_reason: "tool_use", content: [plan, { type: "tool_use", name: "update_section_props",
       input: { sectionId: "hero", patch: { heading: "Our work" } } }] });

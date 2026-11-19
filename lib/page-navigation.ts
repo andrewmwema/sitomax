@@ -16,7 +16,7 @@ export function pageMenuLinks(pages: { slug: string; nav_label?: string | null }
   }));
 }
 
-export type SiteContacts = Pick<Business, "businessName" | "phone" | "email" | "address" | "openingHours">;
+export type SiteContacts = Pick<Business, "businessName" | "phone" | "email" | "address" | "openingHours" | "socialLinks">;
 export type SiteMenu = { links: ReturnType<typeof pageMenuLinks>; contacts: SiteContacts };
 
 export function businessContactDetails(business: SiteContacts) {
@@ -29,6 +29,6 @@ export function businessContactDetails(business: SiteContacts) {
   ].filter(({ value }) => value);
 }
 
-export function siteContacts({ businessName, phone, email, address, openingHours }: Business): SiteContacts {
-  return { businessName, phone, email, address, openingHours };
+export function siteContacts({ businessName, phone, email, address, openingHours, socialLinks }: Business): SiteContacts {
+  return { businessName, phone, email, address, openingHours, ...(socialLinks ? { socialLinks } : {}) };
 }

@@ -7,8 +7,9 @@ import { publishPage, restorePageVersion, saveAiEdit, savePageDraft } from "@/ap
 import type { SiteTheme } from "@/lib/theme/presets";
 import { buildEmptyPageWithAi, saveEmptyPageWithAi } from "@/app/editor/[pageId]/empty-page-actions";
 import { isEmptyPage } from "@/lib/editor/empty-page";
+import type { SiteHeaderData } from "@/lib/header";
 
-type EditorRoot = NonNullable<Data["root"]["props"]> & { __editorTheme?: SiteTheme };
+type EditorRoot = NonNullable<Data["root"]["props"]> & { __editorTheme?: SiteTheme; __editorHeader?: SiteHeaderData; __expectedHeader?: unknown };
 function themeOverride(data: Data) { return (data.root.props as EditorRoot | undefined)?.__editorTheme; }
 export function withEditorTheme(data: Data, theme: SiteTheme): Data {
   const props: EditorRoot = { ...data.root.props, __editorTheme: theme };
@@ -19,7 +20,7 @@ export function editorTheme(data: Data, fallback: SiteTheme): SiteTheme {
 }
 
 const usePuck = createUsePuck();
-export function useDraftPersistence(pageId: string, theme: SiteTheme) {
+export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHeader?: unknown) {
   const getPuck = useGetPuck();
   const data = usePuck((state) => state.appState.data);
   const [saved, setSaved] = useState(() => JSON.stringify(data));
@@ -28,6 +29,17 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
   const [buildNotes, setBuildNotes] = useState<string[]>([]);
   const active = useRef<Promise<boolean> | null>(null);
   const savedTheme = useRef(theme);
+  const savedHeader = useRef(initialHeader ?? null);
+  const forSaving = useCallback((snapshot: Data): Data => {
+    const root = snapshot.root.props as EditorRoot | undefined;
+    if (!root?.__editorHeader) return snapshot;
+    const props: EditorRoot = { ...root, __expectedHeader: savedHeader.current };
+    return { ...snapshot, root: { ...snapshot.root, props } };
+  }, []);
+  const markHeaderSaved = useCallback((snapshot: Data) => {
+    const root = snapshot.root.props as EditorRoot | undefined;
+    if (root?.__editorHeader) savedHeader.current = root.__editorHeader;
+  }, []);
   const lastOverride = useRef<string | undefined>(undefined);
   const dirty = JSON.stringify(data) !== saved;
 
@@ -40,22 +52,24 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
         const override = JSON.stringify(themeOverride(snapshot));
         if (override !== lastOverride.current) {
           const next = editorTheme(snapshot, theme);
-          const result = await saveAiEdit(pageId, snapshot, { snapshot: false, theme: next, expectedTheme: savedTheme.current });
+          const result = await saveAiEdit(pageId, forSaving(snapshot), { snapshot: false, theme: next, expectedTheme: savedTheme.current });
           if (result.status !== "success") {
             setError(result.status === "error" ? result.message : "The theme was not saved.");
             return false;
           }
           savedTheme.current = next;
+          markHeaderSaved(snapshot);
           lastOverride.current = override;
           setSaved(JSON.stringify(snapshot));
           if (kind === "save") return true;
         }
-        const result = await (kind === "publish" ? publishPage : savePageDraft)(pageId, snapshot);
+        const result = await (kind === "publish" ? publishPage : savePageDraft)(pageId, forSaving(snapshot));
         if (result.status !== "success") {
           setError(result.status === "error" ? result.message : "The page was not saved.");
           return false;
         }
         setSaved(JSON.stringify(snapshot));
+        markHeaderSaved(snapshot);
         return true;
       } catch (cause) {
         console.error("Unable to save editor changes", cause);
@@ -65,7 +79,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved]);
 
   const applyAi = useCallback(async (base: Data, next: Data, nextTheme?: SiteTheme, capture = true): Promise<boolean> => {
     while (active.current) await active.current;
@@ -77,7 +91,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
     setBusy("save"); setError(null);
     const operation = (async () => {
       try {
-        const result = await saveAiEdit(pageId, snapshot, { snapshot: capture, ...(nextTheme ? {
+        const result = await saveAiEdit(pageId, forSaving(snapshot), { snapshot: capture, ...(nextTheme ? {
           theme: nextTheme, expectedTheme: lastOverride.current ? savedTheme.current : theme,
         } : {}) });
         if (result.status !== "success") {
@@ -88,6 +102,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
           savedTheme.current = nextTheme;
           lastOverride.current = JSON.stringify(nextTheme);
         }
+        markHeaderSaved(snapshot);
         getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } });
         getPuck().dispatch({ type: "setData", data: snapshot, recordHistory: true });
         setSaved(JSON.stringify(snapshot));
@@ -99,7 +114,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved]);
 
   const buildEmptyPage = useCallback(async (): Promise<boolean> => {
     if (active.current) return false;
@@ -108,6 +123,8 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
       setError("Only empty pages can be built with AI.");
       return false;
     }
+    const header = (base.root.props as EditorRoot | undefined)?.__editorHeader;
+    if (header && JSON.stringify(header) !== JSON.stringify(savedHeader.current) && !await save()) return false;
     setBusy("save"); setError(null); setBuildNotes([]);
     const operation = (async () => {
       try {
@@ -138,7 +155,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId]);
+  }, [getPuck, pageId, save]);
 
   const restore = useCallback(async (versionId: string): Promise<boolean> => {
     while (active.current) await active.current;
@@ -157,6 +174,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme) {
           savedTheme.current = result.theme;
           lastOverride.current = JSON.stringify(result.theme);
         }
+        if ("header" in result && result.header) savedHeader.current = result.header;
         getPuck().dispatch({ type: "setData", data: restored, recordHistory: true });
         getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } });
         setSaved(JSON.stringify(restored));

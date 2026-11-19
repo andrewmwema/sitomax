@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  load: vi.fn(), update: vi.fn(), updated: vi.fn(), version: vi.fn(), profile: vi.fn(),
+  load: vi.fn(), update: vi.fn(), updated: vi.fn(), version: vi.fn(), profile: vi.fn(), rpc: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({
   requireUser: async () => ({ user: { id: "user-1" }, supabase: {
+    rpc: mocks.rpc,
     from: (table: string) => {
       if (table === "profiles") return { select: () => ({ eq: () => ({ maybeSingle: mocks.profile }) }) };
       if (table === "page_versions") return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: mocks.version }) }) }) };
@@ -17,6 +18,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import { publishPage, restorePageVersion, savePageDraft, savePageMenuLabel } from "./actions";
+import { defaultHeader } from "@/lib/header";
 const PAGE = "00000000-0000-4000-8000-000000000001";
 const VERSION = "00000000-0000-4000-8000-000000000002";
 const payload = () => ({ root: { props: { title: "Test" } }, content: [{
@@ -24,7 +26,9 @@ const payload = () => ({ root: { props: { title: "Test" } }, content: [{
 }] });
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.load.mockResolvedValue({ data: { id: PAGE, title: "Test", seo: {}, draft_data: {}, published_data: {} }, error: null });
+  mocks.load.mockResolvedValue({ data: { id: PAGE, title: "Test", seo: {}, draft_data: {}, published_data: {},
+    site: { draft_header: null, theme: {}, draft_theme: null } }, error: null });
+  mocks.rpc.mockResolvedValue({ error: null });
   mocks.update.mockReturnValue({ eq: () => ({ select: mocks.updated }) });
   mocks.updated.mockResolvedValue({ data: [{ id: PAGE }], error: null });
   mocks.version.mockResolvedValue({ data: { data: payload() }, error: null });
@@ -68,7 +72,7 @@ describe("editor persistence", () => {
   it("restores a permitted historical version to draft, leaving live content untouched", async () => {
     const result = await restorePageVersion(PAGE, VERSION);
     expect(result).toMatchObject({ status: "success", data: { content: [{ props: { text: "<p>Hello</p>" } }] } });
-    expect(mocks.update.mock.calls[0][0]).not.toHaveProperty("published_data");
+    expect(mocks.rpc).toHaveBeenCalledWith("save_page_with_header", expect.objectContaining({ p_publish: false }));
   });
   it("does not bypass agency Embed restrictions when restoring history", async () => {
     mocks.version.mockResolvedValueOnce({ data: { data: {
@@ -76,5 +80,38 @@ describe("editor persistence", () => {
     } }, error: null });
     expect(await restorePageVersion(PAGE, VERSION)).toMatchObject({ status: "error", message: expect.stringContaining("agency") });
     expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("atomically saves a validated header with its expected baseline, without persisting transient root props", async () => {
+    const header = defaultHeader("Example");
+    const baseline = { version: 1 };
+    const data = { ...payload(), root: { props: { ...payload().root.props, __editorHeader: header, __expectedHeader: baseline } } };
+    expect(await savePageDraft(PAGE, data)).toMatchObject({ status: "success" });
+    const args = mocks.rpc.mock.calls[0][1];
+    expect(args).toMatchObject({ p_header: header, p_expected_header: baseline, p_publish: false });
+    expect(args.p_data.root.props).not.toHaveProperty("__editorHeader");
+    expect(args.p_data.root.props).not.toHaveProperty("__expectedHeader");
+    expect(args.p_data.content[0].props.text).toBe("<p>Hello</p>");
+    mocks.rpc.mockResolvedValueOnce({ error: { code: "40001" } });
+    expect(await publishPage(PAGE, data)).toMatchObject({ status: "error", message: expect.stringContaining("another editor") });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("rolls back to the untouched Navigation while suppressing the global header on that page", async () => {
+    mocks.version.mockResolvedValueOnce({ data: { data: { ...payload(), content: [
+      { type: "Navigation", props: { businessName: "Original", buttonText: "Contact", buttonLink: "/contact" } },
+      ...payload().content,
+    ] }, header: null }, error: null });
+    expect(await restorePageVersion(PAGE, VERSION)).toMatchObject({ status: "success",
+      data: { root: { props: { __legacyNavigation: true } } } });
+    const args = mocks.rpc.mock.calls[0][1];
+    expect(args.p_data.content.map((item: { type: string }) => item.type)).toEqual(["Navigation", "Text"]);
+    expect(args.p_data.content[0].props.businessName).toBe("Original");
+    expect(args.p_data.root.props.__legacyNavigation).toBe(true);
+  });
+  it("keeps history restoration functional before the header migration is installed", async () => {
+    mocks.version.mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column page_versions.header does not exist" } });
+    expect(await restorePageVersion(PAGE, VERSION)).toMatchObject({ status: "success" });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ draft_data: expect.any(Object) }));
   });
 });

@@ -70,6 +70,8 @@ import { canonicalUrl } from "@/lib/seo-public";
 
 import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
 import { isEmptyPage } from "@/lib/editor/empty-page";
+import { defaultHeader, extractNavigation, headerSchema, type HeaderRoot } from "@/lib/header";
+import { renderHeaderEditor } from "./header-editor";
 
 type EditorUi = {
   pageId: string;
@@ -86,6 +88,9 @@ type EditorUi = {
   updateTheme: (theme: SiteTheme) => void;
   business: Business;
   theme: SiteTheme;
+  initialHeader?: unknown;
+  headersReady: boolean;
+  updateBusiness: (business: Business) => void;
 };
 
 const EditorUiContext = createContext<EditorUi | null>(null);
@@ -106,9 +111,12 @@ function usePersistence() {
 }
 
 function EditorRuntime({ children }: { children: React.ReactNode }) {
-  const { pageId, theme } = useEditorUi();
-  const persistence = useDraftPersistence(pageId, theme);
-  return <PersistenceContext.Provider value={persistence}><AskAiProvider pageId={pageId} theme={theme} persistence={persistence}>
+  const { pageId, theme, initialHeader, business, headersReady } = useEditorUi();
+  const { pages } = useInteractions();
+  const persistence = useDraftPersistence(pageId, theme, initialHeader);
+  return <PersistenceContext.Provider value={persistence}><AskAiProvider pageId={pageId} theme={theme} persistence={persistence}
+    metadata={{ siteMenu: { links: pageMenuLinks(pages.filter(page => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) },
+      siteLinks: linkContext(pages), pagePath: `/${pages.find(page => page.id === pageId)?.slug ?? ""}`, headersReady }}>
     <EditorPanelLayout />
     {children}
     <EditorThemePanel />
@@ -294,11 +302,11 @@ function AutoBuildPage() {
 }
 
 function ThemeTool() {
-  const { openThemePanel, siteId, business } = useEditorUi();
+  const { openThemePanel, siteId, business, updateBusiness } = useEditorUi();
   return <div className="editor-panel min-h-0 overflow-y-auto"><header className="editor-panel-header"><p className="platform-eyebrow mb-1">Visual identity</p><h2 className="font-semibold">Theme</h2>
     <p className="mt-2 text-xs leading-relaxed text-zinc-500">Update this site&apos;s colors, fonts and style.</p></header>
     <button type="button" className="platform-button platform-button-primary mt-4 w-full" onClick={openThemePanel}><Palette size={14} />Edit theme</button>
-    <div className="mt-4"><BusinessInfo siteId={siteId} initialBusiness={business} /></div>
+    <div className="mt-4"><BusinessInfo siteId={siteId} initialBusiness={business} onSave={updateBusiness} /></div>
   </div>;
 }
 
@@ -623,11 +631,12 @@ export function PageEditor({
   sitePages,
   seoPages,
   generationWarnings = [],
-  business,
+  business: initialBusiness,
   siteSeo,
+  headersReady = true,
 }: {
   page: { id: string; slug: string; title: string | null };
-  site: { id: string; account_id: string; name: string | null; subdomain: string; custom_domain: string | null; domain_verified: boolean; theme: SiteTheme | null };
+  site: { id: string; account_id: string; name: string | null; subdomain: string; custom_domain: string | null; domain_verified: boolean; theme: SiteTheme | null; draft_header?: unknown };
   initialData: Record<string, unknown>;
   previewUrl: string;
   isSuperAdmin: boolean;
@@ -637,6 +646,7 @@ export function PageEditor({
   generationWarnings?: string[];
   business: Business;
   siteSeo: SiteSeo;
+  headersReady?: boolean;
 }) {
   const searchParams = useSearchParams();
   const initialUi = useMemo(() => searchParams.get("panel") === "seo"
@@ -644,6 +654,7 @@ export function PageEditor({
     : undefined, [searchParams]);
   const [showGenerationWarnings, setShowGenerationWarnings] = useState(true);
   const [theme, setTheme] = useState<SiteTheme>(site.theme ?? {});
+  const [business, setBusiness] = useState(initialBusiness);
   const [themePanelOpen, setThemePanelOpen] = useState(false);
   const [library, setLibrary] = useState<SectionLibraryUi["library"]>({ open: false, index: 0 });
   const [preview, setPreview] = useState<SectionDesign | null>(null);
@@ -679,9 +690,9 @@ export function PageEditor({
       siteId: site.id,
       siteName: site.name ?? site.subdomain,
       siteSeo,
-      business, theme,
+      business, updateBusiness: setBusiness, theme, initialHeader: site.draft_header, headersReady,
     }),
-    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, siteSeo, seoPages, business, theme, themePanelOpen],
+    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
@@ -733,17 +744,21 @@ export function PageEditor({
     [],
   );
 
-  const config = useMemo(() => editorConfig(isSuperAdmin), [isSuperAdmin]);
+  const config = useMemo(() => editorConfig(isSuperAdmin, headersReady), [isSuperAdmin, headersReady]);
 
   const data = useMemo<Data>(() => {
     const raw = (initialData ?? {}) as Partial<Data>;
-    const rootProps = raw.root?.props ?? {};
+    const extracted = extractNavigation({ content: raw.content ?? [] });
+    const rootProps: HeaderRoot = raw.root?.props ?? {};
     return {
-      content: raw.content ?? [],
       ...raw,
+      content: headersReady && !rootProps.__legacyNavigation ? extracted.data.content : raw.content ?? [],
       root: {
         ...raw.root,
-        props: { title: page.title ?? "", description: "", ...rootProps },
+        props: { title: page.title ?? "", description: "", ...rootProps,
+          ...(headersReady ? { __editorHeader: site.draft_header ? headerSchema.parse(site.draft_header) :
+            extracted.header ?? defaultHeader(business.businessName || site.name || "", theme.logoUrl) } : {}),
+        },
       },
     } as Data;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -764,6 +779,10 @@ export function PageEditor({
               <a href="/dashboard" className="platform-button"><ArrowLeft size={16} />Back to dashboard</a>
             </section>
             <div className="editor-desktop-workspace">
+            {!headersReady ? <p role="status" className="fixed bottom-12 right-4 z-[180] max-w-sm rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+              {isSuperAdmin ? "Global headers are waiting for migration 0028. Apply it, then reload. Existing Navigation remains active." :
+                "The new header editor is waiting for an agency update. Your existing navigation remains active."}
+            </p> : null}
             {showGenerationWarnings && generationWarnings.length ? <aside role="status" className="fixed bottom-12 left-4 z-[100] max-h-56 w-[min(420px,90vw)] overflow-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950 shadow-lg">
               <p className="font-semibold">AI draft review notes</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">{generationWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
@@ -775,7 +794,9 @@ export function PageEditor({
               config={config}
               data={data}
               ui={initialUi}
-              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) }, siteLinks: linkContext(sitePages) }}
+              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) }, siteLinks: linkContext(sitePages),
+                renderHeader: headersReady ? renderHeaderEditor : undefined, pagePath: `/${page.slug}`,
+              }}
               overrides={overrides}
               plugins={editorPlugins}
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}

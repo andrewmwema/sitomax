@@ -74,13 +74,13 @@ export function VersionHistory({ persistence, siteId }: { persistence: Persisten
     <button type="button" onClick={() => void load()} className="platform-button"><History size={14} />History</button>
     <dialog ref={ref} aria-label="Version history" className="editor-modal m-auto w-[min(480px,94vw)] rounded-xl border border-zinc-200 p-5 shadow-xl backdrop:bg-zinc-950/30">
       <h2 className="text-sm font-semibold">Version history</h2>
-      <p className="my-2 text-xs text-zinc-500">The last 20 published versions and AI edits. Restore updates the draft, not the live site.</p>
+      <p className="my-2 text-xs text-zinc-500">The last 20 published versions, AI edits and header changes. Restore updates the draft, including the site-wide header, not the live site.</p>
       <Link href={`/dashboard/sites/${siteId}#ai-history`} className="my-2 block text-xs underline">Site-wide AI draft backups (account owners)</Link>
       {loading ? <p role="status">Loading...</p> : null}
       {error ? <p role="alert" className="text-xs text-red-600">{error} <button type="button" className="underline" onClick={() => void load()}>Retry</button></p> : null}
       <ol className="my-3 max-h-80 overflow-y-auto">
         {versions.map((version) => <li key={version.id} className="flex items-center justify-between gap-3 border-t py-3 text-xs">
-          <span>{version.kind === "ai_edit" ? "AI edit" : "Published"} · <time dateTime={version.published_at}>{new Date(version.published_at).toLocaleString()}</time></span>
+          <span>{{ ai_edit: "AI edit", published: "Published", header_edit: "Header edit", header_migration: "Before global header migration" }[version.kind]} · <time dateTime={version.published_at}>{new Date(version.published_at).toLocaleString()}</time></span>
           <button type="button" disabled={persistence.busy !== null} className="rounded border px-3 py-1 disabled:opacity-40"
             onClick={async () => {
               if (!window.confirm("Restore this version to the draft? Unsaved changes will be replaced; Undo can recover them.")) return;

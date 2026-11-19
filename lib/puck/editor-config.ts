@@ -69,6 +69,18 @@ const superAdminEditorConfig = withLinkResolution(puckConfig);
 const clientEditorConfig = withLinkResolution(clientConfig);
 
 /** Editor config for the current user (Embed is super-admin only). */
-export function editorConfig(isSuperAdmin: boolean): PuckConfig {
-  return isSuperAdmin ? superAdminEditorConfig : clientEditorConfig;
+export function editorConfig(isSuperAdmin: boolean, headersReady = true): PuckConfig {
+  const config = isSuperAdmin ? superAdminEditorConfig : clientEditorConfig;
+  if (headersReady) return { ...config, components: { ...config.components,
+    Navigation: { ...config.components.Navigation, permissions: { insert: false, duplicate: false } },
+  } };
+  return {
+    ...config,
+    categories: { ...config.categories,
+      layout: { ...config.categories?.layout, components: ["Navigation", ...(config.categories?.layout.components ?? [])] },
+      internal: { ...config.categories?.internal, components: ["Column"], visible: false },
+    },
+    root: { ...config.root, fields: Object.fromEntries(Object.entries(config.root?.fields ?? {})
+      .filter(([key]) => !["hideHeader", "transparentHeader"].includes(key))) },
+  };
 }

@@ -4,6 +4,7 @@ import { sectionCatalog } from "@/lib/sections/catalog";
 import { contrastRatio } from "@/lib/theme/presets";
 import { designPatchSchema, editDesign, editTheme, readableText, themePatchSchema } from "./edit-design";
 import { applyEditOperations, sectionContext, updateEditableProps } from "./edit-operations";
+import { defaultHeader, editorHeader } from "@/lib/header";
 
 type NestedRow = { props: { layout?: unknown; columns: { props: { content: { props: Record<string, unknown> }[] } }[] } };
 
@@ -14,6 +15,23 @@ const page: Data = { root: { props: { title: "Home" } }, content: [
 const allowed = (url: string) => url === "/samples/tools.jpg";
 
 describe("editor AI operations", () => {
+  it("validates isolated header operations, preserves content and reports contrast adjustments", () => {
+    const header = defaultHeader("Example");
+    const base = { ...page, root: { props: { title: "Home", __editorHeader: header } } };
+    const operation = { name: "update_header", input: { device: "mobile", settings: { layout: "center-logo", textColor: "#ffffff" } } };
+    const result = applyEditOperations(base, {}, "header", undefined, [operation], allowed);
+    expect(editorHeader(result.data)?.mobile).toMatchObject({ layout: "center-logo", textColor: "#ffffff" });
+    expect(editorHeader(result.data)?.desktop).toEqual(header.desktop);
+    expect(result.data.content).toEqual(page.content);
+    expect(result.warnings.join(" ")).toContain("WCAG AA");
+    expect(editorHeader(base)).toEqual(header);
+    for (const input of [
+      { device: "mobile", settings: { layout: "split" } },
+      { device: "desktop", settings: { css: "anything" } },
+      { device: "desktop", settings: { image: "https://example.com/unapproved.jpg" } },
+    ]) expect(() => applyEditOperations(base, {}, "header", undefined, [{ name: "update_header", input }], allowed)).toThrow();
+    expect(() => applyEditOperations(base, {}, "header", undefined, [{ name: "delete_section", input: { sectionId: "hero" } }], allowed)).toThrow("Only header");
+  });
   it("validates contextual icon names and preserves existing icon styling during AI edits", () => {
     const original = { icon: { name: "star", size: 48, color: "primary" } };
     expect(updateEditableProps("Icon", original, { icon: "wrench" }).icon)

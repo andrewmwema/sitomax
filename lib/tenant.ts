@@ -14,6 +14,7 @@
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { brand } from "@/lib/brand";
+import { headerMigrationMissing } from "@/lib/header";
 export { getSiteUrl } from "@/lib/site-url";
 
 export function getRootDomain(): string {
@@ -50,6 +51,9 @@ export type TenantSite = {
   domain_verified: boolean;
   theme: Record<string, unknown>;
   draft_theme?: Record<string, unknown> | null;
+  draft_header?: unknown;
+  published_header?: unknown;
+  headers_ready?: boolean;
   business: Record<string, unknown>;
   seo: Record<string, unknown>;
 };
@@ -66,6 +70,8 @@ export type TenantPage = {
 };
 
 const SITE_COLUMNS =
+  "id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, draft_header, published_header, business, seo";
+const LEGACY_SITE_COLUMNS =
   "id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, business, seo";
 
 /**
@@ -78,22 +84,34 @@ export const getSiteByHost = cache(
     const key = siteParam.toLowerCase();
     const supabase = createAdminClient();
 
-    const { data: bySubdomain } = await supabase
+    let columns: typeof SITE_COLUMNS | typeof LEGACY_SITE_COLUMNS = SITE_COLUMNS;
+    let headersReady = true;
+    const subdomain = await supabase
       .from("sites")
       .select(SITE_COLUMNS)
       .eq("subdomain", key)
       .maybeSingle();
-    if (bySubdomain) return bySubdomain as TenantSite;
+    let bySubdomain: TenantSite | null = subdomain.data as TenantSite | null;
+    if (headerMigrationMissing(subdomain.error)) {
+      console.warn("Global header migration is not applied; preserving legacy Navigation rendering.");
+      headersReady = false; columns = LEGACY_SITE_COLUMNS;
+      const legacy = await supabase.from("sites").select(LEGACY_SITE_COLUMNS).eq("subdomain", key).maybeSingle();
+      if (legacy.error) throw new Error("Unable to load the legacy site.", { cause: legacy.error });
+      bySubdomain = legacy.data;
+    } else if (subdomain.error) throw new Error("Unable to load the site.", { cause: subdomain.error });
+    if (bySubdomain) return { ...bySubdomain, headers_ready: headersReady } as TenantSite;
 
     // Custom domains never include a port; strip one left over from dev hosts.
     const domain = key.replace(/:\d+$/, "");
-    const { data: byDomain } = await supabase
+    const domainResult = await supabase
       .from("sites")
-      .select(SITE_COLUMNS)
+      .select(columns)
       .eq("custom_domain", domain)
       .eq("domain_verified", true)
       .maybeSingle();
-    return (byDomain as TenantSite | null) ?? null;
+    if (domainResult.error) throw new Error("Unable to load the custom-domain site.", { cause: domainResult.error });
+    const byDomain = domainResult.data as TenantSite | null;
+    return byDomain ? { ...byDomain, headers_ready: headersReady } as TenantSite : null;
   },
 );
 
