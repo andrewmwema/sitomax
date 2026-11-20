@@ -27,7 +27,7 @@ export default async function RegenerateSitePage({ params }: { params: Promise<{
   ]);
   if (pageError) throw new Error("Could not load the site pages.", { cause: pageError });
   if (retryError) throw new Error("Could not load unfinished page builds.", { cause: retryError });
-  return <section className="mx-auto flex max-w-3xl flex-col gap-6">
+  return <section className="site-creation mx-auto flex w-full max-w-6xl flex-col gap-8">
     <header><Link className="text-sm text-zinc-500 hover:underline" href={`/dashboard/sites/${siteId}`}>{site.name || "Your site"}</Link>
       <h1 className="mt-2 text-2xl font-semibold">Build pages with AI</h1>
       <p className="mt-2 text-sm text-zinc-600">Build unpublished page layouts. Changes to shared Business information require separate confirmation and also affect live contact details.</p></header>

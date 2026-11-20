@@ -196,6 +196,15 @@ suggestion. Alt text suggestions use the supplied description, not the image.
 
 ## Internal agency sites
 
+**New site** opens a choice between **Build with AI** and **Start with a
+template**. AI creation has Business, Pages, Design and Review steps and saves
+unpublished drafts. Template creation has Client, Template, Business details
+and Review steps; **Create and publish site** publishes the template pages
+immediately. Both flows keep entered values when moving back between steps.
+The AI builder groups optional business context in an expandable section and
+requires separate confirmation before replacing drafts or updating shared
+Business information on an existing site.
+
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
 through `0018`. Opening **New site** or **Build with AI** as a super admin
 creates the single agency account, named by `NEXT_PUBLIC_AGENCY_NAME` (default

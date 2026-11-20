@@ -26,7 +26,13 @@ async function setInput(label: string, value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
-async function review() {
+async function submit() {
+  await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+}
+async function clickButton(text: string) {
+  await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === text)!.click());
+}
+async function pages() {
   await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={site} rootDomain="localhost:3000" marketingSubdomain="sitomax" />));
   await setInput("Business type", "Plumber"); await setInput("City / area", "Nairobi");
   await act(async () => {
@@ -34,7 +40,13 @@ async function review() {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Drain repairs");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+  await submit();
+}
+async function design() {
+  await pages(); await submit();
+}
+async function review() {
+  await design(); await submit();
 }
 async function setDesignGuidance(value: string) {
   const field = container.querySelector<HTMLTextAreaElement>("#ai-design-guidance")!;
@@ -59,7 +71,7 @@ describe("AI site wizard", () => {
     expect(schema.safeParse({ ...required, designDescription: " ".repeat(5001) }).success).toBe(false);
   });
   it("shows a live counter and limit message, and preserves full guidance when moving between steps", async () => {
-    await review();
+    await design();
     const guidance = "y".repeat(5001);
     await setDesignGuidance(guidance);
     expect(container.querySelector("#ai-design-guidance-count")?.textContent).toContain("5,001 / 5,000");
@@ -84,10 +96,11 @@ describe("AI site wizard", () => {
     expect(container.textContent).toContain("Repairs");
   });
   it("requires confirmation only for selected rebuilds and shows a summary before opening the editor", async () => {
-    await review();
+    await pages();
     const home = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Home — Rebuild"))!.querySelector("input")!;
     expect(home.checked).toBe(false);
     await act(async () => home.click());
+    await submit(); await submit();
     expect(container.textContent).toContain("Only selected drafts will be replaced");
     await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     expect(mocks.fetch).not.toHaveBeenCalled();
@@ -122,9 +135,9 @@ describe("AI site wizard", () => {
   });
   it("requires a separate confirmation for shared Business changes and sends the saved baseline", async () => {
     await review();
-    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Back")!.click());
+    await clickButton("Back"); await clickButton("Back"); await clickButton("Back");
     await setInput("Phone", "+1 555 0100");
-    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await submit(); await submit(); await submit();
     expect(container.textContent).toContain("published pages too");
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(container.querySelector("[role=alert]")?.textContent).toContain("site-wide Business");
@@ -135,6 +148,55 @@ describe("AI site wizard", () => {
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({
       confirmBusinessUpdate: true, expectedBusiness: site.business, phone: "+1 555 0100",
+    });
+  });
+  it("validates the page step and keeps an unsaved custom page from being silently discarded", async () => {
+    await pages();
+    expect(document.activeElement).toBe(container.querySelector("h2"));
+    const about = [...container.querySelectorAll("label")].find((label) => label.textContent === "About")!.querySelector("input")!;
+    await act(async () => about.click());
+    await submit();
+    expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("Pages");
+    expect(container.querySelector("[role=alert]")).not.toBeNull();
+    await act(async () => about.click());
+    await clickButton("+ Add custom page");
+    await setInput("Name", "Emergency repairs");
+    await setInput("Purpose", "Describe our emergency repair services");
+    await submit();
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("Add or cancel your custom page");
+    await clickButton("Add page");
+    await submit();
+    expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("Design");
+    await clickButton("Back");
+    expect(container.querySelector('[aria-label="Page order"]')?.textContent).toContain("Emergency repairs");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it("carries a new site's pending service and selected design through all four steps before requesting generation", async () => {
+    await act(async () => root.render(<AiSiteWizard accounts={[{ id: site.accountId, name: "Agency" }]} rootDomain="localhost:3000" marketingSubdomain="sitomax" />));
+    await act(async () => {
+      const select = container.querySelector("select")!;
+      select.value = site.accountId; select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await setInput("Business name", "Local Plumbing"); await setInput("Business type", "Plumber");
+    await setInput("City / area", "Nairobi");
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>("#ai-services")!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Drain repairs");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await submit(); await submit();
+    await setDesignGuidance("A restrained editorial layout");
+    await submit();
+    expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("Review & build");
+    expect(container.querySelector(".creation-review")?.textContent).toContain("Drain repairs");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    await setInput("Site address", "local-plumbing");
+    mocks.fetch.mockResolvedValue({ ok: false, headers: new Headers() });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await submit();
+    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({
+      subdomain: "local-plumbing", services: ["Drain repairs"], designDescription: "A restrained editorial layout",
+      desiredPages: ["", "about", "services", "contact"],
     });
   });
 });

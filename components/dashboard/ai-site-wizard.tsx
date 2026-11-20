@@ -2,14 +2,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, Globe2, LoaderCircle, Sparkles } from "lucide-react";
 import { z } from "zod";
 import { createGenerationInputSchema, type GenerationInput } from "@/lib/ai/site-input";
 import { DESIRED_SECTION_TYPES, GENERATION_PAGE_SLUGS, PRESET_PAGES, MAX_GENERATION_PAGES, extraPageCredits,
   generationOutcomeSchema, pageDetailsSchema, slugFromPageName, type GenerationResult } from "@/lib/ai/site-input";
 import type { Business } from "@/lib/business";
 import { businessDetailsChanged } from "@/lib/ai/site-business";
+import { creationInputClass as fieldClass, SiteCreationShell } from "./site-creation-shell";
 
-const fieldClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
+const steps = [
+  { title: "Business", description: "Start with the facts that make this business unique." },
+  { title: "Pages", description: "Choose the pages and sections your site needs." },
+  { title: "Design", description: "Set a visual direction, or let AI take the lead." },
+  { title: "Review & build", description: "Check your plan before creating editable drafts." },
+] as const;
+const stepFields: (keyof GenerationInput)[][] = [
+  ["accountId", "businessName", "businessType", "city", "services", "difference", "tone", "openingHours", "phone", "email", "address", "description"],
+  ["desiredPages", "pageDetails", "desiredSections"],
+  ["style", "generationMode", "styleDirection", "fontDirection", "designDescription", "primaryColor", "secondaryColor"],
+];
 const sectionLabels: Record<(typeof DESIRED_SECTION_TYPES)[number], string> = {
   gallery: "Gallery", testimonials: "Testimonials", faq: "FAQ", pricing: "Pricing",
   team: "Team", process: "Process", logos: "Partner logos",
@@ -67,6 +79,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
   };
   const addService = () => {
     const tag = service.trim();
+    if (tag && values.services.length >= 20 && !values.services.includes(tag)) { setError("You can add up to 20 services."); return; }
     if (tag && values.services.length < 20 && !values.services.includes(tag)) set("services", [...values.services, tag]);
     setService("");
   };
@@ -116,36 +129,53 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
       setError(requestId ? `${message} Reference: ${requestId}` : message);
     } finally { setBusy(false); }
   };
-  if (result) return <div className="platform-panel p-6">
-    <h2 className="text-xl font-semibold">Page generation summary</h2>
-    <p className="mt-2 text-sm text-zinc-600">Page layouts remain unpublished. Confirmed Business information changes apply site-wide, including live contact details. Review every page, placeholder and photo before publishing.</p>
+  const summary = <dl className="space-y-4">
+    <div><dt>Business</dt><dd>{values.businessName || "Your business, your starting point"}</dd></div>
+    <div><dt>Site plan</dt><dd>{values.desiredPages.length} {values.desiredPages.length === 1 ? "page" : "pages"} selected</dd></div>
+    <div><dt>Design approach</dt><dd>{values.generationMode === "custom" ? "Original custom layout" : "Curated section designs"}</dd></div>
+  </dl>;
+  const advance = () => {
+    if (step === 1 && custom) { setError("Add or cancel your custom page before continuing."); return; }
+    const tag = service.trim();
+    const next = step === 0 && tag && !values.services.includes(tag) ? { ...values, services: [...values.services, tag] } : values;
+    if (step === 0 && !next.services.length) { setError("Add at least one service."); return; }
+    const parsed = generationInputSchema.safeParse(next);
+    const issue = !parsed.success && parsed.error.issues.find(({ path }) => stepFields[step].some((field) => field === path[0]));
+    if (issue) { setError(issue.message); return; }
+    if (step === 0) { setValues(next); setService(""); }
+    setError(""); setIssues([]); setStep(step + 1);
+  };
+  if (result) return <div className="site-creation">
+    <SiteCreationShell steps={steps} step={3} mode="ai" summary={summary} title="Page generation summary"
+      description="Your next step: review the draft, refine the details and make it your own.">
+    <div className="creation-fields">
+    <div className="creation-callout"><Check size={18} aria-hidden="true" /><p>Page layouts remain unpublished. Confirmed Business information changes apply site-wide, including live contact details. Review every page, placeholder and photo before publishing.</p></div>
     {result.warnings.length ? <ul role="status" className="my-4 list-disc space-y-2 pl-5 text-sm text-amber-900">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
-    <ul className="mt-4 space-y-3">{result.pages.map((page) => <li key={page.slug} className="flex flex-wrap items-center gap-3 text-sm">
-      <span>{page.label}: {page.built ? "Built ✓" : "Not built ✗"}</span>
-      {page.built && page.pageId ? <button type="button" className="underline" onClick={() => router.push(`/editor/${page.pageId}`)}>Open editor</button> : null}
-      {!page.built && page.retryId ? <button type="button" disabled={busy} className="underline disabled:opacity-40"
+    <ul className="space-y-3">{result.pages.map((page) => <li key={page.slug} className="creation-result-row text-sm">
+      <span className="font-medium">{page.label}<span className={`mt-1 block text-xs font-normal ${page.built ? "text-green-700" : "text-amber-800"}`}>{page.built ? "Draft built" : "Not built — needs attention"}</span></span>
+      {page.built && page.pageId ? <button type="button" className="creation-secondary" onClick={() => router.push(`/editor/${page.pageId}`)}>Open editor</button> : null}
+      {!page.built && page.retryId ? <button type="button" disabled={busy} className="creation-secondary"
         onClick={() => void generate(page.retryId)}>Retry (free)</button> : null}
     </li>)}</ul>
-    {busy ? <p role="status" className="mt-4 text-sm">{messages.at(-1)}</p> : null}
-    {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
+    </div>
+    {busy ? <p role="status" className="creation-progress">{messages.at(-1)}</p> : null}
+    {error ? <p role="alert" className="creation-error">{error}</p> : null}
+    <footer className="creation-footer"><span className="creation-hint">Failed-page retries are free. Nothing publishes automatically.</span>
+      <button type="button" className="creation-secondary" onClick={() => router.push(`/dashboard/sites/${result.siteId}`)}>Site overview<ArrowRight size={15} aria-hidden="true" /></button></footer>
+    </SiteCreationShell>
   </div>;
-  return <form className="platform-panel p-5 sm:p-8" onSubmit={(event) => {
+  return <form className="site-creation" aria-label="Build a site with AI" onSubmit={(event) => {
     event.preventDefault();
-    if (step === 0) {
-      if (!values.services.length && !service.trim()) { setError("Add at least one service."); return; }
-      if (service.trim()) addService();
-      setError(""); setStep(1);
-    } else void generate();
+    if (step < steps.length - 1) advance();
+    else void generate();
   }}>
+    <SiteCreationShell steps={steps} step={step} mode="ai" summary={summary}>
+    <fieldset disabled={busy} className="creation-fields">
     {existingSite && pendingRetries.length ? <button type="button" className="mb-4 text-sm underline"
       onClick={() => setResult({ siteId: existingSite.id, pageId: pendingRetries[0].pageId!, warnings: [], pages: pendingRetries })}>
       Review unfinished pages and retry for free
     </button> : null}
-    <ol className="mb-6 flex gap-4 text-xs font-medium text-zinc-500" aria-label="AI setup steps">
-      {["Business details", "Style & review"].map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={step === index ? "text-zinc-900" : ""}>{index + 1}. {label}</li>)}
-    </ol>
-    <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
-      {step === 0 ? <>
+      {step === 0 ? <div className="creation-field-grid">
         {!existingSite ? <label className="text-sm font-medium sm:col-span-2">Account
           <select required className={`${fieldClass} mt-2`} value={values.accountId} onChange={(event) => set("accountId", event.target.value)}>
             <option value="">Choose an account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
@@ -165,11 +195,14 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
             onChange={(event) => setService(event.target.value)} onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addService(); }
             }} placeholder="Add a service, then press Enter" />
-            <button type="button" className="rounded-lg border px-3 text-sm" disabled={!service.trim()} onClick={addService}>Add</button></div>
+            <button type="button" className="creation-secondary" disabled={!service.trim()} onClick={addService}>Add</button></div>
           <ul className="mt-2 flex flex-wrap gap-2">{values.services.map((tag) => <li key={tag}>
-            <button type="button" aria-label={`Remove ${tag}`} className="rounded-full bg-zinc-100 px-3 py-1 text-xs" onClick={() => set("services", values.services.filter((entry) => entry !== tag))}>{tag} &times;</button>
+            <button type="button" aria-label={`Remove ${tag}`} className="creation-chip" onClick={() => set("services", values.services.filter((entry) => entry !== tag))}>{tag} &times;</button>
           </li>)}</ul>
         </div>
+        <details className="creation-section sm:col-span-2">
+          <summary className="creation-disclosure"><span>More business context<span className="creation-hint mt-1 block font-normal">Optional details to make the copy more personal.</span></span><ChevronDown size={16} aria-hidden="true" /></summary>
+          <div className="creation-field-grid mt-5">
         <label className="text-sm font-medium sm:col-span-2">What makes you different?
           <textarea maxLength={1000} className={`${fieldClass} mt-2`} rows={2} value={values.difference} onChange={(event) => set("difference", event.target.value)} />
         </label>
@@ -183,27 +216,14 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
           <textarea maxLength={4000} className={`${fieldClass} mt-2`} rows={4} value={values.description} onChange={(event) => set("description", event.target.value)}
             placeholder="Who you help, what you do and any facts you want included. Do not include private customer information." />
         </label>
-      </> : <>
-        <fieldset className="sm:col-span-2">
-          <legend className="text-sm font-medium">Design approach</legend>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            {([
-              ["catalog", "SitoMax designs", "Build with the existing curated section designs."],
-              ["custom", "Original custom layout", "Compose an editable site from responsive layout blocks and elements."],
-            ] as const).map(([mode, label, description]) => (
-              <label key={mode} className={`cursor-pointer rounded-xl border p-4 ${values.generationMode === mode ? "border-zinc-900 bg-zinc-50" : "border-zinc-300"}`}>
-                <input type="radio" name="generationMode" className="mr-2" value={mode} checked={values.generationMode === mode}
-                  onChange={() => set("generationMode", mode)} />
-                <span className="font-medium">{label}</span>
-                <span className="mt-1 block pl-6 text-xs font-normal text-zinc-600">{description}</span>
-              </label>
-            ))}
           </div>
-        </fieldset>
-        <fieldset className="sm:col-span-2">
-          <legend className="text-sm font-medium">Pages</legend>
-          <div className="mt-2 flex flex-wrap gap-3">
-            {choices.map(({ slug, label, empty }) => <label key={slug} className="flex items-center gap-2 text-sm">
+        </details>
+      </div> : null}
+      {step === 1 ? <>
+        <fieldset>
+          <legend className="creation-section-title">Pages to build</legend>
+          <div className="creation-options">
+            {choices.map(({ slug, label, empty }) => <label key={slug} className="creation-option">
               <input type="checkbox" checked={values.desiredPages.includes(slug)}
                 disabled={(!existingSite && !slug) || (!values.desiredPages.includes(slug) && values.desiredPages.length >= MAX_GENERATION_PAGES)}
                 onChange={(event) => {
@@ -211,11 +231,11 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
                   else setValues((previous) => ({ ...previous, desiredPages: previous.desiredPages.filter((page) => page !== slug),
                     pageDetails: previous.pageDetails?.filter((page) => page.slug !== slug) }));
                 }} />
-              {label}{!empty ? " — Rebuild (replaces draft)" : ""}
+              <span>{label}{!empty ? " — Rebuild (replaces draft)" : ""}</span>
             </label>)}
           </div>
-          <p className="mt-2 text-xs text-zinc-500">{existingSite ? "Unselected drafts are left unchanged." : "Home is required."}
-            {" "}Select up to 10 pages. {values.desiredPages.length ? `Estimated time: ${Math.min(5, values.desiredPages.length)}–${Math.min(12, values.desiredPages.length * 2 + 1)} minutes. Unfinished pages can be retried for free.` : ""}</p>
+          <p className="creation-hint mt-3">{existingSite ? "Unselected drafts are left unchanged." : "Home is required."}
+            {" "}Select up to 10 pages. Unfinished pages can be retried for free.</p>
           {custom ? <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <label className="text-sm">Name<input className={fieldClass} value={custom.name} maxLength={80}
               onChange={(event) => setCustom({ ...custom, name: event.target.value,
@@ -244,18 +264,20 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
                 [next[index], next[index + offset]] = [next[index + offset], next[index]];
                 set("desiredPages", next);
               };
-              return <li key={slug} className="flex items-center gap-2">
+              return <li key={slug} className="creation-order-row">
                 <span>{index + 1}. {label}</span>
-                <button type="button" aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => move(-1)}>↑</button>
-                <button type="button" aria-label={`Move ${label} down`} disabled={index === values.desiredPages.length - 1} onClick={() => move(1)}>↓</button>
+                <span className="flex gap-1">
+                <button type="button" className="inline-flex size-9 items-center justify-center rounded-md border disabled:opacity-30" aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => move(-1)}><ArrowUp size={14} aria-hidden="true" /></button>
+                <button type="button" className="inline-flex size-9 items-center justify-center rounded-md border disabled:opacity-30" aria-label={`Move ${label} down`} disabled={index === values.desiredPages.length - 1} onClick={() => move(1)}><ArrowDown size={14} aria-hidden="true" /></button>
+                </span>
               </li>;
             })}
           </ol> : null}
           <p className="mt-2 text-sm">{unlimited ? "Agency: unlimited credits."
             : `Cost: one generation (10 shared credits if your allowance is used up)${extraPageCredits(values.desiredPages.length) ? ` + ${extraPageCredits(values.desiredPages.length)} shared credits for extra pages` : ""}. Failed-page retries are free.`}</p>
         </fieldset>
-        <fieldset className="sm:col-span-2">
-          <legend className="text-sm font-medium">Include these sections (optional)</legend>
+        <fieldset className="creation-section">
+          <legend className="creation-section-title">Include these sections (optional)</legend>
           <div className="mt-2 flex flex-wrap gap-3">
             {DESIRED_SECTION_TYPES.map((section) => <label key={section} className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={values.desiredSections.includes(section)}
@@ -266,6 +288,24 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
             </label>)}
           </div>
           <p className="mt-1 text-xs text-zinc-500">Requested sections use only information you provided; missing facts stay placeholders.</p>
+        </fieldset>
+      </> : null}
+      {step === 2 ? <div className="creation-field-grid">
+        <fieldset className="sm:col-span-2">
+          <legend className="creation-section-title">Design approach</legend>
+          <div className="creation-options">
+            {([
+              ["catalog", "SitoMax designs", "A cohesive site built with curated section designs."],
+              ["custom", "Original custom layout", "An original composition built from editable layout blocks."],
+            ] as const).map(([mode, label, description]) => (
+              <label key={mode} className="creation-option">
+                <input type="radio" name="generationMode" value={mode} checked={values.generationMode === mode}
+                  onChange={() => set("generationMode", mode)} />
+                <span><span className="font-medium">{label}</span>
+                <span className="creation-hint mt-1 block">{description}</span></span>
+              </label>
+            ))}
+          </div>
         </fieldset>
         <label className="text-sm font-medium">Visual direction
           <select className={`${fieldClass} mt-2`} value={values.styleDirection} onChange={(event) => {
@@ -303,35 +343,55 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
         {(["primaryColor", "secondaryColor"] as const).map((key) => <label key={key} className="text-sm font-medium">{key === "primaryColor" ? "Primary" : "Secondary"} color (optional)
           <input className={`${fieldClass} mt-2`} value={values[key]} onChange={(event) => set(key, event.target.value)} placeholder="#1e3a5f" pattern="#[0-9a-fA-F]{6}" maxLength={7} />
         </label>)}
-        {!existingSite ? <label className="text-sm font-medium sm:col-span-2">Subdomain
-          <input required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={63} className={`${fieldClass} mt-2`} value={values.subdomain}
+      </div> : null}
+      {step === 3 ? <>
+        <dl className="creation-review">
+          <div><dt>Business</dt><dd>{values.businessName}</dd></div>
+          <div><dt>Location</dt><dd>{values.city}</dd></div>
+          <div><dt>Services</dt><dd>{values.services.join(", ")}</dd></div>
+          <div><dt>Design</dt><dd>{values.generationMode === "custom" ? "Original custom layout" : "Curated sections"} · {values.styleDirection === "auto" ? "AI-chosen style" : values.styleDirection}</dd></div>
+          <div><dt>Contact details</dt><dd>{[values.email, values.phone, values.address].filter(Boolean).join("\n") || "Not provided"}</dd></div>
+          <div><dt>Brand colors</dt><dd>{[values.primaryColor, values.secondaryColor].filter(Boolean).join(" / ") || "Let AI choose"}</dd></div>
+          <div className="sm:col-span-2"><dt>Pages, in order</dt><dd>{values.desiredPages.map((slug) => choices.find((page) => page.slug === slug)?.label ?? slug).join(" → ")}</dd></div>
+        </dl>
+        <div className="creation-callout"><Sparkles size={18} aria-hidden="true" /><p>{unlimited ? "Agency: unlimited credits."
+          : `Cost: one generation (10 shared credits if your allowance is used up)${extraPageCredits(values.desiredPages.length) ? ` + ${extraPageCredits(values.desiredPages.length)} shared credits for extra pages` : ""}. Failed-page retries are free.`}</p></div>
+        {!existingSite ? <label className="flex flex-col gap-2 text-sm font-medium">Site address
+          <span className="creation-url"><Globe2 size={16} className="ml-3 shrink-0" aria-hidden="true" />
+          <input aria-label="Subdomain" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={63} className={fieldClass} value={values.subdomain}
             onChange={(event) => set("subdomain", event.target.value.toLowerCase())} autoCapitalize="none" spellCheck={false} />
-          <span className="mt-1 block text-xs font-normal text-zinc-500">.{rootDomain} &mdash; availability is checked before generation and when saving.</span>
-        </label> : needsConfirmation ? <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm sm:col-span-2">
+          <span className="shrink-0 font-normal">.{rootDomain}</span></span>
+          <span className="creation-hint font-normal">Availability is checked before generation and when saving. Connect a custom domain later.</span>
+        </label> : needsConfirmation ? <label className="creation-callout creation-callout-warning">
           <input type="checkbox" required className="mt-1" checked={values.confirmReplace} onChange={(event) => set("confirmReplace", event.target.checked)} />
           <span>Only selected drafts will be replaced. Published content is unchanged. You can restore drafts from version history.</span>
         </label> : null}
-        {changesBusiness ? <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm sm:col-span-2">
+        {changesBusiness ? <label className="creation-callout creation-callout-warning">
           <input type="checkbox" required className="mt-1" checked={values.confirmBusinessUpdate}
             onChange={(event) => set("confirmBusinessUpdate", event.target.checked)} />
           <span>Update shared Business information with these details. This changes contact details and the business name on published pages too. Saved social profiles are kept.</span>
         </label> : null}
         <p className="text-xs leading-relaxed text-zinc-600 sm:col-span-2">Selected pages will be saved as drafts, never published automatically. Completed AI work is metered even if saving fails. Missing facts use placeholders. Review all copy before publishing.</p>
-      </>}
+      </> : null}
     </fieldset>
-    {busy ? <div role="status" aria-live="polite" className="mt-6 rounded-xl bg-zinc-50 p-4 text-sm">
-      <p className="font-medium">Building your draft site. Keep this page open.</p>
+    {busy ? <div role="status" aria-live="polite" className="creation-progress">
+      <p className="flex items-center gap-2 font-medium"><LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />Building your draft site. Keep this page open.</p>
       <ul className="mt-2 space-y-1 text-zinc-600">{messages.map((message, index) => <li key={index}>{message}</li>)}</ul>
     </div> : null}
-    {error ? <div role="alert" className="mt-4 text-sm text-red-700">
+    {error ? <div role="alert" className="creation-error">
       <p>{error}</p>
       {issues.length ? <ul className="mt-2 list-disc pl-5">
         {issues.map(({ path, code, message }, index) => <li key={index}>{path.join(".") || "(root)"} ({code}): {message}</li>)}
       </ul> : null}
     </div> : null}
-    <div className="mt-6 flex gap-3">
-      {step > 0 ? <button type="button" disabled={busy} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40" onClick={() => setStep(0)}>Back</button> : null}
-      <button disabled={busy} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{busy ? "Building…" : step === 0 ? "Continue" : "Build draft site"}</button>
-    </div>
+    <footer className="creation-footer">
+      <span className="creation-hint">{step === 3 ? "Drafts only. You choose when to publish." : "Your choices are kept as you move between steps."}</span>
+      <div className="creation-footer-actions">
+      {step > 0 ? <button type="button" disabled={busy} className="creation-secondary" onClick={() => { setStep(step - 1); setError(""); setIssues([]); }}><ArrowLeft size={15} aria-hidden="true" />Back</button> : null}
+      <button type="submit" disabled={busy} className="creation-primary">{busy ? <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : step === 3 ? <Sparkles size={16} aria-hidden="true" /> : null}
+        {busy ? "Building…" : step === 3 ? "Build draft site" : "Continue"}{!busy && step < 3 ? <ArrowRight size={15} aria-hidden="true" /> : null}</button>
+      </div>
+    </footer>
+    </SiteCreationShell>
   </form>;
 }
