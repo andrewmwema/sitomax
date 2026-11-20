@@ -46,7 +46,7 @@ templates/                niche template JSON (plumber, salon, restaurant...)
   - owner: edit sites, manage domain, view forms and analytics, invite editors
   - editor: edit sites only
 - **All access control lives in Postgres RLS.** Never rely only on hiding UI.
-- `lib/supabase/admin.ts` (service role key) may be used ONLY in server code, and only for: the public site renderer, the form-submit endpoint, the analytics beacon, super-admin actions, and AI reservations/accounting in `lib/ai/usage.ts` after authenticated account-access checks. Never import it into a client component.
+- `lib/supabase/admin.ts` (service role key) may be used ONLY in server code, and only for: the public site renderer, the form-submit endpoint, the analytics beacon, super-admin actions, and AI reservations/accounting/draft checkpoints in `lib/ai/usage.ts` after authenticated account-access checks. Never import it into a client component.
 
 ## Multi-tenant routing rules
 - `ROOT_DOMAIN` env var (e.g. `sitomax.com`; `localhost:3000` in dev); `NEXT_PUBLIC_APP_URL` is the canonical platform origin.
@@ -62,6 +62,7 @@ templates/                niche template JSON (plumber, salon, restaurant...)
 - Each page stores `draft_data` (what the editor saves) and `published_data` (what the public sees). Publishing copies draft → published.
 - Site-wide theme (colors, fonts, logo) lives in `sites.theme` as JSON and is applied with CSS variables.
 - Blocks must read colors and fonts from CSS variables (`var(--color-primary)` etc.), never hard-coded colors, so the theme works everywhere.
+- AI builds create retry records before body generation and checkpoint accepted drafts individually with compare-and-swap protection. Keep published content untouched; shared Business changes need separate explicit confirmation because contact metadata is live site-wide. Preserve saved social profiles and the shared footer.
 
 ## Coding conventions
 - TypeScript strict. No `any` unless unavoidable, with a comment.

@@ -1,6 +1,6 @@
 import type { ComponentConfig } from "@puckeditor/core";
 import { designField, linkField } from "@/lib/puck/fields";
-import { linkAttributes, type LinkValue } from "@/lib/links";
+import { linkAttributes, normalizeExternalUrl, type LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
@@ -92,6 +92,12 @@ export const Footer: ComponentConfig<FooterProps> = {
       businessName, phone, address, email: email ?? "", openingHours: hours ?? "",
     });
     const centered = (variant ?? "columns") === "centered";
+    const profiles = (menu?.contacts.socialLinks ?? socialLinks.map(({ platform, url }) => ({
+      label: PLATFORM_LABELS[platform] ?? platform, url,
+    }))).flatMap(({ label, url }) => {
+      const href = normalizeExternalUrl(url);
+      return href ? [{ label, url: href }] : [];
+    });
 
     const contact = (
       <div
@@ -105,9 +111,9 @@ export const Footer: ComponentConfig<FooterProps> = {
     );
 
     const social =
-      socialLinks.length > 0 ? (
+      profiles.length > 0 ? (
         <div className={`flex flex-wrap gap-5 text-sm font-medium ${centered ? "justify-center" : ""}`}>
-          {socialLinks.map((link, i) => (
+          {profiles.map((link, i) => (
             <a
               key={i}
               href={safeHref(link.url)}
@@ -115,7 +121,7 @@ export const Footer: ComponentConfig<FooterProps> = {
               rel="noreferrer"
               className="inline-flex min-h-12 items-center transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              {PLATFORM_LABELS[link.platform] ?? link.platform}
+              {link.label}
             </a>
           ))}
         </div>
@@ -150,7 +156,7 @@ export const Footer: ComponentConfig<FooterProps> = {
             className={
               centered
                 ? "flex flex-col items-center gap-6 text-center"
-                : "flex flex-col gap-8 md:flex-row md:items-start md:justify-between"
+                : "grid min-w-0 gap-8 break-words md:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]"
             }
           >
             {brand}

@@ -310,6 +310,35 @@ pages for free from the summary or by reopening **Build pages with AI**.
 Unticked drafts and published content are not replaced. Use **Hide from menus**
 in a page's **⋯** menu to remove it from navigation without unpublishing it.
 
+Apply [`0037_ai_draft_checkpoints.sql`](supabase/migrations/0037_ai_draft_checkpoints.sql)
+in the Supabase SQL Editor before deploying the generation quality/checkpoint
+updates. After planning, generation creates recoverable page/retry records and
+one draft backup, then saves each accepted page immediately. Existing drafts
+stay intact until their replacement passes validation; concurrent edits are
+never overwritten. New sites are created as unpublished drafts before body
+generation. If a run is interrupted, reopen the site's **Build pages with AI**;
+unfinished pages become available for free retry after the 15-minute active-run
+window. Unknown provider usage remains reserved for reconciliation.
+
+Both AI modes require one H1, at least 30 words of substantive supporting copy
+(excluding headings, menus and placeholders), a working body button or form,
+and one final footer before a page is marked **Built**. Failed checks receive a
+bounded repair attempt; rejected pages remain retryable, not successful.
+Custom headings are normalized into a single-H1 hierarchy; section links use
+rendered anchor IDs. Custom text preserves paragraphs, line breaks, bold and
+emphasis; unsupported Markdown is rejected for repair.
+
+Generated pages reuse the Home draft footer (then another saved footer, including
+published fallbacks) with fresh block IDs, keeping its layout and introduction.
+A new site uses one consistent footer design without stock business claims.
+Footer contact details, menu links and saved social profiles come from site
+metadata. Confirming edits to Business information in the wizard updates those
+details site-wide, including on published pages; this is separate from draft
+replacement confirmation. Saved social profiles are preserved, and concurrent
+Business edits require reloading rather than being overwritten.
+Always review copy, photos, placeholders and desktop/tablet/mobile layouts before
+publishing; these deterministic checks are not a visual or factual guarantee.
+
 ### Pages and links
 
 The editor's **Pages** panel creates pages (blank, a copy of another page, or

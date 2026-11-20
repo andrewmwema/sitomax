@@ -103,6 +103,7 @@ describe("custom AI layout schemas", () => {
     const content = buildCustomSections([customSectionSchema.parse(responsive)], {
       primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111",
     });
+
     const html = renderToStaticMarkup(createElement(Render, {
       config: puckConfig,
       data: { root: { props: {} }, content } as PuckPageData,
@@ -112,6 +113,20 @@ describe("custom AI layout schemas", () => {
     expect(html).toContain("<h1");
     expect(html).toContain("Local help for your home.");
     expect(html).toContain('href="/contact"');
+  });
+
+  it("renders paragraph breaks, line breaks and limited emphasis without treating HTML as markup", () => {
+    const formatted = structuredClone(section);
+    const element = formatted.rows[0].columns[0].elements[1];
+    if (!("text" in element)) throw new Error("Missing Text fixture.");
+    element.text = "First **paragraph** with *emphasis*.\nSecond line.\n\nNext paragraph <script>bad()</script>.";
+    const content = buildCustomSections([customSectionSchema.parse(formatted)], {
+      primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111",
+    });
+    const text = (content[0].props.rows as RowItem[])[0].props.columns[0].props.content[1].props.text;
+    expect(text).toBe("<p>First <strong>paragraph</strong> with <em>emphasis</em>.<br>Second line.</p><p>Next paragraph &lt;script&gt;bad()&lt;/script&gt;.</p>");
+    element.text = "## A Markdown heading\n- a list";
+    expect(customSectionSchema.safeParse(formatted).error?.issues[0].message).toContain("Use Heading, IconList and Button");
   });
 
   it("reports a repairable path for an unselected-page link", () => {

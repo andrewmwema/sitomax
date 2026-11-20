@@ -13,7 +13,7 @@ import { iconNameSchema, ICON_GENERATION_GUIDANCE } from "@/lib/icons";
 import { DESIRED_SECTION_TYPES, type GenerationInput } from "./site-input";
 import { fallbackPageSeo, requestedSectionsForPage, selectedPageBriefs } from "./selected-pages";
 
-export const CUSTOM_LAYOUT_CONTRACT = "custom-layout-v3";
+export const CUSTOM_LAYOUT_CONTRACT = "custom-layout-v4";
 const LIMIT = { depth: 5, elements: 60, sections: 10, rows: 4, columns: 4, perColumn: 8, goal: 160, title: 80, seoTitle: 59, seoDescription: 159 } as const;
 const pageKey = (slug: string) => slug || "home";
 
@@ -25,7 +25,10 @@ const spacing = z.number().int().refine((value) => SPACING_SCALE.some((step) => 
 const align = z.enum(["left", "center", "right"]).default("left").catch("left");
 const colorToken = z.enum(["primary", "secondary", "text", "muted", "background", "soft", "border"]);
 const iconName = iconNameSchema;
-const plainText = z.string().trim().min(1).max(2000);
+const plainText = z.string().trim().min(1).max(2000).refine(
+  (text) => !/^\s{0,3}(?:#{1,6}\s|[-*+]\s|\d+\.\s|>|```)|\[[^\]]+\]\([^)]+\)/m.test(text),
+  "Text supports paragraphs, line breaks, **bold** and *emphasis* only. Use Heading, IconList and Button elements for headings, lists and links.",
+);
 const elementSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("Heading"), text: z.string().trim().min(1).max(180), level: z.enum(["h1", "h2", "h3", "h4"]), align }),
   z.strictObject({ type: z.literal("Text"), text: plainText, align: z.enum(["left", "center", "right", "justify"]).default("left").catch("left") }),
@@ -120,6 +123,7 @@ export function customPlanContract(input: Pick<GenerationInput, "style" | "fontD
         !pages.some((other) => other.slug !== entry.slug && requestedSectionsForPage(selection, other.slug).some((item) => item === kind)));
       for (const kind of requested) if (!body.some((section) => section.kind === kind)) body.push(placeholder(kind));
       if (!body.length) body.unshift(placeholder(entry.slug === "contact" ? "contact" : entry.slug ? "content" : "hero"));
+      if (body[0].kind === "contact") body.unshift(placeholder("hero"));
       while (body.length >= LIMIT.sections) {
         const index = body.findLastIndex(({ kind }) => !requested.some((item) => item === kind) ||
           body.findIndex((section) => section.kind === kind) !== body.findLastIndex((section) => section.kind === kind));
@@ -175,7 +179,12 @@ function item(type: string, props: Record<string, unknown>): LayoutItem {
 function elementItem(value: GeneratedElement) {
   if (value.type === "Text") {
     const { type, text, ...props } = value;
-    return item(type, { ...props, text: sanitizeRichText(`<p>${escapeHtml(text)}</p>`) });
+    const formatted = escapeHtml(text.replace(/\r\n?/g, "\n")).trim()
+      .split(/\n\s*\n/).map((paragraph) => `<p>${paragraph
+        .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "<em>$1</em>")
+        .replace(/\n/g, "<br>")}</p>`).join("");
+    return item(type, { ...props, text: sanitizeRichText(formatted) });
   }
   if (value.type === "Image") {
     const { type, query, ...props } = value;
@@ -225,7 +234,7 @@ export function customSectionTask(page: { slug: string; title: string; purpose?:
   return `Generate only section ${index + 1} of this page. The section property must be a JSON object, not a string containing JSON. Header, footer and contact details are managed by the site; do not generate menus or write contact values in section copy. Use real Button elements (ghost for inline links), never "label: href" text. The first section of each page may use one H1; use H2–H4 elsewhere.
 PAGE PLAN:\n${JSON.stringify({ slug: page.slug, title: page.title, purpose: page.purpose, sectionGoals: page.sections, current: page.sections[index], theme })}
 BUSINESS FACTS:\n${JSON.stringify(input)}
-Use concise and accessible copy. Buttons may link only to selected site pages, anchors, the supplied phone/email, or supplied URLs. Never imply stock imagery depicts this business.`;
+Use concise and accessible copy with at least 40 words of substantive supporting text across the page, not just headings. Include a clear Button next step or contact form. Text uses blank lines between paragraphs, single newlines for line breaks, and optional **bold** or *emphasis*; do not use other Markdown or HTML. Buttons may link only to selected site pages, anchors, the supplied phone/email, or supplied URLs. Never imply stock imagery depicts this business.`;
 }
 
 const layoutRules = `Generate one editable Section with Row > Column > element only (maximum depth ${LIMIT.depth} including page root). Use 1–${LIMIT.rows} rows, 1–${LIMIT.columns} columns matching the row preset, 1–${LIMIT.perColumn} elements per column and at most ${LIMIT.elements} elements per section. Aim for 1–2 rows. Elements: ${elementSchema.options.map((schema) => schema.shape.type.value).join(", ")}. Row presets: ${row.shape.layout.options.join(", ")}. Section backgrounds: ${customSectionSchema.shape.background.options.join(", ")}. Section widths: ${customSectionSchema.shape.width.options.join(", ")}. Column surfaces: ${column.shape.surface.options.join(", ")}. Color tokens: ${colorToken.options.join(", ")}. Spacing: ${SPACING_SCALE.join(", ")}. Use only design properties and values in the tool schema. Omit animation if not needed.`;

@@ -19,7 +19,9 @@ const section = (text: string) => ({
   background: "default", width: "contained", rowGap: 48, design: {},
   rows: [{ layout: "1", gap: 32, reverseOnMobile: false, columns: [{
     surface: "none", verticalAlign: "top", gap: 16,
-    elements: [{ type: "Heading", text, level: "h1", align: "left" }],
+    elements: [{ type: "Heading", text, level: "h1", align: "left" },
+      { type: "Text", text: "Our team helps you understand the available services and decide what to do next. Tell us about your needs and we can discuss the work together, answer your questions and explain the next steps.", align: "left" },
+      { type: "Button", label: "Explore home", href: "/", variant: "primary", size: "md", align: "left" }],
   }] }],
 });
 
@@ -96,6 +98,17 @@ describe("building an empty page", () => {
     await expect(generateEmptyPage(pageId)).rejects.toThrow("failed validation");
     expect(mocks.request).toHaveBeenCalledTimes(2);
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("repairs heading-only pages instead of returning them as complete", async () => {
+    const empty = section("Only a title");
+    empty.rows[0].columns[0].elements = [empty.rows[0].columns[0].elements[0]];
+    mocks.request.mockResolvedValue({ stop_reason: "tool_use", content: [{
+      type: "tool_use", name: "build_empty_page", id: "call", input: { sections: [empty, empty] },
+    }] });
+    await expect(generateEmptyPage(pageId)).rejects.toThrow("failed validation");
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(mocks.request.mock.calls[1][0].messages)).toContain("substantive supporting copy");
   });
 });
 

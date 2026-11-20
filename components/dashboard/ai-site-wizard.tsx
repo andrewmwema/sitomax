@@ -7,6 +7,7 @@ import { createGenerationInputSchema, type GenerationInput } from "@/lib/ai/site
 import { DESIRED_SECTION_TYPES, GENERATION_PAGE_SLUGS, PRESET_PAGES, MAX_GENERATION_PAGES, extraPageCredits,
   generationOutcomeSchema, pageDetailsSchema, slugFromPageName, type GenerationResult } from "@/lib/ai/site-input";
 import type { Business } from "@/lib/business";
+import { businessDetailsChanged } from "@/lib/ai/site-business";
 
 const fieldClass = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-2 focus:outline-offset-2 focus:outline-zinc-900";
 const sectionLabels: Record<(typeof DESIRED_SECTION_TYPES)[number], string> = {
@@ -41,6 +42,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
       : [...GENERATION_PAGE_SLUGS], desiredSections: [],
     primaryColor: "", secondaryColor: "", phone: existingSite?.business.phone ?? "",
     email: existingSite?.business.email ?? "", address: existingSite?.business.address ?? "", description: "", confirmReplace: false,
+    confirmBusinessUpdate: false, expectedBusiness: existingSite?.business,
   });
   const isInternal = accounts.some((account) => account.id === values.accountId && account.is_internal);
   const generationInputSchema = createGenerationInputSchema(marketingSubdomain, isInternal);
@@ -59,6 +61,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     ...(values.pageDetails ?? []).map(({ slug, name }) => ({ slug, label: name, empty: true })),
   ];
   const needsConfirmation = existingSite?.pages?.some(({ slug, empty }) => !empty && values.desiredPages.includes(slug));
+  const changesBusiness = existingSite && businessDetailsChanged(values, existingSite.business);
   const set = <K extends keyof GenerationInput>(key: K, value: GenerationInput[K]) => {
     setValues((previous) => ({ ...previous, [key]: value })); setError("");
   };
@@ -71,6 +74,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     const parsed = generationInputSchema.safeParse(values);
     if (!retryId && !parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your details."); return; }
     if (!retryId && needsConfirmation && !values.confirmReplace) { setError("Confirm that the selected drafts can be replaced."); return; }
+    if (!retryId && changesBusiness && !values.confirmBusinessUpdate) { setError("Confirm the site-wide Business information update."); return; }
     setBusy(true); setError(""); setIssues([]); setMessages([retryId ? "Retrying page…" : "Planning your site…"]);
     let requestId: string | null = null;
     try {
@@ -114,7 +118,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
   };
   if (result) return <div className="platform-panel p-6">
     <h2 className="text-xl font-semibold">Page generation summary</h2>
-    <p className="mt-2 text-sm text-zinc-600">Nothing has been published. Review every page, placeholder and photo before publishing.</p>
+    <p className="mt-2 text-sm text-zinc-600">Page layouts remain unpublished. Confirmed Business information changes apply site-wide, including live contact details. Review every page, placeholder and photo before publishing.</p>
     {result.warnings.length ? <ul role="status" className="my-4 list-disc space-y-2 pl-5 text-sm text-amber-900">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
     <ul className="mt-4 space-y-3">{result.pages.map((page) => <li key={page.slug} className="flex flex-wrap items-center gap-3 text-sm">
       <span>{page.label}: {page.built ? "Built ✓" : "Not built ✗"}</span>
@@ -306,6 +310,11 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
         </label> : needsConfirmation ? <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm sm:col-span-2">
           <input type="checkbox" required className="mt-1" checked={values.confirmReplace} onChange={(event) => set("confirmReplace", event.target.checked)} />
           <span>Only selected drafts will be replaced. Published content is unchanged. You can restore drafts from version history.</span>
+        </label> : null}
+        {changesBusiness ? <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm sm:col-span-2">
+          <input type="checkbox" required className="mt-1" checked={values.confirmBusinessUpdate}
+            onChange={(event) => set("confirmBusinessUpdate", event.target.checked)} />
+          <span>Update shared Business information with these details. This changes contact details and the business name on published pages too. Saved social profiles are kept.</span>
         </label> : null}
         <p className="text-xs leading-relaxed text-zinc-600 sm:col-span-2">Selected pages will be saved as drafts, never published automatically. Completed AI work is metered even if saving fails. Missing facts use placeholders. Review all copy before publishing.</p>
       </>}

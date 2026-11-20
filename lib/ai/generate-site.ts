@@ -2,16 +2,15 @@ import "server-only";
 
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { puckConfig } from "@/lib/puck/config";
 import { sanitizePuckData } from "@/lib/richtext";
-import { businessSchema } from "@/lib/business";
+import { businessSchema, emptyBusiness } from "@/lib/business";
 import { isReservedForAccountSite } from "@/lib/reserved-subdomains";
 import { contrastRatio, DEFAULT_COLORS, type SiteTheme } from "@/lib/theme/presets";
 import { CURATED_FONTS } from "@/lib/theme/fonts";
 import { requestAi } from "./client";
 import { AiProviderError } from "./provider-error";
-import { beginSiteGeneration, claimPageRetry, finishPageRetry, finishSiteGeneration, stageSelectedGeneration } from "./usage";
+import { beginSiteGeneration, checkpointDraft, claimPageRetry, completeDraftCheckpoints, finishPageRetry, finishSiteGeneration, startDraftCheckpoints } from "./usage";
 import { createGenerationInputSchema, type GenerationInput, type GenerationOutcome, type GenerationProgress, type GenerationResult } from "./site-input";
 import { catalogPageSections, defaultSection, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
 import { fillPage, runSiteTool, validationMessage, type SiteToolCall } from "./site-tool";
@@ -21,10 +20,13 @@ import { CUSTOM_LAYOUT_CONTRACT, customSystemPrompt } from "./custom-layout";
 import { CustomSiteError, customSiteMaxTokens, planCustomSite, writeCustomPage } from "./custom-site";
 import { brand } from "@/lib/brand";
 import { defaultMenuLabel, menuLabelSchema, pageMenuLinks } from "@/lib/page-navigation";
-import { reviewGeneratedPage } from "./site-quality";
+import { generatedPageIssues, reviewGeneratedPage } from "./site-quality";
 import { fallbackPageSeo, normalizeSelectedPages, requestedSectionsForPage, selectedPageBriefs } from "./selected-pages";
 import { isEmptyPage } from "@/lib/editor/empty-page";
 import { themeSchema } from "@/lib/theme/schema";
+import { businessDetailsChanged, generationBusiness } from "./site-business";
+import { freshFooter, sharedSiteFooter } from "./site-footer";
+import type { LayoutItem } from "@/lib/layout/structure";
 
 export class SiteGenerationError extends Error {
   constructor(message: string, readonly validationIssues?: CustomSiteError["issues"]) { super(message); }
@@ -46,17 +48,27 @@ async function authorize(input: GenerationInput) {
     throw new SiteGenerationError("This subdomain is reserved.");
   }
   let existingTheme: SiteTheme | undefined;
+  let expectedBusiness: unknown = null;
+  let savedBusiness = emptyBusiness;
   if (input.siteId) {
-    const { data: site, error } = await supabase.from("sites").select("id, theme, draft_theme")
+    const { data: site, error } = await supabase.from("sites").select("id, theme, draft_theme, business")
       .eq("id", input.siteId).eq("account_id", input.accountId).maybeSingle();
     if (error || !site) throw new SiteGenerationError("This site is unavailable to your account.");
     existingTheme = themeSchema.parse(site.draft_theme ?? site.theme ?? {});
+    expectedBusiness = site.business ?? null;
+    savedBusiness = businessSchema.parse({ ...emptyBusiness, ...site.business });
+    if (businessDetailsChanged(input, savedBusiness)) {
+      if (!input.confirmBusinessUpdate) throw new SiteGenerationError("Confirm the site-wide Business information update, including live contact details.");
+      if (!input.expectedBusiness || JSON.stringify(businessSchema.parse(input.expectedBusiness)) !== JSON.stringify(savedBusiness)) {
+        throw new SiteGenerationError("Business information changed. Reload and confirm the latest details before building.");
+      }
+    }
   } else {
     const { data, error } = await supabase.from("sites").select("id").eq("subdomain", input.subdomain!).maybeSingle();
     if (error) throw new SiteGenerationError("Could not check the subdomain.");
     if (data) throw new SiteGenerationError("This subdomain is already in use.");
   }
-  return { supabase, userId: user.id, isAdmin: Boolean(admin), existingTheme };
+  return { supabase, userId: user.id, isAdmin: Boolean(admin), existingTheme, expectedBusiness, savedBusiness };
 }
 
 function planValidator(input: GenerationInput) {
@@ -85,7 +97,7 @@ type CustomPlan = Awaited<ReturnType<typeof planCustomSite>>;
 type BuildPage =
   | { mode: "custom"; page: CustomPlan["pages"][number]; plan: Pick<CustomPlan, "style" | "colors" | "fonts"> }
   | { mode: "catalog"; page: SitePlan["pages"][number] };
-type RetrySpec = { input: GenerationInput; build: BuildPage; theme: SiteTheme; menu: { slug: string; nav_label: string }[] };
+type RetrySpec = { input: GenerationInput; build: BuildPage; theme: SiteTheme; menu: { slug: string; nav_label: string }[]; footer?: LayoutItem };
 
 function providerCall(input: GenerationInput, generationId: string, requestId: string, deadline = Date.now() + 620_000): SiteToolCall {
   return async (tool, messages) => {
@@ -101,25 +113,23 @@ function providerCall(input: GenerationInput, generationId: string, requestId: s
   };
 }
 
-function businessProfile(input: GenerationInput) {
-  const { businessName, businessType, city, services, difference, tone, phone, email, address, openingHours } = input;
-  return businessSchema.parse({ businessName, businessType, city, services, difference, tone, phone, email, address, openingHours });
-}
-
 async function buildSelectedPage(spec: RetrySpec, call: SiteToolCall, trace: { generationId: string; requestId: string; contract: string },
-  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], assetSiteId: string, emit: (event: GenerationProgress) => void) {
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], assetSiteId: string, emit: (event: GenerationProgress) => void, repair = "") {
   const { input, build, theme, menu } = spec;
   const { page } = build;
   const brief = selectedPageBriefs(input).find(({ slug }) => slug === page.slug);
   const label = brief?.label ?? defaultMenuLabel(page.slug);
   const warnings = new Set<string>();
-  const business = businessProfile(input);
+  const business = generationBusiness(input);
+  const write: SiteToolCall = (tool, messages) => call(tool, repair
+    ? [...messages, { role: "user", content: `The previous page failed acceptance checks. Correct these issues:\n${repair}` }]
+    : messages);
   let content: { type: string; props: Record<string, unknown> }[];
   if (build.mode === "custom") {
-    content = await writeCustomPage(call, input, trace, build.plan, build.page, label, emit, warnings);
+    content = await writeCustomPage(write, input, trace, build.plan, build.page, label, emit, warnings);
   } else {
     const { slots, schema, task, tool } = pageFillContract(build.page);
-    const parsed = await fillPage(call, tool, schema, `${task}\nPAGE PURPOSE: ${JSON.stringify(brief?.purpose ?? "")}\nBUSINESS DATA:\n${JSON.stringify({
+    const parsed = await fillPage(write, tool, schema, `${task}\nPAGE PURPOSE: ${JSON.stringify(brief?.purpose ?? "")}\nBUSINESS DATA:\n${JSON.stringify({
       ...business, description: input.description, styleDirection: input.styleDirection, designDescription: input.designDescription,
       sitePages: menu,
     })}`);
@@ -131,22 +141,24 @@ async function buildSelectedPage(spec: RetrySpec, call: SiteToolCall, trace: { g
       return item;
     });
   }
+  if (spec.footer) content = [...content.filter(({ type }) => type !== "Footer"), freshFooter(spec.footer)];
   const nav = { type: "Navigation", props: {
     ...puckConfig.components.Navigation.defaultProps, id: `Navigation-${crypto.randomUUID()}`, businessName: input.businessName,
     links: pageMenuLinks(menu), buttonLink: menu.some(({ slug }) => slug === "contact") ? "/contact"
       : content.some(({ type }) => type === "ContactForm") ? "#contact" : "",
   } };
-  const resolve = createPhotoResolver(warnings, { supabase, accountId: input.accountId, siteId: assetSiteId });
-  for (const section of content) section.props.photoCredits = await fillSectionPhotos(section.type, section.props, resolve);
   const seo = page.seo ?? fallbackPageSeo(label, input.businessName);
   const draft = sanitizePuckData({
     root: { props: { title: page.title, seoTitle: seo.title.trim(), description: seo.description.trim() } },
     content: [nav, ...content],
   });
   const review = reviewGeneratedPage(draft.content, { pages: menu, slug: page.slug, business, theme });
-  if (review.content.filter(({ type }) => type !== "Navigation").length < 2 || !draft.root.props.seoTitle || !draft.root.props.description) {
-    throw new SiteGenerationError(`${label} did not pass the final page checks.`);
+  const issues = generatedPageIssues(review.content);
+  if (issues.length || !draft.root.props.seoTitle || !draft.root.props.description) {
+    throw new SiteGenerationError(`${label} did not pass the final page checks. ${issues.join(" ")}`);
   }
+  const resolve = createPhotoResolver(warnings, { supabase, accountId: input.accountId, siteId: assetSiteId });
+  for (const section of review.content) section.props.photoCredits = await fillSectionPhotos(section.type, section.props, resolve);
   return { ...draft, content: review.content, root: { props: { ...draft.root.props, generationWarnings: [...review.notes, ...warnings] } } };
 }
 
@@ -159,7 +171,7 @@ export async function buildGeneratedSite(
   raw: unknown, emit: (event: GenerationProgress) => void = () => {}, requestId: string = crypto.randomUUID(),
 ): Promise<GenerationResult> {
   const input = createGenerationInputSchema(brand.marketingSiteSubdomain, true).parse(raw);
-  const { supabase, userId, isAdmin, existingTheme } = await authorize(input);
+  const { supabase, isAdmin, existingTheme, expectedBusiness, savedBusiness } = await authorize(input);
   const existing = input.siteId ? await supabase.from("pages").select("id, slug, title, nav_label, draft_data, published_data")
     .eq("site_id", input.siteId).order("sort_order") : null;
   if (existing?.error) throw new SiteGenerationError("Could not check the existing pages.");
@@ -187,7 +199,9 @@ export async function buildGeneratedSite(
     generationMode: input.generationMode, styleDirection: input.styleDirection, fontDirection: input.fontDirection,
     designDescription: input.designDescription, desiredPages: input.desiredPages, desiredSections: input.desiredSections,
   });
-  const call = providerCall(input, generationId, requestId);
+  const deadline = Date.now() + 620_000;
+  const call = providerCall(input, generationId, requestId, deadline);
+  let checkpointsStarted = false;
   const prompt = (task: string) => `${task}\nBUSINESS DATA:\n${business}`;
   try {
     emit({ message: "Planning your site…" });
@@ -236,49 +250,61 @@ export async function buildGeneratedSite(
     if (input.secondaryColor) planColors.secondary = input.secondaryColor;
     const assetSiteId = input.siteId ?? crypto.randomUUID();
     const theme = existingTheme ?? { style: planStyle, colors: planColors, headingFont: planFonts.heading, bodyFont: planFonts.body };
-    const writes: {
-      slug: string; title: string; label: string; nav_label: string; expectedId?: string; expectedDraft: unknown;
-      data: Awaited<ReturnType<typeof buildSelectedPage>> | null; spec: RetrySpec;
-    }[] = [];
-    for (const build of planPages) {
+    const firstFooter = planPages.flatMap((build) => build.mode === "catalog"
+      ? build.page.sections.filter(({ blockType }) => blockType === "Footer") : [])[0];
+    const footer = sharedSiteFooter(current, firstFooter ? defaultSection(firstFooter.designId) : undefined);
+    const writes = planPages.map((build) => {
       const { slug, title } = build.page;
       const label = briefs.find((brief) => brief.slug === slug)!.label;
       const menu = menuPages.map(({ slug, nav_label }) => ({ slug, nav_label: nav_label ?? defaultMenuLabel(slug) }));
       if (build.mode === "custom" && existingTheme) {
         build.plan = { ...build.plan, colors: { ...DEFAULT_COLORS, ...existingTheme.colors } };
       }
-      const spec = { input, build, theme, menu };
+      const spec: RetrySpec = { input, build, theme, menu, footer };
+      const previous = current.find((page) => page.slug === slug);
+      return { slug, title, label, nav_label: menu.find((page) => page.slug === slug)!.nav_label,
+        expectedId: previous?.id, expectedDraft: previous?.draft_data, data: null, retrySpec: spec };
+    });
+    emit({ message: "Preparing recoverable page drafts…" });
+    const rows = savedPagesSchema.parse(await startDraftCheckpoints(input.accountId, assetSiteId, generationId, {
+      name: input.businessName, subdomain: input.subdomain, theme, pages: writes,
+      business: generationBusiness(input, savedBusiness), expectedBusiness,
+    }).catch((cause) => {
+      throw new SiteGenerationError(cause instanceof Error ? cause.message : "Could not prepare recoverable page drafts.");
+    }));
+    checkpointsStarted = true;
+    const bodyCall = providerCall({ ...input, siteId: assetSiteId }, generationId, requestId, deadline);
+    for (const entry of writes) {
+      const { slug, label, retrySpec: spec } = entry;
+      const row = rows.find((row) => row.slug === slug);
+      if (!row?.retryId || row.conflict) {
+        warnings.add(`${label}: the draft changed; no content was overwritten.`);
+        continue;
+      }
       let data: Awaited<ReturnType<typeof buildSelectedPage>> | null = null;
+      let repair = "";
       for (let attempt = 0; attempt < 2; attempt++) {
         emit({ message: `${attempt ? "Retrying" : "Writing"} ${label}…` });
         try {
-          data = await buildSelectedPage(spec, call, trace, supabase, assetSiteId, emit);
+          data = await buildSelectedPage(spec, bodyCall, trace, supabase, assetSiteId, emit, repair);
           data.root.props.generationWarnings.forEach((note) => warnings.add(note));
           break;
         } catch (error) {
+          if (error instanceof SiteGenerationError) repair = error.message;
+          if (attempt === 1 && repair) warnings.add(repair);
           console.warn("AI selected page attempt failed", { requestId, generationId, slug, attempt: attempt + 1,
             type: error instanceof Error ? error.name : "Unknown" });
         }
       }
-      emit({ message: data ? `Writing ${label}… ✓` : `${label}: Not built — retry` });
-      const previous = current.find((page) => page.slug === slug);
-      writes.push({ slug, title, label, nav_label: menu.find((page) => page.slug === slug)!.nav_label,
-        expectedId: previous?.id, expectedDraft: previous?.draft_data, data, spec });
+      if (data) {
+        row.built = await checkpointDraft(input.accountId, generationId, row.retryId, data);
+        row.retryId = null;
+        if (!row.built) warnings.add(`${label}: the draft changed during generation; no content was overwritten.`);
+      }
+      emit({ message: row.built ? `Saved ${label} draft ✓` : `${label}: Not built${row.retryId ? " — retry" : " — draft changed"}` });
     }
-    const payload = writes.map(({ slug, title, nav_label, expectedId, expectedDraft, data, spec }) =>
-      ({ slug, title, nav_label, expectedId, expectedDraft, data, ...(data ? {} : { retrySpec: spec }) }));
-    emit({ message: "Saving unpublished drafts…" });
-    if (!input.siteId && !isAdmin) throw new SiteGenerationError("Only the agency can create a site.");
-    if (input.siteId) await stageSelectedGeneration(input.accountId, assetSiteId, generationId, payload);
-    const saved = input.siteId
-      ? await supabase.rpc("save_selected_ai_drafts", { p_generation_id: generationId })
-      : await createAdminClient().rpc("create_selected_ai_site", {
-        p_account_id: input.accountId, p_name: input.businessName, p_subdomain: input.subdomain!,
-        p_theme: theme, p_pages: payload, p_business: businessProfile(input), p_site_id: assetSiteId,
-        p_generation_id: generationId, p_user_id: userId,
-      });
-    if (saved.error) throw new SiteGenerationError("Could not save the selected drafts. Check your drafts before retrying.");
-    const rows = savedPagesSchema.parse(saved.data);
+    await completeDraftCheckpoints(input.accountId, generationId);
+    emit({ message: "Unpublished drafts saved." });
     const pages: GenerationOutcome[] = rows.map((row) => ({
       slug: row.slug, label: writes.find(({ slug }) => slug === row.slug)!.label, built: row.built,
       pageId: row.pageId ?? undefined, retryId: row.retryId ?? undefined,
@@ -287,7 +313,10 @@ export async function buildGeneratedSite(
     if (!pageId) throw new SiteGenerationError("Selected drafts changed while generating. No drafts were overwritten.");
     return { siteId: assetSiteId, pageId, warnings: [...warnings], pages };
   } catch (cause) {
-    try { await finishSiteGeneration(generationId, false); }
+    try {
+      if (checkpointsStarted) await completeDraftCheckpoints(input.accountId, generationId);
+      else await finishSiteGeneration(generationId, false);
+    }
     catch (accountingError) {
       console.error("AI generation finalization failed", { requestId, generationId });
       throw accountingError;
@@ -321,7 +350,7 @@ function slugSeoKey(slug: string): "home" | "about" | "services" | "contact" | u
       try {
         if (build.page.slug !== job.slug) throw new Error("Page address changed.");
         emit({ message: `Writing ${label}…` });
-        data = await buildSelectedPage({ input, build, theme, menu }, providerCall(input, job.leaseId, requestId), trace, supabase, job.siteId, emit);
+        data = await buildSelectedPage({ ...spec, input, build, theme, menu }, providerCall(input, job.leaseId, requestId), trace, supabase, job.siteId, emit);
       } catch (error) {
         console.warn("AI page retry failed", { requestId, pageId: job.pageId, type: error instanceof Error ? error.name : "Unknown" });
       }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createSubdomainSchema } from "@/lib/site-creation";
+import { businessSchema } from "@/lib/business";
 
 export const GENERATION_PAGE_SLUGS = ["", "about", "services", "contact"] as const;
 export const MAX_GENERATION_PAGES = 10;
@@ -53,6 +54,8 @@ export function createGenerationInputSchema(marketingSubdomain?: string, isInter
     address: z.string().trim().max(250),
     description: z.string().trim().max(4000),
     confirmReplace: z.boolean(),
+    confirmBusinessUpdate: z.boolean().default(false),
+    expectedBusiness: businessSchema.optional(),
   }).superRefine((input, ctx) => {
     if (!input.siteId && !input.subdomain) ctx.addIssue({ code: "custom", path: ["subdomain"], message: "Enter a subdomain." });
     if (new Set(input.desiredPages).size !== input.desiredPages.length) {

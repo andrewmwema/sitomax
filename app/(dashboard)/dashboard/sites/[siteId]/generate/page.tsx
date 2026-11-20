@@ -30,7 +30,7 @@ export default async function RegenerateSitePage({ params }: { params: Promise<{
   return <section className="mx-auto flex max-w-3xl flex-col gap-6">
     <header><Link className="text-sm text-zinc-500 hover:underline" href={`/dashboard/sites/${siteId}`}>{site.name || "Your site"}</Link>
       <h1 className="mt-2 text-2xl font-semibold">Build pages with AI</h1>
-      <p className="mt-2 text-sm text-zinc-600">Create a new draft direction without changing your published pages.</p></header>
+      <p className="mt-2 text-sm text-zinc-600">Build unpublished page layouts. Changes to shared Business information require separate confirmation and also affect live contact details.</p></header>
     <AiSiteWizard accounts={[]} unlimited={admin === true}
       pendingRetries={(retries as { retryId: string; pageId: string; slug: string; label: string | null }[]).map((retry) =>
         ({ ...retry, label: retry.label ?? defaultMenuLabel(retry.slug), built: false }))}

@@ -12,7 +12,8 @@ import { createGenerationInputSchema } from "@/lib/ai/site-input";
 
 let container: HTMLDivElement, root: Root;
 const site = { id: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000002", name: "Local Plumbing",
-  business: emptyBusiness, pages: [{ slug: "", label: "Home", empty: false }, { slug: "about", label: "About", empty: true }] };
+  business: { ...emptyBusiness, businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi", services: ["Drain repairs"] },
+  pages: [{ slug: "", label: "Home", empty: false }, { slug: "about", label: "About", empty: true }] };
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.stubGlobal("fetch", mocks.fetch);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -118,5 +119,22 @@ describe("AI site wizard", () => {
     });
     expect(container.querySelector("[role=alert]")?.textContent).toContain("connection ended before confirmation");
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+  it("requires a separate confirmation for shared Business changes and sends the saved baseline", async () => {
+    await review();
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Back")!.click());
+    await setInput("Phone", "+1 555 0100");
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(container.textContent).toContain("published pages too");
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("site-wide Business");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    await act(async () => container.querySelector<HTMLInputElement>("input[type=checkbox][required]")!.click());
+    mocks.fetch.mockResolvedValue({ ok: false, headers: new Headers() });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({
+      confirmBusinessUpdate: true, expectedBusiness: site.business, phone: "+1 555 0100",
+    });
   });
 });

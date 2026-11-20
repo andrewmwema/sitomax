@@ -29,7 +29,8 @@ Photo queries must be generic subjects, never business names, personal names, ad
 Write descriptive alt text in the corresponding alt/imageAlt field, identifying stock imagery where appropriate.
 Logos and identifiable staff/client portraits must be omitted unless supplied by the user.
 Only link to selected site pages, valid anchors, supplied email/phone or explicit user-supplied URLs.
-Forms are not yet connected: include a note directing visitors to the supplied telephone/email instead.
+Every page needs one Hero with a meaningful heading, at least 40 words of substantive supporting copy (not just titles), and a working next-step button or contact form. Use only one H1, supplied by the Hero; body rich text uses paragraphs, lists and emphasis, not H1 tags.
+Contact forms are connected to the site's Leads inbox. Do not claim otherwise.
 CATALOG (IDs, names, descriptions and layout presets):
 ${JSON.stringify(aiCatalog.map((design) => ({
   id: design.id, name: design.name,

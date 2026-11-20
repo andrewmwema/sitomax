@@ -72,6 +72,36 @@ export async function stageSelectedGeneration(accountId: string, siteId: string,
   if (error || !data) throw new Error("Could not finalize the generation reservation.", { cause: error });
 }
 
+export async function startDraftCheckpoints(accountId: string, siteId: string, generationId: string, options: {
+  name: string; subdomain?: string; theme: unknown; pages: unknown; business: unknown; expectedBusiness: unknown;
+}) {
+  const user = await authorizeAccount(accountId);
+  const { data, error } = await createAdminClient().rpc("start_ai_draft_checkpoints", {
+    p_user_id: user.id, p_generation_id: z.uuid().parse(generationId), p_site_id: z.uuid().parse(siteId),
+    p_name: options.name, p_subdomain: options.subdomain ?? null, p_theme: options.theme, p_pages: options.pages,
+    p_business: options.business, p_expected_business: options.expectedBusiness,
+  });
+  if (error) throw new Error(error.code === "P0001" ? error.message : "Could not prepare recoverable page drafts.", { cause: error });
+  return data;
+}
+
+export async function checkpointDraft(accountId: string, generationId: string, retryId: string, draft: unknown) {
+  const user = await authorizeAccount(accountId);
+  const { data, error } = await createAdminClient().rpc("checkpoint_ai_draft", {
+    p_user_id: user.id, p_generation_id: z.uuid().parse(generationId), p_retry_id: z.uuid().parse(retryId), p_data: draft,
+  });
+  if (error) throw new Error("Could not save this page checkpoint. Completed drafts remain available.", { cause: error });
+  return z.boolean().parse(data);
+}
+
+export async function completeDraftCheckpoints(accountId: string, generationId: string) {
+  const user = await authorizeAccount(accountId);
+  const { error } = await createAdminClient().rpc("complete_ai_draft_checkpoints", {
+    p_user_id: user.id, p_generation_id: z.uuid().parse(generationId),
+  });
+  if (error) throw new Error("Could not finalize this generation. Check saved drafts before retrying.", { cause: error });
+}
+
 export async function claimPageRetry(retryId: string) {
   const { supabase, user } = await requireUser();
   const { data: visible, error: accessError } = await supabase.rpc("can_retry_ai_page", { p_retry_id: retryId });

@@ -3,7 +3,8 @@ import type { Field } from "@puckeditor/core";
 import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), lookup: vi.fn(), existing: vi.fn(), request: vi.fn(), begin: vi.fn(),
-  finish: vi.fn(), claim: vi.fn(), finishRetry: vi.fn(), admin: vi.fn(), photoLibrary: vi.fn() }));
+  finish: vi.fn(), claim: vi.fn(), finishRetry: vi.fn(), admin: vi.fn(), photoLibrary: vi.fn(),
+  start: vi.fn(), checkpoint: vi.fn(), complete: vi.fn() }));
 vi.mock("@/lib/photos", () => ({ createPhotoLibrary: mocks.photoLibrary }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({
   user: { id: "authenticated-user" },
@@ -15,8 +16,7 @@ vi.mock("@/lib/auth", () => ({ requireUser: async () => ({
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
 vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGeneration: mocks.finish,
-  stageSelectedGeneration: (_account: string, site: string, generation: string, pages: unknown) =>
-    mocks.rpc("apply_selected_ai_pages", { p_site_id: site, p_generation_id: generation, p_pages: pages }),
+  startDraftCheckpoints: mocks.start, checkpointDraft: mocks.checkpoint, completeDraftCheckpoints: mocks.complete,
   claimPageRetry: mocks.claim, finishPageRetry: mocks.finishRetry }));
 import { buildGeneratedSite, retryGeneratedPage } from "./generate-site";
 import { aiCatalog, blockFields, blockSchemas, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
@@ -26,16 +26,18 @@ import { strictTool } from "./strict-tool";
 import { customSystemPrompt } from "./custom-layout";
 import type { GenerationInput } from "./site-input";
 import { createGenerationInputSchema, extraPageCredits, slugFromPageName } from "./site-input";
+import { emptyBusiness } from "@/lib/business";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
 const pageId = "00000000-0000-4000-8000-000000000003";
 const generationId = "00000000-0000-4000-8000-000000000004";
 const retryId = "00000000-0000-4000-8000-000000000007";
+const business = { ...emptyBusiness, businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi", services: ["Repairs"] };
 const input = { accountId, siteId, businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi",
   services: ["Repairs"], difference: "", style: "modern", primaryColor: "", secondaryColor: "",
-  phone: "", email: "", address: "", description: "", confirmReplace: true };
-const hero = aiCatalog.find((design) => design.blockType === "TextSection")!;
+  phone: "", email: "", address: "", description: "", confirmReplace: true, confirmBusinessUpdate: true, expectedBusiness: business };
+const hero = aiCatalog.find((design) => design.blockType === "Hero" && design.styles.includes("modern"))!;
 const footer = aiCatalog.find((design) => design.blockType === "Footer")!;
 const seo = { title: "Local Plumbing Nairobi", description: "Plumbing repairs in Nairobi. Contact Local Plumbing to discuss your needs." };
 const plan = {
@@ -53,22 +55,31 @@ function fieldValue(field: Field): unknown {
   if (field.type === "array") return [];
   if (field.type === "object") return Object.fromEntries(Object.entries(field.objectFields).map(([key, child]) => [key, fieldValue(child)]));
   if (field.type === "number") return 1;
-  if (field.type === "richtext") return '<p onclick="bad()">Business copy<script>bad()</script></p>';
+  if (field.type === "richtext") return `<p onclick="bad()">${bodyCopy}<script>bad()</script></p>`;
   return "";
 }
 function section(designId: string) {
   const design = aiCatalog.find((entry) => entry.id === designId)!;
   return Object.fromEntries(Object.entries(blockFields(design.blockType)).filter(([key]) => key !== "design" && key !== "variant")
-    .map(([key, field]) => [key, fieldValue(field)]));
+    .map(([key, field]) => [key, key === "heading" ? "Local Plumbing" : key === "buttonText" ? "Contact us"
+      : key === "buttonLink" ? "/" : fieldValue(field)]));
 }
+const bodyCopy = "We help you explore plumbing repairs in Nairobi and understand the next steps for your home. Tell us about the work you need so we can discuss your requirements and help you decide how to proceed.";
 const message = (name: string, value: unknown) => ({ stop_reason: "tool_use", content: [
   { type: "tool_use", id: "toolu_test", name, input: value },
 ] });
-function savedRows(_name: string, args: { p_pages: { slug: string; data: unknown }[] }) {
-  return { data: args.p_pages.map(({ slug, data }, index) => ({
+function rowsFor(pages: { slug: string }[]) {
+  return pages.map(({ slug }, index) => ({
     slug, pageId: index ? `00000000-0000-4000-8001-${String(index).padStart(12, "0")}` : pageId,
-    built: Boolean(data), retryId: data ? null : retryId,
-  })), error: null };
+    built: false, retryId: index === 1 ? retryId : `00000000-0000-4000-8002-${String(index).padStart(12, "0")}`,
+  }));
+}
+function savedPayload() {
+  const options = mocks.start.mock.calls[0][3];
+  const rows = rowsFor(options.pages);
+  return { p_generation_id: generationId, p_pages: options.pages.map((page: { slug: string }, index: number) => ({
+    ...page, data: mocks.checkpoint.mock.calls.find((args) => args[2] === rows[index].retryId)?.[3] ?? null,
+  })) };
 }
 function answer(request: { toolName: string; messages: { content: string }[] }) {
   if (request.toolName === "plan_site") return message("plan_site", structuredClone(plan));
@@ -76,17 +87,22 @@ function answer(request: { toolName: string; messages: { content: string }[] }) 
     slug: string; sections: Record<string, { designId: string }>;
   };
   return message("fill_page", { slug: page.slug, sections: Object.fromEntries(
-    Object.entries(page.sections).map(([key, entry]) => [key, section(entry.designId)]),
+    Object.entries(page.sections).map(([key, entry]) => {
+      const props = section(entry.designId);
+      if ("buttonLink" in props) props.buttonLink = `/${page.slug}`;
+      return [key, props];
+    }),
   ) });
 }
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv("ANTHROPIC_API_KEY", "local-test-not-a-key"); vi.stubEnv("PIXABAY_API_KEY", "");
-  mocks.rpc.mockImplementation(async (name: string) => name === "save_selected_ai_drafts"
-    ? savedRows(name, mocks.rpc.mock.calls.find(([rpc]) => rpc === "apply_selected_ai_pages")![1])
-    : ({ data: name === "is_super_admin" ? false : name === "is_account_owner" ? true : null, error: null }));
+  mocks.rpc.mockImplementation(async (name: string) =>
+    ({ data: name === "is_super_admin" ? false : name === "is_account_owner" ? true : null, error: null }));
   mocks.existing.mockResolvedValue({ data: [], error: null });
-  mocks.lookup.mockResolvedValue({ data: { id: siteId }, error: null });
+  mocks.lookup.mockResolvedValue({ data: { id: siteId, business }, error: null });
   mocks.begin.mockResolvedValue(generationId); mocks.finish.mockResolvedValue(undefined);
+  mocks.start.mockImplementation(async (_account, _site, _generation, options) => rowsFor(options.pages));
+  mocks.checkpoint.mockResolvedValue(true); mocks.complete.mockResolvedValue(undefined);
   mocks.request.mockImplementation(answer);
   mocks.photoLibrary.mockReturnValue({ search: vi.fn().mockResolvedValue([]) });
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -136,16 +152,17 @@ describe("catalog site generation", () => {
       cacheTtl: "5m", system: SITE_SYSTEM_PROMPT,
     });
     expect(mocks.request.mock.calls.map(([request]) => request.toolName)).toEqual(["plan_site", ...Array(4).fill("fill_page")]);
-    const save = mocks.rpc.mock.calls.find(([name]) => name === "apply_selected_ai_pages")![1];
+    const save = savedPayload();
     expect(save.p_pages).toHaveLength(4);
     expect(JSON.stringify(save.p_pages)).not.toMatch(/onclick|<script>|bad\(\)/);
     expect(save).not.toHaveProperty("published_data");
     expect(save.p_pages[0].data.content[0].props.businessName).toBe("Local Plumbing");
     expect(save).not.toHaveProperty("p_theme");
-    expect(progress).toEqual(["Planning your site…", "Writing Home…", "Writing Home… ✓", "Writing About…", "Writing About… ✓",
-      "Writing Services…", "Writing Services… ✓", "Writing Contact…", "Writing Contact… ✓", "Saving unpublished drafts…"]);
+    expect(progress).toEqual(["Planning your site…", "Preparing recoverable page drafts…", "Writing Home…", "Saved Home draft ✓", "Writing About…", "Saved About draft ✓",
+      "Writing Services…", "Saved Services draft ✓", "Writing Contact…", "Saved Contact draft ✓", "Unpublished drafts saved."]);
     expect(save.p_generation_id).toBe(generationId);
     expect(mocks.admin).not.toHaveBeenCalled();
+    expect(mocks.complete).toHaveBeenCalledExactlyOnceWith(accountId, generationId);
   });
   it("repairs a plan once with the Zod errors, never accepting unknown catalog IDs or long SEO", async () => {
     const invalid = structuredClone(plan);
@@ -166,11 +183,17 @@ describe("catalog site generation", () => {
     const barrier = new Promise<void>((resolve) => { release = resolve; });
     mocks.request.mockImplementation(async (request) => {
       if (request.toolName === "plan_site") return answer(request);
-      if (JSON.parse(request.messages[0].content.split("\n")[1]).slug === "about") throw new Error("Page failed");
+      if (JSON.parse(request.messages[0].content.split("\n")[1]).slug === "about") {
+        expect(mocks.checkpoint).toHaveBeenCalledTimes(1);
+        expect(mocks.complete).not.toHaveBeenCalled();
+        throw new Error("Page failed");
+      }
       await barrier; return answer(request);
     });
     const pending = buildGeneratedSite(input);
     await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+    expect(mocks.start.mock.calls[0][3].pages.every((page: { data: unknown; retrySpec: unknown }) => page.data === null && page.retrySpec)).toBe(true);
     expect(mocks.finish).not.toHaveBeenCalled();
     release();
     await expect(pending).resolves.toMatchObject({ pages: [
@@ -178,6 +201,69 @@ describe("catalog site generation", () => {
     ] });
     expect(mocks.request).toHaveBeenCalledTimes(6);
     expect(mocks.finish).not.toHaveBeenCalled();
+    expect(mocks.checkpoint).toHaveBeenCalledTimes(3);
+    expect(mocks.complete).toHaveBeenCalledExactlyOnceWith(accountId, generationId);
+  });
+  it("does not mark heading-only pages as built, and supplies acceptance feedback on the bounded retry", async () => {
+    mocks.request.mockImplementation((request) => {
+      const response = answer(request);
+      if (request.toolName === "fill_page") {
+        const page = response.content[0].input as { sections: Record<string, Record<string, unknown>> };
+        Object.values(page.sections).forEach((props) => {
+          for (const key of ["subheading", "text", "buttonText", "secondaryButtonText"]) if (key in props) props[key] = "";
+        });
+      }
+      return response;
+    });
+    const result = await buildGeneratedSite({ ...input, desiredPages: [""] });
+    expect(result.pages).toMatchObject([{ built: false, retryId: expect.any(String) }]);
+    expect(mocks.request).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(mocks.request.mock.calls[2][0].messages)).toContain("substantive supporting copy");
+    expect(mocks.checkpoint).not.toHaveBeenCalled();
+  });
+  it("preserves concurrent draft edits and does not advertise an unavailable retry", async () => {
+    mocks.checkpoint.mockResolvedValue(false);
+    const result = await buildGeneratedSite({ ...input, desiredPages: [""] });
+    expect(result.pages).toMatchObject([{ built: false, pageId }]);
+    expect(result.pages[0].retryId).toBeUndefined();
+    expect(result.warnings).toContain("Home: the draft changed during generation; no content was overwritten.");
+  });
+  it("stops on a checkpoint failure without discarding already saved drafts", async () => {
+    mocks.checkpoint.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error("Database unavailable"));
+    await expect(buildGeneratedSite(input)).rejects.toThrow("Check your drafts");
+    expect(mocks.request).toHaveBeenCalledTimes(3);
+    expect(mocks.checkpoint).toHaveBeenCalledTimes(2);
+    expect(mocks.complete).toHaveBeenCalledExactlyOnceWith(accountId, generationId);
+  });
+  it("shares the Home draft footer across rebuilt pages and retry specifications", async () => {
+    mocks.existing.mockResolvedValue({ data: [{ id: pageId, slug: "", nav_label: "Home",
+      draft_data: { content: [{ type: "Footer", props: { id: "original-footer", variant: "compact", tagline: "Saved introduction" } }] } }], error: null });
+    await buildGeneratedSite({ ...input, desiredPages: ["about", "services"] });
+    const saved = savedPayload().p_pages;
+    expect(saved).toHaveLength(2);
+    for (const page of saved) {
+      expect(page.retrySpec.footer.props).toMatchObject({ variant: "compact", tagline: "Saved introduction" });
+      expect(page.data.content.at(-1)).toMatchObject({ type: "Footer", props: { variant: "compact", tagline: "Saved introduction" } });
+    }
+    expect(saved[0].data.content.at(-1).props.id).not.toBe(saved[1].data.content.at(-1).props.id);
+  });
+  it("requires explicit current Business confirmation before charging and preserves saved social profiles", async () => {
+    await expect(buildGeneratedSite({ ...input, phone: "+1 555 0100", confirmBusinessUpdate: false })).rejects.toThrow("Confirm the site-wide");
+    await expect(buildGeneratedSite({ ...input, phone: "+1 555 0100", expectedBusiness: { ...business, city: "Stale" } })).rejects.toThrow("Business information changed");
+    expect(mocks.begin).not.toHaveBeenCalled();
+    const saved = { ...business, socialLinks: [{ label: "Photos", url: "https://instagram.com/example" }] };
+    mocks.lookup.mockResolvedValue({ data: { id: siteId, business: saved }, error: null });
+    await buildGeneratedSite({ ...input, phone: "+1 555 0100", expectedBusiness: saved, desiredPages: [""] });
+    expect(mocks.start.mock.calls[0][3]).toMatchObject({
+      business: { phone: "+1 555 0100", socialLinks: saved.socialLinks }, expectedBusiness: saved,
+    });
+  });
+  it("explains a concurrent Business change detected while the plan was being written", async () => {
+    mocks.start.mockRejectedValue(new Error("Business information changed. Reload and confirm the latest details before building."));
+    await expect(buildGeneratedSite(input)).rejects.toThrow("Business information changed. Reload");
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.checkpoint).not.toHaveBeenCalled();
+    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
   it("repairs invalid props once in the same conversation and saves only corrected content", async () => {
     let originalTurn: object[] = [];
@@ -223,7 +309,7 @@ describe("catalog site generation", () => {
     expect(mocks.request).toHaveBeenCalledTimes(8);
     expect(progress).toContain("Retrying About…");
     const retryPageId = result.pages[1].pageId;
-    const save = mocks.rpc.mock.calls.find(([name]) => name === "apply_selected_ai_pages")![1];
+    const save = savedPayload();
     expect(save.p_pages[1]).toMatchObject({ slug: "about", data: null, retrySpec: expect.any(Object) });
     mocks.claim.mockResolvedValue({ accountId, siteId, pageId: retryPageId, leaseId: retryId, slug: "about", spec: save.p_pages[1].retrySpec });
     mocks.finishRetry.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
@@ -232,7 +318,7 @@ describe("catalog site generation", () => {
     await expect(retryGeneratedPage(retryId, vi.fn(), retryId)).resolves.toMatchObject({ slug: "about", built: true });
     expect(mocks.begin).toHaveBeenCalledTimes(1);
     expect(mocks.finishRetry).toHaveBeenLastCalledWith(retryId, retryId, expect.objectContaining({ content: expect.any(Array) }));
-    expect(mocks.rpc.mock.calls.filter(([name]) => name === "apply_selected_ai_pages")).toHaveLength(1);
+    expect(mocks.start).toHaveBeenCalledTimes(1);
   });
   it("asks for the expected tool again without inventing a tool ID for a text-only reply", async () => {
     mocks.request.mockImplementationOnce(answer).mockResolvedValueOnce({
@@ -277,17 +363,15 @@ describe("catalog site generation", () => {
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
     mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: false }, error: null })
       .mockResolvedValue({ data: null, error: null });
-    const create = vi.fn(savedRows);
-    mocks.admin.mockReturnValue({ rpc: create });
     await expect(buildGeneratedSite({ ...input, siteId: undefined, subdomain: "local-plumbing" })).resolves.toMatchObject({ siteId: futureSiteId, pageId });
-    expect(create).toHaveBeenCalledWith("create_selected_ai_site", expect.objectContaining({
-      p_account_id: accountId, p_subdomain: "local-plumbing", p_site_id: futureSiteId,
+    expect(mocks.start).toHaveBeenCalledWith(accountId, futureSiteId, generationId, expect.objectContaining({
+      subdomain: "local-plumbing", business: expect.objectContaining({ businessName: input.businessName }),
     }));
     expect(mocks.photoLibrary).toHaveBeenCalledWith(expect.anything(), accountId);
     expect(selectPhoto).toHaveBeenCalledExactlyOnceWith({
       siteId: futureSiteId, query: "plumbing tools", orientation: "horizontal", photoId: 42,
     });
-    expect(create.mock.calls[0][1].p_pages[0].data).toMatchObject({ content: expect.arrayContaining([expect.objectContaining({ props: expect.objectContaining({
+    expect(savedPayload().p_pages[0].data).toMatchObject({ content: expect.arrayContaining([expect.objectContaining({ props: expect.objectContaining({
       backgroundImage: `https://storage.example/site-assets/${futureSiteId}/pixabay-42.jpg`, photoCredits: [],
     }) })]) });
     expect(mocks.finish).not.toHaveBeenCalled();
@@ -304,16 +388,14 @@ describe("catalog site generation", () => {
 
     mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: true }, error: null })
       .mockResolvedValueOnce({ data: null, error: null });
-    const create = vi.fn(savedRows);
-    mocks.admin.mockReturnValue({ rpc: create });
     await expect(buildGeneratedSite(marketing)).resolves.toMatchObject({ pageId });
-    expect(create).toHaveBeenCalledWith("create_selected_ai_site", expect.objectContaining({ p_subdomain: brand.marketingSiteSubdomain }));
+    expect(mocks.start.mock.calls[0][3]).toMatchObject({ subdomain: brand.marketingSiteSubdomain });
   });
   it("stops after two invalid plans without saving; finalizes already-billed work without free retries", async () => {
     mocks.request.mockResolvedValue(message("plan_site", { style: "invented" }));
     await expect(buildGeneratedSite(input)).rejects.toThrow("invalid twice");
     expect(mocks.request).toHaveBeenCalledTimes(2);
-    expect(mocks.rpc.mock.calls.some(([name]) => name === "apply_selected_ai_pages")).toBe(false);
+    expect(mocks.start).not.toHaveBeenCalled();
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
   });
   it("builds strict content contracts directly from all catalog block fields", () => {
@@ -385,7 +467,9 @@ describe("custom site generation", () => {
       background: "default", width: "contained", rowGap: 48, design: {},
       rows: [{ layout: "1", gap: 32, reverseOnMobile: false, columns: [{
         surface: "none", verticalAlign: "top", gap: 16,
-        elements: [{ type: "Heading", text: heading, level: "h2", align: "left" }],
+        elements: [{ type: "Heading", text: heading, level: "h2", align: "left" },
+          { type: "Text", text: bodyCopy, align: "left" },
+          { type: "Button", label: "Contact us", href: "/", variant: "primary", size: "md", align: "left" }],
       }] }],
   });
   const requestId = "00000000-0000-4000-8000-000000000005";
@@ -408,21 +492,21 @@ describe("custom site generation", () => {
     expect(result).toMatchObject({ siteId, pageId });
     expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId, desiredPages.length);
     expect(mocks.request.mock.calls.map(([request]) => request.toolName))
-      .toEqual(["plan_custom_site", ...Array(desiredPages.filter((slug) => slug !== "contact").length + extras.length).fill("fill_custom_section")]);
+      .toEqual(["plan_custom_site", ...Array(desiredPages.length + extras.length).fill("fill_custom_section")]);
     for (const [request] of mocks.request.mock.calls) {
       expect(request).toMatchObject({
         action: "generate_site", tools: [{ strict: request.toolName === "plan_custom_site" }],
         cacheTtl: "5m", system: customSystemPrompt(), generationId, correlationId: requestId,
       });
     }
-    const save = mocks.rpc.mock.calls.find(([name]) => name === "apply_selected_ai_pages")![1];
+    const save = savedPayload();
     expect(save.p_pages.map((page: { slug: string }) => page.slug)).toEqual(desiredPages);
     expect(save.p_pages[0].data.content.length).toBeGreaterThanOrEqual(3);
     expect(save.p_pages[0]).toMatchObject({ nav_label: "Home", data: { root: { props: { title: "Home", seoTitle: seo.title, description: seo.description } } } });
     expect(save.p_pages[0].data.content.at(-1)).toMatchObject({ type: "Footer" });
     if (desiredPages.includes("contact")) {
       expect(save.p_pages.find((page: { slug: string }) => page.slug === "contact").data.content.map((block: { type: string }) => block.type))
-        .toEqual(["Navigation", "ContactForm", "Footer"]);
+        .toEqual(["Navigation", "Section", "ContactForm", "Footer"]);
     }
     expect(save.p_pages[0].data.content[1]).toMatchObject({ type: "Section" });
     const rows = save.p_pages[0].data.content[1].props.rows as {
@@ -433,7 +517,7 @@ describe("custom site generation", () => {
     expect(save).not.toHaveProperty("p_theme");
     expect(progress[0]).toBe("Planning your site…");
     expect(progress.some((entry) => entry.startsWith("Designing Home"))).toBe(true);
-    expect(progress.at(-1)).toBe("Saving unpublished drafts…");
+    expect(progress.at(-1)).toBe("Unpublished drafts saved.");
     expect(mocks.finish).not.toHaveBeenCalled();
   });
 
@@ -476,9 +560,9 @@ describe("custom site generation", () => {
     expect(mocks.request.mock.calls[3][0].messages[2].content[0]).toMatchObject({
       type: "tool_result", content: expect.stringContaining("section.rows.0.columns.0.elements.0.level (invalid_value)"),
     });
-    expect(mocks.rpc).toHaveBeenCalledWith("apply_selected_ai_pages", expect.objectContaining({ p_pages: [
+    expect(savedPayload()).toMatchObject({ p_pages: [
       expect.objectContaining({ slug: "", data: expect.any(Object) }), expect.objectContaining({ slug: "services", data: null }),
-    ] }));
+    ] });
   });
 
   it("distinguishes truncation and never echoes a partial tool call back to the provider", async () => {

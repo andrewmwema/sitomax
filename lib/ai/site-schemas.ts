@@ -112,14 +112,16 @@ export function catalogPageSections(style: SitePlan["style"], page: PlannedPage[
   };
   const requested = desired.map((kind) => pick(catalogSectionType[kind])).filter((entry) => entry !== undefined);
   const excluded = new Set(elsewhere.map((kind) => catalogSectionType[kind]));
-  const body = entries.filter(({ blockType }) => blockType !== "Footer" && !excluded.has(blockType));
+  const hero = entries.find(({ blockType }) => blockType === "Hero") ?? pick("Hero");
+  const body = entries.filter(({ blockType }) => blockType !== "Footer" && blockType !== "Hero" && !excluded.has(blockType));
   if (!body.length) {
     const fallback = pick("TextSection");
     if (fallback) body.push(fallback);
   }
   for (const section of requested) if (!body.some(({ blockType }) => blockType === section.blockType)) body.push(section);
+  if (hero) body.unshift(hero);
   const footer = entries.find(({ blockType }) => blockType === "Footer") ?? pick("Footer");
-  const required = new Set(requested.map(({ blockType }) => blockType));
+  const required = new Set(["Hero", ...requested.map(({ blockType }) => blockType)]);
   while (body.length > (footer ? 6 : 7)) {
     const index = body.findLastIndex(({ blockType }) => !required.has(blockType) || body.findIndex((entry) => entry.blockType === blockType) !== body.findLastIndex((entry) => entry.blockType === blockType));
     body.splice(index, 1);

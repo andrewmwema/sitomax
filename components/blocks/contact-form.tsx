@@ -111,7 +111,6 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
               ) : null}
               {contactDetails}
             </div>
-            {contactDetails}
             {form}
           </div>
         </Section>

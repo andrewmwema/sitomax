@@ -4,7 +4,7 @@ import { SITE_GENERATION_MODEL } from "./models";
 const mocks = vi.hoisted(() => ({ authorize: vi.fn(), account: vi.fn(), rpc: vi.fn(), admin: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireUser: mocks.authorize }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
-import { beginSiteGeneration, checkLimit, finishSiteGeneration, recordUsage } from "./usage";
+import { beginSiteGeneration, checkpointDraft, checkLimit, completeDraftCheckpoints, finishSiteGeneration, recordUsage, startDraftCheckpoints } from "./usage";
 
 const id = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
@@ -57,5 +57,26 @@ describe("AI server-side accounting", () => {
     }));
     await finishSiteGeneration(generationId, true);
     expect(mocks.rpc).toHaveBeenLastCalledWith("finish_ai_site_generation", { p_generation_id: generationId, p_success: true });
+  });
+  it("uses scoped server-only checkpoint RPCs after authenticated account checks", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: [], error: null }).mockResolvedValueOnce({ data: true, error: null });
+    await startDraftCheckpoints(id, id, id, { name: "Example", theme: {}, pages: [], business: {}, expectedBusiness: null });
+    expect(mocks.rpc).toHaveBeenLastCalledWith("start_ai_draft_checkpoints", expect.objectContaining({
+      p_generation_id: id, p_site_id: id, p_user_id: "authenticated-user", p_expected_business: null,
+    }));
+    expect(await checkpointDraft(id, id, id, { content: [] })).toBe(true);
+    await completeDraftCheckpoints(id, id);
+    expect(mocks.rpc).toHaveBeenLastCalledWith("complete_ai_draft_checkpoints", { p_generation_id: id, p_user_id: "authenticated-user" });
+    mocks.account.mockResolvedValue({ data: null, error: null });
+    mocks.admin.mockClear();
+    await expect(checkpointDraft(id, id, id, {})).rejects.toThrow("access");
+    await expect(startDraftCheckpoints(id, id, id, { name: "", theme: {}, pages: [], business: {}, expectedBusiness: null })).rejects.toThrow("access");
+    expect(mocks.admin).not.toHaveBeenCalled();
+  });
+  it("surfaces checkpoint and concurrent Business failures rather than pretending drafts were saved", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "P0001", message: "Business information changed." } });
+    await expect(startDraftCheckpoints(id, id, id, { name: "", theme: {}, pages: [], business: {}, expectedBusiness: {} })).rejects.toThrow("Business information changed");
+    await expect(checkpointDraft(id, id, id, {})).rejects.toThrow("Could not save");
+    await expect(completeDraftCheckpoints(id, id)).rejects.toThrow("Could not finalize");
   });
 });
