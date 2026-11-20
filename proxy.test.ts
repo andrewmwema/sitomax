@@ -2,6 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn(), updateSession: vi.fn() }));
+vi.mock("@/lib/brand", () => ({ brand: { appUrl: "https://app.agency.test", marketingSiteSubdomain: "sitomax" } }));
 vi.mock("@/lib/redirect-lookup", () => ({ lookupTenantRedirect: mocks.lookup }));
 vi.mock("@/lib/supabase/proxy", () => ({ updateSession: mocks.updateSession }));
 import { proxy } from "./proxy";
@@ -18,6 +19,16 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("host routing", () => {
+  it("allows email webhooks only on the canonical app host", async () => {
+    for (const path of ["/api/email/inbound", "/api/email/events"]) {
+      const allowed = await proxy(request(`https://app.agency.test${path}`));
+      expect(allowed.status).toBe(200);
+      expect(allowed.headers.get("x-middleware-next")).toBe("1");
+      expect((await proxy(request(`https://client.test${path}`))).status).toBe(404);
+    }
+    expect(mocks.updateSession).not.toHaveBeenCalled();
+  });
+
   it("passes app, local development and hosted preview domains through app session handling", async () => {
     for (const host of ["app.agency.test", "localhost:3000", "client.app.github.dev", "preview.vercel.app"]) {
       await proxy(request(`https://${host}/dashboard`, host));

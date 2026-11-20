@@ -63,7 +63,7 @@ export async function proxy(request: NextRequest) {
   const root = getRootDomain().toLowerCase();
   const rootHost = hostname(root);
 
-  if (pathname === "/api/email/inbound") {
+  if (pathname === "/api/email/inbound" || pathname === "/api/email/events") {
     return host === new URL(brand.appUrl).host.toLowerCase() ? NextResponse.next() : new NextResponse("Not found", { status: 404 });
   }
   if (isAppHost(host, rootHost)) return updateSession(request);

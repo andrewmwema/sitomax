@@ -17,7 +17,9 @@ import { leadReplyWorker } from "@/lib/leads/reply-worker";
 
 const routeSchema = z.object({
   email: leadEmailAddress.nullable(), mode: z.enum(["tracked", "direct"]), direct_to: z.string().nullable(),
-  owner_copy: z.string().nullable(), bounced: z.boolean(), archived: z.boolean(),
+  owner_copy: z.string().nullable(), bounced: z.boolean(), undeliverable: z.boolean().default(false),
+  undeliverable_type: z.enum(["bounce", "spam_complaint"]).nullable().optional(),
+  undeliverable_reason: z.string().nullable().optional(), archived: z.boolean(),
 });
 const sendSchema = z.object({
   leadId: z.uuid(), requestId: z.uuid(), subject: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f]+$/),
@@ -54,7 +56,11 @@ export async function sendLeadReply(raw: unknown) {
     if (routeResult.error || agency.error) throw new Error("Could not load reply settings.", { cause: routeResult.error?.code ?? agency.error?.code });
     const route = routeSchema.safeParse(routeResult.data);
     if (!route.success || !route.data.email || route.data.archived) return { error: "This lead does not have a usable contact email, or is archived." };
-    if (route.data.bounced) return { error: "This lead's email address bounced. Sending to it has been disabled." };
+    if (route.data.bounced || route.data.undeliverable) {
+      return { error: route.data.undeliverable_type === "spam_complaint"
+        ? "This lead's email address reported your email as spam. Sending to it has been disabled."
+        : "This lead's email address bounced or is undeliverable. Sending to it has been disabled." };
+    }
     const html = cleanLeadEmailHtml(form.html);
     const text = replyHtmlText(html);
     if (!text) return { error: "Enter a reply before sending." };

@@ -59,7 +59,12 @@ export async function LeadReplyThread({ lead, supabase }: {
       </li>)}
     </ol>
     {route.data?.mode === "direct" ? <p className="text-xs text-[var(--platform-muted)]">New replies go directly to the notification mailbox and do not appear in this conversation.</p> : null}
-    {route.data?.bounced ? <p role="status" className="text-sm text-[var(--platform-error)]">This lead’s address bounced. Sending is disabled.</p>
+    {route.data?.bounced || route.data?.undeliverable ? <p role="status" className="text-sm text-[var(--platform-error)]">
+      {route.data?.undeliverable_type === "spam_complaint"
+        ? "This address reported email as spam. Replies are disabled."
+        : "This address bounced or is undeliverable. Replies are disabled."}
+      {route.data?.undeliverable_reason ? <span className="block text-xs">{route.data.undeliverable_reason}</span> : null}
+    </p>
       : lead.archived ? <p className="text-sm">Restore this lead before replying.</p>
       : email.success ? <LeadReplyComposer leadId={lead.id} siteId={lead.site_id} to={email.data} business={name}
         firstName={contact.name?.trim().split(/\s+/)[0] ?? ""} siteUrl={siteUrl} canCopy={Boolean(route.data?.owner_copy)}

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ site: vi.fn(), rpc: vi.fn(), after: vi.fn(), send: vi.fn(), owners: vi.fn(), configured: vi.fn(),
-  settings: vi.fn(), preferences: vi.fn(), members: vi.fn() }));
+  settings: vi.fn(), preferences: vi.fn(), members: vi.fn(), suppressions: vi.fn() }));
 vi.mock("next/server", () => ({ after: mocks.after }));
 vi.mock("@/lib/email", async (original) => ({ ...await original<typeof import("@/lib/email")>(),
   sendEmail: mocks.send, isEmailConfigured: mocks.configured }));
@@ -15,6 +15,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({
   from: (table: string) => {
     const query = { select: () => query, eq: () => query, in: mocks.members, maybeSingle: mocks.settings,
       then: (resolve: (value: unknown) => unknown) => Promise.resolve(mocks.preferences()).then(resolve) };
+    if (table === "email_suppressions") return { select: () => ({ in: mocks.suppressions }) };
     if (!["lead_site_settings", "lead_notification_preferences", "account_members"].includes(table)) throw new Error(table);
     return query;
   },
@@ -38,6 +39,7 @@ beforeEach(() => {
   mocks.configured.mockReturnValue(false);
   mocks.settings.mockResolvedValue({ data: null, error: null });
   mocks.preferences.mockReturnValue({ data: [], error: null });
+  mocks.suppressions.mockResolvedValue({ data: [], error: null });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 
@@ -111,6 +113,15 @@ describe("form submission endpoint", () => {
     expect((await POST(request(valid))).status).toBe(200);
     await mocks.after.mock.calls[0][0]();
     expect(mocks.owners).not.toHaveBeenCalled();
+    expect(mocks.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ to: "custom@example.test" }));
+  });
+
+  it("does not send new-lead notifications to suppressed recipients", async () => {
+    mocks.configured.mockReturnValue(true);
+    mocks.settings.mockResolvedValue({ data: { recipients: ["owner@example.test", "custom@example.test"] }, error: null });
+    mocks.suppressions.mockResolvedValue({ data: [{ email: "owner@example.test" }], error: null });
+    expect((await POST(request(valid))).status).toBe(200);
+    await mocks.after.mock.calls[0][0]();
     expect(mocks.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ to: "custom@example.test" }));
   });
 

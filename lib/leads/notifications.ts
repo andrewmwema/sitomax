@@ -20,6 +20,11 @@ export async function newLeadRecipients(admin: Admin, site: { id: string; accoun
   if (settings.error || preferences.error) throw new EmailDeliveryError("Could not load lead notification settings.");
   const recipients = settings.data?.recipients?.length ? settings.data.recipients : await getAccountOwnerEmails(admin, site.account_id);
   const emails = z.array(emailAddress).max(50).parse(recipients);
+  const suppressions = emails.length
+    ? await admin.from("email_suppressions").select("email").in("email", emails.map((email) => email.toLowerCase()))
+    : { data: [], error: null };
+  if (suppressions.error) throw new EmailDeliveryError("Could not check lead notification recipients.");
+  const suppressed = new Set((suppressions.data ?? []).map((entry) => entry.email));
   const muted = new Set<string>();
   if (preferences.data.length) {
     const members = await admin.from("account_members").select("user_id").eq("account_id", site.account_id)
@@ -31,7 +36,7 @@ export async function newLeadRecipients(admin: Admin, site: { id: string; accoun
       if (profile.success && (profile.data.is_super_admin || owners.has(pref.user_id))) muted.add(profile.data.email.toLowerCase());
     }
   }
-  return [...new Set(emails.map((email) => email.toLowerCase()))].filter((email) => !muted.has(email));
+  return [...new Set(emails.map((email) => email.toLowerCase()))].filter((email) => !muted.has(email) && !suppressed.has(email));
 }
 
 export async function notifyNewLead(admin: Admin, site: { id: string; account_id: string; name: string | null; subdomain: string },

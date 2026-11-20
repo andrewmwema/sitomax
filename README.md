@@ -566,6 +566,12 @@ to newly sent emails. The agency can adjust the per-account daily send limit
 branding in **Settings → Branding**. An accepted send counts as a send
 attempt even if delivery later fails. Forward delivery is retried up to
 three times after the first attempt. Auto-replies are stored collapsed but
-not forwarded. Attachments are not stored. Postmark's synchronous
-inactive-recipient rejection disables further sends to that lead when it
-can be attributed to the lead; this phase does not install a bounce webhook.
+not forwarded. Attachments are not stored. Apply
+[`0036_postmark_email_events.sql`](./supabase/migrations/0036_postmark_email_events.sql)
+after `0035` and before deploying bounce/spam handling. In Postmark, configure
+the Bounce and Spam Complaint webhooks to the exact `NEXT_PUBLIC_APP_URL`
+origin at `/api/email/events`, using the same Basic Auth credentials as the
+inbound webhook. Suppressed addresses are excluded from lead replies,
+notifications, forwards, and daily digests; matching leads show an
+undeliverable warning. Any future report sender must also exclude
+`public.email_suppressions`.
