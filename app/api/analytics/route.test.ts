@@ -1,8 +1,15 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ insert: vi.fn(), site: vi.fn() }));
+const mocks = vi.hoisted(() => ({ insert: vi.fn(), site: vi.fn(), post: vi.fn(), filter: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ from: () => ({ insert: mocks.insert }) }),
+  createAdminClient: () => ({ from: (table: string) => {
+    if (table === "posts") {
+      const query = { select: () => query, eq: mocks.filter, not: () => query, maybeSingle: mocks.post };
+      mocks.filter.mockReturnValue(query);
+      return query;
+    }
+    return { insert: mocks.insert };
+  } }),
 }));
 vi.mock("@/lib/tenant", () => ({
   getTenantKeyFromHost: (host: string) => host === "agency.test" ? "sitomax" : host,
@@ -28,6 +35,19 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
 describe("analytics beacon", () => {
+  it("attributes a blog view only to a published post on the resolved site", async () => {
+    const blogPostId = "00000000-0000-4000-8000-000000000001";
+    const body = { path: "/articles/example", referrer: "", blogPostId };
+    mocks.post.mockResolvedValueOnce({ data: { id: blogPostId }, error: null });
+    expect((await POST(request(body))).status).toBe(204);
+    expect(mocks.filter.mock.calls).toEqual([["site_id", "site-1"], ["id", blogPostId], ["status", "published"]]);
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ site_id: "site-1", blog_post_id: blogPostId }));
+    mocks.insert.mockClear();
+    mocks.post.mockResolvedValueOnce({ data: null, error: null });
+    expect((await POST(request(body))).status).toBe(404);
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+
   it("stores only privacy-reduced data and rotates identifiers by day and site", async () => {
     const body = { path: "/contact", referrer: "https://search.example/results?q=private" };
     expect((await POST(request(body, { "x-vercel-ip-country": "us" }))).status).toBe(204);

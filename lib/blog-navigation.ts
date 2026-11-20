@@ -8,6 +8,13 @@ export function blogManagerHref(siteId: string, editorPageId: string | null, pos
   return `/dashboard/sites/${encodeURIComponent(siteId)}/blog${postId ? `/${encodeURIComponent(postId)}` : ""}${query.size ? `?${query}` : ""}`;
 }
 
+export function blogAnalyticsHref(siteId: string, editorPageId: string | null, days?: string) {
+  const query = new URLSearchParams();
+  if (editorPageId) query.set("editorPage", editorPageId);
+  if (days) query.set("days", days);
+  return `/dashboard/sites/${encodeURIComponent(siteId)}/blog/analytics${query.size ? `?${query}` : ""}`;
+}
+
 export async function resolveBlogEditorPage(
   supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], siteId: string, requestedPage: unknown,
 ): Promise<string | null> {

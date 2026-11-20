@@ -3,7 +3,7 @@ import { z } from "zod";
 import Link from "next/link";
 import { BarChart3, CalendarDays } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { siteAnalyticsReportSchema } from "@/lib/analytics";
+import { analyticsDaysSchema, siteAnalyticsReportSchema } from "@/lib/analytics";
 import { AnalyticsReport } from "@/components/dashboard/analytics-report";
 
 export default function AnalyticsPage({ searchParams }: PageProps<"/dashboard/analytics">) {
@@ -24,7 +24,7 @@ async function AnalyticsContent({ searchParams }: { searchParams: PageProps<"/da
   ]);
   if (sitesError || membershipsError || adminError) throw new Error("Could not load analytics sites.");
   const allowedSites = (sites ?? []).filter((site) => admin || memberships?.some((member) => member.account_id === site.account_id));
-  const filters = z.object({ site: z.uuid().optional(), days: z.enum(["7", "30", "90"]).default("30") }).safeParse(params);
+  const filters = z.object({ site: z.uuid().optional(), days: analyticsDaysSchema }).safeParse(params);
   if (!filters.success) return <p role="alert">Choose a valid website and a 7, 30 or 90 day range.</p>;
   const selected = filters.data.site ? allowedSites.find((site) => site.id === filters.data.site) : allowedSites[0];
   if (filters.data.site && !selected) return <p role="alert">This site is unavailable or you do not have permission to view its analytics.</p>;

@@ -152,6 +152,14 @@ later edits stay in the draft unless you reschedule. Cancel the schedule
 before changing the post URL. Posts scheduled before 0032 must be
 rescheduled with a future time; they are not published automatically.
 
+Apply [migration 0033](supabase/migrations/0033_blog_analytics.sql) after
+0032 and before deploying Blog Analytics. Account owners and super admins
+can open **Blog Manager → Analytics** for post views and top posts over
+7, 30, or 90 UTC days. It uses the existing first-party analytics beacon
+and requires the same `ANALYTICS_HASH_SALT` setting. Preview and signed-in
+site team visits are excluded. Post views start counting after deployment;
+historical traffic is not backfilled.
+
 The blog writer offers credit-metered AI draft, selected-text rewrite, and SEO
 suggestion previews. Review the verification notes before applying any
 suggestion. Alt text suggestions use the supplied description, not the image.

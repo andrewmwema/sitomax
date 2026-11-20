@@ -36,13 +36,26 @@ export async function POST(request: Request) {
   const site = await getSiteByHost(key);
   if (!site) return new Response(null, { status: 404 });
 
+  const supabase = createAdminClient();
+  const { blogPostId } = parsed.data;
+  if (blogPostId) {
+    const { data: post, error } = await supabase.from("posts").select("id")
+      .eq("site_id", site.id).eq("id", blogPostId).eq("status", "published").not("published_content", "is", null).maybeSingle();
+    if (error) {
+      console.error("Could not validate analytics blog post", { code: error.code });
+      return new Response(null, { status: 500 });
+    }
+    if (!post) return new Response(null, { status: 404 });
+  }
+
   const agent = (request.headers.get("user-agent") ?? "").slice(0, 1024);
   const day = new Date().toISOString().slice(0, 10);
   const visitorHash = createHash("sha256").update(JSON.stringify([ip, agent, day, salt, site.id])).digest("hex");
   const country = request.headers.get("x-vercel-ip-country")?.toUpperCase() ?? "";
-  const { error } = await createAdminClient().from("page_views").insert({
+  const { error } = await supabase.from("page_views").insert({
     site_id: site.id,
     path: parsed.data.path,
+    ...(blogPostId ? { blog_post_id: blogPostId } : {}),
     referrer: referrerOrigin(parsed.data.referrer, host),
     device: deviceFromUserAgent(agent),
     country: /^[A-Z]{2}$/.test(country) ? country : null,

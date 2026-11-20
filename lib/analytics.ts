@@ -12,9 +12,16 @@ export const siteAnalyticsReportSchema = z.object({
 });
 export type SiteAnalyticsReport = z.infer<typeof siteAnalyticsReportSchema>;
 
+export const analyticsDaysSchema = z.enum(["7", "30", "90"]).default("30");
+export const blogAnalyticsReportSchema = z.object({
+  visits: reportCount,
+  posts: z.array(z.object({ id: z.uuid(), title: z.string(), visits: reportCount })).max(10),
+});
+
 export const beaconSchema = z.object({
   path: z.string().min(1).max(2048).regex(/^\/(?!\/)[^?#]*$/),
   referrer: z.string().max(2048),
+  blogPostId: z.uuid().optional(),
 }).strict();
 
 export function referrerOrigin(referrer: string, host: string): string | null {

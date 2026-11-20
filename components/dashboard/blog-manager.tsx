@@ -7,7 +7,7 @@ import { ArrowLeft, BookOpen, ChevronDown, ImagePlus, Plus, Search, X } from "lu
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
 import { MediaPicker } from "@/components/editor/media-picker";
 import { BlogImportPanel } from "@/components/dashboard/blog-import-panel";
-import { blogManagerHref } from "@/lib/blog-navigation";
+import { blogAnalyticsHref, blogManagerHref } from "@/lib/blog-navigation";
 import {
   bulkBlogPostStatus, createBlogPost, deleteBlogAuthor, deleteBlogCategory, deleteBlogPost, duplicateBlogPost,
   saveBlogAuthor, saveBlogCategory, saveBlogImageAltText, saveBlogSettings, setBlogPostStatus,
@@ -51,6 +51,7 @@ type Props = {
   tags: BlogManagerTag[];
   altEntries: BlogAltEntry[];
   settings: BlogSettings;
+  canViewAnalytics: boolean;
 };
 
 const control = "w-full rounded-lg border border-[#E8E7E3] bg-white px-3 py-2 text-sm focus:outline-2 focus:outline-[#4B3FE0]";
@@ -79,6 +80,8 @@ export function BlogManager(props: Props) {
           className={`border-b-2 px-1 pb-3 text-sm ${tab === name ? "border-[#4B3FE0] font-semibold text-[#3025B8]" : "border-transparent text-zinc-600 hover:text-zinc-900"}`}>
           {name}
         </button>)}
+        {props.canViewAnalytics ? <Link href={blogAnalyticsHref(props.siteId, props.editorPageId)}
+          className="border-b-2 border-transparent px-1 pb-3 text-sm text-zinc-600 hover:text-zinc-900">Analytics</Link> : null}
       </nav>
       <section className="pt-6">
         {tab === "Posts" ? <PostsView {...props} /> : null}

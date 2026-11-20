@@ -13,9 +13,9 @@ const defaultSettings: BlogSettings = {
 
 export default async function BlogPage({ params, searchParams }: PageProps<"/dashboard/sites/[siteId]/blog">) {
   const [{ siteId }, query] = await Promise.all([params, searchParams]);
-  const { supabase } = await requireUser();
-  const [siteResult, postsResult, categoriesResult, authorsResult, tagsResult, settingsResult, editorPageId] = await Promise.all([
-    supabase.from("sites").select("id, name, subdomain, timezone").eq("id", siteId).maybeSingle(),
+  const { supabase, user } = await requireUser();
+  const [siteResult, postsResult, categoriesResult, authorsResult, tagsResult, settingsResult, editorPageId, admin, memberships] = await Promise.all([
+    supabase.from("sites").select("id, account_id, name, subdomain, timezone").eq("id", siteId).maybeSingle(),
     supabase.from("posts").select(`
       id, title, slug, excerpt, cover_image, cover_alt, thumbnail_image, thumbnail_alt, draft_content, created_at, updated_at, published_at, publish_at, status, has_unpublished_changes,
       author_id, author:blog_authors(name), category_id, category:post_categories(name),
@@ -26,6 +26,8 @@ export default async function BlogPage({ params, searchParams }: PageProps<"/das
     supabase.from("post_tags").select("id, name").eq("site_id", siteId).order("name"),
     supabase.from("blog_settings").select("*").eq("site_id", siteId).maybeSingle(),
     resolveBlogEditorPage(supabase, siteId, query.editorPage),
+    supabase.rpc("is_super_admin"),
+    supabase.from("account_members").select("account_id").eq("user_id", user.id).eq("role", "owner"),
   ]);
   for (const [label, error] of [
     ["site", siteResult.error], ["posts", postsResult.error], ["categories", categoriesResult.error], ["authors", authorsResult.error],
@@ -76,7 +78,12 @@ export default async function BlogPage({ params, searchParams }: PageProps<"/das
   const authors = (authorsResult.data ?? []) as BlogManagerAuthor[];
   const tags = (tagsResult.data ?? []) as BlogManagerTag[];
   const settings = { ...defaultSettings, ...(settingsResult.data ?? {}) } as BlogSettings;
+  if (admin.error || memberships.error) {
+    console.error("Could not check blog analytics access", { code: admin.error?.code ?? memberships.error?.code });
+  }
+  const canViewAnalytics = admin.data === true || memberships.data?.some(({ account_id }) => account_id === siteResult.data?.account_id) === true;
   return <BlogManager siteId={siteId} editorPageId={editorPageId} siteName={siteResult.data.name ?? siteResult.data.subdomain}
     subdomain={siteResult.data.subdomain} timezone={siteResult.data.timezone} posts={posts}
-    categories={categories} authors={authors} tags={tags} altEntries={altEntries} settings={settings} />;
+    categories={categories} authors={authors} tags={tags} altEntries={altEntries} settings={settings}
+    canViewAnalytics={canViewAnalytics} />;
 }

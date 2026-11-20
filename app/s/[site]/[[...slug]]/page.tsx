@@ -46,17 +46,16 @@ import {
 type Props = PageProps<"/s/[site]/[[...slug]]">;
 
 /**
- * True when the current visitor may see drafts of this page: RLS only
- * returns the row to members of the site's account or the super admin.
+ * Site and page RLS return a row only to the site's team or a super admin.
  */
-const checkPageAccess = cache(async (pageId: string): Promise<{ allowed: boolean; failed: boolean }> => {
+const checkSiteContentAccess = cache(async (table: "pages" | "sites", id: string): Promise<{ allowed: boolean; failed: boolean }> => {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("pages")
+    .from(table)
     .select("id")
-    .eq("id", pageId)
+    .eq("id", id)
     .maybeSingle();
-  if (error) console.error("Could not check page access:", error.message);
+  if (error) console.error("Could not check site content access:", error.message);
   return { allowed: Boolean(data), failed: Boolean(error) };
 });
 
@@ -81,7 +80,7 @@ async function loadPage(
   if (!page) return null;
 
   const isPreview =
-    preview === "1" && page.draft_data != null && (await checkPageAccess(page.id)).allowed;
+    preview === "1" && page.draft_data != null && (await checkSiteContentAccess("pages", page.id)).allowed;
   const data = isPreview ? page.draft_data : page.published_data;
   if (!data) return null;
 
@@ -183,13 +182,15 @@ async function renderBlogPage(page: LoadedBlogPage, params: Props["params"], sea
   if (route.kind === "post" && !page.currentPost) notFound();
   if (route.kind !== "post" && route.kind !== "index" && page.total === 0) notFound();
   const [{ site: siteParam }, { preview }] = await Promise.all([params, searchParams]);
+  const blogPostId = page.currentPost?.id;
   const previewPrefix = preview === "1" ? `/s/${encodeURIComponent(siteParam)}` : "";
   const theme = (site.theme ?? {}) as SiteTheme;
   const seo = parseSiteSeo(site);
-  const [menuPages, linkPages, homePage] = await Promise.all([
+  const [menuPages, linkPages, homePage, access] = await Promise.all([
     getTenantMenuPages(site.id, false),
     getTenantLinkPages(site.id, false),
     getSitePage(site.id, ""),
+    preview !== "1" && blogPostId ? checkSiteContentAccess("sites", site.id) : null,
   ]);
   const contacts = siteContacts(businessSchema.parse({ ...emptyBusiness, ...site.business }));
   const siteMenu: SiteMenu = { links: pageMenuLinks(menuPages, previewPrefix), contacts };
@@ -236,6 +237,7 @@ async function renderBlogPage(page: LoadedBlogPage, params: Props["params"], sea
     <TenantFontHints />
     {jsonLd.map((json, index) => <script key={index} type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />)}
     {preview !== "1" ? <TenantTracking seo={seo} /> : null}
+    {blogPostId && access && !access.allowed && !access.failed ? <AnalyticsBeacon key={blogPostId} blogPostId={blogPostId} /> : null}
     <Render config={puckConfig} data={data as unknown as PuckPageData}
       metadata={{
         theme, siteMenu, siteHeader, siteLinks: linkContext(linkPages),
@@ -289,7 +291,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
 
   const { site, page, data, isPreview } = loaded;
   const { preview } = await searchParams;
-  const access = preview !== "1" ? await checkPageAccess(page.id) : null;
+  const access = preview !== "1" ? await checkSiteContentAccess("pages", page.id) : null;
   const track = access !== null && !access.allowed && !access.failed;
   const theme = ((isPreview ? site.draft_theme ?? site.theme : site.theme) ?? {}) as SiteTheme;
   const seo = parseSiteSeo(site);
