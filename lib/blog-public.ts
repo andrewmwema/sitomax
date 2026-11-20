@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { blogPublicationSchema, blogSlugify, sanitizeBlogContent, type BlogPublication } from "@/lib/blog";
+import { blogPublicPath } from "@/lib/blog-navigation";
 import { absoluteImage, isNoindex } from "@/lib/seo";
 import { parseSiteSeo } from "@/lib/seo-public";
 import { getSiteUrl } from "@/lib/site-url";
@@ -189,10 +190,7 @@ export function selectBlogPosts(
   return { posts: matches.slice((page - 1) * limit, page * limit), total, pages };
 }
 
-export function blogPublicPath(blogPath: string, suffix = "") {
-  const segments = [...blogPath.split("/").filter(Boolean), ...suffix.split("/").filter(Boolean)];
-  return `/${segments.map(encodeURIComponent).join("/")}`;
-}
+export { blogPublicPath };
 
 export function blogPostUrl(site: TenantSite, blogPath: string, post: Pick<PublicBlogPost, "slug" | "publication">) {
   const canonical = post.publication.metadata.canonical_url;

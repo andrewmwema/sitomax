@@ -199,7 +199,8 @@ async function renderBlogPage(page: LoadedBlogPage, params: Props["params"], sea
     rawHeader ? headerSchema.parse(rawHeader) : defaultHeader(contacts.businessName || site.name || "", theme.logoUrl);
   const postIndex = page.currentPost ? page.allPosts.findIndex((post) => post.id === page.currentPost?.id) : -1;
   const archiveProps: BlogArchiveProps = {
-    blogPath: blogPublicPath(settings.blog_path),
+    blogPath: `${previewPrefix}${blogPublicPath(settings.blog_path)}`,
+    preview: preview === "1",
     route,
     settings,
     posts: page.posts,
@@ -222,7 +223,7 @@ async function renderBlogPage(page: LoadedBlogPage, params: Props["params"], sea
       email: contacts.email, hours: contacts.openingHours, socialLinks: [], navigation: [], variant: "columns" },
     id: "blog-fallback-footer",
   }];
-  const footerData = resolveDataLinks({ root: {}, content: footerContent }, linkContext(linkPages));
+  const footerData = resolveDataLinks({ root: {}, content: footerContent }, linkContext(linkPages, previewPrefix));
   const content = [{
     type: "BlogPosts",
     props: {
@@ -240,7 +241,7 @@ async function renderBlogPage(page: LoadedBlogPage, params: Props["params"], sea
     {blogPostId && access && !access.allowed && !access.failed ? <AnalyticsBeacon key={blogPostId} blogPostId={blogPostId} /> : null}
     <Render config={puckConfig} data={data as unknown as PuckPageData}
       metadata={{
-        theme, siteMenu, siteHeader, siteLinks: linkContext(linkPages),
+        theme, siteMenu, siteHeader, siteLinks: linkContext(linkPages, previewPrefix),
         pagePath: `${previewPrefix}${blogPublicPath(settings.blog_path, route.kind === "post" ? route.slug : route.kind === "index" ? "" : `${route.kind}/${route.slug}`)}`,
       }}
       fieldTransforms={{ richtext: ({ value }) => value }} />
@@ -310,6 +311,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   const pageData = resolveDataLinks({ content: [], root: {}, ...data }, linkContext(linkPages, previewPrefix));
   const hasBlogPosts = hasBlockType(pageData.content, "BlogPosts");
   const blogFeedMetadata = hasBlogPosts ? await getPublicBlogData(site.id) : null;
+  const blogPreviewPrefix = preview === "1" ? `/s/${encodeURIComponent((await params).site)}` : "";
 
   return (
     <>
@@ -326,7 +328,8 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
         config={puckConfig}
         data={pageData as unknown as PuckPageData}
         metadata={{ theme, siteMenu, siteHeader, siteLinks: linkContext(linkPages, previewPrefix), pagePath: `${previewPrefix}/${page.slug}`,
-          ...(blogFeedMetadata ? { siteBlogPosts: blogFeedMetadata.posts, siteBlogPath: blogPublicPath(blogFeedMetadata.settings.blog_path),
+          ...(blogFeedMetadata ? { siteBlogPosts: blogFeedMetadata.posts,
+            siteBlogPath: `${blogPreviewPrefix}${blogPublicPath(blogFeedMetadata.settings.blog_path)}`, siteBlogPreview: preview === "1",
             siteBlogTimezone: blogFeedMetadata.settings.timezone } : {}) }}
         // Disable Puck's default richtext transform (it injects the raw
         // HTML unsanitized); pass the string through so blocks render it

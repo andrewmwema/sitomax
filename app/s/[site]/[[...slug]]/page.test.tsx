@@ -1,8 +1,12 @@
 import { Children, isValidElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Render } from "@puckeditor/core/rsc";
+import { BlogPosts } from "@/components/blocks/blog-posts";
 
-const mocks = vi.hoisted(() => ({ access: vi.fn(), blog: false, table: vi.fn() }));
-const post = { id: "post", slug: "example", tags: [], publication: { metadata: { title: "Example post" } } };
+const mocks = vi.hoisted(() => ({ access: vi.fn(), blog: false, feed: false, table: vi.fn() }));
+const post = { id: "post", slug: "example", published_at: "2026-11-20T12:00:00Z", tags: [], publication: { blocks: [], metadata: { title: "Example post" } } };
+const feedData = () => ({ content: mocks.feed ? [{ type: "BlogPosts", props: { id: "feed" } }] : [] });
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from: (table: string) => {
     mocks.table(table);
@@ -12,16 +16,16 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/tenant", () => ({
   getSiteUrl: () => "https://example.com",
   getSiteByHost: async () => ({ id: "site", name: "Example", subdomain: "client", custom_domain: "example.com", domain_verified: true, theme: {}, business: {}, seo: { socialImage: "/share.jpg", googleVerification: "verify123" } }),
-  getSitePage: async () => ({ id: "page", slug: "about", title: "About", seo: { title: "Search title", description: "Search description", noindex: true }, draft_data: { content: [] }, published_data: { content: [] } }),
+  getSitePage: async () => ({ id: "page", slug: "about", title: "About", seo: { title: "Search title", description: "Search description", noindex: true }, draft_data: feedData(), published_data: feedData() }),
   getTenantMenuPages: async () => [],
   getTenantLinkPages: async () => [],
 }));
 vi.mock("@/lib/blog-public", () => ({
-  blogMetadata: () => ({}), blogPostUrl: () => "https://example.com/blog/example", blogPublicPath: () => "/blog",
-  getPublicBlogData: async () => ({ settings: { available: false }, posts: [] }),
+  blogMetadata: () => ({}), blogPostUrl: () => "https://example.com/blog/example", blogPublicPath: (path: string, suffix?: string) => suffix ? `${path}/${suffix}` : path,
+  getPublicBlogData: async () => ({ settings: { available: true, blog_path: "/news/journal", timezone: "UTC" }, posts: [post] }),
   getPublicBlogSettings: async () => ({ available: mocks.blog, blog_path: "/blog" }), getPublishedBlogPosts: async () => [post],
   parseBlogRoute: (slug: string[]) => slug.length > 1 ? { kind: "post", slug: "example" } : { kind: "index", page: 1 },
-  selectBlogPosts: () => ({ posts: [], total: 0, pages: 1 }),
+  selectBlogPosts: () => ({ posts: [post], total: 2, pages: 2 }),
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: {} }));
 vi.mock("@puckeditor/core/rsc", () => ({ Render: () => null }));
@@ -31,6 +35,7 @@ import TenantSitePage, { generateMetadata } from "./page";
 
 beforeEach(() => {
   mocks.blog = false;
+  mocks.feed = false;
   mocks.table.mockClear();
   mocks.access.mockReset();
   mocks.access.mockResolvedValue({ data: null, error: null });
@@ -43,6 +48,54 @@ async function hasBeacon(preview?: string) {
   });
   return Children.toArray(result.props.children).some((child) => isValidElement(child) && child.type === AnalyticsBeacon);
 }
+
+describe("tenant blog feed links", () => {
+  it.each(["1", undefined])("keeps the tenant context in feed links with preview=%s", async (preview) => {
+    mocks.feed = true;
+    mocks.access.mockResolvedValue({ data: { id: "page" }, error: null });
+    const result = await TenantSitePage({
+      params: Promise.resolve({ site: "client" }),
+      searchParams: Promise.resolve({ preview }),
+    });
+    const render = Children.toArray(result.props.children).find((child) => isValidElement(child) && child.type === Render);
+    if (!isValidElement<{ metadata: Record<string, unknown> }>(render) || !BlogPosts.defaultProps) {
+      throw new Error("Missing blog feed render data");
+    }
+    const markup = renderToStaticMarkup(BlogPosts.render({
+      ...BlogPosts.defaultProps,
+      id: "feed",
+      puck: { metadata: render.props.metadata, isEditing: false, dragRef: null, renderDropZone: () => null },
+    }));
+    const path = preview ? "/s/client/news/journal" : "/news/journal";
+    const query = preview ? "?preview=1" : "";
+    expect(markup).toContain(`href="${path}${query}"`);
+    expect(markup).toContain(">View all posts</a>");
+    expect(markup).toContain(`href="${path}/example${query}"`);
+  });
+
+  it("keeps the tenant and preview mode when navigating within the blog", async () => {
+    mocks.blog = true;
+    async function archiveMarkup(slug: string[]) {
+      const result = await TenantSitePage({
+        params: Promise.resolve({ site: "client", slug }), searchParams: Promise.resolve({ preview: "1" }),
+      });
+      const render = Children.toArray(result.props.children).find((child) => isValidElement(child) && child.type === Render);
+      if (!isValidElement<{ data: { content: [{ props: Parameters<typeof BlogPosts.render>[0] }] } }>(render)) {
+        throw new Error("Missing blog archive render data");
+      }
+      return renderToStaticMarkup(BlogPosts.render({
+        ...render.props.data.content[0].props,
+        id: "archive",
+        puck: { metadata: {}, isEditing: false, dragRef: null, renderDropZone: () => null },
+      }));
+    }
+    const index = await archiveMarkup(["blog"]);
+    expect(index).toContain('href="/s/client/blog/example?preview=1"');
+    expect(index).toContain('href="/s/client/blog?preview=1&amp;page=2"');
+    expect(index).toContain('name="preview" value="1"');
+    expect(await archiveMarkup(["blog", "example"])).toContain('href="/s/client/blog?preview=1"');
+  });
+});
 
 describe("tenant analytics eligibility", () => {
   it("tracks public blog posts by ID, excluding previews, index pages, and site team visits", async () => {

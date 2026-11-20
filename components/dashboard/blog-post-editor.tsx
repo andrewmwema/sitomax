@@ -801,12 +801,13 @@ function SeoSettings({ form, change, onPickThumbnail }: {
         {form.seo_description.length}/160 ideal{form.seo_description.length > 0 && (form.seo_description.length < 140 || form.seo_description.length > 160) ? " · outside recommended range" : ""}
       </span>
     </label>
-    <section><p className="text-xs font-semibold">Social image</p>
+    <section><p className="text-xs font-semibold">Post thumbnail and social image</p>
+      <p className="mt-1 text-xs text-zinc-500">Used in blog listings and link previews. If no thumbnail is selected, listings use the main image.</p>
       {thumbnail ? <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={thumbnail} alt={form.thumbnail_alt || form.cover_alt} className="mt-2 aspect-video w-full rounded-lg object-cover" />
       </> : null}
-      <button type="button" onClick={onPickThumbnail} className="platform-button mt-2 w-full"><ImagePlus size={14} />{form.thumbnail_image ? "Replace image" : "Use or replace main image"}</button>
+      <button type="button" onClick={onPickThumbnail} className="platform-button mt-2 w-full"><ImagePlus size={14} />{form.thumbnail_image ? "Replace thumbnail" : "Choose thumbnail"}</button>
       <label className="mt-2 block text-xs">Alt text<input value={form.thumbnail_alt} onChange={(event) => change((old) => ({ ...old, thumbnail_alt: event.target.value }))} maxLength={500} className={`${fieldClass} mt-1 font-normal`} /></label>
     </section>
     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.noindex} onChange={(event) => change((old) => ({ ...old, noindex: event.target.checked }))} />Ask search engines not to index</label>

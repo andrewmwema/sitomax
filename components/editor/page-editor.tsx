@@ -71,6 +71,7 @@ import { canonicalUrl } from "@/lib/seo-public";
 import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
 import { isEmptyPage } from "@/lib/editor/empty-page";
 import { blogManagerHref } from "@/lib/blog-navigation";
+import type { BlogFeedMetadata } from "@/components/blocks/blog-posts";
 import { defaultHeader, extractNavigation, headerSchema, type HeaderRoot } from "@/lib/header";
 import { renderHeaderEditor } from "./header-editor";
 
@@ -656,6 +657,7 @@ export function PageEditor({
   business: initialBusiness,
   siteSeo,
   headersReady = true,
+  blogFeed,
 }: {
   page: { id: string; slug: string; title: string | null };
   site: { id: string; account_id: string; name: string | null; subdomain: string; custom_domain: string | null; domain_verified: boolean; theme: SiteTheme | null; draft_header?: unknown };
@@ -669,6 +671,7 @@ export function PageEditor({
   business: Business;
   siteSeo: SiteSeo;
   headersReady?: boolean;
+  blogFeed?: BlogFeedMetadata;
 }) {
   const searchParams = useSearchParams();
   const initialUi = useMemo(() => searchParams.get("panel") === "seo"
@@ -817,7 +820,7 @@ export function PageEditor({
               data={data}
               ui={initialUi}
               metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) }, siteLinks: linkContext(sitePages),
-                renderHeader: headersReady ? renderHeaderEditor : undefined, pagePath: `/${page.slug}`,
+                renderHeader: headersReady ? renderHeaderEditor : undefined, pagePath: `/${page.slug}`, ...blogFeed,
               }}
               overrides={overrides}
               plugins={editorPlugins}

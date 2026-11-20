@@ -4,11 +4,13 @@ import { BlogShareLinks } from "@/components/blocks/blog-share-links";
 import { safeMediaUrl, videoEmbedUrl } from "@/lib/sections/design";
 import { safeHref } from "@/lib/layout/guardrails";
 import { slugify } from "@/lib/page-slugs";
+import { blogHref } from "@/lib/blog-navigation";
 import type { BlogBlock } from "@/lib/blog";
 import type { BlogRoute, PublicBlogPost, PublicBlogSettings } from "@/lib/blog-public";
 
 export type BlogArchiveProps = {
   blogPath: string;
+  preview?: boolean;
   route: BlogRoute;
   settings: PublicBlogSettings;
   posts: PublicBlogPost[];
@@ -32,8 +34,9 @@ function headingId(text: string, index: number) {
 
 function pageHref(props: BlogArchiveProps, page: number) {
   const suffix = props.route.kind === "index" ? "" : `${props.route.kind}/${props.route.slug}`;
-  const path = `${props.blogPath.replace(/\/+$/, "")}${suffix ? `/${suffix}` : ""}`;
+  const path = blogHref(props.blogPath, suffix);
   const params = new URLSearchParams();
+  if (props.preview) params.set("preview", "1");
   if (page > 1) params.set("page", String(page));
   if (props.query) params.set("q", props.query);
   return `${path}${params.size ? `?${params}` : ""}`;
@@ -123,7 +126,7 @@ function BlogPostView(props: BlogArchiveProps) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={safeMediaUrl(metadata.author.photo)!} alt="" width="48" height="48" className="h-12 w-12 rounded-full object-cover" />
         </> : null}
-        <div><a href={`${props.blogPath.replace(/\/+$/, "")}/author/${encodeURIComponent(slugify(metadata.author.name))}`}
+        <div><a href={blogHref(props.blogPath, `author/${slugify(metadata.author.name)}`, props.preview)}
           className="font-medium hover:underline">{metadata.author.name}</a>
           {metadata.author.bio ? <p className="mt-1 max-w-prose text-sm text-[var(--color-muted)]">{metadata.author.bio}</p> : null}
           {props.settings.show_date ? <p className="text-sm text-[var(--color-muted)]"><time dateTime={post.published_at}>{date}</time></p> : null}
@@ -147,25 +150,25 @@ function BlogPostView(props: BlogArchiveProps) {
         className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-[var(--color-primary)] px-5 font-semibold text-[var(--color-on-primary)]">{props.settings.cta_button_text}</a> : null}
     </aside> : null}
     {(props.previousPost || props.nextPost) ? <nav className="mx-auto mt-10 grid max-w-[70ch] gap-4 border-t border-current/15 pt-6 sm:grid-cols-2" aria-label="More posts">
-      {props.previousPost ? <a href={`${props.blogPath.replace(/\/+$/, "")}/${props.previousPost.slug.split("/").map(encodeURIComponent).join("/")}`} className="hover:underline">
+      {props.previousPost ? <a href={blogHref(props.blogPath, props.previousPost.slug, props.preview)} className="hover:underline">
         <span className="block text-xs text-[var(--color-muted)]">Previous</span>{props.previousPost.publication.metadata.title}</a> : <span />}
-      {props.nextPost ? <a href={`${props.blogPath.replace(/\/+$/, "")}/${props.nextPost.slug.split("/").map(encodeURIComponent).join("/")}`} className="text-right hover:underline">
+      {props.nextPost ? <a href={blogHref(props.blogPath, props.nextPost.slug, props.preview)} className="text-right hover:underline">
         <span className="block text-xs text-[var(--color-muted)]">Next</span>{props.nextPost.publication.metadata.title}</a> : null}
     </nav> : null}
     {props.relatedPosts?.length ? <section className="mx-auto mt-14 max-w-7xl border-t border-current/15 px-5 pt-10 sm:px-8" aria-labelledby="related-posts">
       <h2 id="related-posts" className="mb-6 text-2xl font-semibold">Related posts</h2>
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">{props.relatedPosts.map((related) =>
-        <BlogPostCard key={related.id} post={related} blogPath={props.blogPath} timezone={props.settings.timezone} />)}</div>
+        <BlogPostCard key={related.id} post={related} blogPath={props.blogPath} preview={props.preview} timezone={props.settings.timezone} />)}</div>
     </section> : null}
   </div>;
 
   const title = <header className="mx-auto max-w-4xl px-5 pb-8 pt-12 text-center sm:px-8">
-    {metadata.category ? <a href={`${props.blogPath.replace(/\/+$/, "")}/category/${encodeURIComponent(metadata.category.slug)}`}
+    {metadata.category ? <a href={blogHref(props.blogPath, `category/${metadata.category.slug}`, props.preview)}
       className="text-sm font-semibold uppercase tracking-wide text-[var(--color-primary)]">{metadata.category.name}</a> : null}
     <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl" style={{ fontFamily: "var(--font-heading)" }}>{metadata.title}</h1>
     {metadata.subtitle ? <p className="mx-auto mt-4 max-w-3xl text-lg leading-7 text-[var(--color-muted)]">{metadata.subtitle}</p> : null}
     <nav className="mt-5 text-sm text-[var(--color-muted)]" aria-label="Breadcrumb">
-      <a href={props.blogPath} className="hover:underline">Blog</a><span aria-hidden="true"> / </span><span>{metadata.title}</span>
+      <a href={blogHref(props.blogPath, "", props.preview)} className="hover:underline">Blog</a><span aria-hidden="true"> / </span><span>{metadata.title}</span>
     </nav>
   </header>;
 
@@ -194,28 +197,29 @@ export function BlogArchive(props: BlogArchiveProps) {
     <header className="mb-8">
       <h1 id="blog-heading" className="text-4xl font-bold" style={{ fontFamily: "var(--font-heading)" }}>{props.title}</h1>
       {props.route.kind === "index" ? <form action={props.blogPath} method="get" role="search" className="mt-5 flex max-w-xl gap-2">
+        {props.preview ? <input type="hidden" name="preview" value="1" /> : null}
         <label className="sr-only" htmlFor="blog-search">Search blog posts</label>
         <input id="blog-search" type="search" name="q" defaultValue={props.query} placeholder="Search posts"
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-current/20 bg-transparent px-3" />
         <button className="min-h-11 rounded-lg bg-[var(--color-primary)] px-5 font-semibold text-[var(--color-on-primary)]">Search</button>
       </form> : null}
       {categories.length ? <nav className="mt-5 flex flex-wrap gap-2" aria-label="Blog categories">
-        <a href={props.blogPath} className={`rounded-full border px-3 py-1.5 text-sm ${props.route.kind === "index" ? "border-[var(--color-primary)]" : "border-current/20"}`}>All</a>
-        {categories.map((category) => <a key={category.slug} href={`${props.blogPath.replace(/\/+$/, "")}/category/${encodeURIComponent(category.slug)}`}
+        <a href={blogHref(props.blogPath, "", props.preview)} className={`rounded-full border px-3 py-1.5 text-sm ${props.route.kind === "index" ? "border-[var(--color-primary)]" : "border-current/20"}`}>All</a>
+        {categories.map((category) => <a key={category.slug} href={blogHref(props.blogPath, `category/${category.slug}`, props.preview)}
           className="rounded-full border border-current/20 px-3 py-1.5 text-sm hover:border-[var(--color-primary)]">{category.name}</a>)}
       </nav> : null}
     </header>
     {!displayPosts.length ? <p className="py-16 text-center text-[var(--color-muted)]">No posts found.</p> :
       props.settings.index_layout === "magazine" && props.page === 1 && !props.query && displayPosts.length > 1 ? <>
         <div className="mb-10 rounded-2xl bg-[var(--color-soft-bg)] p-5 sm:p-8">
-          <BlogPostCard post={displayPosts[0]} blogPath={props.blogPath} showExcerpt showDate={props.settings.show_date}
+          <BlogPostCard post={displayPosts[0]} blogPath={props.blogPath} preview={props.preview} showExcerpt showDate={props.settings.show_date}
             showAuthor={props.settings.show_author} showReadingTime={props.settings.show_reading_time} timezone={props.settings.timezone} />
         </div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">{displayPosts.slice(1).map((post) =>
-          <BlogPostCard key={post.id} post={post} blogPath={props.blogPath} showDate={props.settings.show_date}
+          <BlogPostCard key={post.id} post={post} blogPath={props.blogPath} preview={props.preview} showDate={props.settings.show_date}
             showAuthor={props.settings.show_author} showReadingTime={props.settings.show_reading_time} timezone={props.settings.timezone} />)}</div>
       </> : <div className={props.settings.index_layout === "list" ? "grid gap-8" : "grid gap-8 sm:grid-cols-2 lg:grid-cols-3"}>
-        {displayPosts.map((post) => <BlogPostCard key={post.id} post={post} blogPath={props.blogPath}
+        {displayPosts.map((post) => <BlogPostCard key={post.id} post={post} blogPath={props.blogPath} preview={props.preview}
           layout={props.settings.index_layout === "list" ? "list" : "grid"} showDate={props.settings.show_date}
           showAuthor={props.settings.show_author} showReadingTime={props.settings.show_reading_time} timezone={props.settings.timezone} />)}
       </div>}

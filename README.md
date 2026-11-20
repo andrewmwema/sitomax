@@ -137,7 +137,12 @@ site-local scheduling. Public blog routes, feeds and SEO use published
 snapshots.
 To show recent articles on an existing page, open the website editor and choose
 **Add section → Blog → Latest blog posts**, then publish the page. The live feed
-updates automatically as posts are published.
+updates automatically as posts are published. Post links and **View all posts**
+stay on the same tenant when clicked from the page preview.
+The editor canvas previews published posts using their thumbnail (or cover image)
+and saved excerpt. Select the section to change its heading, layout, or post filter.
+To change an image on an already published card, choose a thumbnail under the
+post's **SEO** tab (or a main image under **Details**), then republish the post.
 Use **Back to editor** in Blog Manager or the post writer to return to the
 page you started from. If you opened the blog directly, it returns to the
 site's home page (or its first available page).

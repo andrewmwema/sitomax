@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   build: vi.fn(),
   busy: null as string | null,
   ui: undefined as unknown,
+  metadata: undefined as unknown,
   dispatch: vi.fn(),
   back: vi.fn(),
   forward: vi.fn(),
@@ -38,12 +39,14 @@ vi.mock("@puckeditor/core", () => ({
   useGetPuck: () => puckState,
   blocksPlugin: () => ({ name: "blocks" }),
   outlinePlugin: () => ({ name: "outline" }),
-  Puck: ({ ui, overrides, plugins }: {
+  Puck: ({ ui, metadata, overrides, plugins }: {
     ui: unknown;
+    metadata: unknown;
     overrides: { puck: (props: { children: ReactNode }) => ReactNode; header: (props: { actions: ReactNode }) => ReactNode; headerActions: () => ReactNode };
     plugins: { name: string; render?: () => ReactNode }[];
   }) => {
     mocks.ui = ui;
+    mocks.metadata = metadata;
     const Wrapper = overrides.puck;
     const Header = overrides.header;
     const Actions = overrides.headerActions;
@@ -102,6 +105,18 @@ beforeEach(() => {
   mocks.header = false;
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   mocks.save.mockResolvedValue(true);
+});
+
+it("passes the site's published blog feed to the canvas", async () => {
+  const blogFeed = { siteBlogPath: "https://example.test/blog", siteBlogPosts: [], siteBlogTimezone: "UTC" };
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(<PageEditor {...props} blogFeed={blogFeed} />));
+    expect(mocks.metadata).toMatchObject(blogFeed);
+  } finally {
+    await act(async () => root.unmount());
+  }
 });
 
 describe("empty-page AI entry point", () => {

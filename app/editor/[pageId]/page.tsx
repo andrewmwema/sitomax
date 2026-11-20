@@ -11,6 +11,7 @@ import { seoChecklist } from "@/lib/seo-checklist";
 import { pageSections } from "@/lib/links";
 import type { SeoPageSummary } from "@/components/editor/seo-panel";
 import { headerMigrationMissing } from "@/lib/header";
+import { loadEditorBlogFeed } from "@/lib/blog-editor-feed";
 
 /**
  * Full-screen visual editor for a page.
@@ -85,8 +86,14 @@ async function EditorLoader({
   // supabase-js types to-one joins as arrays without generated DB types.
   const site = data.site as unknown as EditorSite;
   const siteSeo = siteSeoSchema.parse(site.seo);
-  const listed = await supabase.from("pages").select("id, slug, title, nav_label, hide_from_menu, ai_pending_build, draft_data, seo, published_at")
-    .eq("site_id", site.id).order("sort_order").order("slug");
+  const [listed, blogFeed] = await Promise.all([
+    supabase.from("pages").select("id, slug, title, nav_label, hide_from_menu, ai_pending_build, draft_data, seo, published_at")
+      .eq("site_id", site.id).order("sort_order").order("slug"),
+    loadEditorBlogFeed(supabase, site).catch((error: unknown) => {
+      console.error("Could not load the blog feed preview.", { siteId: site.id, error });
+      return { siteBlogFeedUnavailable: true };
+    }),
+  ]);
   const menuLabelsReady = listed.error?.code !== "42703";
   if (!menuLabelsReady) console.warn("Page menu labels migration is not applied; the editor is using labels from slugs.");
   const { data: sitePages, error: pagesError } = menuLabelsReady ? listed : await supabase.from("pages")
@@ -131,6 +138,7 @@ async function EditorLoader({
       business={businessSchema.parse({ ...emptyBusiness, ...(site.business as object) })}
       initialData={initialData}
       previewUrl={previewUrl}
+      blogFeed={blogFeed}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
       headersReady={headersReady}
       userId={user.id}

@@ -1,6 +1,15 @@
 import { z } from "zod";
 import type { requireUser } from "@/lib/auth";
 
+export function blogPublicPath(blogPath: string, suffix = "") {
+  const segments = [...blogPath.split("/").filter(Boolean), ...suffix.split("/").filter(Boolean)];
+  return `/${segments.map(encodeURIComponent).join("/")}`;
+}
+
+export function blogHref(path: string, suffix = "", preview = false) {
+  return `${path.replace(/\/+$/, "")}${suffix ? blogPublicPath(suffix) : ""}${preview ? "?preview=1" : ""}`;
+}
+
 export function blogManagerHref(siteId: string, editorPageId: string | null, postId?: string, panel?: "settings") {
   const query = new URLSearchParams();
   if (editorPageId) query.set("editorPage", editorPageId);
