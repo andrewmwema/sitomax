@@ -29,6 +29,8 @@ const ALLOWED_TAGS = [
   "h1",
   "h3",
   "h4",
+  "h5",
+  "h6",
   "blockquote",
 ];
 
@@ -187,6 +189,10 @@ export function renderableRichText(value: string): string {
   return sanitizeRichText(toRichTextHtml(value));
 }
 
+export function isRichHeading(value: string): boolean {
+  return /^\s*<(?:h[1-6]|p|blockquote|ul|ol)(?:\s|>)/i.test(value);
+}
+
 type PuckFields = Record<string, Field>;
 
 /** The parts of a Puck config the sanitizer walks. */
@@ -214,7 +220,9 @@ function sanitizeFields(
     switch (field.type) {
       case "richtext":
         if (typeof value === "string") {
-          record[key] = renderableRichText(value);
+          record[key] = "headingLevel" in field && !isRichHeading(value)
+            ? value
+            : renderableRichText(value);
         }
         break;
       case "array":

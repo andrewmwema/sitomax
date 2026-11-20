@@ -64,7 +64,7 @@ export function richTextField(label: string): RichtextField {
     label,
     contentEditable: true,
     options: {
-      heading: { levels: [1, 2, 3, 4] },
+      heading: { levels: [1, 2, 3, 4, 5, 6] },
       textAlign: { types: ["heading", "paragraph"] },
       // Keep the toolbar focused on safe, supported marks.
       code: false,
@@ -76,6 +76,15 @@ export function richTextField(label: string): RichtextField {
     tiptap: { extensions: editorTextExtensions },
     renderMenu: (props) => <RichTextToolbar {...props} floating />,
     renderInlineMenu: (props) => <RichTextToolbar {...props} floating />,
+  };
+}
+
+export function richHeadingField(label: string, level: 1 | 2): RichtextField & { headingLevel: 1 | 2 } {
+  return {
+    ...richTextField(label),
+    headingLevel: level,
+    renderMenu: (props) => <RichTextToolbar {...props} floating initialHeadingLevel={level} />,
+    renderInlineMenu: (props) => <RichTextToolbar {...props} floating initialHeadingLevel={level} />,
   };
 }
 

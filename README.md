@@ -76,13 +76,17 @@ shared detail drawer; the media picker is a native modal so it also works above
 other dialogs. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
 
+The editor tool rail uses compact, color-coded icons while retaining their
+existing click targets and selection indicator.
+
 Owners and agency admins can open **Domain** in the editor header or tool rail
 to save their draft and open the site's existing domain settings. **Back to
 editor** returns to the page they were editing.
 
-Select words directly inside editable canvas text to replace them. Body copy
-opens the floating formatting toolbar, including Hero subheadings and call-to-action,
-gallery and logo introductions. Headings and button labels remain plain-text fields.
+Select words directly inside editable canvas text to replace them. Section headings
+and body copy open the floating formatting toolbar, including heading levels 1–6.
+Existing plain section headings keep their original heading level. Button labels
+remain plain-text fields.
 Use the section toolbar's drag handle to reposition a section instead of dragging
 its content.
 

@@ -1,10 +1,10 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
 import type { CSSProperties } from "react";
-import { designField, iconField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, iconField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Card } from "./ui/card";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { IconTile } from "./ui/icon-tile";
 import { RichTextContent } from "./ui/rich-text";
 import { Section } from "./ui/section";
@@ -43,7 +43,7 @@ export const Stats: ComponentConfig<StatsProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
     stats: {
       type: "array",
@@ -88,7 +88,7 @@ export const Stats: ComponentConfig<StatsProps> = {
     const intro = (
       <div className={`flex min-w-0 flex-col gap-4 ${variant === "cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        <Heading level={2}>{heading}</Heading>
+        <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} className="w-full text-base" />
       </div>
     );

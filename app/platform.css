@@ -665,14 +665,12 @@
   color: var(--platform-muted);
 }
 
-.editor-icon-button:not(:disabled):hover,
-.editor-rail-button:hover {
+.editor-icon-button:not(:disabled):hover {
   background: var(--platform-subtle);
   color: var(--platform-ink);
 }
 
-.editor-icon-button[aria-pressed="true"],
-.editor-rail-button[aria-pressed="true"] {
+.editor-icon-button[aria-pressed="true"] {
   border-color: #ded9fa;
   background: var(--platform-accent-soft);
   color: var(--platform-accent);
@@ -683,7 +681,40 @@
   opacity: 0.35;
 }
 
-/* Puck's rail sizes SVGs to their wrapper; keep icons compact without shrinking hit targets. */
+.editor-rail-button {
+  --editor-tool-color: #5143b5;
+  --editor-tool-tint: #f0edff;
+  border-color: transparent;
+  background: var(--editor-tool-tint);
+  color: var(--editor-tool-color);
+}
+
+.editor-rail-button[data-tool="outline"],
+.editor-rail-button[data-tool="pages"] {
+  --editor-tool-color: #24599a;
+  --editor-tool-tint: #eaf2ff;
+}
+
+.editor-rail-button[data-tool="blog"],
+.editor-rail-button[data-tool="theme"] {
+  --editor-tool-color: #a1316a;
+  --editor-tool-tint: #fbeef5;
+}
+
+.editor-rail-button[data-tool="domain"],
+.editor-rail-button[data-tool="seo"] {
+  --editor-tool-color: #176f65;
+  --editor-tool-tint: #e9f7f3;
+}
+
+.editor-rail-button:hover,
+.editor-rail-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--editor-tool-color) 28%, transparent);
+  background: color-mix(in srgb, var(--editor-tool-tint) 75%, var(--editor-tool-color));
+  color: var(--editor-tool-color);
+}
+
+/* Preserve the rail hit targets while reducing icon and item spacing. */
 .platform-editor [class*="_NavItem-linkIcon_"] {
   display: flex;
   width: 36px;
@@ -693,12 +724,19 @@
 }
 
 .platform-editor [class*="_NavItem-linkIcon_"] .editor-rail-button svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .platform-editor [class*="_NavItem-link_"] {
   gap: 2px;
+}
+
+@media (min-width: 638px) {
+  .platform-editor [class*="_Nav-list_"] {
+    gap: 4px;
+    padding-top: 16px;
+  }
 }
 
 .platform-editor [data-block-thumbnail] {

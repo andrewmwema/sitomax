@@ -1,9 +1,9 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { SiteImage } from "./ui/site-image";
 import { RichTextContent } from "./ui/rich-text";
 
@@ -37,7 +37,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
     images: {
       type: "array",
@@ -85,7 +85,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
     <Section>
       <div className="flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        {heading ? <Heading level={2}>{heading}</Heading> : null}
+        {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
         {text ? <RichTextContent value={text} className="max-w-[55ch]" style={{ color: "var(--color-muted)" }} /> : null}
       </div>
       {variant === "portfolio-rows" ? (

@@ -56,6 +56,15 @@ describe("site and page SEO", () => {
     expect(incomplete.issues).toContain("Unreplaced placeholders");
     expect(incomplete.checks.find((check) => check.key === "placeholders")?.targetId).toBe("gallery");
   });
+  it("recognizes the actual rich heading level rather than assuming every Hero is H1", () => {
+    const settings = siteSeoSchema.parse({});
+    const hasH1 = (heading: string) => seoChecklist({ content: [{ type: "Hero", props: { heading } }] }, "Page", settings)
+      .checks.find((check) => check.key === "h1")?.complete;
+    expect(hasH1("Legacy title")).toBe(true);
+    expect(hasH1("<h1>Title</h1>")).toBe(true);
+    expect(hasH1("<h2>Title</h2>")).toBe(false);
+    expect(hasH1("<p>Title</p>")).toBe(false);
+  });
   it("uses the exact 60- and 160-character limits", () => {
     const data = (title: string, description: string) => ({
       root: { props: { seoTitle: title, description, socialImage: "/share.jpg" } },

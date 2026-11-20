@@ -1,10 +1,10 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, linkField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, linkField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { RichTextContent } from "./ui/rich-text";
@@ -32,7 +32,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Text"),
     buttonText: { type: "text", label: "Button text", contentEditable: true },
     buttonLink: linkField("Button link"),
@@ -80,7 +80,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
           <div className="grid items-center gap-10 md:grid-cols-2 lg:gap-20">
             <div className="flex flex-col gap-5">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-              <Heading level={2}>{heading}</Heading>
+              <RichHeading level={2}>{heading}</RichHeading>
               <RichTextContent value={text} className="max-w-[48ch] text-lg" style={{ color: "var(--color-muted)" }} />
               <div className="mt-[var(--content-gap)] border-t pt-6 text-sm" style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}>A little detail now helps us make our first conversation more useful.</div>
             </div>
@@ -98,7 +98,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
           <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
             <div className="flex max-w-2xl flex-col gap-4">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-              <Heading level={2}>{heading}</Heading>
+              <RichHeading level={2}>{heading}</RichHeading>
               <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />
             </div>
             {buttonText ? (
@@ -122,7 +122,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
         ) : null}
         <div className={`mx-auto flex flex-col gap-6 ${layout === "image" ? "min-h-80 max-w-3xl items-start justify-center" : layout === "primary" ? "max-w-4xl items-center text-center" : "max-w-3xl items-center text-center"}`}>
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-          <Heading level={2}>{heading}</Heading>
+          <RichHeading level={2}>{heading}</RichHeading>
           <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />
           <div className="flex w-full flex-col gap-3 min-[480px]:w-auto min-[480px]:flex-row">
           {buttonText ? (

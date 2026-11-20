@@ -9,6 +9,8 @@ import Text from "@tiptap/extension-text";
 import { UndoRedo } from "@tiptap/extensions";
 import Link from "@tiptap/extension-link";
 import Bold from "@tiptap/extension-bold";
+import Heading from "@tiptap/extension-heading";
+import Blockquote from "@tiptap/extension-blockquote";
 import { TextAppearance, TextLayout, WritingAssistantOptOut } from "@/lib/puck/richtext-extensions";
 
 const mocks = vi.hoisted(() => ({
@@ -70,6 +72,46 @@ beforeEach(() => {
 });
 
 describe("editor AI preview", () => {
+  it.each([1, 2] as const)("initializes a legacy heading at level %i and preserves an explicitly chosen paragraph", async (level) => {
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    const editor = new Editor({ extensions: [Document, Paragraph, Text, UndoRedo, Blockquote, Heading.configure({ levels: [1, 2, 3, 4, 5, 6] })], content: "Existing heading" });
+    vi.spyOn(editor.view, "coordsAtPos").mockReturnValue({ left: 0, right: 0, top: 0, bottom: 0 });
+    await act(async () => root.render(<RichTextToolbar editor={editor} readOnly={false} initialHeadingLevel={level} />));
+    await act(async () => focusText(editor));
+    expect(editor.getHTML()).toBe(`<h${level}>Existing heading</h${level}>`);
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Text style"]')!;
+    expect(select.value).toBe(`h${level}`);
+    await act(async () => { select.value = "h6"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(editor.getHTML()).toBe("<h6>Existing heading</h6>");
+    await act(async () => { select.value = "p"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await act(async () => { editor.view.dom.blur(); editor.view.focus(); });
+    expect(editor.getHTML()).toBe("<p>Existing heading</p>");
+    await act(async () => root.unmount());
+    editor.destroy(); container.remove(); vi.unstubAllGlobals();
+  });
+
+  it("initializes when the inline menu mounts after focus, but leaves saved paragraphs unchanged", async () => {
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    const extensions = [Document, Paragraph, Text, UndoRedo, Blockquote, Heading];
+    const editor = new Editor({ extensions, content: "Legacy" });
+    vi.spyOn(editor.view, "coordsAtPos").mockReturnValue({ left: 0, right: 0, top: 0, bottom: 0 });
+    await act(async () => focusText(editor));
+    await act(async () => root.render(<RichTextToolbar editor={editor} readOnly={false} initialHeadingLevel={1} />));
+    expect(editor.getHTML()).toBe("<h1>Legacy</h1>");
+    await act(async () => root.unmount());
+    editor.destroy(); container.remove();
+    const secondContainer = document.createElement("div"); document.body.append(secondContainer);
+    const secondRoot = createRoot(secondContainer);
+    const saved = new Editor({ extensions, content: "<p>Explicit paragraph</p>" });
+    await act(async () => secondRoot.render(<RichTextToolbar editor={saved} readOnly={false} initialHeadingLevel={1} />));
+    await act(async () => focusText(saved));
+    expect(saved.getHTML()).toBe("<p>Explicit paragraph</p>");
+    await act(async () => secondRoot.unmount());
+    saved.destroy(); secondContainer.remove(); vi.unstubAllGlobals();
+  });
+
   it.each(["object", "function"])("opts out of writing overlays before mounting without replacing %s editor attributes or saved HTML", (kind) => {
     const attributes = { role: "textbox", "data-existing": "preserved" };
     const editor = new Editor({

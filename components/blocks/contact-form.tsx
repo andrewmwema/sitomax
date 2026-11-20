@@ -1,10 +1,10 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField, iconField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, iconField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { RichText } from "@puckeditor/core";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { Card } from "./ui/card";
 import { EnquiryForm, enquiryFieldsField } from "./ui/enquiry-form";
 import { RichTextContent } from "./ui/rich-text";
@@ -36,7 +36,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     formName: { type: "text", label: "Form name", placeholder: "contact" },
     submitText: { type: "text", label: "Submit button text", contentEditable: true },
     text: richTextField("Introduction"),
@@ -103,7 +103,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
           <div id="contact" className="grid items-start gap-10 md:grid-cols-2 md:gap-16">
             <div className="flex flex-col gap-3">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-              <Heading level={2}>{heading}</Heading>
+              <RichHeading level={2}>{heading}</RichHeading>
               {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}
               {variant === "visit" && image ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
@@ -123,7 +123,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
         <div id="contact" className="mx-auto flex w-full max-w-xl flex-col gap-10">
           <div className="flex flex-col items-center gap-3 text-center">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-            <Heading level={2}>{heading}</Heading>
+            <RichHeading level={2}>{heading}</RichHeading>
             {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}
           </div>
           {form}

@@ -1,9 +1,9 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField } from "@/lib/puck/fields";
+import { designField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { Card } from "./ui/card";
 import { BlockIcon } from "./ui/icon";
 import { Carousel } from "./ui/carousel";
@@ -24,7 +24,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     testimonials: {
       type: "array",
       label: "Testimonials",
@@ -67,7 +67,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
     <Section background="soft">
       <div className="flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        <Heading level={2}>{heading}</Heading>
+        <RichHeading level={2}>{heading}</RichHeading>
       </div>
       {variant === "carousel" ? (
         <div className="mx-auto mt-[var(--section-gap)] max-w-4xl">

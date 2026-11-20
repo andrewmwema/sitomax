@@ -1,10 +1,10 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { RichTextContent } from "./ui/rich-text";
 
 export type ImageWithTextProps = {
@@ -26,7 +26,7 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
     image: imageField("Image"),
     imageAlt: { type: "text", label: "Image alt text" },
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Text"),
     variant: {
       type: "radio",
@@ -76,7 +76,7 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
           <Container className="flex flex-col gap-10">
             <div className="mx-auto flex max-w-[46rem] flex-col items-center gap-4 text-center">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-              <Heading level={2}>{heading}</Heading>
+              <RichHeading level={2}>{heading}</RichHeading>
               <RichTextContent value={text} className="w-full max-w-[65ch]" />
             </div>
             {imageElement}
@@ -91,7 +91,7 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
           <div className={layout === "image-right" ? "md:order-2" : ""}>{imageElement}</div>
           <div className="flex flex-col gap-4">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-            <Heading level={2}>{heading}</Heading>
+            <RichHeading level={2}>{heading}</RichHeading>
             <RichTextContent value={text} className="w-full max-w-[65ch]" />
           </div>
         </Container>

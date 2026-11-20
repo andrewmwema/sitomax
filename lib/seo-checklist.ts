@@ -1,6 +1,7 @@
 import type { Data } from "@puckeditor/core";
 import { findUnreplacedPlaceholders } from "@/lib/sections/placeholders";
 import { isNoindex, pageSeoSchema, rootSeoSchema, type SiteSeo } from "@/lib/seo";
+import { isRichHeading } from "@/lib/richtext";
 
 export type SeoCheckKey = "title" | "description" | "socialImage" | "alt" | "h1" | "placeholders" | "indexing";
 export type SeoCheck = { key: SeoCheckKey; label: string; complete: boolean; targetId?: string };
@@ -30,7 +31,7 @@ export function seoChecklist(data: unknown, pageTitle: string | null, seo: SiteS
     const itemId = typeof item?.id === "string" ? item.id : parentId;
     if (!firstTargetId && itemId) firstTargetId = itemId;
     if (!firstMeaningfulTargetId && itemId && obj.type !== "Navigation" && obj.type !== "Footer") firstMeaningfulTargetId = itemId;
-    if (obj.type === "Hero" && item?.heading) {
+    if (obj.type === "Hero" && typeof item?.heading === "string" && item.heading.trim() && !isRichHeading(item.heading)) {
       hasH1 = true;
       h1TargetId ??= itemId;
     }

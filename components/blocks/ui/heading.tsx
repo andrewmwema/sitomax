@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
+import { isRichHeading, sanitizeRichText } from "@/lib/richtext";
+import { CURATED_FONT_NAMES, googleFontsUrl } from "@/lib/theme/fonts";
 
 type Level = 1 | 2 | 3;
 
@@ -46,4 +48,35 @@ export function Heading({
       {children}
     </Tag>
   );
+}
+
+export function RichHeading({ level = 2, children, className = "", style, customSize = false }: {
+  level?: Level | 4;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  customSize?: boolean;
+}) {
+  const headingStyle: CSSProperties = {
+    fontFamily: "var(--font-heading)",
+    fontWeight: "var(--heading-weight)" as CSSProperties["fontWeight"],
+    ...(customSize ? {} : SIZES[level === 4 ? 3 : level]),
+    ...style,
+  };
+  if (typeof children === "string" && !isRichHeading(children)) {
+    const Tag = `h${level}` as const;
+    return <Tag className={className} style={headingStyle}>{children}</Tag>;
+  }
+  const classes = `rich-heading${customSize ? " rich-heading--custom-size" : ""} ${className}`;
+  if (typeof children !== "string") {
+    return <div className={classes} style={headingStyle}>{children}</div>;
+  }
+  const clean = sanitizeRichText(children);
+  const families = new Set([...clean.matchAll(/font-family:\s*(?:&quot;([^&]*)&quot;|([^;"&]+))/g)]
+    .map((match) => (match[1] ?? match[2]).trim()));
+  const fonts = CURATED_FONT_NAMES.filter((font) => families.has(font));
+  return <>
+    {fonts.length ? <link rel="stylesheet" href={googleFontsUrl(fonts)} /> : null}
+    <div className={classes} style={headingStyle} dangerouslySetInnerHTML={{ __html: clean }} />
+  </>;
 }

@@ -1,4 +1,4 @@
-import { escapeHtml, toRichTextHtml } from "@/lib/richtext";
+import { escapeHtml, isRichHeading, toRichTextHtml } from "@/lib/richtext";
 import { linkHref, parseSiteLink } from "@/lib/links";
 import { iconValueSchema } from "@/lib/icons";
 import type { BlockDesign } from "@/lib/sections/design";
@@ -138,7 +138,9 @@ function intro(
         color: onDark ? "auto" : "primary",
         align,
       }),
-    str(props.heading) && b.el("Heading", { text: str(props.heading), level, align }),
+    str(props.heading) && (isRichHeading(str(props.heading))
+      ? b.el("Text", { text: str(props.heading), align, font: "heading", size: level === "h1" ? "5xl" : "4xl" })
+      : b.el("Heading", { text: str(props.heading), level, align })),
     html(props.text) && b.el("Text", { text: html(props.text), align, size: "lg" }),
   ]);
 }

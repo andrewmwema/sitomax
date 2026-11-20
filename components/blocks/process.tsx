@@ -1,8 +1,8 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, iconField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, iconField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
-import { Heading } from "./ui/heading";
+import { Heading, RichHeading } from "./ui/heading";
 import { Eyebrow } from "./ui/eyebrow";
 import { Card } from "./ui/card";
 import { BlockIcon } from "./ui/icon";
@@ -25,7 +25,7 @@ export const Process: ComponentConfig<ProcessProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
     variant: { type: "select", label: "Layout", options: [{ label: "Numbered step cards", value: "steps" }, { label: "Editorial timeline", value: "timeline" }, { label: "Photo + checklist", value: "checklist" }] },
     image: imageField("Photo"), imageAlt: { type: "text", label: "Photo alt text" },
@@ -51,7 +51,7 @@ export const Process: ComponentConfig<ProcessProps> = {
         <div className="flex flex-col gap-4">
           <div className="flex max-w-2xl flex-col gap-4">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-            <Heading level={2}>{heading}</Heading>
+            <RichHeading level={2}>{heading}</RichHeading>
             <RichTextContent value={text} />
           </div>
           {variant === "checklist" && image ? (

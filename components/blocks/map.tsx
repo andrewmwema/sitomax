@@ -1,9 +1,9 @@
 import type { ComponentConfig } from "@puckeditor/core";
-import { designField } from "@/lib/puck/fields";
+import { designField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 
 export type MapProps = {
   design?: BlockDesign;
@@ -18,7 +18,7 @@ export const Map: ComponentConfig<MapProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     address: { type: "text", label: "Address", placeholder: "123 Main St, Springfield" },
     variant: {
       type: "radio",
@@ -66,7 +66,7 @@ export const Map: ComponentConfig<MapProps> = {
           <div className="grid items-center gap-10 md:grid-cols-[1fr_1.4fr] md:gap-16">
             <div className="flex flex-col gap-3">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-              {heading ? <Heading level={2}>{heading}</Heading> : null}
+              {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
               {address ? (
                 <p className="text-sm" style={{ color: "var(--color-muted)", lineHeight: 1.6 }}>
                   {address}
@@ -83,7 +83,7 @@ export const Map: ComponentConfig<MapProps> = {
       <Section>
         <div className="flex flex-col items-center gap-3 text-center">
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-          {heading ? <Heading level={2}>{heading}</Heading> : null}
+          {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
         </div>
         <div className="mt-[var(--section-gap)]">{map}</div>
       </Section>

@@ -1,13 +1,13 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
 import type { CSSProperties, ReactNode } from "react";
-import { designField, linkField, imageField, iconField, richTextField } from "@/lib/puck/fields";
+import { designField, linkField, imageField, iconField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
 import type { IconValue } from "@/lib/icons";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Container } from "./ui/container";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
@@ -145,7 +145,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       contentEditable: true,
     },
     badgeIcon: iconField("Badge icon"),
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 1),
     subheading: richTextField("Subheading"),
     buttonText: { type: "text", label: "Button text", contentEditable: true },
     buttonLink: linkField("Button link"),
@@ -294,7 +294,7 @@ export const Hero: ComponentConfig<HeroProps> = {
           <Container className="grid items-center gap-12 md:grid-cols-2 lg:gap-16">
             <div className="flex flex-col items-start gap-5">
               <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
-              <Heading level={1}>{heading}</Heading>
+              <RichHeading level={1}>{heading}</RichHeading>
               <Subheading>{subheading}</Subheading>
               {buttons()}
             </div>
@@ -366,12 +366,12 @@ export const Hero: ComponentConfig<HeroProps> = {
           <Container className="relative flex min-h-[380px] flex-col justify-center gap-6 sm:min-h-[460px]">
             <div className="flex max-w-2xl flex-col items-start gap-5">
               <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
-              <Heading
+              <RichHeading
                 level={1}
                 style={backgroundImage ? { color: "#ffffff" } : undefined}
               >
                 {heading}
-              </Heading>
+              </RichHeading>
               <Subheading
                 style={
                   backgroundImage ? { color: "rgba(255,255,255,0.84)" } : undefined
@@ -394,7 +394,7 @@ export const Hero: ComponentConfig<HeroProps> = {
           <Container className="grid items-center gap-12 lg:grid-cols-[1.05fr_minmax(0,30rem)] lg:gap-16">
             <div className="flex flex-col items-start gap-5">
               <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
-              <Heading level={1}>{heading}</Heading>
+              <RichHeading level={1}>{heading}</RichHeading>
               <Subheading>{subheading}</Subheading>
               {buttons()}
             </div>
@@ -466,7 +466,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       const content = (
         <div className="flex max-w-2xl flex-col items-start gap-5">
           <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
-          <Heading level={1}>{heading}</Heading>
+          <RichHeading level={1}>{heading}</RichHeading>
           <Subheading>{subheading}</Subheading>
           {buttons()}
         </div>
@@ -565,9 +565,9 @@ export const Hero: ComponentConfig<HeroProps> = {
         ) : null}
         <Container className="relative flex max-w-3xl flex-col items-center gap-6 text-center">
           <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
-          <Heading level={1} style={backgroundImage ? { color: "#ffffff" } : undefined}>
+          <RichHeading level={1} style={backgroundImage ? { color: "#ffffff" } : undefined}>
             {heading}
-          </Heading>
+          </RichHeading>
           <Subheading
             className="max-w-[55ch]"
             style={backgroundImage ? { color: "rgba(255,255,255,0.82)" } : undefined}

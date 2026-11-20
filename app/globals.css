@@ -179,6 +179,28 @@ body {
   font-size: 1.1em;
 }
 
+.rich-heading :is(h1, h2, h3, h4, h5, h6, p) {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+.rich-heading h1 { font-size: clamp(2.25rem, 1.35rem + 3.6vw, 3.5rem); }
+.rich-heading h2 { font-size: clamp(1.75rem, 1.3rem + 1.8vw, 2.5rem); }
+.rich-heading h3 { font-size: clamp(1.2rem, 1.08rem + 0.5vw, 1.45rem); }
+.rich-heading h4 { font-size: 1.2rem; }
+.rich-heading h5 { font-size: 1.1rem; }
+.rich-heading h6 { font-size: 1rem; }
+.rich-heading--custom-size :is(h1, h2, h3, h4, h5, h6) { font-size: inherit; }
+.rich-heading .rich-text { max-width: none; line-height: inherit; }
+.rich-heading li { color: inherit; }
+.rich-heading ul, .rich-heading ol { margin-block: 0.75em; padding-inline-start: 1.5em; }
+.rich-heading ul { list-style: disc; }
+.rich-heading ol { list-style: decimal; }
+.rich-heading a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; }
+
 .rich-text blockquote {
   margin-block: 0.9em;
   padding-inline-start: 1em;

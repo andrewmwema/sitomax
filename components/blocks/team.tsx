@@ -1,9 +1,9 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, imageField, richTextField } from "@/lib/puck/fields";
+import { designField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { RichTextContent } from "./ui/rich-text";
 
 export type TeamProps = {
@@ -20,7 +20,7 @@ export const Team: ComponentConfig<TeamProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
     variant: { type: "select", label: "Layout", options: [{ label: "Photo cards", value: "cards" }, { label: "Editorial profiles", value: "profiles" }, { label: "Featured team member", value: "featured" }] },
     members: {
@@ -46,7 +46,7 @@ export const Team: ComponentConfig<TeamProps> = {
     <Section background={variant === "featured" ? "soft" : "default"}>
       <div className="mb-[var(--section-gap)] flex max-w-2xl flex-col gap-4">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        <Heading level={2}>{heading}</Heading>
+        <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} />
       </div>
       <div className={variant === "profiles" ? "flex flex-col gap-8" : variant === "featured" ? "grid gap-8" : "grid gap-8 md:grid-cols-3"}>

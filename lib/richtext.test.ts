@@ -197,6 +197,15 @@ const testConfig: SanitizableConfig = {
 const XSS = '<p>ok</p><script>alert(1)</script>';
 
 describe("sanitizePuckData", () => {
+  it("preserves plain section headings and sanitizes formatted headings", () => {
+    const data = { content: [
+      { type: "Hero", props: { heading: "Plain & simple" } },
+      { type: "Services", props: { heading: '<h6 onclick="bad()">Hello <strong>there</strong><script>bad()</script></h6>' } },
+    ] };
+    sanitizePuckData(data);
+    expect(data.content[0].props.heading).toBe("Plain & simple");
+    expect(data.content[1].props.heading).toBe("<h6>Hello <strong>there</strong></h6>");
+  });
   it("sanitizes richtext fields in root.props", () => {
     const data = {
       root: { props: { intro: XSS, title: "<script>keep-as-is</script>" } },

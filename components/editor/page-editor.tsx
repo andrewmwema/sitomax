@@ -419,7 +419,7 @@ const editorPlugins: Plugin[] = [
 function EditorTool({ name, label, children }: { name: string; label: string; children: React.ReactNode }) {
   const active = usePuckStore((state) => state.appState.ui.plugin?.current === name && state.appState.ui.leftSideBarVisible);
   // Clicks bubble to Puck's rail item, preserving its plugin and collapse behavior.
-  return <button type="button" className="editor-rail-button" title={label} aria-label={label} aria-pressed={active}>{children}</button>;
+  return <button type="button" className="editor-rail-button" data-tool={name} title={label} aria-label={label} aria-pressed={active}>{children}</button>;
 }
 
 /** Labels for the placeholder warning, from the block config. */

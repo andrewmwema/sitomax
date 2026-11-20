@@ -1,11 +1,11 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
 import type { CSSProperties } from "react";
-import { designField, linkField, richTextField } from "@/lib/puck/fields";
+import { designField, linkField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { Heading, RichHeading } from "./ui/heading";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -194,7 +194,7 @@ export const Pricing: ComponentConfig<PricingProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
     note: richTextField("Pricing note"),
     highlightLabel: { type: "text", label: "Highlighted plan badge", contentEditable: true },
@@ -260,7 +260,7 @@ export const Pricing: ComponentConfig<PricingProps> = {
     const intro = (
       <div className={`flex min-w-0 flex-col gap-4 ${variant === "single" ? "" : "mx-auto max-w-[43rem] items-center text-center"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        <Heading level={2}>{heading}</Heading>
+        <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} className="w-full text-base" />
       </div>
     );

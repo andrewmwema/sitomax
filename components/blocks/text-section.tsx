@@ -1,12 +1,12 @@
 import type { CSSProperties } from "react";
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, linkField, iconField, richTextField } from "@/lib/puck/fields";
+import { designField, linkField, iconField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
 import type { IconValue } from "@/lib/icons";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
-import { Heading } from "./ui/heading";
+import { RichHeading } from "./ui/heading";
 import { Button } from "./ui/button";
 import { IconTile } from "./ui/icon-tile";
 import { RichTextContent } from "./ui/rich-text";
@@ -61,7 +61,7 @@ function SectionHeader({ eyebrow, heading }: { eyebrow: string; heading: string 
   return (
     <>
       {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-      {heading ? <Heading level={2}>{heading}</Heading> : null}
+      {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
     </>
   );
 }
@@ -71,7 +71,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
   fields: {
     design: designField(),
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
-    heading: { type: "text", label: "Heading", contentEditable: true },
+    heading: richHeadingField("Heading", 2),
     text: richTextField("Text"),
     variant: {
       type: "select",

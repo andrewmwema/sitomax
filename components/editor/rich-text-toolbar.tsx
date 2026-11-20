@@ -53,8 +53,10 @@ export function applyTextAppearance(editor: Editor, attrs: Record<string, string
   return chain.setMark("textAppearance", attrs).run();
 }
 
-export function RichTextToolbar({ editor, readOnly, floating = false }: {
-  editor: Editor | null; readOnly: boolean; floating?: boolean;
+const initializedHeadings = new WeakSet<Editor>();
+
+export function RichTextToolbar({ editor, readOnly, floating = false, initialHeadingLevel }: {
+  editor: Editor | null; readOnly: boolean; floating?: boolean; initialHeadingLevel?: 1 | 2;
 }) {
   const ui = useContext(InteractionContext);
   const library = useContext(SectionLibraryContext);
@@ -66,6 +68,23 @@ export function RichTextToolbar({ editor, readOnly, floating = false }: {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkHint, setLinkHint] = useState(false);
   const linkSelection = useRef<{ from: number; to: number } | null>(null);
+  useEffect(() => {
+    if (!editor || !initialHeadingLevel || readOnly) return;
+    const initialize = () => {
+      queueMicrotask(() => {
+        const content = editor.options.content;
+        if (editor.isDestroyed || initializedHeadings.has(editor) || typeof content !== "string"
+          || /^\s*</.test(content) || !editor.isFocused) return;
+        initializedHeadings.add(editor);
+        if (editor.state.doc.childCount === 1 && editor.isActive("paragraph") && editor.getText() === content) {
+          editor.chain().setHeading({ level: initialHeadingLevel }).run();
+        }
+      });
+    };
+    editor.on("focus", initialize);
+    if (editor.isFocused) initialize();
+    return () => { editor.off("focus", initialize); };
+  }, [editor, initialHeadingLevel, readOnly]);
   const hasSelection = useSyncExternalStore(
     useCallback((notify: () => void) => {
       if (!editor) return () => {};
@@ -303,20 +322,22 @@ export function RichTextToolbar({ editor, readOnly, floating = false }: {
       {button("Link", requestLink, editor.isActive("link"))}
       </div>
       <div role="group" aria-label="Typography" className={groupClass}>
-      <select aria-label="Text style" className="h-8 max-w-24 rounded border border-zinc-200 p-1 text-xs" value=""
+      <select aria-label="Text style" className="h-8 max-w-28 rounded border border-zinc-200 p-1 text-xs"
+        value={editor.isActive("blockquote") ? "quote" : editor.isActive("heading")
+          ? `h${editor.getAttributes("heading").level}` : "p"}
         onChange={(event) => {
           const value = event.target.value;
           const chain = editor.chain().focus();
           if (value === "quote") chain.setBlockquote().run();
           else {
             chain.unsetBlockquote();
-            if (value.startsWith("h")) chain.setHeading({ level: Number(value[1]) as 1 | 2 | 3 | 4 }).run();
+            if (value.startsWith("h")) chain.setHeading({ level: Number(value[1]) as 1 | 2 | 3 | 4 | 5 | 6 }).run();
             else chain.setParagraph().run();
             if (value === "small") appearance({ fontSize: "14px" });
           }
         }}>
-        <option value="" disabled>Style</option><option value="p">Paragraph</option>
-        {[1, 2, 3, 4].map((n) => <option key={n} value={`h${n}`}>Heading {n}</option>)}
+        <option value="p">Paragraph</option>
+        {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={`h${n}`}>Heading {n}</option>)}
         <option value="small">Small</option><option value="quote">Quote</option>
       </select>
       <select aria-label="Font family" value="" className="h-8 max-w-28 rounded border border-zinc-200 p-1 text-xs"

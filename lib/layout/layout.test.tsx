@@ -165,6 +165,22 @@ describe("embed element", () => {
 });
 
 describe("convert to custom layout", () => {
+  it("preserves rich section heading markup and semantics when converting", () => {
+    const heading = '<h3>Our <strong>work</strong></h3>';
+    const converted = convertToLayout(el("Hero", { heading }), defaults)!;
+    const html = render([converted]);
+    expect(html).toContain(heading);
+    expect(html).not.toContain("&lt;h3&gt;");
+  });
+
+  it("renders legacy and formatted section headings safely", () => {
+    const legacy = render([el("Hero", { heading: "Your & our work" })]);
+    expect(legacy).toMatch(/<h1[^>]*>Your &amp; our work<\/h1>/);
+    const formatted = render([el("Services", { heading: '<h5 onclick="bad()">Our <strong>work</strong><script>bad()</script></h5>' })]);
+    expect(formatted).toContain("<h5>Our <strong>work</strong></h5>");
+    expect(formatted).not.toContain("onclick");
+    expect(formatted).not.toContain("<script>");
+  });
   it("keeps chosen icons, size and theme color when converting a service section", () => {
     const icon = { name: "droplets", size: 48, color: "primary" };
     const converted = convertToLayout(el("Services", { variant: "grid", services: [{ title: "Plumbing", text: "Repairs", icon }] }), defaults)!;
