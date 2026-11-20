@@ -129,6 +129,8 @@ snapshots.
 Use **Back to editor** in Blog Manager or the post writer to return to the
 page you started from. If you opened the blog directly, it returns to the
 site's home page (or its first available page).
+In the Posts table, use **More** for actions such as duplicating or deleting
+a post.
 
 If Blog Manager shows a server error, check the deployment runtime logs for
 `Could not load Blog Manager data`. Verify both blog migrations are applied

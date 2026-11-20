@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, BookOpen, ChevronDown, ImagePlus, Plus, Search, X } from "lucide-react";
@@ -296,24 +296,67 @@ function PostMenu({ post, siteId, editorPageId, subdomain, blogPath, onMessage }
   post: BlogManagerPost; blogPath: string; onMessage: (message: string) => void;
 }) {
   const router = useRouter();
+  const menuId = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const popover = menu.current;
+    if (!open || !popover) return;
+    const dismissOnScroll = (event: Event) => {
+      if (event.target !== popover) popover.hidePopover();
+    };
+    const dismissOnResize = () => popover.hidePopover();
+    window.addEventListener("scroll", dismissOnScroll, true);
+    window.addEventListener("resize", dismissOnResize);
+    return () => {
+      window.removeEventListener("scroll", dismissOnScroll, true);
+      window.removeEventListener("resize", dismissOnResize);
+    };
+  }, [open]);
   async function run(action: () => Promise<{ status: "success" | "error"; message: string; postId?: string }>) {
     setBusy(true);
     try {
       const result = await action();
       onMessage(result.message);
-      if (result.status === "success") router.refresh();
+      if (result.status === "success") {
+        menu.current?.hidePopover();
+        router.refresh();
+      }
       if (result.status === "success" && result.postId) router.push(blogManagerHref(siteId, editorPageId, result.postId));
     } catch { onMessage("The action failed. Please retry."); }
     finally { setBusy(false); }
   }
-  return <details className="relative">
-    <summary className="cursor-pointer list-none rounded-lg border border-transparent px-3 py-1.5 text-xs hover:border-zinc-200 hover:bg-zinc-50">More <ChevronDown size={12} className="inline" /></summary>
-    <div className="absolute right-0 z-10 mt-1 w-48 rounded-xl border border-[#E8E7E3] bg-white p-1.5 shadow-lg">
+  return <>
+    <button ref={trigger} type="button" popoverTarget={menuId} aria-label={`More actions for ${post.title}`}
+      className="cursor-pointer whitespace-nowrap rounded-lg border border-transparent px-3 py-1.5 text-xs hover:border-zinc-200 hover:bg-zinc-50">
+      More <ChevronDown size={12} className="inline" />
+    </button>
+    <div ref={menu} id={menuId} popover="auto"
+      className="fixed inset-auto m-0 overflow-y-auto rounded-xl border border-[#E8E7E3] bg-white p-1.5 shadow-lg"
+      onToggle={(event) => setOpen(event.newState === "open")}
+      onBeforeToggle={(event) => {
+        if (event.newState !== "open" || !trigger.current) return;
+        const { clientWidth, clientHeight } = document.documentElement;
+        const { right, top, bottom } = trigger.current.getBoundingClientRect();
+        const above = top - 12;
+        const below = clientHeight - bottom - 12;
+        const opensAbove = below < 224 && above > below;
+        const width = Math.min(192, clientWidth - 16);
+        Object.assign(event.currentTarget.style, {
+          width: `${width}px`,
+          left: `${Math.max(8, Math.min(right - width, clientWidth - width - 8))}px`,
+          top: opensAbove ? "auto" : `${bottom + 4}px`,
+          bottom: opensAbove ? `${clientHeight - top + 4}px` : "auto",
+          maxHeight: `${Math.max(0, opensAbove ? above : below)}px`,
+        });
+      }}>
       <Link href={blogManagerHref(siteId, editorPageId, post.id)} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Edit</Link>
       <Link href={blogManagerHref(siteId, editorPageId, post.id, "settings")} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Settings</Link>
       {post.status === "published" ? <a href={`/s/${encodeURIComponent(subdomain)}${blogPath.replace(/\/+$/, "")}/${post.slug.split("/").map(encodeURIComponent).join("/")}`}
-        target="_blank" rel="noreferrer" className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">View live</a> : null}
+        target="_blank" rel="noreferrer" onClick={() => menu.current?.hidePopover()}
+        className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">View live</a> : null}
       {post.status === "published" && post.has_unpublished_changes ? <button type="button" disabled={busy}
         onClick={() => void run(() => setBlogPostStatus(post.id, "published"))}
         className="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-zinc-50">Republish</button> : null}
@@ -329,7 +372,7 @@ function PostMenu({ post, siteId, editorPageId, subdomain, blogPath, onMessage }
         if (window.confirm(`Delete “${post.title}”? This cannot be undone.`)) void run(() => deleteBlogPost(post.id));
       }} className="block w-full rounded-lg px-3 py-2 text-left text-xs text-red-700 hover:bg-red-50">Delete…</button>
     </div>
-  </details>;
+  </>;
 }
 
 function CategoriesView({ siteId, categories }: { siteId: string; categories: BlogManagerCategory[] }) {
