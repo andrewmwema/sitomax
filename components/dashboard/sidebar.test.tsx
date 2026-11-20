@@ -27,6 +27,7 @@ describe("dashboard navigation", () => {
     await act(async () => root.render(<Sidebar {...props} />));
     const sidebar = container.querySelector("aside")!;
     expect(sidebar.querySelector('a[href="/dashboard/forms"]')?.getAttribute("aria-current")).toBe("page");
+    expect(sidebar.querySelector('a[href="/dashboard/domains"]')?.textContent).toContain("Domains");
     expect(sidebar.querySelector('[aria-label="2 unread submissions"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/clients"]')).toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/ai-usage"]')).toBeNull();
@@ -61,6 +62,7 @@ describe("dashboard navigation", () => {
     expect(search.open).toBe(true);
     expect(search.querySelector('a[href="/dashboard/clients"]')).toBeNull();
     expect(search.querySelector('a[href="/dashboard/ai-usage"]')).toBeNull();
+    expect(search.querySelector('a[href="/dashboard/domains"]')).not.toBeNull();
     const input = search.querySelector("input")!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "unmatched");

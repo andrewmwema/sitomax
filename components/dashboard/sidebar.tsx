@@ -3,12 +3,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CircleDollarSign, Globe2, HandHelping, Inbox, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Users, X } from "lucide-react";
+import { BarChart3, CircleDollarSign, Globe2, HandHelping, Inbox, LayoutDashboard, Link2, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Users, X } from "lucide-react";
 
 const groups = [
   { label: "Workspace", items: [
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/sites", label: "Sites", icon: Globe2 },
+    { href: "/dashboard/domains", label: "Domains", icon: Link2 },
     { href: "/dashboard/clients", label: "Clients", icon: Users, admin: true },
   ] },
   { label: "Operations", items: [

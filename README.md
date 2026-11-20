@@ -366,9 +366,11 @@ applicable consent requirements.
 
 ## Custom domains
 
-Account owners and the agency can click **Connect domain** directly on a site's
-dashboard card (**Domains** if a domain is already attached). Alternatively,
-click **Pages** on the card, then the **Domains** tab. **Edit** opens the page
+Account owners and the agency can use **Domains** in the workspace sidebar to
+open domain settings directly for one website or choose from multiple websites.
+They can still click **Connect domain** directly on a site's dashboard card
+(**Domains** if a domain is already attached), or click **Pages** on the card,
+then the **Domains** tab. **Edit** opens the page
 editor, not site settings. Editors cannot manage domains. Configure
 `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID` and, for team projects, `VERCEL_TEAM_ID`
 on the server. The token must have permission to manage that project's domains;
