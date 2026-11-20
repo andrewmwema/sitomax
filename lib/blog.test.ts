@@ -10,6 +10,7 @@ describe("blog slugs", () => {
     expect(blogSlugify("SEO Basics/Meta Tags")).toBe("seo-basics/meta-tags");
     expect(blogSlugSchema.safeParse("seo//meta").success).toBe(false);
     expect(blogSlugSchema.safeParse("../admin").success).toBe(false);
+    expect(blogSlugSchema.safeParse("category/example").success).toBe(false);
   });
 });
 
@@ -52,11 +53,11 @@ describe("blog content", () => {
       seo_title: "", seo_description: "", canonical_url: "", noindex: false,
     });
     const content = sanitizeBlogContent(fields.draft_content);
-    const snapshot = blogPublicationSnapshot(fields, content, null, null, ["Guides"], 1);
+    const snapshot = blogPublicationSnapshot(fields, content, null, null, [{ name: "Guides", slug: "guides" }], 1);
     expect(snapshot).toMatchObject({
       version: 1,
       blocks: [{ type: "heading", text: "Draft body" }],
-      metadata: { title: "Current title", slug: "current-title", tags: ["Guides"], reading_minutes: 1 },
+      metadata: { title: "Current title", slug: "current-title", tags: [{ name: "Guides", slug: "guides" }], reading_minutes: 1 },
     });
   });
 });

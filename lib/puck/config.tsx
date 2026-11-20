@@ -28,6 +28,7 @@ import { ContactForm, type ContactFormProps } from "@/components/blocks/contact-
 import { Map, type MapProps } from "@/components/blocks/map";
 import { Spacer, type SpacerProps } from "@/components/blocks/spacer";
 import { Footer, type FooterProps } from "@/components/blocks/footer";
+import { BlogPosts, type BlogPostsProps } from "@/components/blocks/blog-posts";
 import { Navigation, type NavigationProps } from "@/components/blocks/navigation";
 import { SiteHeader } from "@/components/header/site-header";
 import { headerSchema, type SiteHeaderData } from "@/lib/header";
@@ -79,6 +80,7 @@ type Components = {
   Map: MapProps;
   Spacer: SpacerProps;
   Footer: FooterProps;
+  BlogPosts: BlogPostsProps;
   Navigation: NavigationProps;
   // Custom layout system (Section → Row → Column → elements).
   Section: LayoutSectionProps;
@@ -194,6 +196,7 @@ export const puckConfig: PuckConfig = {
         "Process",
         "Pricing",
         "Faq",
+        "BlogPosts",
       ],
     },
     media: {
@@ -304,6 +307,7 @@ export const puckConfig: PuckConfig = {
     Map: withSectionShell(Map),
     Spacer: withSectionShell(Spacer),
     Footer: withSectionShell(Footer),
+    BlogPosts: withSectionShell(BlogPosts),
     Navigation: withSectionShell(Navigation),
     Section: withSectionShell(LayoutSection),
     Row: withSectionShell(Row, "row"),

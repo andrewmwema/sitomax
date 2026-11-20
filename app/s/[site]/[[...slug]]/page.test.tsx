@@ -6,10 +6,17 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.access }) }) }) }),
 }));
 vi.mock("@/lib/tenant", () => ({
+  getSiteUrl: () => "https://example.com",
   getSiteByHost: async () => ({ id: "site", name: "Example", subdomain: "client", custom_domain: "example.com", domain_verified: true, theme: {}, business: {}, seo: { socialImage: "/share.jpg", googleVerification: "verify123" } }),
   getSitePage: async () => ({ id: "page", slug: "about", title: "About", seo: { title: "Search title", description: "Search description", noindex: true }, draft_data: { content: [] }, published_data: { content: [] } }),
   getTenantMenuPages: async () => [],
   getTenantLinkPages: async () => [],
+}));
+vi.mock("@/lib/blog-public", () => ({
+  blogMetadata: () => ({}), blogPostUrl: () => "", blogPublicPath: () => "/blog",
+  getPublicBlogData: async () => ({ settings: { available: false }, posts: [] }),
+  getPublicBlogSettings: async () => ({ available: false }), getPublishedBlogPosts: async () => [],
+  parseBlogRoute: () => null, selectBlogPosts: () => ({ posts: [], total: 0, pages: 1 }),
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: {} }));
 vi.mock("@puckeditor/core/rsc", () => ({ Render: () => null }));

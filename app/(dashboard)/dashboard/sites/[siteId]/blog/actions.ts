@@ -17,6 +17,7 @@ const uuid = z.uuid();
 
 function refresh(siteId: string) {
   revalidatePath(`/dashboard/sites/${siteId}/blog`);
+  revalidatePath("/s/[site]/[[...slug]]", "page");
 }
 
 function slugifyLabel(value: string) {
@@ -59,7 +60,7 @@ async function createPublicationSnapshot(
   }
   const tagIds = (tagLinksResult.data ?? []).map(({ tag_id }) => tag_id);
   const tagResult = tagIds.length
-    ? await supabase.from("post_tags").select("name").eq("site_id", post.site_id).in("id", tagIds)
+    ? await supabase.from("post_tags").select("name, slug").eq("site_id", post.site_id).in("id", tagIds)
     : { data: [], error: null };
   if (tagResult.error) return { error: "Could not load post tags for publishing." as const };
 
@@ -74,7 +75,7 @@ async function createPublicationSnapshot(
       fields, content,
       authorResult?.data ?? null,
       categoryResult?.data ?? null,
-      (tagResult.data ?? []).map(({ name }) => name),
+      tagResult.data ?? [],
       readingMinutes(content),
     ),
   };
@@ -433,6 +434,7 @@ export async function saveBlogSettings(siteId: string, raw: unknown): Promise<Ac
     index_layout: z.enum(["grid", "list", "magazine"]),
     default_post_layout: z.enum(["classic", "wide", "minimal"]),
     show_author: z.boolean(), show_date: z.boolean(), show_reading_time: z.boolean(), show_share_links: z.boolean(),
+    show_in_menu: z.boolean(), noindex_tags: z.boolean(),
     cta_text: z.string().max(300), cta_button_text: z.string().max(80),
     cta_link: z.string().max(2048),
   }).safeParse(raw);
@@ -446,6 +448,7 @@ export async function saveBlogSettings(siteId: string, raw: unknown): Promise<Ac
     return failed("Blog path must use lowercase letters, numbers and dashes.");
   const { supabase } = await requireUser();
   const { cta_link, ...settings } = input.data;
+  settings.blog_path = settings.blog_path.replace(/\/+$/, "");
   const link = cta_link.trim();
   const cta = link && (/^(https?:\/\/|mailto:|tel:)/i.test(link) || (/^\/(?!\/)/.test(link))) ? link : "";
   if (link && !cta) return failed("Enter a safe CTA link.");

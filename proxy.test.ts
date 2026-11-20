@@ -55,6 +55,15 @@ describe("host routing", () => {
     }
     expect(mocks.lookup).not.toHaveBeenCalled();
   });
+
+  it("rewrites nested RSS paths to the tenant feed handler despite the XML asset matcher", async () => {
+    const response = await proxy(request("https://client.test/journal/rss.xml?source=menu"));
+    const target = new URL(response.headers.get("x-middleware-rewrite")!);
+    expect(target.pathname).toBe("/s/client.test/blog-rss.xml");
+    expect(target.searchParams.get("blogPath")).toBe("/journal");
+    expect(target.searchParams.get("source")).toBe("menu");
+    expect(mocks.lookup).not.toHaveBeenCalled();
+  });
 });
 
 describe("tenant redirects", () => {

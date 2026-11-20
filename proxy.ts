@@ -25,6 +25,13 @@ function matchesPathPrefix(pathname: string, prefix: string) {
 
 async function serveTenant(request: NextRequest, tenantKey: string) {
   const { pathname } = request.nextUrl;
+  if (pathname.endsWith("/rss.xml")) {
+    const url = request.nextUrl.clone();
+    const blogPath = pathname.slice(0, -"/rss.xml".length) || "/";
+    url.pathname = `/s/${tenantKey}/blog-rss.xml`;
+    url.searchParams.set("blogPath", blogPath);
+    return NextResponse.rewrite(url);
+  }
   if ((request.method === "GET" || request.method === "HEAD") &&
     !["/robots.txt", "/sitemap.xml"].includes(pathname) &&
     request.nextUrl.searchParams.get("preview") !== "1") {
@@ -87,5 +94,7 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$).*)",
     "/robots.txt",
     "/sitemap.xml",
+    "/rss.xml",
+    "/:path*/rss.xml",
   ],
 };

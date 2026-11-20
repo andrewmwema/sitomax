@@ -166,5 +166,13 @@ export async function getTenantMenuPages(siteId: string, preview: boolean) {
   }
   const { data, error } = result;
   if (error) throw new Error("Could not load tenant menu.", { cause: error });
-  return data;
+  const blogSettings = await supabase.from("blog_settings").select("*").eq("site_id", siteId).maybeSingle();
+  if (blogSettings.error && blogSettings.error.code !== "42P01") {
+    throw new Error("Could not load blog menu settings.", { cause: blogSettings.error });
+  }
+  if (blogSettings.error || blogSettings.data?.show_in_menu === false) return data;
+  const blogSlug = (typeof blogSettings.data?.blog_path === "string" ? blogSettings.data.blog_path : "/blog")
+    .replace(/^\/+|\/+$/g, "");
+  if (!blogSlug || data.some(({ slug }) => slug === blogSlug)) return data;
+  return [...data, { slug: blogSlug, nav_label: "Blog" }];
 }

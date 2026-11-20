@@ -153,7 +153,7 @@ function CreatePostDialog({ siteId, authors }: { siteId: string; authors: BlogMa
   </>;
 }
 
-function PostsView({ siteId, posts, categories, authors, tags, timezone }: Props) {
+function PostsView({ siteId, subdomain, settings, posts, categories, authors, tags, timezone }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -239,7 +239,7 @@ function PostsView({ siteId, posts, categories, authors, tags, timezone }: Props
               {post.status !== "published" || post.has_unpublished_changes
                 ? <QuickPublishButton post={post} onMessage={setMessage} />
                 : null}
-              <PostMenu post={post} siteId={siteId} onMessage={setMessage} />
+              <PostMenu post={post} siteId={siteId} subdomain={subdomain} blogPath={settings.blog_path} onMessage={setMessage} />
             </div></td>
           </tr>)}
           {!filtered.length ? <tr><td colSpan={7} className="p-10 text-center text-sm text-zinc-500">{posts.length ? "No posts match these filters." : "No posts yet. Start with a title and a blank canvas."}</td></tr> : null}
@@ -287,7 +287,9 @@ function QuickPublishButton({ post, onMessage }: { post: BlogManagerPost; onMess
   </button>;
 }
 
-function PostMenu({ post, siteId, onMessage }: { post: BlogManagerPost; siteId: string; onMessage: (message: string) => void }) {
+function PostMenu({ post, siteId, subdomain, blogPath, onMessage }: {
+  post: BlogManagerPost; siteId: string; subdomain: string; blogPath: string; onMessage: (message: string) => void;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   async function run(action: () => Promise<{ status: "success" | "error"; message: string; postId?: string }>) {
@@ -305,7 +307,8 @@ function PostMenu({ post, siteId, onMessage }: { post: BlogManagerPost; siteId: 
     <div className="absolute right-0 z-10 mt-1 w-48 rounded-xl border border-[#E8E7E3] bg-white p-1.5 shadow-lg">
       <Link href={`/dashboard/sites/${siteId}/blog/${post.id}`} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Edit</Link>
       <Link href={`/dashboard/sites/${siteId}/blog/${post.id}?panel=settings`} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Settings</Link>
-      <button type="button" disabled className="block w-full rounded-lg px-3 py-2 text-left text-xs text-zinc-400" title="Public blog pages are part of Phase B">View live (Phase B)</button>
+      {post.status === "published" ? <a href={`/s/${encodeURIComponent(subdomain)}${blogPath.replace(/\/+$/, "")}/${post.slug.split("/").map(encodeURIComponent).join("/")}`}
+        target="_blank" rel="noreferrer" className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">View live</a> : null}
       {post.status === "published" && post.has_unpublished_changes ? <button type="button" disabled={busy}
         onClick={() => void run(() => setBlogPostStatus(post.id, "published"))}
         className="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-zinc-50">Republish</button> : null}
@@ -489,7 +492,7 @@ function SettingsView({ siteId, settings, timezone }: Props) {
   }
   return <form onSubmit={save} className="max-w-3xl rounded-xl border border-[#E8E7E3] bg-white p-6">
     <h2 className="text-lg font-semibold">Blog defaults</h2>
-    <p className="mt-1 text-sm text-zinc-500">These defaults will be used by the public blog in Phase B.</p>
+    <p className="mt-1 text-sm text-zinc-500">These defaults are used by the public blog.</p>
     <div className="mt-5 grid gap-4 sm:grid-cols-2">
       <Field label="Blog path"><input value={form.blog_path} onChange={(event) => set("blog_path", event.target.value)} className={control} /></Field>
       <Field label="Posts per page"><input type="number" min={1} max={100} value={form.posts_per_page} onChange={(event) => set("posts_per_page", Number(event.target.value))} className={control} /></Field>
@@ -501,6 +504,11 @@ function SettingsView({ siteId, settings, timezone }: Props) {
       <legend className="mb-2 text-sm font-semibold">Show on posts</legend>
       {([["show_author", "Author"], ["show_date", "Date"], ["show_reading_time", "Reading time"], ["show_share_links", "Share links"]] as const).map(([key, label]) =>
         <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form[key]} onChange={(event) => set(key, event.target.checked)} />{label}</label>)}
+    </fieldset>
+    <fieldset className="mt-6 grid gap-3">
+      <legend className="mb-2 text-sm font-semibold">Discovery</legend>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.show_in_menu} onChange={(event) => set("show_in_menu", event.target.checked)} />Show Blog in the site menu</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.noindex_tags} onChange={(event) => set("noindex_tags", event.target.checked)} />Ask search engines not to index tag pages</label>
     </fieldset>
     <fieldset className="mt-6 grid gap-3">
       <legend className="text-sm font-semibold">End-of-post call to action</legend>
@@ -526,6 +534,7 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 export type BlogSettings = {
   blog_path: string; posts_per_page: number; index_layout: "grid" | "list" | "magazine";
   default_post_layout: "classic" | "wide" | "minimal"; show_author: boolean; show_date: boolean;
-  show_reading_time: boolean; show_share_links: boolean; cta_text: string; cta_button_text: string;
+  show_reading_time: boolean; show_share_links: boolean; show_in_menu: boolean; noindex_tags: boolean;
+  cta_text: string; cta_button_text: string;
   cta_link: string | null;
 };

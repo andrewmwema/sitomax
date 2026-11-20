@@ -7,6 +7,8 @@ const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 
 export const blogSlugSchema = z.string().trim().min(1).max(1000).regex(slugPattern, {
   message: "Use lowercase letters, numbers and dashes; nested paths may use /.",
+}).refine((value) => !["category", "tag", "author"].includes(value.split("/")[0]), {
+  message: "Post slugs cannot begin with category, tag, or author.",
 });
 
 export function blogSlugify(value: string): string {
@@ -133,7 +135,10 @@ export const blogPublicationSchema = z.strictObject({
     thumbnail_image: safeImageField, thumbnail_alt: z.string().max(500),
     author: z.strictObject({ name: z.string().max(120), bio: z.string().max(2000), photo: safeImageField }).nullable(),
     category: z.strictObject({ name: z.string().max(100), slug: z.string().max(200) }).nullable(),
-    tags: z.array(z.string().max(80)).max(50),
+    tags: z.array(z.union([
+      z.string().max(80),
+      z.strictObject({ name: z.string().max(80), slug: z.string().max(160) }),
+    ])).max(50),
     featured: z.boolean(), layout_override: z.enum(["classic", "wide", "minimal"]).nullable(),
     seo_title: z.string().max(200), seo_description: z.string().max(500),
     canonical_url: canonicalUrl, noindex: z.boolean(), reading_minutes: z.number().int().min(1).max(999),
@@ -146,7 +151,7 @@ export function blogPublicationSnapshot(
   content: BlogContent,
   author: BlogPublication["metadata"]["author"],
   category: BlogPublication["metadata"]["category"],
-  tags: string[],
+  tags: { name: string; slug: string }[],
   minutes: number,
 ): BlogPublication {
   return blogPublicationSchema.parse({

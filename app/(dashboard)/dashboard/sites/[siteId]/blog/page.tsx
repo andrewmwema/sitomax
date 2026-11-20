@@ -7,7 +7,7 @@ import { blogContentSchema, weakAltText } from "@/lib/blog";
 const defaultSettings: BlogSettings = {
   blog_path: "/blog", posts_per_page: 10, index_layout: "grid", default_post_layout: "classic",
   show_author: true, show_date: true, show_reading_time: true, show_share_links: true,
-  cta_text: "", cta_button_text: "", cta_link: null,
+  show_in_menu: true, noindex_tags: true, cta_text: "", cta_button_text: "", cta_link: null,
 };
 
 export default async function BlogPage({ params }: PageProps<"/dashboard/sites/[siteId]/blog">) {

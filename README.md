@@ -121,9 +121,11 @@ a missing header without replacing an existing site header.
 ### Blog management
 
 Apply `supabase/migrations/0029_blog_phase_a.sql` in the Supabase SQL Editor
-after `0028_global_headers.sql`. Each site's dashboard includes a Blog manager
-for posts, categories, authors, SEO settings and site-local scheduling. Public
-blog pages and automatic scheduled publishing are not part of Phase A.
+after `0028_global_headers.sql`, then apply
+`supabase/migrations/0030_blog_public_settings.sql`. Each site's dashboard
+includes a Blog manager for posts, categories, authors, SEO settings and
+site-local scheduling. Public blog routes, feeds and SEO use published
+snapshots; scheduled posts still require an external publishing worker.
 
 ## Internal agency sites
 
