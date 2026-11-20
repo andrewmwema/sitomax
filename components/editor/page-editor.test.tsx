@@ -163,6 +163,19 @@ describe("SEO page navigation", () => {
 });
 
 describe("editor navigation", () => {
+    it("opens Blog Manager with the current page ID after saving changes", async () => {
+      mocks.renderedPanel = "blog";
+      mocks.dirty = true;
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      const open = [...container.querySelectorAll("button")].find((button) => button.textContent === "Open blog manager")!;
+      await act(async () => open.click());
+      expect(mocks.save).toHaveBeenCalledOnce();
+      expect(mocks.push).toHaveBeenCalledWith("/dashboard/sites/site/blog?editorPage=home-page");
+      await act(async () => root.unmount());
+    });
+
     it("shows a dashboard exit, saving changes first and staying put on save failure", async () => {
       mocks.header = true;
       mocks.dirty = true;

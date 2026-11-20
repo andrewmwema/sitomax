@@ -3,10 +3,11 @@
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, ChevronDown, ImagePlus, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ImagePlus, Plus, Search, X } from "lucide-react";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
 import { MediaPicker } from "@/components/editor/media-picker";
 import { BlogImportPanel } from "@/components/dashboard/blog-import-panel";
+import { blogManagerHref } from "@/lib/blog-navigation";
 import {
   bulkBlogPostStatus, createBlogPost, deleteBlogAuthor, deleteBlogCategory, deleteBlogPost, duplicateBlogPost,
   saveBlogAuthor, saveBlogCategory, saveBlogImageAltText, saveBlogSettings, setBlogPostStatus,
@@ -40,6 +41,7 @@ export type BlogAltEntry = {
 
 type Props = {
   siteId: string;
+  editorPageId: string | null;
   subdomain: string;
   siteName: string;
   timezone: string;
@@ -66,8 +68,9 @@ export function BlogManager(props: Props) {
           <p className="mt-1 text-sm text-zinc-500">{props.siteName} · {props.timezone}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {props.editorPageId ? <Link href={`/editor/${props.editorPageId}`} className="platform-button"><ArrowLeft size={15} />Back to editor</Link> : null}
           <Link href={`/dashboard/sites/${props.siteId}`} className="platform-button">Site overview</Link>
-          {tab === "Posts" ? <CreatePostDialog siteId={props.siteId} authors={props.authors} /> : null}
+          {tab === "Posts" ? <CreatePostDialog siteId={props.siteId} editorPageId={props.editorPageId} authors={props.authors} /> : null}
         </div>
       </header>
       <nav aria-label="Blog management" className="mt-7 flex flex-wrap gap-5 border-b border-[#E8E7E3]">
@@ -81,7 +84,7 @@ export function BlogManager(props: Props) {
         {tab === "Posts" ? <PostsView {...props} /> : null}
         {tab === "Categories" ? <CategoriesView siteId={props.siteId} categories={props.categories} /> : null}
         {tab === "Authors" ? <AuthorsView siteId={props.siteId} authors={props.authors} /> : null}
-        {tab === "All alt text" ? <AltTextView siteId={props.siteId} entries={props.altEntries} /> : null}
+        {tab === "All alt text" ? <AltTextView siteId={props.siteId} editorPageId={props.editorPageId} entries={props.altEntries} /> : null}
         {tab === "Settings" ? <SettingsView {...props} /> : null}
         {tab === "Import" ? <BlogImportPanel siteId={props.siteId} /> : null}
       </section>
@@ -89,7 +92,7 @@ export function BlogManager(props: Props) {
   </EditorSiteContext.Provider>;
 }
 
-function CreatePostDialog({ siteId, authors }: { siteId: string; authors: BlogManagerAuthor[] }) {
+function CreatePostDialog({ siteId, editorPageId, authors }: Pick<Props, "siteId" | "editorPageId" | "authors">) {
   const router = useRouter();
   const ref = useRef<HTMLDialogElement>(null);
   const [title, setTitle] = useState("");
@@ -109,7 +112,7 @@ function CreatePostDialog({ siteId, authors }: { siteId: string; authors: BlogMa
       });
       if (result.status === "error") { setError(result.message); return; }
       ref.current?.close();
-      router.push(`/dashboard/sites/${siteId}/blog/${result.postId}`);
+      router.push(blogManagerHref(siteId, editorPageId, result.postId));
     } catch {
       setError("Could not create the post. Please retry.");
     } finally { setBusy(false); }
@@ -155,7 +158,7 @@ function CreatePostDialog({ siteId, authors }: { siteId: string; authors: BlogMa
   </>;
 }
 
-function PostsView({ siteId, subdomain, settings, posts, categories, authors, tags, timezone }: Props) {
+function PostsView({ siteId, editorPageId, subdomain, settings, posts, categories, authors, tags, timezone }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -227,7 +230,7 @@ function PostsView({ siteId, subdomain, settings, posts, categories, authors, ta
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={post.cover_image} alt="" className="size-12 rounded-lg object-cover" />
                 </> : <span aria-hidden className="flex size-12 items-center justify-center rounded-lg bg-[#F4F3EF] text-zinc-400"><BookOpen size={17} /></span>}
-                <div className="min-w-0"><Link href={`/dashboard/sites/${siteId}/blog/${post.id}`} className="block truncate font-medium hover:underline">{post.title}</Link>
+                <div className="min-w-0"><Link href={blogManagerHref(siteId, editorPageId, post.id)} className="block truncate font-medium hover:underline">{post.title}</Link>
                   <p className="mt-0.5 max-w-[380px] truncate text-xs text-zinc-500">{post.excerpt || `/${post.slug}`}</p></div>
               </div>
             </td>
@@ -236,12 +239,12 @@ function PostsView({ siteId, subdomain, settings, posts, categories, authors, ta
             <td className="p-3 text-xs text-zinc-600">{date(post.created_at)}</td>
             <td className="p-3 text-xs text-zinc-600">{date(post.published_at)}</td>
             <td className="p-3"><div className="flex items-center gap-2">
-              <Link href={`/dashboard/sites/${siteId}/blog/${post.id}`} className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Edit</Link>
-              <Link href={`/dashboard/sites/${siteId}/blog/${post.id}?panel=settings`} className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Settings</Link>
+              <Link href={blogManagerHref(siteId, editorPageId, post.id)} className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Edit</Link>
+              <Link href={blogManagerHref(siteId, editorPageId, post.id, "settings")} className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Settings</Link>
               {post.status !== "published" || post.has_unpublished_changes
                 ? <QuickPublishButton post={post} onMessage={setMessage} />
                 : null}
-              <PostMenu post={post} siteId={siteId} subdomain={subdomain} blogPath={settings.blog_path} onMessage={setMessage} />
+              <PostMenu post={post} siteId={siteId} editorPageId={editorPageId} subdomain={subdomain} blogPath={settings.blog_path} onMessage={setMessage} />
             </div></td>
           </tr>)}
           {!filtered.length ? <tr><td colSpan={7} className="p-10 text-center text-sm text-zinc-500">{posts.length ? "No posts match these filters." : "No posts yet. Start with a title and a blank canvas."}</td></tr> : null}
@@ -289,8 +292,8 @@ function QuickPublishButton({ post, onMessage }: { post: BlogManagerPost; onMess
   </button>;
 }
 
-function PostMenu({ post, siteId, subdomain, blogPath, onMessage }: {
-  post: BlogManagerPost; siteId: string; subdomain: string; blogPath: string; onMessage: (message: string) => void;
+function PostMenu({ post, siteId, editorPageId, subdomain, blogPath, onMessage }: Pick<Props, "siteId" | "editorPageId" | "subdomain"> & {
+  post: BlogManagerPost; blogPath: string; onMessage: (message: string) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -300,15 +303,15 @@ function PostMenu({ post, siteId, subdomain, blogPath, onMessage }: {
       const result = await action();
       onMessage(result.message);
       if (result.status === "success") router.refresh();
-      if (result.status === "success" && result.postId) router.push(`/dashboard/sites/${siteId}/blog/${result.postId}`);
+      if (result.status === "success" && result.postId) router.push(blogManagerHref(siteId, editorPageId, result.postId));
     } catch { onMessage("The action failed. Please retry."); }
     finally { setBusy(false); }
   }
   return <details className="relative">
     <summary className="cursor-pointer list-none rounded-lg border border-transparent px-3 py-1.5 text-xs hover:border-zinc-200 hover:bg-zinc-50">More <ChevronDown size={12} className="inline" /></summary>
     <div className="absolute right-0 z-10 mt-1 w-48 rounded-xl border border-[#E8E7E3] bg-white p-1.5 shadow-lg">
-      <Link href={`/dashboard/sites/${siteId}/blog/${post.id}`} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Edit</Link>
-      <Link href={`/dashboard/sites/${siteId}/blog/${post.id}?panel=settings`} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Settings</Link>
+      <Link href={blogManagerHref(siteId, editorPageId, post.id)} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Edit</Link>
+      <Link href={blogManagerHref(siteId, editorPageId, post.id, "settings")} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Settings</Link>
       {post.status === "published" ? <a href={`/s/${encodeURIComponent(subdomain)}${blogPath.replace(/\/+$/, "")}/${post.slug.split("/").map(encodeURIComponent).join("/")}`}
         target="_blank" rel="noreferrer" className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">View live</a> : null}
       {post.status === "published" && post.has_unpublished_changes ? <button type="button" disabled={busy}
@@ -429,19 +432,19 @@ function AuthorsView({ siteId, authors }: { siteId: string; authors: BlogManager
   </div>;
 }
 
-function AltTextView({ siteId, entries }: { siteId: string; entries: BlogAltEntry[] }) {
+function AltTextView({ siteId, editorPageId, entries }: Pick<Props, "siteId" | "editorPageId"> & { entries: BlogAltEntry[] }) {
   return <div>
     <h2 className="text-lg font-semibold">Images that need alt text</h2>
     <p className="mt-1 text-sm text-zinc-500">Add a concise description to images with missing or generic alt text.</p>
     <div className="mt-5 grid gap-3">
       {entries.map((entry) => <AltTextRow key={`${entry.postId}-${entry.location}-${entry.blockIndex ?? ""}-${entry.imageIndex ?? ""}`}
-        siteId={siteId} entry={entry} />)}
+        siteId={siteId} editorPageId={editorPageId} entry={entry} />)}
       {!entries.length ? <p className="rounded-xl border border-[#E8E7E3] bg-white p-8 text-center text-sm text-zinc-500">Every post image has descriptive alt text.</p> : null}
     </div>
   </div>;
 }
 
-function AltTextRow({ siteId, entry }: { siteId: string; entry: BlogAltEntry }) {
+function AltTextRow({ siteId, editorPageId, entry }: Pick<Props, "siteId" | "editorPageId"> & { entry: BlogAltEntry }) {
   const router = useRouter();
   const [alt, setAlt] = useState(entry.alt);
   const [message, setMessage] = useState("");
@@ -466,7 +469,7 @@ function AltTextRow({ siteId, entry }: { siteId: string; entry: BlogAltEntry }) 
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={entry.imageUrl} alt="" className="size-16 rounded-lg object-cover" />
     <div className="min-w-40 flex-1">
-      <Link href={`/dashboard/sites/${siteId}/blog/${entry.postId}`} className="text-sm font-medium hover:underline">{entry.postTitle}</Link>
+      <Link href={blogManagerHref(siteId, editorPageId, entry.postId)} className="text-sm font-medium hover:underline">{entry.postTitle}</Link>
       <p className="mt-1 text-xs capitalize text-zinc-500">{entry.location === "cover" ? "Main image" : entry.location === "thumbnail" ? "Social image" : `${entry.location} in post`}</p>
     </div>
     <label className="min-w-52 flex-[2] text-xs">Alt text

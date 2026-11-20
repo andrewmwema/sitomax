@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { BlogManager, type BlogAltEntry, type BlogManagerAuthor, type BlogManagerCategory, type BlogManagerPost, type BlogManagerTag } from "@/components/dashboard/blog-manager";
 import type { BlogSettings } from "@/components/dashboard/blog-manager";
 import { blogContentSchema, weakAltText } from "@/lib/blog";
+import { resolveBlogEditorPage } from "@/lib/blog-navigation";
 
 const defaultSettings: BlogSettings = {
   blog_path: "/blog", posts_per_page: 10, index_layout: "grid", default_post_layout: "classic",
@@ -10,10 +11,10 @@ const defaultSettings: BlogSettings = {
   show_in_menu: true, noindex_tags: true, cta_text: "", cta_button_text: "", cta_link: null,
 };
 
-export default async function BlogPage({ params }: PageProps<"/dashboard/sites/[siteId]/blog">) {
-  const { siteId } = await params;
+export default async function BlogPage({ params, searchParams }: PageProps<"/dashboard/sites/[siteId]/blog">) {
+  const [{ siteId }, query] = await Promise.all([params, searchParams]);
   const { supabase } = await requireUser();
-  const [siteResult, postsResult, categoriesResult, authorsResult, tagsResult, settingsResult] = await Promise.all([
+  const [siteResult, postsResult, categoriesResult, authorsResult, tagsResult, settingsResult, editorPageId] = await Promise.all([
     supabase.from("sites").select("id, name, subdomain, timezone").eq("id", siteId).maybeSingle(),
     supabase.from("posts").select(`
       id, title, slug, excerpt, cover_image, cover_alt, thumbnail_image, thumbnail_alt, draft_content, created_at, updated_at, published_at, publish_at, status, has_unpublished_changes,
@@ -24,6 +25,7 @@ export default async function BlogPage({ params }: PageProps<"/dashboard/sites/[
     supabase.from("blog_authors").select("id, name, bio, photo").eq("site_id", siteId).order("name"),
     supabase.from("post_tags").select("id, name").eq("site_id", siteId).order("name"),
     supabase.from("blog_settings").select("*").eq("site_id", siteId).maybeSingle(),
+    resolveBlogEditorPage(supabase, siteId, query.editorPage),
   ]);
   for (const [label, error] of [
     ["site", siteResult.error], ["posts", postsResult.error], ["categories", categoriesResult.error], ["authors", authorsResult.error],
@@ -74,7 +76,7 @@ export default async function BlogPage({ params }: PageProps<"/dashboard/sites/[
   const authors = (authorsResult.data ?? []) as BlogManagerAuthor[];
   const tags = (tagsResult.data ?? []) as BlogManagerTag[];
   const settings = { ...defaultSettings, ...(settingsResult.data ?? {}) } as BlogSettings;
-  return <BlogManager siteId={siteId} siteName={siteResult.data.name ?? siteResult.data.subdomain}
+  return <BlogManager siteId={siteId} editorPageId={editorPageId} siteName={siteResult.data.name ?? siteResult.data.subdomain}
     subdomain={siteResult.data.subdomain} timezone={siteResult.data.timezone} posts={posts}
     categories={categories} authors={authors} tags={tags} altEntries={altEntries} settings={settings} />;
 }

@@ -2,7 +2,6 @@
 
 import { linkContext } from "@/lib/links";
 import { PagesManager } from "./pages-panel";
-import Link from "next/link";
 import { EditorIconPicker } from "./editor-icon-picker";
 import { findBrokenLinks, type LinkIssue } from "@/lib/link-qa";
 import {
@@ -71,6 +70,7 @@ import { canonicalUrl } from "@/lib/seo-public";
 
 import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
 import { isEmptyPage } from "@/lib/editor/empty-page";
+import { blogManagerHref } from "@/lib/blog-navigation";
 import { defaultHeader, extractNavigation, headerSchema, type HeaderRoot } from "@/lib/header";
 import { renderHeaderEditor } from "./header-editor";
 
@@ -265,16 +265,22 @@ function PagesPanel() {
 }
 
 function BlogPanel() {
-  const { siteId } = useEditorUi();
+  const { siteId, pageId } = useEditorUi();
+  const persistence = usePersistence();
+  const router = useRouter();
+  const href = blogManagerHref(siteId, pageId);
   return <section className="editor-panel">
     <header className="editor-panel-header mb-4">
       <p className="platform-eyebrow mb-1">Publishing</p>
       <h2 className="font-semibold">Blog</h2>
       <p className="mt-2 text-xs leading-relaxed text-zinc-500">Write and manage posts for this site.</p>
     </header>
-    <Link href={`/dashboard/sites/${siteId}/blog`} className="platform-button platform-button-primary w-full">
+    <button type="button" className="platform-button platform-button-primary w-full" disabled={persistence.busy !== null} onClick={async () => {
+      if (!persistence.dirty || await persistence.save()) router.push(href);
+    }}>
       <BookOpen size={14} />Open blog manager
-    </Link>
+    </button>
+    {persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
   </section>;
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Eye, ImagePlus, Plus, RotateCcw, Settings2, Sparkles, X } from "lucide-react";
 import type { CSSProperties } from "react";
@@ -11,6 +10,7 @@ import { blogContentSchema, blogSlugSchema, type BlogBlock, type BlogContent, ty
 import { fontFamily, googleFontsUrl, type CuratedFont } from "@/lib/theme/fonts";
 import { sanitizeRichText, escapeHtml } from "@/lib/richtext";
 import { siteDateTimeInput, siteLocalTimeToUtc } from "@/lib/blog-date";
+import { blogManagerHref } from "@/lib/blog-navigation";
 import {
   createBlogTag, listBlogPostVersions, restoreBlogPostVersion, saveBlogPost, setBlogPostStatus,
 } from "@/app/(dashboard)/dashboard/sites/[siteId]/blog/actions";
@@ -28,6 +28,7 @@ type BlogAiResult =
   };
 type Props = {
   siteId: string;
+  editorPageId: string | null;
   initialTab: "status" | "details";
   headingFont: CuratedFont;
   bodyFont: CuratedFont;
@@ -75,6 +76,7 @@ export function BlogPostEditor(props: Props) {
   const [form, setForm] = useState(props.post);
   const formRef = useRef(form);
   const revision = useRef(0);
+  const autosaveTimer = useRef<number | undefined>(undefined);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(true);
@@ -142,6 +144,7 @@ export function BlogPostEditor(props: Props) {
     const snapshot = form;
     const expectedRevision = revision.current;
     const timer = window.setTimeout(() => { void persist(snapshot, expectedRevision); }, 900);
+    autosaveTimer.current = timer;
     return () => window.clearTimeout(timer);
   }, [dirty, form, persist]);
 
@@ -316,7 +319,8 @@ export function BlogPostEditor(props: Props) {
     setAiResult(null);
   }
   const blocks = form.draft_content.blocks;
-  const siteHref = `/dashboard/sites/${props.siteId}/blog`;
+  const siteHref = blogManagerHref(props.siteId, props.editorPageId);
+  const postIndex = props.adjacentPosts.findIndex(({ id }) => id === props.postId);
   const slugMessage = blogSlugSchema.safeParse(form.slug);
   const utcSchedule = siteLocalTimeToUtc(scheduleTime, props.timezone);
 
@@ -326,7 +330,10 @@ export function BlogPostEditor(props: Props) {
     <main className="platform-ui min-h-screen bg-[#FBFBFA]"
       style={{ "--font-heading": fontFamily(props.headingFont), "--font-body": fontFamily(props.bodyFont), fontFamily: "var(--font-body)" } as CSSProperties}>
       <header className="sticky top-0 z-30 flex min-h-16 flex-wrap items-center gap-3 border-b border-[#E8E7E3] bg-white/95 px-4 backdrop-blur sm:px-7">
-        <Link href={siteHref} className="platform-button" aria-label="Back to posts"><ArrowLeft size={15} /><span className="hidden sm:inline">Posts</span></Link>
+        {props.editorPageId ? <button type="button" className="platform-button" disabled={busy}
+          onClick={() => void navigateAfterSave(`/editor/${props.editorPageId}`)}><ArrowLeft size={15} />Back to editor</button> : null}
+        <button type="button" className="platform-button" disabled={busy}
+          onClick={() => void navigateAfterSave(siteHref)} aria-label="Back to posts">Posts</button>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{form.title || "Untitled post"}</p>
           <p role={error ? "alert" : "status"} className={`text-xs ${error ? "text-red-700" : "text-zinc-500"}`}>
@@ -397,9 +404,9 @@ export function BlogPostEditor(props: Props) {
             <header className="flex items-center justify-between">
               <div><p className="text-xs text-zinc-500">Post settings</p><h2 className="font-semibold">Details</h2></div>
               <div className="flex items-center gap-1">
-                <button type="button" disabled={props.adjacentPosts.findIndex(({ id }) => id === props.postId) <= 0} onClick={() => void stepPost(-1)} aria-label="Previous post" className="rounded-lg p-2 hover:bg-zinc-100"><ChevronLeft size={17} /></button>
-                <button type="button" disabled={props.adjacentPosts.findIndex(({ id }) => id === props.postId) < 0 || props.adjacentPosts.findIndex(({ id }) => id === props.postId) === props.adjacentPosts.length - 1}
-                  onClick={() => void stepPost(1)} aria-label="Next post" className="rounded-lg p-2 hover:bg-zinc-100"><ChevronRight size={17} /></button>
+                <button type="button" disabled={busy || postIndex <= 0} onClick={() => stepPost(-1)} aria-label="Previous post" className="rounded-lg p-2 hover:bg-zinc-100"><ChevronLeft size={17} /></button>
+                <button type="button" disabled={busy || postIndex < 0 || postIndex === props.adjacentPosts.length - 1}
+                  onClick={() => stepPost(1)} aria-label="Next post" className="rounded-lg p-2 hover:bg-zinc-100"><ChevronRight size={17} /></button>
               </div>
             </header>
             <nav aria-label="Post settings tabs" className="mt-4 grid grid-cols-3 border-b border-[#E8E7E3] text-xs">
@@ -436,10 +443,19 @@ export function BlogPostEditor(props: Props) {
     </>
   </EditorSiteContext.Provider>;
 
-  async function stepPost(by: number) {
-    const index = props.adjacentPosts.findIndex(({ id }) => id === props.postId);
-    const next = props.adjacentPosts[index + by];
-    if (next && (!dirty || await persist())) router.push(`/dashboard/sites/${props.siteId}/blog/${next.id}`);
+  async function navigateAfterSave(href: string) {
+    if (busy) return;
+    if (dirty) {
+      window.clearTimeout(autosaveTimer.current);
+      const expectedRevision = revision.current;
+      if (!(await persist()) || revision.current !== expectedRevision) return;
+    }
+    router.push(href);
+  }
+
+  function stepPost(by: number) {
+    const next = props.adjacentPosts[postIndex + by];
+    if (next) void navigateAfterSave(blogManagerHref(props.siteId, props.editorPageId, next.id));
   }
 }
 

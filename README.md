@@ -126,6 +126,9 @@ after `0028_global_headers.sql`, then apply
 includes a Blog manager for posts, categories, authors, SEO settings and
 site-local scheduling. Public blog routes, feeds and SEO use published
 snapshots; scheduled posts still require an external publishing worker.
+Use **Back to editor** in Blog Manager or the post writer to return to the
+page you started from. If you opened the blog directly, it returns to the
+site's home page (or its first available page).
 
 If Blog Manager shows a server error, check the deployment runtime logs for
 `Could not load Blog Manager data`. Verify both blog migrations are applied
