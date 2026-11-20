@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { buildDesignItem } from "./library";
-import { sectionCatalog, designsForCategory, sectionCategory, type SectionDesign } from "./catalog";
+import { sectionCatalog, designsForCategory, searchSectionDesigns, sectionCategory, type SectionDesign } from "./catalog";
 import { blankSection } from "@/lib/layout/structure";
 
 it("re-keys saved slot trees on every insert without modifying their content or the saved design", () => {
@@ -25,4 +25,14 @@ it("keeps legacy saved categories available and exposes image-and-text designs i
   expect(sectionCategory("Process")).toBe("Services");
   expect(sectionCategory("unknown")).toBeNull();
   expect(designsForCategory(sectionCatalog, "Text & Image")).toHaveLength(3);
+});
+
+it("finds and inserts the blog feed from the library's category and search", () => {
+  const [preset] = designsForCategory(sectionCatalog, "Blog");
+  expect(preset).toBeDefined();
+  expect(searchSectionDesigns(sectionCatalog, "blog posts")).toContain(preset);
+  expect(buildDesignItem(preset)).toMatchObject({
+    type: "BlogPosts",
+    props: { source: "latest", variant: "grid", showViewAll: true },
+  });
 });

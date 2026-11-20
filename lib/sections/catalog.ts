@@ -11,6 +11,7 @@ import type { ProcessProps } from "@/components/blocks/process";
 import { enquiryFields } from "@/components/blocks/ui/enquiry-form";
 import type { PricingProps } from "@/components/blocks/pricing";
 import type { FaqProps } from "@/components/blocks/faq";
+import type { BlogPostsProps } from "@/components/blocks/blog-posts";
 import type { CallToActionProps } from "@/components/blocks/call-to-action";
 import type { ContactFormProps } from "@/components/blocks/contact-form";
 import type { MapProps } from "@/components/blocks/map";
@@ -35,6 +36,7 @@ export const SECTION_CATEGORIES = [
   "Testimonials",
   "Pricing",
   "FAQ",
+  "Blog",
   "Call to action",
   "Contact",
   "Gallery",
@@ -96,6 +98,7 @@ type BlockPropsMap = {
   Process: ProcessProps;
   Pricing: PricingProps;
   Faq: FaqProps;
+  BlogPosts: BlogPostsProps & { design?: BlockDesign };
   CallToAction: CallToActionProps;
   ContactForm: ContactFormProps;
   Map: MapProps;
@@ -1213,6 +1216,14 @@ export const sectionCatalog: SectionDesign[] = [
       variant: "sidebar",
       design: shellDesign({ anchorId: "faq", animation: "fade" }),
     },
+  }),
+
+  design({
+    id: "blog-latest-posts",
+    blockType: "BlogPosts",
+    category: "Blog",
+    name: "Latest blog posts",
+    props: { source: "latest", variant: "grid", design: shellDesign() },
   }),
 
   // --------------------------------------------------- Call to action

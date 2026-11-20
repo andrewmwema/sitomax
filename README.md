@@ -135,6 +135,9 @@ after `0028_global_headers.sql`, then apply
 includes a Blog manager for posts, categories, authors, SEO settings and
 site-local scheduling. Public blog routes, feeds and SEO use published
 snapshots.
+To show recent articles on an existing page, open the website editor and choose
+**Add section → Blog → Latest blog posts**, then publish the page. The live feed
+updates automatically as posts are published.
 Use **Back to editor** in Blog Manager or the post writer to return to the
 page you started from. If you opened the blog directly, it returns to the
 site's home page (or its first available page).
