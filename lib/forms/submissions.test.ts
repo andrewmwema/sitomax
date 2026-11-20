@@ -16,8 +16,9 @@ describe("submission search and filters", () => {
   });
 
   it("preserves arbitrary answers and only extracts recognized textual contact fields", () => {
-    expect(submissionContact({ "Full Name": "Alex", email_address: "alex@example.test", custom: true })).toEqual({ name: "Alex", email: "alex@example.test" });
-    expect(submissionContact({ name: ["not", "text"], email: { address: "private" } })).toEqual({ name: undefined, email: undefined });
+    expect(submissionContact({ "Full Name": "Alex", email_address: "alex@example.test", "Phone Number": "+1 555 555 0123", custom: true }))
+      .toEqual({ name: "Alex", email: "alex@example.test", phone: "+1 555 555 0123" });
+    expect(submissionContact({ name: ["not", "text"], email: { address: "private" } })).toEqual({ name: undefined, email: undefined, phone: undefined });
     expect(submissionFields(["Choice A", "Choice B"])).toEqual([["Response", ["Choice A", "Choice B"]]]);
     expect(submissionFields(null)).toEqual([]);
   });

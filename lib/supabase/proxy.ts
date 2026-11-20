@@ -60,7 +60,10 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    url.searchParams.set("next", pathname);
+    const lead = request.nextUrl.searchParams.get("lead");
+    const returnTo = pathname === "/dashboard/forms" && lead && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lead)
+      ? `${pathname}?lead=${lead}` : pathname;
+    url.searchParams.set("next", returnTo);
 
     const redirectResponse = NextResponse.redirect(url);
     // Keep any refreshed auth cookies on the redirect.

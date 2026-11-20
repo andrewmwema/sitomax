@@ -1,31 +1,27 @@
 import { createClient } from "@/lib/supabase/server";
 import { csvCell } from "@/lib/csv";
-import { submissionFiltersSchema } from "@/lib/forms/submissions";
-import { submissionBatches, SubmissionQueryError } from "@/lib/forms/queries";
+import { leadStatusLabels, selectedLeadIdsSchema, submissionFiltersSchema } from "@/lib/forms/submissions";
+import { allowedLeadSites, submissionBatches, SubmissionQueryError } from "@/lib/forms/queries";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return new Response("Authentication required.", { status: 401 });
-  const parsed = submissionFiltersSchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+  const params = new URL(request.url).searchParams;
+  const parsed = submissionFiltersSchema.safeParse(Object.fromEntries(params));
   if (!parsed.success) return new Response("Invalid submission filters.", { status: 400 });
+  const selected = params.has("id") ? selectedLeadIdsSchema.safeParse(params.getAll("id")) : null;
+  if (selected && !selected.success) return new Response("Invalid lead selection.", { status: 400 });
   const filters = parsed.data;
-  const siteId = filters.site;
-  const [{ data: sites, error: sitesError }, { data: memberships, error: memberError }, { data: admin, error: adminError }] = await Promise.all([
-    supabase.from("sites").select("id, account_id, name, subdomain"),
-    supabase.from("account_members").select("account_id").eq("user_id", user.id).eq("role", "owner"),
-    supabase.rpc("is_super_admin"),
-  ]);
-  if (sitesError || memberError || adminError) return new Response("Could not check permissions.", { status: 500 });
-  const allowed = (sites ?? []).filter((site) => admin || memberships?.some((member) => member.account_id === site.account_id));
-  if (!allowed.length || (siteId && !allowed.some((site) => site.id === siteId))) return new Response("Access denied.", { status: 403 });
 
-  const lines = [["Received (UTC)", "Site", "Form", "Page", "Read", "Details"].map(csvCell).join(",")];
+  const lines = [["Received (UTC)", "Site", "Form", "Page", "Read", "Details", "Status", "Last activity (UTC)"].map(csvCell).join(",")];
   try {
-    for await (const rows of submissionBatches(supabase, allowed, filters, new Date(), true)) {
+    const allowed = await allowedLeadSites(supabase, user.id);
+    if (!allowed.length || (filters.site && !allowed.some((site) => site.id === filters.site))) return new Response("Access denied.", { status: 403 });
+    for await (const rows of submissionBatches(supabase, allowed, filters, new Date(), true, selected?.data)) {
       for (const row of rows) {
         const site = allowed.find((item) => item.id === row.site_id);
-        lines.push([row.created_at, site?.name || site?.subdomain || "Site", row.form_name || "Form", row.page_path || "/", row.is_read ? "Yes" : "No", JSON.stringify(row.data ?? {})].map(csvCell).join(","));
+        lines.push([row.created_at, site?.name || site?.subdomain || "Site", row.form_name || "Form", row.page_path || "/", row.is_read ? "Yes" : "No", JSON.stringify(row.data ?? {}), leadStatusLabels[row.status], row.last_activity_at].map(csvCell).join(","));
       }
     }
   } catch (error) {

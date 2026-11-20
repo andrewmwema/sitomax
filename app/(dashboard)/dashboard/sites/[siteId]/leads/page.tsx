@@ -1,0 +1,85 @@
+import { Suspense } from "react";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { z } from "zod";
+import { requireUser } from "@/lib/auth";
+import { SiteSettingsNav } from "@/components/dashboard/site-settings-nav";
+import { LeadSettingsForm } from "@/components/dashboard/lead-settings-form";
+import { CopyLeadValue } from "@/components/dashboard/lead-controls";
+import { TableScrollArea } from "@/components/dashboard/table-scroll-area";
+
+export default function LeadSettingsPage({ params }: PageProps<"/dashboard/sites/[siteId]/leads">) {
+  return <Suspense fallback={<p role="status">Loading lead settings…</p>}><LeadSettings params={params} /></Suspense>;
+}
+
+async function LeadSettings({ params }: { params: PageProps<"/dashboard/sites/[siteId]/leads">["params"] }) {
+  const { siteId } = await params;
+  if (!z.uuid().safeParse(siteId).success) notFound();
+  const { supabase, user } = await requireUser();
+  const [site, access] = await Promise.all([
+    supabase.from("sites").select("name, subdomain").eq("id", siteId).maybeSingle(),
+    supabase.rpc("can_manage_site_leads", { p_site: siteId }),
+  ]);
+  if (site.error || access.error) throw new Error("Could not check lead settings permissions.");
+  if (!site.data || !access.data) notFound();
+  const [settings, preferences, log] = await Promise.all([
+    supabase.from("lead_site_settings").select("recipients, webhook_url, webhook_secret").eq("site_id", siteId)
+      .maybeSingle<{ recipients: string[]; webhook_url: string | null; webhook_secret: string | null }>(),
+    supabase.from("lead_notification_preferences").select("new_lead, replies, digest").eq("site_id", siteId)
+      .eq("user_id", user.id).maybeSingle<{ new_lead: boolean; replies: boolean; digest: boolean }>(),
+    supabase.from("lead_webhook_deliveries").select("event_id, event_type, status, attempts, http_status, created_at").eq("site_id", siteId)
+      .order("created_at", { ascending: false }).order("event_id", { ascending: false }).limit(50),
+  ]);
+  if (settings.error || preferences.error) throw new Error("Could not load lead settings.");
+  return <section className="flex flex-col gap-6">
+    <header className="flex flex-wrap items-end justify-between gap-3"><div>
+      <p className="platform-eyebrow">{site.data.name || site.data.subdomain}</p>
+      <h1 className="mt-1 text-2xl font-semibold">Lead settings</h1>
+    </div><Link className="platform-button" href={`/dashboard/forms?site=${siteId}`}>Open lead inbox</Link></header>
+    <SiteSettingsNav siteId={siteId} current="leads" canManageDomains />
+    <div className="grid gap-4 lg:grid-cols-2">
+      <section className="platform-panel space-y-3 p-5"><h2 className="font-semibold">Notification recipients</h2>
+        <p className="text-sm text-[var(--platform-muted)]">Leave blank to notify account owners. Only add addresses authorized to receive lead summaries for this site.</p>
+        <LeadSettingsForm siteId={siteId} intent="recipients">
+          <label className="block text-sm">Email addresses (one per line or comma separated)
+            <textarea name="recipients" rows={3} maxLength={6500} className="mt-1 block w-full rounded-lg border p-2 text-sm"
+              defaultValue={settings.data?.recipients.join("\n")} /></label>
+        </LeadSettingsForm>
+      </section>
+      <section className="platform-panel space-y-3 p-5"><h2 className="font-semibold">Your email preferences</h2>
+        <p className="text-sm text-[var(--platform-muted)]">New lead preferences apply if your email is a recipient. Your digest goes to your account email.</p>
+        <LeadSettingsForm siteId={siteId} intent="preferences">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="new_lead" defaultChecked={preferences.data?.new_lead ?? true} /> New lead email</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="replies" defaultChecked={preferences.data?.replies ?? true} /> Reply email (for when replies are available)</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="digest" defaultChecked={preferences.data?.digest ?? false} /> Daily digest</label>
+        </LeadSettingsForm>
+      </section>
+    </div>
+    <section className="platform-panel space-y-4 p-5"><h2 className="font-semibold">Outgoing webhook</h2>
+      <p className="text-sm text-[var(--platform-muted)]">Connect a trusted webhook catcher. It receives submitted answers and lead events for this site. Clear the URL to turn delivery off.</p>
+      <LeadSettingsForm siteId={siteId} intent="webhook">
+        <label className="block text-sm">Webhook URL
+          <input type="url" name="url" maxLength={2048} className="mt-1 block w-full border px-3 text-sm"
+            placeholder="https://…" defaultValue={settings.data?.webhook_url ?? ""} /></label>
+        {settings.data?.webhook_secret ? <label className="flex items-center gap-2 text-sm">
+          <input name="rotate" type="checkbox" /> Rotate signing secret (cancels outstanding retries)
+        </label> : null}
+      </LeadSettingsForm>
+      {settings.data?.webhook_secret ? <div className="flex flex-wrap items-center gap-2">
+        <CopyLeadValue key={settings.data.webhook_secret} value={settings.data.webhook_secret} label="signing secret" />
+        <p className="text-xs text-[var(--platform-muted)]">Verify the X-SitoMax-Signature header against the raw request body.</p>
+      </div> : null}
+    </section>
+    <section className="platform-panel overflow-hidden"><h2 className="p-5 font-semibold">Webhook deliveries <span className="text-sm font-normal text-[var(--platform-muted)]">(last 50)</span></h2>
+      {log.error ? <p role="alert" className="px-5 pb-5 text-sm">Delivery history is unavailable.</p> : log.data.length ? <TableScrollArea label="Webhook delivery history">
+        <table className="min-w-[590px] w-full text-left text-sm"><thead><tr>{["Event", "Queued (UTC)", "Status", "Attempts", "HTTP"].map((label) =>
+          <th key={label} scope="col" className="px-4">{label}</th>)}</tr></thead>
+          <tbody>{log.data.map((entry) => <tr key={entry.event_id}>
+            <td className="px-4">{entry.event_type}</td><td className="px-4">{new Date(entry.created_at).toLocaleString("en", { timeZone: "UTC" })}</td>
+            <td className="px-4 capitalize">{entry.status}</td><td className="px-4">{entry.attempts}</td><td className="px-4">{entry.http_status ?? "—"}</td>
+          </tr>)}</tbody>
+        </table>
+      </TableScrollArea> : <p className="px-5 pb-5 text-sm text-[var(--platform-muted)]">No deliveries yet. New events will appear here after you configure a URL.</p>}
+    </section>
+  </section>;
+}

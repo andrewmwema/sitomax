@@ -22,7 +22,8 @@ vi.mock("@/lib/supabase/server", () => ({
         gte: (column: string, value: unknown) => { mocks.filters.push(["gte", column, value]); return query; },
         range: (offset: number) => { start = offset; mocks.offsets.push(start); return query; },
         then: (resolve: (value: { data: object[]; error: null }) => unknown) => {
-          const row = { site_id: "00000000-0000-4000-8000-000000000001", form_name: "contact", page_path: "/", data: { Name: "Alex" }, created_at: "2026-01-01", is_read: false };
+          const row = { site_id: "00000000-0000-4000-8000-000000000001", form_name: "contact", page_path: "/", data: { Name: "Alex" },
+            created_at: "2026-01-01", last_activity_at: "2026-01-02", is_read: false, status: "new" };
           const data = start === 0 ? Array.from({ length: mocks.fullBatch ? 500 : 1 }, () => row) : [];
           return Promise.resolve({ data, error: null }).then(resolve);
         },
@@ -58,8 +59,15 @@ describe("submission CSV export", () => {
     expect(response.status).toBe(200);
     expect((await response.text()).split("\r\n").filter(Boolean)).toHaveLength(1);
     expect(mocks.filters).toContainEqual(["in", "site_id", ["00000000-0000-4000-8000-000000000001"]]);
-    expect(mocks.filters).toContainEqual(["eq", "is_read", false]);
+    expect(mocks.filters).toContainEqual(["eq", "status", "new"]);
     expect(mocks.filters.some(([operator, column]) => operator === "gte" && column === "created_at")).toBe(true);
+  });
+  it("limits a selected export to the requested IDs and rejects invalid IDs", async () => {
+    const url = "https://agency.test/dashboard/forms/export";
+    expect((await GET(new Request(`${url}?id=bad`))).status).toBe(400);
+    const id = "00000000-0000-4000-8000-000000000003";
+    expect((await GET(new Request(`${url}?id=${id}`))).status).toBe(200);
+    expect(mocks.filters).toContainEqual(["in", "id", [id]]);
   });
   it("rejects malformed filters rather than exporting all records", async () => {
     expect((await GET(new Request("https://agency.test/dashboard/forms/export?days=invalid"))).status).toBe(400);

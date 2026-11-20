@@ -1,9 +1,15 @@
 import { z } from "zod";
 
+export const leadStatuses = ["new", "contacted", "won", "lost"] as const;
+export const leadStatusLabels = { new: "New", contacted: "Contacted", won: "Won", lost: "Lost" } as const;
+export const leadStatusSchema = z.enum(leadStatuses);
+export const selectedLeadIdsSchema = z.array(z.uuid()).min(1).max(25);
+
 export const submissionFiltersSchema = z.object({
   site: z.union([z.literal(""), z.uuid()]).default(""),
   days: z.enum(["all", "7", "30", "90"]).default("all"),
-  status: z.enum(["all", "new", "read"]).default("all"),
+  status: z.enum(["all", "read", ...leadStatuses]).default("all"),
+  archived: z.enum(["0", "1"]).default("0"),
   q: z.string().trim().max(200, "Keep searches under 200 characters.").default(""),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
 });
@@ -11,6 +17,14 @@ export type SubmissionFilters = z.infer<typeof submissionFiltersSchema>;
 export type Submission = {
   id: string; site_id: string; form_name: string | null; page_path: string | null;
   data: unknown; created_at: string; is_read: boolean;
+};
+export type Lead = Submission & {
+  status: z.infer<typeof leadStatusSchema>; last_activity_at: string; has_unread_reply: boolean; archived: boolean;
+};
+export type LeadNote = { id: string; author_id: string | null; body: string; created_at: string };
+export type LeadEvent = {
+  id: string; type: "created" | "status_changed" | "note_added" | "email_sent" | "reply_received";
+  data: Record<string, unknown>; created_at: string;
 };
 export type SubmissionSite = { id: string; name: string | null; subdomain: string };
 
@@ -24,6 +38,7 @@ export function submissionQueryString(filters: SubmissionFilters, page = 1) {
   if (filters.site) params.set("site", filters.site);
   if (filters.days !== "all") params.set("days", filters.days);
   if (filters.status !== "all") params.set("status", filters.status);
+  if (filters.archived === "1") params.set("archived", "1");
   if (filters.q) params.set("q", filters.q);
   if (page > 1) params.set("page", String(page));
   const query = params.toString();
@@ -45,5 +60,6 @@ export function submissionContact(data: unknown) {
   return {
     name: textField(["name", "fullname", "contactname"]),
     email: textField(["email", "emailaddress"]),
+    phone: textField(["phone", "phonenumber", "telephone", "mobile", "mobilephone"]),
   };
 }

@@ -1,34 +1,9 @@
-import { lookup } from "node:dns/promises";
-import { request } from "node:https";
-import { BlockList, isIP } from "node:net";
-
-const blocked = new BlockList();
-for (const [prefix, bits] of [
-  ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16],
-  ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.0.2.0", 24], ["192.88.99.0", 24], ["192.168.0.0", 16],
-  ["198.18.0.0", 15], ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 3],
-] as const) blocked.addSubnet(prefix, bits);
+import { requestPublicHttps } from "@/lib/public-https";
 
 export async function fetchBlogImport(raw: string, limit: number, signal: AbortSignal) {
   let url = new URL(raw);
   for (let hop = 0; hop < 4; hop++) {
-    signal.throwIfAborted();
-    if (url.protocol !== "https:" || url.port || url.username || url.password || isIP(url.hostname) ||
-      !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z][a-z0-9-]*$/i.test(url.hostname)) {
-      throw new Error("Use a public HTTPS URL.");
-    }
-    const addresses = await lookup(url.hostname, { family: 4, all: true });
-    if (!addresses.length || addresses.some(({ address }) => blocked.check(address))) throw new Error("Use a public HTTPS host.");
-    const address = addresses[0].address;
-    // Pin the validated address but retain hostname-based TLS verification.
-    const response = await new Promise<import("node:http").IncomingMessage>((resolve, reject) => {
-      const req = request(url, { agent: false, signal, family: 4,
-        lookup: (_host, _options, callback) => callback(null, address, 4),
-        headers: { "Accept-Encoding": "identity" },
-      }, resolve);
-      req.on("error", reject);
-      req.end();
-    });
+    const response = await requestPublicHttps(url, signal, { headers: { "Accept-Encoding": "identity" } });
     try {
       const status = response.statusCode ?? 0;
       if ([301, 302, 303, 307, 308].includes(status) && response.headers.location) {

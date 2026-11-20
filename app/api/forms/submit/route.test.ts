@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ site: vi.fn(), rpc: vi.fn(), after: vi.fn(), send: vi.fn(), owners: vi.fn(), configured: vi.fn() }));
+const mocks = vi.hoisted(() => ({ site: vi.fn(), rpc: vi.fn(), after: vi.fn(), send: vi.fn(), owners: vi.fn(), configured: vi.fn(),
+  settings: vi.fn(), preferences: vi.fn(), members: vi.fn() }));
 vi.mock("next/server", () => ({ after: mocks.after }));
 vi.mock("@/lib/email", async (original) => ({ ...await original<typeof import("@/lib/email")>(),
   sendEmail: mocks.send, isEmailConfigured: mocks.configured }));
@@ -9,7 +10,15 @@ vi.mock("@/lib/tenant", () => ({
   getTenantKeyFromHost: (host: string) => host === "agency.test" ? "sitomax" : host,
   getSiteByHost: mocks.site,
 }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: mocks.rpc }) }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({
+  rpc: mocks.rpc,
+  from: (table: string) => {
+    const query = { select: () => query, eq: () => query, in: mocks.members, maybeSingle: mocks.settings,
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve(mocks.preferences()).then(resolve) };
+    if (!["lead_site_settings", "lead_notification_preferences", "account_members"].includes(table)) throw new Error(table);
+    return query;
+  },
+}) }));
 import { POST } from "./route";
 
 function request(fields: Record<string, string>, headers: Record<string, string> = {}) {
@@ -20,12 +29,15 @@ function request(fields: Record<string, string>, headers: Record<string, string>
   });
 }
 const valid = { _form_name: "contact", _website: "", _page_path: "/contact", Name: "Alex", Email: "a@example.test" };
+const leadId = "00000000-0000-4000-8000-000000000003";
 
 beforeEach(() => {
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-secret");
   mocks.site.mockResolvedValue({ id: "site-1", account_id: "account-1", name: "Acme" });
-  mocks.rpc.mockResolvedValue({ data: true, error: null });
+  mocks.rpc.mockResolvedValue({ data: leadId, error: null });
   mocks.configured.mockReturnValue(false);
+  mocks.settings.mockResolvedValue({ data: null, error: null });
+  mocks.preferences.mockReturnValue({ data: [], error: null });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 
@@ -34,7 +46,7 @@ describe("form submission endpoint", () => {
     expect((await POST(request(valid))).status).toBe(200);
     expect(mocks.site).toHaveBeenCalledWith("client.test");
     const [name, args] = mocks.rpc.mock.calls[0];
-    expect(name).toBe("submit_contact_form");
+    expect(name).toBe("submit_contact_form_lead");
     expect(args).toMatchObject({ p_site_id: "site-1", p_form_name: "contact", p_path: "/contact", p_data: { Name: "Alex", Email: "a@example.test" } });
     expect(args.p_ip_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(args)).not.toContain("203.0.113.10");
@@ -60,7 +72,7 @@ describe("form submission endpoint", () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
   it("surfaces rate limits and database failures, and fails closed without an IP", async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: false, error: null });
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: null });
     expect((await POST(request(valid))).status).toBe(429);
     vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: "failed" } });
@@ -74,7 +86,7 @@ describe("form submission endpoint", () => {
     expect(mocks.rpc.mock.calls[0][1].p_data.Name).toBe("Alex\nSam");
   });
 
-  it("notifies only the saved site's owners without including submitted fields", async () => {
+  it("defaults to the saved site's owners and links to the specific lead without including the submitted email", async () => {
     mocks.configured.mockReturnValue(true);
     mocks.owners.mockResolvedValue(["owner@example.test"]);
     expect((await POST(request(valid))).status).toBe(200);
@@ -82,15 +94,29 @@ describe("form submission endpoint", () => {
     await mocks.after.mock.calls[0][0]();
     expect(mocks.owners).toHaveBeenCalledWith(expect.anything(), "account-1");
     expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({
-      to: ["owner@example.test"], tag: "form-notification",
-      text: expect.stringContaining("/dashboard/forms"), html: expect.stringContaining("/dashboard/forms"),
+      to: "owner@example.test", tag: "form-notification",
+      text: expect.stringContaining("Contact: Alex"), html: expect.stringContaining(`/dashboard/forms?lead=${leadId}`),
     }));
     expect(JSON.stringify(mocks.send.mock.calls)).not.toContain(valid.Email);
   });
 
+  it("uses configured recipients and honors only current owners' personal opt-outs", async () => {
+    mocks.configured.mockReturnValue(true);
+    mocks.settings.mockResolvedValue({ data: { recipients: ["owner@example.test", "custom@example.test"] }, error: null });
+    mocks.preferences.mockReturnValue({ data: [
+      { user_id: "owner", profiles: { email: "owner@example.test", is_super_admin: false } },
+      { user_id: "former-member", profiles: { email: "custom@example.test", is_super_admin: false } },
+    ], error: null });
+    mocks.members.mockResolvedValue({ data: [{ user_id: "owner" }], error: null });
+    expect((await POST(request(valid))).status).toBe(200);
+    await mocks.after.mock.calls[0][0]();
+    expect(mocks.owners).not.toHaveBeenCalled();
+    expect(mocks.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ to: "custom@example.test" }));
+  });
+
   it("does not schedule an email for a rejected submission", async () => {
     mocks.configured.mockReturnValue(true);
-    mocks.rpc.mockResolvedValue({ data: false, error: null });
+    mocks.rpc.mockResolvedValue({ data: null, error: null });
     expect((await POST(request(valid))).status).toBe(429);
     expect(mocks.after).not.toHaveBeenCalled();
   });

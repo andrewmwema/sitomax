@@ -29,4 +29,12 @@ describe("app host session routing", () => {
     const response = await updateSession(new NextRequest("https://app.example.test/dashboard/settings"));
     expect(response.headers.get("location")).toBe("https://app.example.test/login?next=%2Fdashboard%2Fsettings");
   });
+
+  it("returns signed-out notification recipients to the specific lead after login", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    const id = "00000000-0000-4000-8000-000000000003";
+    const response = await updateSession(new NextRequest(`https://app.example.test/dashboard/forms?lead=${id}&q=private`));
+    const location = new URL(response.headers.get("location")!);
+    expect(location.searchParams.get("next")).toBe(`/dashboard/forms?lead=${id}`);
+  });
 });

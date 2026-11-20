@@ -492,6 +492,44 @@ API keys or transfer codes in update notes.
    failures are reported in server logs without bodies, recipient addresses, or
    tokens.
 
-With email configured, saved public form submissions notify the site's account
-owners after the response. The email links to the Forms dashboard and does not
-include submitted fields. A mail failure never rolls back the submission.
+## Lead inbox (Phase A)
+
+Run [`0034_leads_phase_a.sql`](./supabase/migrations/0034_leads_phase_a.sql) in
+the Supabase SQL Editor **before deploying** the app. Existing submissions
+become New leads and keep their original received date and read state.
+Account owners see their own account's sites; the agency can see all sites.
+Editors retain site editing access but cannot see lead data. Inbox stats use
+UTC and are scoped by the selected website, independent of list filters.
+Archiving removes a lead from the active inbox without changing past wins.
+
+With the default Postmark transactional stream configured above, new inquiries
+notify account owners after the form is saved. Set `NEXT_PUBLIC_APP_URL` to
+the platform origin so **View lead** links open the right lead. In **Sites →
+Leads**, owners can replace the default recipients and users can set personal
+email preferences. New lead emails include the contact name and form source;
+sign-in is required for full answers. Email failure never rolls back a form.
+Opt-in digests are best-effort, at most once per site/user per UTC day; they
+count the previous UTC day's submissions and current leads awaiting reply.
+
+For webhooks and digests, set the server-only `CRON_SECRET` and generate a
+**separate** `LEAD_WORKER_SECRET` (`openssl rand -hex 32`). Compute the
+SHA-256 hex digest of that exact secret without a trailing newline and
+register **only the hash** in the Supabase SQL Editor:
+
+```sql
+insert into public.lead_worker_config (secret_hash)
+values ('<64-character SHA-256 hex digest>')
+on conflict (singleton) do update set secret_hash = excluded.secret_hash;
+```
+
+The Vercel job calls `/api/cron/leads` every five minutes. With another
+scheduler, send `Authorization: Bearer <CRON_SECRET>` at the same interval.
+Paste a trusted public HTTPS URL (IPv4 DNS required) into **Sites → Leads →
+Outgoing webhook**. The destination receives form answers, the site and lead
+IDs, and event data. `lead.created` and `lead.status_changed` are active;
+`lead.reply_received` will use the same delivery path once replies are built.
+Verify `X-SitoMax-Signature` as the hex HMAC-SHA256 of the raw UTF-8 request
+body, using the signing secret as shown, not hex-decoded. Deduplicate using
+`X-SitoMax-Event-Id`. Non-2xx and network failures retry up to five total
+attempts with backoff; redirects are not followed. The latest 50 deliveries
+are shown in site settings.

@@ -47,8 +47,8 @@ describe("authorized submission browsing", () => {
     expect(result.rows[0].id).toBe("25");
     expect(mocks.ranges).toEqual([[25, 49]]);
     expect(mocks.filters).toEqual([
-      ["in", "site_id", [site.id]], ["eq", "site_id", site.id],
-      ["gte", "created_at", "2026-11-12T12:00:00.000Z"], ["eq", "is_read", false],
+      ["in", "site_id", [site.id]], ["eq", "archived", false], ["eq", "site_id", site.id],
+      ["gte", "created_at", "2026-11-12T12:00:00.000Z"], ["eq", "status", "new"],
     ]);
   });
 

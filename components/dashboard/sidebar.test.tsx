@@ -48,12 +48,12 @@ describe("dashboard navigation", () => {
     const sidebar = container.querySelector("aside")!;
     expect(sidebar.querySelector('a[href="/dashboard/forms"]')?.getAttribute("aria-current")).toBe("page");
     expect(sidebar.querySelector('a[href="/dashboard/domains"]')?.textContent).toContain("Domains");
-    expect(sidebar.querySelector('[aria-label="2 unread submissions"]')).not.toBeNull();
+    expect(sidebar.querySelector('[aria-label="2 unread leads"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/clients"]')).toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/ai-usage"]')).toBeNull();
     await act(async () => sidebar.querySelector<HTMLButtonElement>('[aria-label="Collapse sidebar"]')!.click());
     expect(sidebar.querySelector('[aria-label="Expand sidebar"]')?.getAttribute("aria-expanded")).toBe("false");
-    expect(sidebar.querySelector('a[aria-label="Forms"]')).not.toBeNull();
+    expect(sidebar.querySelector('a[aria-label="Leads"]')).not.toBeNull();
     await act(async () => sidebar.querySelector<HTMLButtonElement>('[aria-label="Expand sidebar"]')!.click());
     expect(sidebar.textContent).toContain("Operations");
     await act(async () => root.unmount()); container.remove();

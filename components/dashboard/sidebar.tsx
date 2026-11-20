@@ -15,7 +15,7 @@ const groups = [
   ] },
   { label: "Operations", items: [
     { href: "/dashboard/domain-requests", label: "Domain requests", icon: HandHelping, admin: true },
-    { href: "/dashboard/forms", label: "Forms", icon: Inbox },
+    { href: "/dashboard/forms", label: "Leads", icon: Inbox },
     { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   ] },
   { label: "Management", items: [
@@ -95,7 +95,7 @@ export function Sidebar(props: SidebarProps) {
               <item.icon size={17} strokeWidth={1.7} className={active ? "text-[var(--platform-accent)]" : undefined} />
               {!compact ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}
               {item.href === "/dashboard/forms" && props.unreadCount !== 0 ? <span
-                aria-label={props.unreadCount === null ? "Unread count unavailable" : `${props.unreadCount} unread submissions`}
+                aria-label={props.unreadCount === null ? "Unread count unavailable" : `${props.unreadCount} unread ${props.unreadCount === 1 ? "lead" : "leads"}`}
                 className={`platform-nav-count ${compact ? "sr-only" : ""}`}>{props.unreadCount === null ? "!" : props.unreadCount}</span> : null}
             </Link>;
           })}
