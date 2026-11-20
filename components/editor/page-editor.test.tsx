@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   forward: vi.fn(),
   openLibrary: vi.fn(),
   header: false,
+  plugins: [] as string[],
 }));
 
 function puckState() {
@@ -47,6 +48,7 @@ vi.mock("@puckeditor/core", () => ({
   }) => {
     mocks.ui = ui;
     mocks.metadata = metadata;
+    mocks.plugins = plugins.map((plugin) => plugin.name);
     const Wrapper = overrides.puck;
     const Header = overrides.header;
     const Actions = overrides.headerActions;
@@ -87,6 +89,7 @@ const props: ComponentProps<typeof PageEditor> = {
   initialData: { root: { props: {} }, content: [] },
   previewUrl: "https://example.test",
   isSuperAdmin: false,
+  canManageDomains: true,
   userId: "user",
   sitePages: [],
   seoPages: [],
@@ -178,6 +181,44 @@ describe("SEO page navigation", () => {
 });
 
 describe("editor navigation", () => {
+    it("opens domain settings only after a successful draft save", async () => {
+      mocks.renderedPanel = "domain";
+      mocks.dirty = true;
+      let finishSave!: (saved: boolean) => void;
+      mocks.save.mockReturnValueOnce(new Promise<boolean>((resolve) => { finishSave = resolve; }));
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      const open = [...container.querySelectorAll("button")].find((button) => button.textContent === "Open domain settings")!;
+      await act(async () => open.click());
+      expect(mocks.save).toHaveBeenCalledOnce();
+      expect(mocks.push).not.toHaveBeenCalled();
+      await act(async () => finishSave(false));
+      expect(mocks.push).not.toHaveBeenCalled();
+      mocks.save.mockResolvedValueOnce(true);
+      await act(async () => open.click());
+      expect(mocks.push).toHaveBeenCalledWith("/dashboard/sites/site/domains?editorPage=home-page");
+      mocks.push.mockClear();
+      mocks.dirty = false;
+      mocks.save.mockClear();
+      await act(async () => root.render(<PageEditor {...props} />));
+      await act(async () => open.click());
+      expect(mocks.save).not.toHaveBeenCalled();
+      expect(mocks.push).toHaveBeenCalledOnce();
+      mocks.busy = "save";
+      await act(async () => root.render(<PageEditor {...props} />));
+      expect(open.disabled).toBe(true);
+      await act(async () => root.unmount());
+    });
+
+    it("does not offer the domain tool to users without domain-management access", async () => {
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} canManageDomains={false} />));
+      expect(mocks.plugins).not.toContain("domain");
+      await act(async () => root.unmount());
+    });
+
     it("opens Blog Manager with the current page ID after saving changes", async () => {
       mocks.renderedPanel = "blog";
       mocks.dirty = true;

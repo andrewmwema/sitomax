@@ -76,6 +76,10 @@ shared detail drawer; the media picker is a native modal so it also works above
 other dialogs. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
 
+Owners and agency admins can open **Domain** in the editor tool rail to save
+their draft and open the site's existing domain settings. **Back to editor**
+returns to the page they were editing.
+
 Select words directly inside editable canvas text to replace them. Body copy
 opens the floating formatting toolbar, including Hero subheadings and call-to-action,
 gallery and logo introductions. Headings and button labels remain plain-text fields.

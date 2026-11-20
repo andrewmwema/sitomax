@@ -24,7 +24,7 @@ import {
   type Overrides,
   type Plugin,
 } from "@puckeditor/core";
-import { ArrowLeft, ArrowUpRight, BookOpen, Bookmark, Check, Eye, FileText, Layers, LayoutGrid, Monitor, MoreHorizontal, Palette, PanelLeft, PanelRight, Plus, Redo2, Search, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BookOpen, Bookmark, Check, Eye, FileText, Globe, Layers, LayoutGrid, Monitor, MoreHorizontal, Palette, PanelLeft, PanelRight, Plus, Redo2, Search, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { savePageMenuLabel } from "@/app/editor/[pageId]/actions";
 import { defaultMenuLabel, pageMenuLinks, siteContacts } from "@/lib/page-navigation";
@@ -285,6 +285,25 @@ function BlogPanel() {
   </section>;
 }
 
+function DomainPanel() {
+  const { siteId, pageId } = useEditorUi();
+  const persistence = usePersistence();
+  const router = useRouter();
+  return <section className="editor-panel">
+    <header className="editor-panel-header mb-4">
+      <p className="platform-eyebrow mb-1">Publishing</p>
+      <h2 className="font-semibold">Domain</h2>
+      <p className="mt-2 text-xs leading-relaxed text-zinc-500">Connect or manage this website&apos;s domain in site settings.</p>
+    </header>
+    <button type="button" className="platform-button platform-button-primary w-full" disabled={persistence.busy !== null} onClick={async () => {
+      if (!persistence.dirty || await persistence.save()) {
+        router.push(`/dashboard/sites/${encodeURIComponent(siteId)}/domains?editorPage=${encodeURIComponent(pageId)}`);
+      }
+    }}><Globe size={14} />Open domain settings</button>
+    {persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
+  </section>;
+}
+
 function MenuLabelSettings({ page }: { page?: EditorPageLink }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -382,6 +401,7 @@ const editorPlugins: Plugin[] = [
   outlinePlugin({ label: "Layers", icon: <EditorTool name="outline" label="Layers"><Layers size={18} /></EditorTool> }),
   { name: "pages", label: "Pages", icon: <EditorTool name="pages" label="Pages"><FileText size={18} /></EditorTool>, render: () => <PagesPanel /> },
   { name: "blog", label: "Blog", icon: <EditorTool name="blog" label="Blog"><BookOpen size={18} /></EditorTool>, render: () => <BlogPanel /> },
+  { name: "domain", label: "Domain", icon: <EditorTool name="domain" label="Domain"><Globe size={18} /></EditorTool>, render: () => <DomainPanel /> },
   { name: "theme", label: "Theme", icon: <EditorTool name="theme" label="Theme"><Palette size={18} /></EditorTool>, render: () => <ThemeTool /> },
   { name: "ai", label: "AI", icon: <EditorTool name="ai" label="AI"><Sparkles size={18} /></EditorTool>, render: () => <AiTool /> },
   { name: "seo", label: "SEO", icon: <EditorTool name="seo" label="SEO"><Search size={18} /></EditorTool>, render: () => <SeoTool /> },
@@ -650,6 +670,7 @@ export function PageEditor({
   initialData,
   previewUrl,
   isSuperAdmin,
+  canManageDomains,
   userId,
   sitePages,
   seoPages,
@@ -664,6 +685,7 @@ export function PageEditor({
   initialData: Record<string, unknown>;
   previewUrl: string;
   isSuperAdmin: boolean;
+  canManageDomains: boolean;
   userId: string;
   sitePages: EditorPageLink[];
   seoPages: SeoPageSummary[];
@@ -770,6 +792,7 @@ export function PageEditor({
   );
 
   const config = useMemo(() => editorConfig(isSuperAdmin, headersReady), [isSuperAdmin, headersReady]);
+  const plugins = useMemo(() => canManageDomains ? editorPlugins : editorPlugins.filter((plugin) => plugin.name !== "domain"), [canManageDomains]);
 
   const data = useMemo<Data>(() => {
     const raw = (initialData ?? {}) as Partial<Data>;
@@ -823,7 +846,7 @@ export function PageEditor({
                 renderHeader: headersReady ? renderHeaderEditor : undefined, pagePath: `/${page.slug}`, ...blogFeed,
               }}
               overrides={overrides}
-              plugins={editorPlugins}
+              plugins={plugins}
               headerTitle={`${site.name ?? site.subdomain} / ${page.title || page.slug || "Home"}`}
               headerPath={page.slug ? `/${page.slug}` : "/"}
             />

@@ -86,14 +86,16 @@ async function EditorLoader({
   // supabase-js types to-one joins as arrays without generated DB types.
   const site = data.site as unknown as EditorSite;
   const siteSeo = siteSeoSchema.parse(site.seo);
-  const [listed, blogFeed] = await Promise.all([
+  const [listed, blogFeed, owner] = await Promise.all([
     supabase.from("pages").select("id, slug, title, nav_label, hide_from_menu, ai_pending_build, draft_data, seo, published_at")
       .eq("site_id", site.id).order("sort_order").order("slug"),
     loadEditorBlogFeed(supabase, site).catch((error: unknown) => {
       console.error("Could not load the blog feed preview.", { siteId: site.id, error });
       return { siteBlogFeedUnavailable: true };
     }),
+    supabase.rpc("is_account_owner", { acc: site.account_id }),
   ]);
+  if (owner.error) throw new Error("Unable to check domain permissions.", { cause: owner.error });
   const menuLabelsReady = listed.error?.code !== "42703";
   if (!menuLabelsReady) console.warn("Page menu labels migration is not applied; the editor is using labels from slugs.");
   const { data: sitePages, error: pagesError } = menuLabelsReady ? listed : await supabase.from("pages")
@@ -140,6 +142,7 @@ async function EditorLoader({
       previewUrl={previewUrl}
       blogFeed={blogFeed}
       isSuperAdmin={Boolean(profile?.is_super_admin)}
+      canManageDomains={Boolean(profile?.is_super_admin || owner.data)}
       headersReady={headersReady}
       userId={user.id}
       sitePages={(sitePages ?? []).map((page) => ({ id: page.id, slug: page.slug, title: page.title,

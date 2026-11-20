@@ -23,7 +23,7 @@ async function DomainsContent() {
   const ownerAccounts = new Set((membershipsResult.data ?? []).map(({ account_id }) => account_id));
   const sites = (sitesResult.data ?? []).filter((site) => adminResult.data || ownerAccounts.has(site.account_id));
 
-  if (sites.length === 1) return <SiteDomainsPage params={Promise.resolve({ siteId: sites[0].id })} />;
+  if (sites.length === 1) return <SiteDomainsPage params={Promise.resolve({ siteId: sites[0].id })} searchParams={Promise.resolve({})} />;
 
   return <section className="flex flex-col gap-6">
     <header>
