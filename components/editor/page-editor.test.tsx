@@ -181,6 +181,29 @@ describe("SEO page navigation", () => {
 });
 
 describe("editor navigation", () => {
+    it("opens domain settings from the header after saving and stays put if saving fails", async () => {
+      mocks.header = true;
+      mocks.dirty = true;
+      mocks.save.mockResolvedValueOnce(false);
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      const button = container.querySelector<HTMLButtonElement>('.editor-topbar [aria-label="Open domain settings"]')!;
+      expect(button.textContent).toContain("Domain");
+      await act(async () => button.click());
+      expect(mocks.save).toHaveBeenCalledOnce();
+      expect(mocks.push).not.toHaveBeenCalled();
+      mocks.save.mockResolvedValueOnce(true);
+      await act(async () => button.click());
+      expect(mocks.push).toHaveBeenCalledWith("/dashboard/sites/site/domains?editorPage=home-page");
+      mocks.busy = "save";
+      await act(async () => root.render(<PageEditor {...props} />));
+      expect(button.disabled).toBe(true);
+      await act(async () => root.render(<PageEditor {...props} canManageDomains={false} />));
+      expect(container.querySelector('.editor-topbar [aria-label="Open domain settings"]')).toBeNull();
+      await act(async () => root.unmount());
+    });
+
     it("opens domain settings only after a successful draft save", async () => {
       mocks.renderedPanel = "domain";
       mocks.dirty = true;

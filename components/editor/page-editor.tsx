@@ -79,6 +79,7 @@ type EditorUi = {
   pageId: string;
   siteId: string;
   siteName: string;
+  canManageDomains: boolean;
   siteSeo: SiteSeo;
   seoPages: SeoPageSummary[];
   pageTitle: string;
@@ -157,7 +158,7 @@ function EditorPanelLayout() {
 }
 
 function EditorHeader({ actions }: { actions: React.ReactNode }) {
-  const { pageId, siteName } = useEditorUi();
+  const { pageId, siteName, canManageDomains } = useEditorUi();
   const { pages } = useInteractions();
   const persistence = usePersistence();
   const router = useRouter();
@@ -199,6 +200,7 @@ function EditorHeader({ actions }: { actions: React.ReactNode }) {
           {pages.map((page) => <option key={page.id} value={page.id}>{page.nav_label ?? defaultMenuLabel(page.slug)}</option>)}
         </select>
       </div>
+      {canManageDomains ? <DomainButton header /> : null}
     </div>
     <div className="editor-topbar-tools" aria-label="Canvas tools">
       <button type="button" className="editor-icon-button" aria-label="Toggle library panel" title="Toggle library panel"
@@ -286,22 +288,29 @@ function BlogPanel() {
 }
 
 function DomainPanel() {
-  const { siteId, pageId } = useEditorUi();
   const persistence = usePersistence();
-  const router = useRouter();
   return <section className="editor-panel">
     <header className="editor-panel-header mb-4">
       <p className="platform-eyebrow mb-1">Publishing</p>
       <h2 className="font-semibold">Domain</h2>
       <p className="mt-2 text-xs leading-relaxed text-zinc-500">Connect or manage this website&apos;s domain in site settings.</p>
     </header>
-    <button type="button" className="platform-button platform-button-primary w-full" disabled={persistence.busy !== null} onClick={async () => {
+    <DomainButton />
+    {persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
+  </section>;
+}
+
+function DomainButton({ header = false }: { header?: boolean }) {
+  const { siteId, pageId } = useEditorUi();
+  const persistence = usePersistence();
+  const router = useRouter();
+  return <button type="button" className={header ? "editor-back-button" : "platform-button platform-button-primary w-full"}
+    aria-label={header ? "Open domain settings" : undefined} title={header ? "Save changes and open domain settings" : undefined}
+    disabled={persistence.busy !== null} onClick={async () => {
       if (!persistence.dirty || await persistence.save()) {
         router.push(`/dashboard/sites/${encodeURIComponent(siteId)}/domains?editorPage=${encodeURIComponent(pageId)}`);
       }
-    }}><Globe size={14} />Open domain settings</button>
-    {persistence.error ? <p role="alert" className="mt-3 text-xs text-red-600">{persistence.error}</p> : null}
-  </section>;
+    }}><Globe size={14} />{header ? "Domain" : "Open domain settings"}</button>;
 }
 
 function MenuLabelSettings({ page }: { page?: EditorPageLink }) {
@@ -736,10 +745,11 @@ export function PageEditor({
       themePanelOpen, updateTheme: setTheme,
       siteId: site.id,
       siteName: site.name ?? site.subdomain,
+      canManageDomains,
       siteSeo,
       business, updateBusiness: setBusiness, theme, initialHeader: site.draft_header, headersReady,
     }),
-    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady],
+    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady, canManageDomains],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
