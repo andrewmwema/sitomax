@@ -4,7 +4,7 @@ import { useActionState, type ReactNode } from "react";
 import { saveLeadSettings } from "@/app/(dashboard)/dashboard/sites/[siteId]/leads/actions";
 
 export function LeadSettingsForm({ siteId, intent, children }: {
-  siteId: string; intent: "recipients" | "preferences" | "webhook"; children: ReactNode;
+  siteId: string; intent: "recipients" | "preferences" | "webhook" | "reply_mode" | "limit"; children: ReactNode;
 }) {
   const [state, action, busy] = useActionState(saveLeadSettings, { error: "" });
   return <form action={action} className="space-y-3">

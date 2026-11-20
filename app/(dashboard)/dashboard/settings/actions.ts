@@ -88,6 +88,7 @@ export async function updateAgencySettings(
       name: parsed.data.name,
       primary_color: parsed.data.primary_color,
       support_email: parsed.data.support_email || null,
+      show_lead_email_branding: formData.get("show_lead_email_branding") === "on",
       ...(logoUrl !== undefined ? { logo_url: logoUrl || null } : {}),
     })
     .eq("id", 1);

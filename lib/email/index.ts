@@ -9,19 +9,22 @@ export type EmailMessage = {
   html: string;
   text: string;
   replyTo?: string;
-  tag: "invite" | "domain" | "form-notification" | "password-reset";
+  bcc?: string;
+  from?: string;
+  stream?: string;
+  tag: "invite" | "domain" | "form-notification" | "password-reset" | "lead-reply" | "lead-forward";
   metadata?: Record<string, string>;
 };
 
 export interface EmailProvider {
   isConfigured(): boolean;
-  sendEmail(message: EmailMessage): Promise<void>;
+  sendEmail(message: EmailMessage): Promise<{ messageId: string }>;
 }
 
 export function isEmailConfigured(): boolean {
   return postmarkProvider.isConfigured();
 }
 
-export async function sendEmail(message: EmailMessage): Promise<void> {
+export async function sendEmail(message: EmailMessage) {
   return postmarkProvider.sendEmail(message);
 }

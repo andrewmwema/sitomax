@@ -73,5 +73,8 @@ async function SettingsContent() {
     );
   }
 
-  return <AgencySettingsForm settings={settings} action={updateAgencySettings} account={{ name: profile.full_name ?? "", email: profile.email ?? user.email ?? "" }} />;
+  const branding = await supabase.from("agency_settings").select("show_lead_email_branding").eq("id", 1).maybeSingle();
+  if (branding.error) throw new Error("Could not load lead email branding.", { cause: branding.error.code });
+  return <AgencySettingsForm settings={{ ...settings, showLeadEmailBranding: branding.data?.show_lead_email_branding ?? false }}
+    action={updateAgencySettings} account={{ name: profile.full_name ?? "", email: profile.email ?? user.email ?? "" }} />;
 }

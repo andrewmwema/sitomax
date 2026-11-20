@@ -16,7 +16,7 @@ function saved(siteId: string): Result {
 
 export async function saveLeadSettings(_previous: Result, form: FormData): Promise<Result> {
   const parsed = z.object({
-    id: z.uuid(), intent: z.enum(["recipients", "webhook", "preferences"]),
+    id: z.uuid(), intent: z.enum(["recipients", "webhook", "preferences", "reply_mode", "limit"]),
   }).safeParse({ id: form.get("site"), intent: form.get("intent") });
   if (!parsed.success) return { error: "Invalid site settings request." };
   const { id, intent } = parsed.data;
@@ -27,7 +27,28 @@ export async function saveLeadSettings(_previous: Result, form: FormData): Promi
     return { error: "Only site owners and the agency can manage these settings." };
   }
   const table = supabase.from("lead_site_settings");
-  if (intent === "preferences") {
+  if (intent === "limit") {
+    const admin = await supabase.rpc("is_super_admin");
+    if (admin.error || admin.data !== true) return { error: "Only the agency can change the daily limit." };
+    const limit = z.string().regex(/^\d{1,5}$/).transform(Number).pipe(z.number().int().min(0).max(10000)).safeParse(form.get("daily_limit"));
+    if (!limit.success) return { error: "Enter a whole number between 0 and 10,000." };
+    const site = await supabase.from("sites").select("account_id").eq("id", id).single();
+    if (site.error) return { error: "Could not load this client's account." };
+    const { error } = await supabase.from("lead_send_limits").upsert({ account_id: site.data.account_id, daily_limit: limit.data });
+    if (error) {
+      console.error("Could not save lead reply limit", { code: error.code });
+      return { error: "Could not save the daily reply limit." };
+    }
+  } else if (intent === "reply_mode") {
+    const mode = z.enum(["tracked", "direct"]).safeParse(form.get("reply_mode"));
+    if (!mode.success) return { error: "Choose a reply delivery mode." };
+    const seed = await table.upsert({ site_id: id }, { ignoreDuplicates: true });
+    const error = seed.error ?? (await table.update({ reply_mode: mode.data }).eq("site_id", id)).error;
+    if (error) {
+      console.error("Could not save lead reply routing", { code: error.code });
+      return { error: "Could not save reply delivery settings." };
+    }
+  } else if (intent === "preferences") {
     const prefs = supabase.from("lead_notification_preferences");
     const seed = await prefs.upsert({ site_id: id, user_id: user.id }, { onConflict: "site_id,user_id", ignoreDuplicates: true });
     const error = seed.error ?? (await prefs.update({

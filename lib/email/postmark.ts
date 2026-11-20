@@ -11,7 +11,7 @@ function configuration() {
 }
 
 function deliveryError(code: number, status: number, detail: string): EmailDeliveryError {
-  if (code === 406) return new EmailDeliveryError("The recipient is inactive. Check the address and review its email suppression before retrying.");
+  if (code === 406) return new EmailDeliveryError("The recipient is inactive or bounced. Check their address.", "inactive-recipient");
   if (code === 400 || code === 401 || (code === 300 && /sender signature|sender domain|from address.+(?:verif|confirm)/i.test(detail))) {
     return new EmailDeliveryError("The sender is not verified. Verify the sending address or domain before retrying.");
   }
@@ -30,15 +30,16 @@ export const postmarkProvider: EmailProvider = {
     let response: Awaited<ReturnType<ServerClient["sendEmail"]>>;
     try {
       response = await client.sendEmail({
-        From: config.from,
+        From: message.from ?? config.from,
         To: typeof message.to === "string" ? message.to : message.to.join(","),
         Subject: message.subject,
         HtmlBody: message.html,
         TextBody: message.text,
         ReplyTo: message.replyTo,
+        Bcc: message.bcc,
         Tag: message.tag,
         Metadata: message.metadata,
-        MessageStream: config.stream,
+        MessageStream: message.stream ?? config.stream,
         TrackOpens: false,
         TrackLinks: Models.LinkTrackingOptions.None,
       });
@@ -56,5 +57,6 @@ export const postmarkProvider: EmailProvider = {
       console.error("Email provider did not acknowledge the message", { tag: message.tag });
       throw new EmailDeliveryError("The email service did not confirm acceptance. Please try again.");
     }
+    return { messageId: response.MessageID };
   },
 };

@@ -6,10 +6,11 @@ import { WorkspaceMetrics } from "@/components/dashboard/workspace-metrics";
 import { MarkSubmissionRead } from "@/components/dashboard/mark-submission-read";
 import { CopyLeadValue, LeadBulkForm, LeadDrawer, LeadNoteForm, LeadStatusForm } from "@/components/dashboard/lead-controls";
 import { allowedLeadSites, getSubmissionPage, LEAD_COLUMNS, SUBMISSION_PAGE_SIZE } from "@/lib/forms/queries";
-import { leadStatuses, leadStatusLabels, submissionContact, submissionFields, submissionFiltersSchema, submissionQueryString,
+import { leadStatuses, leadStatusLabels, submissionContact, submissionFiltersSchema, submissionQueryString,
   type Lead, type LeadEvent, type LeadNote } from "@/lib/forms/submissions";
 import { TableScrollArea } from "@/components/dashboard/table-scroll-area";
 import { z } from "zod";
+import { LeadReplyThread } from "./reply-thread";
 
 const route = "/dashboard/forms";
 const statsSchema = z.object({ received: z.number(), awaiting: z.number(), won_month: z.number(), won: z.number(), lost: z.number() });
@@ -145,7 +146,6 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId }: {
   const email = z.email().safeParse(contact.email?.trim());
   const phone = contact.phone?.trim().replace(/[\s().-]/g, "");
   const tel = phone && /^\+?[0-9]{3,20}$/.test(phone) ? `tel:${phone}` : null;
-  const fields = submissionFields(lead.data);
   return <LeadDrawer title={contact.name || "Lead details"} description={`${siteName} · ${lead.form_name || "Form"} · ${lead.page_path || "/"}`} closeHref={closeHref}>
     <section className="space-y-2 border-b border-[var(--platform-line)] pb-4">
       <p className="text-xs text-[var(--platform-muted)]">Received {displayDate(lead.created_at)} UTC</p>
@@ -159,12 +159,7 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId }: {
       <LeadStatusForm lead={lead} />
       {!lead.is_read || lead.has_unread_reply ? <MarkSubmissionRead id={lead.id} /> : null}
     </section>
-    <section><h3 className="text-sm font-semibold">Submitted answers</h3>
-      {fields.length ? <dl className="divide-y divide-[var(--platform-line)]">{fields.map(([key, value]) => <div key={key} className="py-2">
-        <dt className="break-words text-xs font-medium text-[var(--platform-muted)]">{key}</dt>
-        <dd className="whitespace-pre-wrap break-words text-sm">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</dd>
-      </div>)}</dl> : <p className="mt-2 text-sm text-[var(--platform-muted)]">No answers were submitted.</p>}
-    </section>
+    <LeadReplyThread lead={lead} supabase={supabase} />
     <section className="space-y-3"><h3 className="text-sm font-semibold">Internal notes</h3>
       <LeadNoteForm leadId={lead.id} siteId={lead.site_id} />
       {notes.error ? <p role="alert" className="text-sm">Notes are unavailable.</p> : notes.data.map((note) => <article key={note.id} className="platform-panel space-y-2 p-3">

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { isEmailConfigured } from "@/lib/email";
 import { sendLeadDigest } from "@/lib/leads/notifications";
 import { postLeadWebhook } from "@/lib/leads/webhooks";
+import { forwardLeadReplies, leadMailConfig } from "@/lib/leads/reply-mail";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -60,5 +61,13 @@ export async function GET(request: Request) {
       }),
     ]);
   }
-  return Response.json({ webhooks: deliveries.length, digests: emails.length, failures }, { status: failures ? 500 : 200 });
+  let forwards = 0;
+  if (isEmailConfigured() && leadMailConfig()) {
+    try {
+      const result = await forwardLeadReplies();
+      forwards = result.processed;
+      failures += result.failures;
+    } catch { console.error("Could not process pending reply forwards"); failures++; }
+  }
+  return Response.json({ webhooks: deliveries.length, digests: emails.length, forwards, failures }, { status: failures ? 500 : 200 });
 }

@@ -112,26 +112,38 @@ function useCurrentSections() {
   return { sections, assignAnchor };
 }
 
-export function LinkPicker({ value, onApply, onCancel, onRemove, autoFocus = false }: {
+type LinkPickerProps = {
   value: LinkValue; onApply: (link: SiteLink) => void; onCancel: () => void; onRemove?: () => void; autoFocus?: boolean;
+};
+
+export function LinkPicker(props: LinkPickerProps) {
+  const current = useCurrentSections();
+  return <LinkPickerFields {...props} current={current} />;
+}
+
+export function EmailLinkPicker(props: LinkPickerProps & { pages: EditorPageLink[] }) {
+  return <LinkPickerFields {...props} emailPages={props.pages} />;
+}
+
+function LinkPickerFields({ value, onApply, onCancel, onRemove, autoFocus = false, current, emailPages }: LinkPickerProps & {
+  current?: ReturnType<typeof useCurrentSections>; emailPages?: EditorPageLink[];
 }) {
   const id = useId();
   const ui = useContext(InteractionContext);
-  const pages = useMemo(() => ui?.pages ?? [], [ui?.pages]);
-  const current = useCurrentSections();
-  const [draft, setDraft] = useState(() => linkDraft(value, pages));
+  const pages = useMemo(() => emailPages ?? ui?.pages ?? [], [emailPages, ui?.pages]);
+  const [draft, setDraft] = useState(() => linkDraft(value || (emailPages ? "https://" : ""), pages));
   const [error, setError] = useState("");
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (autoFocus) first.current?.focus(); }, [autoFocus]);
   const set = (patch: Partial<Draft>) => { setDraft((previous) => ({ ...previous, ...patch })); setError(""); };
   const external = draft.type === "url" || draft.type === "file";
-  const targetSections = draft.type === "anchor" || draft.pageId === ui?.pageId
+  const targetSections = current && (draft.type === "anchor" || draft.pageId === ui?.pageId)
     ? current.sections : pages.find((page) => page.id === draft.pageId)?.sections ?? [];
   const chooseSection = (anchor: string) => {
     const section = targetSections.find((candidate) => candidate.anchor === anchor || candidate.id === anchor);
     if (!section) return set({ anchor: "" });
     const onThisPage = draft.type === "anchor" || draft.pageId === ui?.pageId;
-    set({ anchor: section.anchor ?? (onThisPage ? current.assignAnchor(section) : "") });
+    set({ anchor: section.anchor ?? (onThisPage ? current?.assignAnchor(section) ?? "" : "") });
   };
 
   const apply = () => {
@@ -145,7 +157,7 @@ export function LinkPicker({ value, onApply, onCancel, onRemove, autoFocus = fal
     if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.type !== "checkbox") { event.preventDefault(); apply(); }
   }}>
     <div role="radiogroup" aria-label="Link type" className="grid grid-cols-3 gap-1">
-      {TYPES.map(({ type, label, icon }, index) => <button key={type} ref={index === 0 ? first : undefined} type="button" role="radio"
+      {TYPES.filter(({ type }) => !emailPages || (type !== "anchor" && type !== "file")).map(({ type, label, icon }, index) => <button key={type} ref={index === 0 ? first : undefined} type="button" role="radio"
         aria-checked={draft.type === type} onClick={() => { if (type !== draft.type) set({ type, newTab: type === "url" || type === "file", nofollow: false }); }}
         className={`flex min-h-9 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 font-medium transition ${draft.type === type
           ? "border-[#4B3FE0] bg-[#F1EFFF] text-[#4B3FE0]" : "border-[#E8E7E3] bg-white hover:bg-[#F7F7F5]"}`}>{icon}{label}</button>)}
@@ -161,7 +173,7 @@ export function LinkPicker({ value, onApply, onCancel, onRemove, autoFocus = fal
       {draft.pageId ? <SectionSelect id={`${id}-section`} label="Section (optional)" sections={targetSections} anchor={draft.anchor}
         canAssign={draft.pageId === ui?.pageId} optional onChange={chooseSection} /> : null}
     </> : null}
-    {draft.type === "anchor" ? <SectionSelect id={`${id}-section`} label="Section on this page" sections={current.sections}
+    {draft.type === "anchor" && current ? <SectionSelect id={`${id}-section`} label="Section on this page" sections={current.sections}
       anchor={draft.anchor} canAssign onChange={chooseSection} /> : null}
     {draft.type === "url" ? <label className="flex flex-col gap-1">Web address
       <input className={control} value={draft.url} inputMode="url" placeholder="example.com/page" onChange={(event) => set({ url: event.target.value })}

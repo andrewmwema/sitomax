@@ -89,8 +89,15 @@ LEAD_WORKER_SECRET=              # server only; register its SHA-256 hex hash in
 POSTMARK_SERVER_TOKEN=            # server only
 POSTMARK_FROM_EMAIL=              # verified sender
 POSTMARK_MESSAGE_STREAM=outbound  # transactional stream
+POSTMARK_LEADS_STREAM=            # transactional stream for lead replies and forwards
+LEADS_FROM_DOMAIN=                # verified Postmark sender domain
+INBOUND_REPLY_DOMAIN=             # Postmark inbound forwarding domain
+LEAD_REPLY_TOKEN_SECRET=          # server only; stable secret for signed reply addresses
+POSTMARK_INBOUND_WEBHOOK_USER=    # server only; Basic Auth username
+POSTMARK_INBOUND_WEBHOOK_PASSWORD= # server only; Basic Auth password
 SUPABASE_SEND_EMAIL_HOOK_SECRET=  # server only; signed Auth email hook secret
 ```
 - Route transactional mail through `lib/email` with HTML and plain text, a type tag, and no credentials, links containing auth tokens, or message bodies in logs. The signed Supabase Send Email Hook forwards password resets to this sender.
 - Leads are `form_submissions`; preserve owner/agency RLS for leads, notes, timelines, settings and exports. Lead email and daily digests use the default Postmark transactional stream. `/api/cron/leads` uses scoped, secret-checked RPCs with the anon key, never the service role. See the README for worker setup.
+- Lead replies and forwards use `POSTMARK_LEADS_STREAM`. Inbound lives only on the canonical platform host and requires Basic Auth plus a signed thread address. Never include these addresses, credentials or message bodies in logs.
 - Changes to sites.subdomain, sites.custom_domain, sites.domain_verified or sites.account_id must be done in server actions with lib/supabase/admin.ts after checking the user's permission. Regular users can only update sites.name and sites.theme.

@@ -533,3 +533,39 @@ body, using the signing secret as shown, not hex-decoded. Deduplicate using
 `X-SitoMax-Event-Id`. Non-2xx and network failures retry up to five total
 attempts with backoff; redirects are not followed. The latest 50 deliveries
 are shown in site settings.
+
+## Replying to leads (Phase B)
+
+Run [`0035_leads_phase_b.sql`](./supabase/migrations/0035_leads_phase_b.sql) in
+the Supabase SQL Editor after `0034` and before deploying. Keep the Phase A
+worker configured: it reserves sends, stores replies and retries forwards.
+
+1. Use a Postmark **transactional** stream for lead sends/forwards and set
+   `POSTMARK_LEADS_STREAM` to its ID. Verify `LEADS_FROM_DOMAIN` in Postmark
+   so `leads@LEADS_FROM_DOMAIN` can send. Keep the default transactional
+   stream configured for new lead notifications and daily digests.
+2. Set up Postmark's inbound stream and custom inbound domain. Publish the
+   inbound MX records specified in Postmark, set `INBOUND_REPLY_DOMAIN`
+   to that domain, and set `LEAD_REPLY_TOKEN_SECRET` to a separate random
+   secret (at least 32 characters). Keep it stable: changing it invalidates
+   existing tracked Reply-To addresses.
+3. Configure the inbound webhook at `/api/email/inbound` on the exact HTTPS
+   origin in `NEXT_PUBLIC_APP_URL`. Configure its HTTP Basic Auth with the
+   server-only `POSTMARK_INBOUND_WEBHOOK_USER` and
+   `POSTMARK_INBOUND_WEBHOOK_PASSWORD`. Do not put credentials in the
+   repository or public configuration.
+4. In a controlled mailbox, verify a sent reply, then reply to its tracked
+   address from the same address supplied on the lead form. Confirm the
+   reply appears in Leads and the right notification recipient gets a
+   forwarded copy. Replies from another sending address aren't threaded.
+
+In **Sites → Leads**, tracked delivery is the default. Direct delivery uses
+the first notification address alphabetically and does not thread replies
+to newly sent emails. The agency can adjust the per-account daily send limit
+(50 by default, midnight UTC reset), and enable optional email footer
+branding in **Settings → Branding**. An accepted send counts as a send
+attempt even if delivery later fails. Forward delivery is retried up to
+three times after the first attempt. Auto-replies are stored collapsed but
+not forwarded. Attachments are not stored. Postmark's synchronous
+inactive-recipient rejection disables further sends to that lead when it
+can be attributed to the lead; this phase does not install a bounce webhook.

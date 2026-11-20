@@ -6,6 +6,7 @@ export type AgencySettings = {
   logoUrl: string | null;
   primaryColor: string;
   supportEmail: string | null;
+  showLeadEmailBranding?: boolean;
 };
 
 const FALLBACK_PRIMARY_COLOR = "#4f46e5";

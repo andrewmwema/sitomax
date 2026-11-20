@@ -16,19 +16,21 @@ async function LeadSettings({ params }: { params: PageProps<"/dashboard/sites/[s
   const { siteId } = await params;
   if (!z.uuid().safeParse(siteId).success) notFound();
   const { supabase, user } = await requireUser();
-  const [site, access] = await Promise.all([
-    supabase.from("sites").select("name, subdomain").eq("id", siteId).maybeSingle(),
+  const [site, access, admin] = await Promise.all([
+    supabase.from("sites").select("name, subdomain, account_id").eq("id", siteId).maybeSingle(),
     supabase.rpc("can_manage_site_leads", { p_site: siteId }),
+    supabase.rpc("is_super_admin"),
   ]);
-  if (site.error || access.error) throw new Error("Could not check lead settings permissions.");
+  if (site.error || access.error || admin.error) throw new Error("Could not check lead settings permissions.");
   if (!site.data || !access.data) notFound();
-  const [settings, preferences, log] = await Promise.all([
-    supabase.from("lead_site_settings").select("recipients, webhook_url, webhook_secret").eq("site_id", siteId)
-      .maybeSingle<{ recipients: string[]; webhook_url: string | null; webhook_secret: string | null }>(),
+  const [settings, preferences, log, limit] = await Promise.all([
+    supabase.from("lead_site_settings").select("recipients, webhook_url, webhook_secret, reply_mode").eq("site_id", siteId)
+      .maybeSingle<{ recipients: string[]; webhook_url: string | null; webhook_secret: string | null; reply_mode: "tracked" | "direct" }>(),
     supabase.from("lead_notification_preferences").select("new_lead, replies, digest").eq("site_id", siteId)
       .eq("user_id", user.id).maybeSingle<{ new_lead: boolean; replies: boolean; digest: boolean }>(),
     supabase.from("lead_webhook_deliveries").select("event_id, event_type, status, attempts, http_status, created_at").eq("site_id", siteId)
       .order("created_at", { ascending: false }).order("event_id", { ascending: false }).limit(50),
+    admin.data === true ? supabase.from("lead_send_limits").select("daily_limit").eq("account_id", site.data.account_id).maybeSingle() : null,
   ]);
   if (settings.error || preferences.error) throw new Error("Could not load lead settings.");
   return <section className="flex flex-col gap-6">
@@ -50,11 +52,30 @@ async function LeadSettings({ params }: { params: PageProps<"/dashboard/sites/[s
         <p className="text-sm text-[var(--platform-muted)]">New lead preferences apply if your email is a recipient. Your digest goes to your account email.</p>
         <LeadSettingsForm siteId={siteId} intent="preferences">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="new_lead" defaultChecked={preferences.data?.new_lead ?? true} /> New lead email</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="replies" defaultChecked={preferences.data?.replies ?? true} /> Reply email (for when replies are available)</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="replies" defaultChecked={preferences.data?.replies ?? true} /> Forward replies to my email</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="digest" defaultChecked={preferences.data?.digest ?? false} /> Daily digest</label>
         </LeadSettingsForm>
       </section>
     </div>
+    <section className="platform-panel space-y-3 p-5"><h2 className="font-semibold">Lead replies</h2>
+      <LeadSettingsForm siteId={siteId} intent="reply_mode">
+        <fieldset className="space-y-3">
+          <legend className="sr-only">Where to deliver replies</legend>
+          <label className="flex items-start gap-2 text-sm"><input type="radio" name="reply_mode" value="tracked" defaultChecked={settings.data?.reply_mode !== "direct"} />
+            <span>Track in SitoMax + forward to my email<span className="block text-xs text-[var(--platform-muted)]">Replies appear in Leads and are forwarded to notification recipients who opted in.</span></span></label>
+          <label className="flex items-start gap-2 text-sm"><input type="radio" name="reply_mode" value="direct" defaultChecked={settings.data?.reply_mode === "direct"} />
+            <span>Send replies directly to my email<span className="block text-xs text-[var(--platform-muted)]">New outbound emails use the first notification address (alphabetically). Their replies will not be tracked, forwarded, or shown in the inbox.</span></span></label>
+        </fieldset>
+      </LeadSettingsForm>
+    </section>
+    {limit ? <section className="platform-panel space-y-3 p-5"><h2 className="font-semibold">Daily account reply limit</h2>
+      <p className="text-sm text-[var(--platform-muted)]">Shared by all sites on this account. Resets at midnight UTC.</p>
+      {limit.error ? <p role="alert" className="text-sm">Could not load the account limit.</p> : <LeadSettingsForm siteId={siteId} intent="limit">
+        <label className="block text-sm">Send attempts per day
+          <input type="number" name="daily_limit" min={0} max={10000} required defaultValue={limit.data?.daily_limit ?? 50}
+            className="ml-2 border px-3" /></label>
+      </LeadSettingsForm>}
+    </section> : null}
     <section className="platform-panel space-y-4 p-5"><h2 className="font-semibold">Outgoing webhook</h2>
       <p className="text-sm text-[var(--platform-muted)]">Connect a trusted webhook catcher. It receives submitted answers and lead events for this site. Clear the URL to turn delivery off.</p>
       <LeadSettingsForm siteId={siteId} intent="webhook">

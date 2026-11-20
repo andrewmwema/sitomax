@@ -24,17 +24,19 @@ export function AgencySettingsForm({ settings, action, account }: {
 }) {
   const initial = {
     name: settings.name, supportEmail: settings.supportEmail ?? "", logoUrl: settings.logoUrl ?? "", primaryColor: settings.primaryColor,
+    showLeadEmailBranding: settings.showLeadEmailBranding ?? false,
   };
   const [fields, setFields] = useState(initial);
   const [saved, setSaved] = useState(initial);
   const dirty = fields.name !== saved.name || fields.supportEmail !== saved.supportEmail ||
-    fields.logoUrl !== saved.logoUrl || fields.primaryColor !== saved.primaryColor;
+    fields.logoUrl !== saved.logoUrl || fields.primaryColor !== saved.primaryColor || fields.showLeadEmailBranding !== saved.showLeadEmailBranding;
   const [state, formAction, pending] = useActionState(async (previous: ActionState, formData: FormData) => {
     const submitted = {
       name: String(formData.get("name") ?? "").trim(),
       supportEmail: String(formData.get("support_email") ?? "") || brand.supportEmail,
       logoUrl: String(formData.get("logo_url") ?? ""),
       primaryColor: String(formData.get("primary_color") ?? ""),
+      showLeadEmailBranding: formData.get("show_lead_email_branding") === "on",
     };
     const result = await action(previous, formData);
     if (result.status === "success") {
@@ -90,6 +92,9 @@ export function AgencySettingsForm({ settings, action, account }: {
 
         <section id="agency-branding" className="platform-panel scroll-mt-5 p-5 sm:p-6">
           <div className="mb-5 flex items-center gap-3"><span className="rounded-lg border border-[var(--platform-line)] p-2 text-[var(--platform-muted)]"><Palette size={17} /></span><div><h2 className="text-[15px] font-semibold">Branding</h2><p className="mt-1 text-xs text-[var(--platform-muted)]">Make the client workspace feel like your own.</p></div></div>
+          <label className="mb-4 flex items-center gap-2 text-sm"><input type="checkbox" name="show_lead_email_branding"
+            checked={fields.showLeadEmailBranding} onChange={(event) => setFields({ ...fields, showLeadEmailBranding: event.target.checked })} />
+            Include “Sent via {fields.name}” on outbound lead replies</label>
           <div className="grid items-start gap-6 xl:grid-cols-2">
             <div className="flex flex-col gap-5">
               <div><h3 className="mb-2 text-sm font-medium">Agency logo</h3>
