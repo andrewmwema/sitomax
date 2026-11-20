@@ -24,7 +24,7 @@ export function AuthCard({
           <img
             src={settings.logoUrl}
             alt={settings.name}
-            className="h-12 w-auto"
+            className="h-12 w-auto max-w-full object-contain"
           />
         ) : (
           <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-xl font-semibold text-white shadow-[inset_0_1px_0_#ffffff26,0_6px_12px_#12121214]">

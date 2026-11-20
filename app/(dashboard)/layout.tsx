@@ -48,7 +48,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="platform-ui relative flex min-h-screen w-full"
+      className="platform-ui relative flex min-h-screen w-full overflow-x-clip"
       style={{ "--platform-accent": accent } as CSSProperties}
     >
       {/* Fonts are scoped to platform chrome rather than client sites. */}

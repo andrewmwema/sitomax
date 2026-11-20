@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, CircleDollarSign, Globe2, HandHelping, Inbox, LayoutDashboard, Link2, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Users, X } from "lucide-react";
+import { AgencyBrand } from "./agency-brand";
 
 const groups = [
   { label: "Workspace", items: [
@@ -72,11 +73,9 @@ export function Sidebar(props: SidebarProps) {
   };
   const navigation = (compact: boolean, mobile: boolean) => <div className={`platform-sidebar flex h-full flex-col overflow-y-auto ${compact ? "w-[72px] px-2" : "w-[248px] max-w-[85vw] px-3"} py-4`}>
     <div className={`flex min-h-12 items-center gap-2 ${compact ? "justify-center" : "px-2"}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- branding host is user-configured */}
-      {props.logoUrl ? <img src={props.logoUrl} alt="" className="size-9 shrink-0 rounded-lg object-contain" /> :
-        <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--platform-ink)] text-sm font-semibold text-white">{props.agencyName.charAt(0).toUpperCase()}</span>}
-      {!compact ? <span className="min-w-0 flex-1"><strong className="block truncate text-sm font-semibold tracking-tight">{props.agencyName}</strong><span className="block text-xs text-[var(--platform-muted)]">{props.isSuperAdmin ? "Agency workspace" : "Client workspace"}</span></span> : null}
-      {mobile ? <button type="button" onClick={closeMobile} aria-label="Close navigation" className="platform-icon-button"><X size={17} /></button> : null}
+      <AgencyBrand name={props.agencyName} logoUrl={props.logoUrl} compact={compact}
+        subtitle={props.isSuperAdmin ? "Agency workspace" : "Client workspace"} />
+      {mobile ? <button type="button" onClick={closeMobile} aria-label="Close navigation" className="platform-icon-button shrink-0"><X size={17} /></button> : null}
     </div>
     <button type="button" onClick={openSearch} title="Search or jump to" aria-label="Search or jump to" aria-haspopup="dialog" aria-controls={searchId} className={`platform-search-trigger mt-5 ${compact ? "justify-center px-0" : "px-3"}`}>
       <Search size={16} className="shrink-0" />

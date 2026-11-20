@@ -74,7 +74,7 @@ export function BlogManager(props: Props) {
           {tab === "Posts" ? <CreatePostDialog siteId={props.siteId} editorPageId={props.editorPageId} authors={props.authors} /> : null}
         </div>
       </header>
-      <nav aria-label="Blog management" className="mt-7 flex flex-wrap gap-5 border-b border-[#E8E7E3]">
+      <nav aria-label="Blog management" className="platform-tabs mt-7">
         {tabs.map((name) => <button key={name} type="button" onClick={() => setTab(name)}
           aria-current={tab === name ? "page" : undefined}
           className={`border-b-2 px-1 pb-3 text-sm ${tab === name ? "border-[#4B3FE0] font-semibold text-[#3025B8]" : "border-transparent text-zinc-600 hover:text-zinc-900"}`}>

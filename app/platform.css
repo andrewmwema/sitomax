@@ -207,15 +207,55 @@
   background: var(--platform-surface);
 }
 
-.platform-icon-button {
-  display: inline-flex;
-  width: 40px;
+/* Allow responsive utilities such as md:hidden to override button defaults. */
+@layer components {
+  .platform-icon-button {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--platform-radius-control);
+    color: var(--platform-secondary);
+  }
+}
+
+.platform-agency-logo {
+  display: block;
+  width: 176px;
+  max-width: 100%;
   height: 40px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.platform-agency-logo-compact {
+  width: 40px;
+  object-position: center;
+}
+
+.platform-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  border-bottom: 1px solid var(--platform-line);
+  font-size: 14px;
+}
+
+.platform-tabs > :where(a, button) {
+  display: inline-flex;
+  min-height: 44px;
   align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  border-radius: var(--platform-radius-control);
-  color: var(--platform-secondary);
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.platform-tabs > [aria-current="page"] {
+  border-bottom-color: var(--platform-accent);
+  color: var(--platform-accent);
+  font-weight: 600;
 }
 
 .platform-search-trigger {
@@ -387,6 +427,28 @@
 
 .platform-auth-card {
   box-shadow: 0 2px 4px rgb(26 25 22 / 2%), 0 20px 70px -24px rgb(26 25 22 / 16%);
+}
+
+.platform-auth-card :where(input:not([type="hidden"])) {
+  min-width: 0;
+  /* iOS Safari can zoom the page when a smaller input receives focus. */
+  font-size: 1rem;
+}
+
+@media (max-width: 767px) {
+  .platform-ui :where(input, textarea, select):is(.text-xs, .text-sm) {
+    font-size: 1rem;
+  }
+
+  .platform-content :where(button, summary, .platform-button, .platform-icon-button, .platform-nav-link),
+  .platform-sidebar :where(button, .platform-nav-link) {
+    min-height: 44px;
+  }
+
+  .platform-icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .platform-editor {

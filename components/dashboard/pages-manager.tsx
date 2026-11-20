@@ -45,7 +45,7 @@ export function PagesManager({
   }
 
   const smallButton =
-    "rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-40";
+    "min-h-11 min-w-11 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-40 md:min-h-0 md:min-w-0";
 
   return (
     <div className="flex flex-col gap-4">
@@ -130,7 +130,7 @@ export function PagesManager({
                 </div>
               )}
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`Actions for ${page.title || (isHome ? "Home" : page.slug)}`}>
                 <button
                   type="button"
                   title="Move up"
@@ -151,7 +151,7 @@ export function PagesManager({
                 </button>
                 <Link
                   href={`/editor/${page.id}`}
-                  className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-primary/90"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md bg-primary px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-primary/90 md:min-h-0 md:min-w-0"
                 >
                   Edit
                 </Link>
@@ -203,7 +203,7 @@ export function PagesManager({
       </ul>
 
       <form
-        className="flex items-center gap-2"
+        className="flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (!newTitle.trim()) return;

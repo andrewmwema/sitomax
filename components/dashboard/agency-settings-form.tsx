@@ -8,6 +8,7 @@ import { idleState, type ActionState } from "@/lib/form-state";
 import type { AgencySettings } from "@/lib/agency";
 import { brand } from "@/lib/brand";
 import { nearestContrast } from "@/lib/theme/contrast";
+import { AgencyBrand } from "./agency-brand";
 
 const inputClasses = "w-full border px-3.5 py-2.5 text-sm font-normal";
 const sections = [
@@ -95,6 +96,7 @@ export function AgencySettingsForm({ settings, action, account }: {
                 <ImageUploadField agency value={fields.logoUrl} onChange={(logoUrl) => setFields({ ...fields, logoUrl })} readOnly={pending} initialQuery={fields.name} />
                 <input type="hidden" name="logo_url" value={fields.logoUrl} />
                 <p className="mt-2 text-xs text-[var(--platform-muted)]">PNG, JPEG, SVG or WebP, up to 2 MB. Choose, replace or remove using the media picker.</p>
+                <p className="mt-2 text-xs text-[var(--platform-muted)]">Your logo replaces the agency name in navigation. Use a tightly cropped logo with a transparent background; wide wordmarks work best.</p>
               </div>
               <label className="flex flex-col gap-2 text-sm font-medium">Primary brand color
                 <span className="flex items-center gap-3"><input type="color" name="primary_color" value={fields.primaryColor} onChange={(event) => setFields({ ...fields, primaryColor: event.target.value })} className="h-11 w-14 rounded-lg border border-[var(--platform-line)] bg-white p-1" /><span className="font-mono text-xs font-normal text-[var(--platform-secondary)]">{fields.primaryColor.toUpperCase()}</span></span>
@@ -104,11 +106,7 @@ export function AgencySettingsForm({ settings, action, account }: {
             <div aria-label="Branding preview" className="overflow-hidden rounded-xl border border-[var(--platform-line)] bg-[var(--platform-ground)]">
               <div className="border-b border-[var(--platform-line)] px-4 py-3"><p className="platform-eyebrow">Live branding preview</p><p className="mt-1 text-xs text-[var(--platform-muted)]">Preview only · {dirty ? "unsaved appearance" : "saved appearance"}</p></div>
               <div className="m-4 rounded-lg border border-[var(--platform-line)] bg-white p-4 shadow-sm">
-                <div className="flex items-center gap-2.5">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- agency logos use configured storage URLs */}
-                  {fields.logoUrl ? <img src={fields.logoUrl} alt="Agency logo preview" className="size-9 shrink-0 rounded-lg object-contain" /> : <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--platform-ink)] text-sm font-semibold text-white">{fields.name.charAt(0).toUpperCase() || "A"}</span>}
-                  <span className="min-w-0"><span className="block truncate text-sm font-semibold">{fields.name || "Your agency"}</span><span className="block text-xs text-[var(--platform-muted)]">Client workspace</span></span>
-                </div>
+                <AgencyBrand name={fields.name || "Your agency"} logoUrl={fields.logoUrl} subtitle="Client workspace" />
                 <div className="mt-5 flex items-center gap-2 rounded-lg border border-[var(--platform-line)] px-3 py-2.5 text-xs font-medium" style={{ color: accent }}><span className="h-4 w-0.5 rounded-full" style={{ backgroundColor: accent }} />Overview</div>
                 <div className="mt-3 rounded-lg bg-[var(--platform-ground)] p-3"><p className="text-xs font-medium">Your websites, in one place</p><span className="mt-2 inline-flex items-center gap-1.5 text-xs" style={{ color: accent }}><Check size={13} />Agency-branded experience</span></div>
                 <p className="mt-4 flex items-center gap-1.5 break-all text-[11px] text-[var(--platform-muted)]"><LifeBuoy size={13} className="shrink-0" />{fields.supportEmail || brand.supportEmail}</p>

@@ -66,6 +66,9 @@ describe("agency settings workspace", () => {
     expect(button("Save settings").disabled).toBe(false);
     await act(async () => button("Choose image").click());
     expect(container.querySelector<HTMLInputElement>('[name="logo_url"]')?.value).toBe("/logo.png");
+    const preview = container.querySelector('[aria-label="Branding preview"]')!;
+    expect(preview.querySelector("img")?.alt).toBe("Updated Agency");
+    expect(preview.querySelector("strong")).toBeNull();
     await act(async () => container.querySelector("form")!.requestSubmit());
     expect(action.mock.calls[1][1].get("logo_url")).toBe("/logo.png");
     expect(button("Save settings").disabled).toBe(true);

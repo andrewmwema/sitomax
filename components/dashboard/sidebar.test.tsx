@@ -21,6 +21,26 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("dashboard navigation", () => {
+  it("uses the uploaded wordmark instead of duplicate brand text in expanded, collapsed, and mobile navigation", async () => {
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<Sidebar {...props} logoUrl="/agency-wordmark.svg" />));
+    const sidebar = container.querySelector("aside")!;
+    expect(sidebar.querySelector("img")?.alt).toBe(props.agencyName);
+    expect(sidebar.querySelector("strong")).toBeNull();
+    expect(sidebar.textContent).toContain("Client workspace");
+    await act(async () => sidebar.querySelector<HTMLButtonElement>('[aria-label="Collapse sidebar"]')!.click());
+    expect(sidebar.querySelector("img")?.alt).toBe(props.agencyName);
+    expect(sidebar.textContent).not.toContain("Client workspace");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!.click());
+    const drawer = container.querySelector<HTMLDialogElement>('[aria-label="Workspace navigation"]')!;
+    expect(drawer.querySelector("img")?.alt).toBe(props.agencyName);
+    expect(drawer.querySelector("strong")).toBeNull();
+    await act(async () => drawer.querySelector<HTMLButtonElement>('[aria-label="Close navigation"]')!.click());
+    expect(drawer.open).toBe(false);
+    await act(async () => root.unmount()); container.remove();
+  });
+
   it("preserves role-aware links and unread status while collapsing the desktop sidebar", async () => {
     const container = document.createElement("div"); document.body.append(container);
     const root = createRoot(container);

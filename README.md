@@ -22,10 +22,19 @@ The dashboard derives its accent from the agency primary color, adjusting the
 display shade when needed for contrast. Desktop navigation can be collapsed;
 on phones it opens as a keyboard-accessible drawer. Agency-only navigation
 remains restricted to super admins.
+Uploaded agency logos replace the sidebar name with an aspect-preserving wordmark;
+the branding preview uses the same presentation. Use tightly cropped artwork
+(preferably a transparent, wide logo). Without a logo, navigation shows the
+agency initial and name. The mobile launcher is hidden from the desktop breakpoint.
 
 Dashboard keyboard users can skip directly to the main content. Wide management
 tables use named, focusable scroll regions, including on mobile; screen-reader
-labels remain contained inside those regions. Navigation and detail dialogs use
+labels remain contained inside those regions. The dashboard clips page-wide
+horizontal overflow without disabling table scrolling. Auth fields use a
+16px default font size to avoid focus zoom on iOS; compact dashboard fields also
+use 16px on phones without reducing larger editor headings. Site and blog tabs
+and page actions wrap on narrow screens, with larger mobile touch targets.
+Navigation and detail dialogs use
 native modal focus handling and prevent background scrolling. Loading skeletons
 respect reduced-motion preferences. Overview and Analytics share the same traffic
 chart and accessible daily-values table.

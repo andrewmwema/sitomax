@@ -3,6 +3,7 @@ import Link from "next/link";
 import { DomainSettings } from "@/components/dashboard/domain-settings";
 import { loadDomainSettings } from "./actions";
 import { loadDomainAssistance } from "@/lib/domains/request-data";
+import { SiteSettingsNav } from "@/components/dashboard/site-settings-nav";
 
 export default function DomainsPage({ params }: { params: Promise<{ siteId: string }> }) {
   return <Suspense fallback={<p role="status">Loading domain settings...</p>}>
@@ -23,11 +24,7 @@ async function DomainContent({ params }: { params: Promise<{ siteId: string }> }
       <h1 className="mt-1 text-2xl font-semibold">Domains</h1>
       <p className="mt-2 text-sm text-zinc-600">Give your website a home on your own domain.</p>
     </header>
-    <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm">
-      <Link href={`/dashboard/sites/${siteId}`} className="pb-3 hover:underline">Pages</Link>
-      <Link href={`/dashboard/sites/${siteId}/seo`} className="pb-3 hover:underline">SEO</Link>
-      <span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">Domains</span>
-    </nav>
+    <SiteSettingsNav siteId={siteId} current="domains" canManageDomains />
     <DomainSettings siteId={siteId} initial={initial} assistance={assistance} />
   </section>;
 }

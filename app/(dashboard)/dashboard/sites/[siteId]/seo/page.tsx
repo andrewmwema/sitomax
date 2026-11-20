@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { SiteSettingsNav } from "@/components/dashboard/site-settings-nav";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { businessSchema, emptyBusiness } from "@/lib/business";
@@ -62,11 +63,7 @@ async function SeoContent({ params }: { params: PageProps<"/dashboard/sites/[sit
   return <section className="space-y-6">
     <header><p className="text-sm text-zinc-500"><Link href={`/dashboard/sites/${siteId}`} className="hover:underline">{site.name || site.subdomain}</Link> / SEO</p>
       <h1 className="mt-1 text-2xl font-semibold">SEO</h1></header>
-    <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm">
-      <Link href={`/dashboard/sites/${siteId}`} className="pb-3">Pages</Link>
-      <span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">SEO</span>
-      {admin.data || owner.data ? <Link href={`/dashboard/sites/${siteId}/domains`} className="pb-3 hover:underline">Domains</Link> : null}
-    </nav>
+    <SiteSettingsNav siteId={siteId} current="seo" canManageDomains={Boolean(admin.data || owner.data)} />
     <PageSeoManager siteId={site.id} siteSeo={seo} pages={seoPages} averageScore={averageScore} />
     <section className="platform-panel p-6"><h2 className="font-semibold">Business information</h2>
       <p className="mt-2 text-sm text-zinc-600">Used for structured data and shared with your business profile.</p>

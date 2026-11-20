@@ -7,6 +7,7 @@ import { PagesManager, type ManagedPage } from "@/components/dashboard/pages-man
 import { AiDraftHistory } from "@/components/dashboard/ai-draft-history";
 import { BusinessInfo } from "@/components/dashboard/business-info";
 import { businessSchema, emptyBusiness } from "@/lib/business";
+import { SiteSettingsNav } from "@/components/dashboard/site-settings-nav";
 
 /**
  * Site detail page: live URL and the pages manager (add, rename, reorder,
@@ -101,12 +102,7 @@ async function SiteDetail({
         </div>
       </header>
 
-      <nav aria-label="Site settings" className="flex gap-4 border-b border-[#E8E7E3] text-sm">
-        <span aria-current="page" className="border-b-2 border-[#4B3FE0] pb-3 font-semibold">Pages</span>
-        <Link href={`/dashboard/sites/${siteId}/blog`} className="pb-3 hover:underline">Blog</Link>
-        <Link href={`/dashboard/sites/${siteId}/seo`} className="pb-3 hover:underline">SEO</Link>
-        {canGenerate ? <Link href={`/dashboard/sites/${siteId}/domains`} className="pb-3 hover:underline">Domains</Link> : null}
-      </nav>
+      <SiteSettingsNav siteId={siteId} current="pages" canManageDomains={canGenerate} />
       <div>
         <h2 className="mb-3 text-sm font-semibold tracking-wide text-zinc-500 uppercase">
           Pages
