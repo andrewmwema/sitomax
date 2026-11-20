@@ -20,7 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ site
   return new Response(xml, {
     headers: {
       "Content-Type": "application/rss+xml; charset=utf-8",
-      "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+      "Cache-Control": "public, max-age=60",
     },
   });
 }

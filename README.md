@@ -125,7 +125,7 @@ after `0028_global_headers.sql`, then apply
 `supabase/migrations/0030_blog_public_settings.sql`. Each site's dashboard
 includes a Blog manager for posts, categories, authors, SEO settings and
 site-local scheduling. Public blog routes, feeds and SEO use published
-snapshots; scheduled posts still require an external publishing worker.
+snapshots.
 Use **Back to editor** in Blog Manager or the post writer to return to the
 page you started from. If you opened the blog directly, it returns to the
 site's home page (or its first available page).
@@ -140,6 +140,15 @@ feed before writing any posts. Imports default to drafts and skip existing
 slugs; overwriting and retaining published status are separate opt-ins.
 Sources are limited to 2 MB and 250 posts. Feed URLs must be public HTTPS;
 unavailable or unsupported images are omitted and reported.
+
+Apply [migration 0032](supabase/migrations/0032_blog_scheduled_publishing.sql)
+after 0031 and before deploying scheduled publishing. It registers the
+`publish-due-blog-posts` job in Supabase Cron (`pg_cron`) to run every minute
+and publish up to 100 due posts per run. Check the job's run history in
+Supabase Cron after rollout. Scheduling captures the current version;
+later edits stay in the draft unless you reschedule. Cancel the schedule
+before changing the post URL. Posts scheduled before 0032 must be
+rescheduled with a future time; they are not published automatically.
 
 The blog writer offers credit-metered AI draft, selected-text rewrite, and SEO
 suggestion previews. Review the verification notes before applying any

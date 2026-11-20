@@ -166,12 +166,15 @@ export async function saveBlogPost(postId: string, raw: unknown): Promise<Action
     author_id: fields.author_id, category_id: fields.category_id, featured: fields.featured,
     layout_override: fields.layout_override, seo_title: fields.seo_title, seo_description: fields.seo_description,
     canonical_url: fields.canonical_url, noindex: fields.noindex, reading_minutes: readingMinutes(content),
-    has_unpublished_changes: current.status === "published"
+    has_unpublished_changes: current.status === "published" || current.status === "scheduled"
       ? current.has_unpublished_changes || changed : current.has_unpublished_changes,
   };
   const { error } = await supabase.from("posts").update(postUpdate).eq("id", parsedId.data);
   if (error) {
     console.error("Could not save blog post", { code: error.code });
+    if (error.code === "23514" && error.message.includes("posts_scheduled_snapshot")) {
+      return failed("Cancel the schedule before changing the post URL.");
+    }
     return failed(error.code === "23505" ? "Another post already uses this URL." : "Could not save this post.");
   }
   const { error: clearError } = await supabase.from("post_tag_links").delete().eq("post_id", parsedId.data);
@@ -197,7 +200,7 @@ export async function setBlogPostStatus(postId: string, status: "draft" | "sched
   if (!id.success || !["draft", "scheduled", "published"].includes(status)) return failed("Invalid post status.");
   const { supabase } = await requireUser();
   const { data: post, error: loadError } = await supabase.from("posts")
-    .select("id, site_id, status, draft_content, title, subtitle, slug, excerpt, cover_image, cover_alt, thumbnail_image, thumbnail_alt, author_id, category_id, featured, layout_override, seo_title, seo_description, canonical_url, noindex")
+    .select("id, site_id, status, updated_at, draft_content, title, subtitle, slug, excerpt, cover_image, cover_alt, thumbnail_image, thumbnail_alt, author_id, category_id, featured, layout_override, seo_title, seo_description, canonical_url, noindex")
     .eq("id", id.data).maybeSingle();
   if (loadError || !post) return failed("This post is unavailable.");
   let publishAt: string | null = null;
@@ -208,20 +211,24 @@ export async function setBlogPostStatus(postId: string, status: "draft" | "sched
     if (!publishAt || new Date(publishAt).getTime() <= Date.now()) return failed("Choose a future date and time in the site timezone.");
   }
   let update;
-  if (status === "published") {
+  if (status === "published" || status === "scheduled") {
     const publication = await createPublicationSnapshot(supabase, post);
     if (!("snapshot" in publication)) return failed(publication.error);
-    update = { status, published_content: publication.snapshot, published_at: new Date().toISOString(), publish_at: null, has_unpublished_changes: false };
-  } else if (status === "scheduled") {
-    update = { status, publish_at: publishAt, has_unpublished_changes: post.status === "published" };
+    update = status === "scheduled"
+      ? { status, publish_at: publishAt, scheduled_content: publication.snapshot, has_unpublished_changes: false }
+      : { status, published_content: publication.snapshot, published_at: new Date().toISOString(), publish_at: null, has_unpublished_changes: false };
   } else {
     update = { status, publish_at: null, has_unpublished_changes: false };
   }
-  const { error } = await supabase.from("posts").update(update).eq("id", id.data);
+  const write = supabase.from("posts").update(update).eq("id", id.data);
+  const { error, data } = status === "scheduled"
+    ? await write.eq("updated_at", post.updated_at).select("id").maybeSingle()
+    : await write;
   if (error) {
     console.error("Could not change blog post status", { code: error.code });
     return failed("Could not update the post status.");
   }
+  if (status === "scheduled" && !data) return failed("The post changed while scheduling. Reload and try again.");
   refresh(post.site_id);
   return ok(status === "published" ? (post.status === "published" ? "Post republished." : "Post published.")
     : status === "scheduled" ? "Post scheduled." : "Post unpublished.");
@@ -402,7 +409,7 @@ export async function saveBlogImageAltText(siteId: string, postId: string, raw: 
     .eq("site_id", siteId).eq("id", postId).maybeSingle();
   if (loadError || !post) return failed("This post is unavailable.");
   const update: Record<string, unknown> = {
-    has_unpublished_changes: post.status === "published" ? true : post.has_unpublished_changes,
+    has_unpublished_changes: post.status === "published" || post.status === "scheduled" ? true : post.has_unpublished_changes,
   };
   if (input.data.location === "cover") update.cover_alt = input.data.alt;
   else if (input.data.location === "thumbnail") update.thumbnail_alt = input.data.alt;

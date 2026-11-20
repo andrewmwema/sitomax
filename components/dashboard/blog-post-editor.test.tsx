@@ -15,7 +15,7 @@ vi.mock("@/app/(dashboard)/dashboard/sites/[siteId]/blog/ai-actions", () => ({ b
 const props: ComponentProps<typeof BlogPostEditor> = {
   siteId: "site", postId: "first", editorPageId: "about",
   initialTab: "status", headingFont: "Inter", bodyFont: "Inter",
-  status: "draft", publishedAt: null, publishAt: null, hasUnpublishedChanges: false,
+  status: "draft", publishedAt: null, publishAt: null, hasScheduledSnapshot: false, hasUnpublishedChanges: false,
   timezone: "UTC", categories: [], authors: [], tags: [],
   adjacentPosts: [{ id: "first", title: "First" }, { id: "second", title: "Second" }],
   post: {

@@ -41,7 +41,7 @@ export default async function BlogPostPage({ params, searchParams }: PageProps<"
     initialTab={query.panel === "settings" ? "details" : "status"}
     headingFont={headingFont} bodyFont={bodyFont}
     status={post.status as "draft" | "scheduled" | "published"} publishedAt={post.published_at}
-    publishAt={post.publish_at} hasUnpublishedChanges={post.has_unpublished_changes}
+    publishAt={post.publish_at} hasScheduledSnapshot={post.scheduled_content != null} hasUnpublishedChanges={post.has_unpublished_changes}
     timezone={siteResult.data.timezone}
     categories={(categoriesResult.data ?? []) as BlogManagerCategory[]}
     authors={(authorsResult.data ?? []) as BlogManagerAuthor[]}

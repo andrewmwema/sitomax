@@ -37,6 +37,7 @@ type Props = {
   status: "draft" | "scheduled" | "published";
   publishedAt: string | null;
   publishAt: string | null;
+  hasScheduledSnapshot: boolean;
   hasUnpublishedChanges: boolean;
   timezone: string;
   categories: BlogManagerCategory[];
@@ -91,6 +92,7 @@ export function BlogPostEditor(props: Props) {
     : siteDateTimeInput(new Date(Date.now() + 60 * 60 * 1000), props.timezone));
   const [scheduleError, setScheduleError] = useState("");
   const [status, setStatus] = useState(props.status);
+  const [hasScheduledSnapshot, setHasScheduledSnapshot] = useState(props.hasScheduledSnapshot);
   const [publishedAt, setPublishedAt] = useState(props.publishedAt);
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(props.hasUnpublishedChanges);
   const [picker, setPicker] = useState<"cover" | "thumbnail" | number | null>(null);
@@ -119,7 +121,7 @@ export function BlogPostEditor(props: Props) {
     setDirty(true);
     setSaved(false);
     setError("");
-    if (status === "published") setHasUnpublishedChanges(true);
+    if (status === "published" || status === "scheduled") setHasUnpublishedChanges(true);
   }
 
   const persist = useCallback(async (snapshot = formRef.current, expectedRevision = revision.current) => {
@@ -150,7 +152,11 @@ export function BlogPostEditor(props: Props) {
 
   async function changeStatus(next: "draft" | "scheduled" | "published") {
     if (busy) return;
-    if (dirty && !(await persist())) return;
+    const expectedRevision = revision.current;
+    if (dirty) {
+      window.clearTimeout(autosaveTimer.current);
+      if (!(await persist()) || revision.current !== expectedRevision) return;
+    }
     setBusy(true); setError(""); setScheduleError("");
     try {
       const result = await setBlogPostStatus(props.postId, next, next === "scheduled" ? scheduleTime : undefined);
@@ -160,10 +166,9 @@ export function BlogPostEditor(props: Props) {
         return;
       }
       setStatus(next);
-      setHasUnpublishedChanges(next === "published" ? false : next === "scheduled" && status === "published");
+      setHasScheduledSnapshot(next === "scheduled");
+      if (revision.current === expectedRevision) setHasUnpublishedChanges(false);
       setPublishedAt(next === "published" ? new Date().toISOString() : next === "draft" ? null : publishedAt);
-      setSaved(true);
-      setDirty(false);
       router.refresh();
     } catch {
       setError("Could not update the post status.");
@@ -414,7 +419,8 @@ export function BlogPostEditor(props: Props) {
                 aria-current={tab === name ? "page" : undefined} className={`border-b-2 py-2 capitalize ${tab === name ? "border-[#4B3FE0] font-semibold text-[#3025B8]" : "border-transparent text-zinc-500"}`}>{name}</button>)}
             </nav>
             {tab === "status" ? <StatusSettings status={status} publishedAt={publishedAt}
-              hasUnpublishedChanges={hasUnpublishedChanges} slug={form.slug} slugMessage={slugMessage.success ? "" : slugMessage.error.issues[0]?.message ?? ""}
+              hasUnpublishedChanges={hasUnpublishedChanges} hasScheduledSnapshot={hasScheduledSnapshot}
+              slug={form.slug} slugMessage={slugMessage.success ? "" : slugMessage.error.issues[0]?.message ?? ""}
               onSlug={(slug) => change((previous) => ({ ...previous, slug }))} timezone={props.timezone}
               scheduleTime={scheduleTime} setScheduleTime={setScheduleTime} utcSchedule={utcSchedule}
               scheduleError={scheduleError} busy={busy} versions={versions} onChangeStatus={changeStatus}
@@ -667,10 +673,11 @@ function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChoose
   </article>;
 }
 
-function StatusSettings({ status, publishedAt, hasUnpublishedChanges, slug, slugMessage, onSlug, timezone,
+function StatusSettings({ status, publishedAt, hasUnpublishedChanges, hasScheduledSnapshot, slug, slugMessage, onSlug, timezone,
   scheduleTime, setScheduleTime, utcSchedule, scheduleError, busy, versions, onChangeStatus, onVersions,
   versionOpen, closeVersions, restore }: {
   status: Props["status"]; publishedAt: string | null; hasUnpublishedChanges: boolean;
+  hasScheduledSnapshot: boolean;
   slug: string; slugMessage: string; onSlug: (slug: string) => void; timezone: string;
   scheduleTime: string; setScheduleTime: (value: string) => void; utcSchedule: string | null; scheduleError: string;
   busy: boolean; versions: Version[]; onChangeStatus: (status: "draft" | "scheduled" | "published") => void;
@@ -683,9 +690,10 @@ function StatusSettings({ status, publishedAt, hasUnpublishedChanges, slug, slug
   }
   return <div className="space-y-5 py-5">
     <section><label className="block text-xs font-semibold">URL slug
-      <div className="mt-1 flex gap-2"><input value={slug} onChange={(event) => onSlug(event.target.value)} className={`${fieldClass} min-w-0`} />
+      <div className="mt-1 flex gap-2"><input value={slug} readOnly={hasScheduledSnapshot} onChange={(event) => onSlug(event.target.value)} className={`${fieldClass} min-w-0`} />
         <button type="button" onClick={() => void copy()} aria-label="Copy post slug" className="rounded-lg border px-3"><Copy size={14} /></button></div>
-    </label><p className={`mt-1 text-[11px] ${slugMessage ? "text-red-700" : "text-zinc-500"}`}>{slugMessage || (copied ? "Copied" : "Nested slugs are supported.")}</p></section>
+    </label><p className={`mt-1 text-[11px] ${slugMessage ? "text-red-700" : "text-zinc-500"}`}>{slugMessage || (copied ? "Copied" :
+      hasScheduledSnapshot ? "Cancel the schedule to change the URL." : "Nested slugs are supported.")}</p></section>
     <section className="rounded-xl bg-[#F8F8F6] p-3">
       <p className="text-xs font-semibold">Status</p>
       <p className="mt-1 text-sm capitalize">{status}{status === "published" && hasUnpublishedChanges ? " · Changes not published" : ""}</p>
@@ -695,11 +703,16 @@ function StatusSettings({ status, publishedAt, hasUnpublishedChanges, slug, slug
       <input type="datetime-local" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} className={`${fieldClass} mt-1`} />
     </label>
       <p className="mt-1 text-[11px] text-zinc-500">UTC: {utcSchedule ? new Date(utcSchedule).toISOString() : "Choose a valid local date and time."}</p>
+      {status === "scheduled" && !hasScheduledSnapshot ? <p className="mt-1 text-xs text-amber-800">This older schedule needs a new date and time before it can publish automatically.</p> : null}
+      {hasScheduledSnapshot ? <p className="mt-1 text-xs text-zinc-500">
+        {hasUnpublishedChanges ? "Draft changes are not part of the schedule. Reschedule to include them." : "This version will publish automatically. Later edits stay in the draft."}
+      </p> : null}
+      {status === "published" ? <p className="mt-1 text-xs text-zinc-500">Scheduling takes the post offline until the scheduled time.</p> : null}
       {scheduleError ? <p role="alert" className="mt-1 text-xs text-red-700">{scheduleError}</p> : null}
-      <button type="button" disabled={busy} onClick={() => onChangeStatus("scheduled")} className="platform-button mt-2 w-full">Schedule</button>
+      <button type="button" disabled={busy} onClick={() => onChangeStatus("scheduled")} className="platform-button mt-2 w-full">{status === "scheduled" ? "Reschedule" : "Schedule"}</button>
     </section>
     <div className="grid grid-cols-2 gap-2">
-      <button type="button" disabled={busy || status === "draft"} onClick={() => onChangeStatus("draft")} className="platform-button">Unpublish</button>
+      <button type="button" disabled={busy || status === "draft"} onClick={() => onChangeStatus("draft")} className="platform-button">{status === "scheduled" ? "Cancel schedule" : "Unpublish"}</button>
       <button type="button" disabled={busy || (status === "published" && !hasUnpublishedChanges)} onClick={() => onChangeStatus("published")} className="platform-button platform-button-primary">
         {status === "published" ? hasUnpublishedChanges ? "Republish" : "Published" : "Publish now"}
       </button>
