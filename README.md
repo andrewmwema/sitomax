@@ -131,6 +131,17 @@ If Blog Manager shows a server error, check the deployment runtime logs for
 `Could not load Blog Manager data`. Verify both blog migrations are applied
 to the database used by that deployment.
 
+Apply [migration 0031](supabase/migrations/0031_blog_import.sql) after 0030
+to enable Blog Manager → Import. Preview a WordPress XML export or an RSS/Atom
+feed before writing any posts. Imports default to drafts and skip existing
+slugs; overwriting and retaining published status are separate opt-ins.
+Sources are limited to 2 MB and 250 posts. Feed URLs must be public HTTPS;
+unavailable or unsupported images are omitted and reported.
+
+The blog writer offers credit-metered AI draft, selected-text rewrite, and SEO
+suggestion previews. Review the verification notes before applying any
+suggestion. Alt text suggestions use the supplied description, not the image.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations

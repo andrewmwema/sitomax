@@ -66,9 +66,12 @@ async function createPublicationSnapshot(
 
   const content = sanitizeBlogContent(post.draft_content);
   const fields = blogPostFieldsSchema.parse({
-    ...post,
-    draft_content: content,
-    tag_ids: tagIds,
+    title: post.title, subtitle: post.subtitle, slug: post.slug, excerpt: post.excerpt,
+    draft_content: content, cover_image: post.cover_image, cover_alt: post.cover_alt,
+    thumbnail_image: post.thumbnail_image, thumbnail_alt: post.thumbnail_alt,
+    author_id: post.author_id, category_id: post.category_id, tag_ids: tagIds,
+    featured: post.featured, layout_override: post.layout_override, seo_title: post.seo_title,
+    seo_description: post.seo_description, canonical_url: post.canonical_url, noindex: post.noindex,
   });
   return {
     snapshot: blogPublicationSnapshot(

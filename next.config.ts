@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000", "*.app.github.dev"],
+      bodySizeLimit: "3mb",
     },
   },
   // Required for Tailwind v4: compiles CSS through @tailwindcss/turbopack

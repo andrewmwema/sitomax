@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { BookOpen, ChevronDown, ImagePlus, Plus, Search, X } from "lucide-react";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
 import { MediaPicker } from "@/components/editor/media-picker";
+import { BlogImportPanel } from "@/components/dashboard/blog-import-panel";
 import {
   bulkBlogPostStatus, createBlogPost, deleteBlogAuthor, deleteBlogCategory, deleteBlogPost, duplicateBlogPost,
   saveBlogAuthor, saveBlogCategory, saveBlogImageAltText, saveBlogSettings, setBlogPostStatus,
@@ -51,7 +52,7 @@ type Props = {
 };
 
 const control = "w-full rounded-lg border border-[#E8E7E3] bg-white px-3 py-2 text-sm focus:outline-2 focus:outline-[#4B3FE0]";
-const tabs = ["Posts", "Categories", "Authors", "All alt text", "Settings"] as const;
+const tabs = ["Posts", "Categories", "Authors", "All alt text", "Settings", "Import"] as const;
 type Tab = (typeof tabs)[number];
 
 export function BlogManager(props: Props) {
@@ -69,7 +70,7 @@ export function BlogManager(props: Props) {
           {tab === "Posts" ? <CreatePostDialog siteId={props.siteId} authors={props.authors} /> : null}
         </div>
       </header>
-      <nav aria-label="Blog management" className="mt-7 flex gap-5 border-b border-[#E8E7E3]">
+      <nav aria-label="Blog management" className="mt-7 flex flex-wrap gap-5 border-b border-[#E8E7E3]">
         {tabs.map((name) => <button key={name} type="button" onClick={() => setTab(name)}
           aria-current={tab === name ? "page" : undefined}
           className={`border-b-2 px-1 pb-3 text-sm ${tab === name ? "border-[#4B3FE0] font-semibold text-[#3025B8]" : "border-transparent text-zinc-600 hover:text-zinc-900"}`}>
@@ -82,6 +83,7 @@ export function BlogManager(props: Props) {
         {tab === "Authors" ? <AuthorsView siteId={props.siteId} authors={props.authors} /> : null}
         {tab === "All alt text" ? <AltTextView siteId={props.siteId} entries={props.altEntries} /> : null}
         {tab === "Settings" ? <SettingsView {...props} /> : null}
+        {tab === "Import" ? <BlogImportPanel siteId={props.siteId} /> : null}
       </section>
     </main>
   </EditorSiteContext.Provider>;

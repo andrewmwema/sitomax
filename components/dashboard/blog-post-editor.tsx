@@ -3,20 +3,29 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Eye, ImagePlus, Plus, RotateCcw, Settings2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Eye, ImagePlus, Plus, RotateCcw, Settings2, Sparkles, X } from "lucide-react";
 import type { CSSProperties } from "react";
 import { MediaPicker } from "@/components/editor/media-picker";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
-import { blogContentSchema, blogSlugSchema, type BlogBlock, type BlogPostFields } from "@/lib/blog";
+import { blogContentSchema, blogSlugSchema, type BlogBlock, type BlogContent, type BlogPostFields } from "@/lib/blog";
 import { fontFamily, googleFontsUrl, type CuratedFont } from "@/lib/theme/fonts";
 import { sanitizeRichText, escapeHtml } from "@/lib/richtext";
 import { siteDateTimeInput, siteLocalTimeToUtc } from "@/lib/blog-date";
 import {
   createBlogTag, listBlogPostVersions, restoreBlogPostVersion, saveBlogPost, setBlogPostStatus,
 } from "@/app/(dashboard)/dashboard/sites/[siteId]/blog/actions";
+import { blogWriterAi } from "@/app/(dashboard)/dashboard/sites/[siteId]/blog/ai-actions";
 import type { BlogManagerAuthor, BlogManagerCategory, BlogManagerPost, BlogManagerTag } from "./blog-manager";
 
 type Version = { id: string; created_at: string };
+type AiSelection = { blockIndex: number; start: number; end: number; text: string };
+type BlogAiResult =
+  | { mode: "draft"; title: string; subtitle: string; excerpt: string; content: BlogContent; notes: string[] }
+  | { mode: "rewrite"; text: string; notes: string[] }
+  | {
+    mode: "suggest"; title: string; subtitle: string; excerpt: string; seo_title: string; seo_description: string;
+    cover_alt: string; tag_names: string[]; category_id: string | null; notes: string[];
+  };
 type Props = {
   siteId: string;
   initialTab: "status" | "details";
@@ -87,6 +96,16 @@ export function BlogPostEditor(props: Props) {
   const [tagError, setTagError] = useState("");
   const [versions, setVersions] = useState<Version[]>([]);
   const [versionOpen, setVersionOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiMode, setAiMode] = useState<"draft" | "rewrite" | "suggest">("draft");
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiInstruction, setAiInstruction] = useState<"improve" | "shorten" | "expand" | "tone">("improve");
+  const [aiTone, setAiTone] = useState("");
+  const [aiSelection, setAiSelection] = useState<AiSelection | null>(null);
+  const [aiResultSelection, setAiResultSelection] = useState<AiSelection | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiResult, setAiResult] = useState<BlogAiResult | null>(null);
 
   function change(update: (previous: BlogPostFields) => BlogPostFields) {
     setForm((previous) => {
@@ -198,6 +217,104 @@ export function BlogPostEditor(props: Props) {
     if (result.content) change((previous) => ({ ...previous, draft_content: result.content! }));
     setVersionOpen(false);
   }
+  async function requestBlogAi() {
+    if (aiBusy) return;
+    setAiBusy(true);
+    setAiError("");
+    setAiResult(null);
+    setAiResultSelection(null);
+    try {
+      const request = aiMode === "draft"
+        ? { mode: "draft" as const, siteId: props.siteId, topic: aiTopic }
+        : aiMode === "rewrite"
+          ? {
+            mode: "rewrite" as const, siteId: props.siteId, text: aiSelection?.text ?? "",
+            instruction: aiInstruction, tone: aiTone,
+          }
+          : {
+            mode: "suggest" as const, siteId: props.siteId, title: form.title, subtitle: form.subtitle,
+            excerpt: form.excerpt,
+            bodyText: form.draft_content.blocks.map((block) => block.type === "paragraph" ? textFromHtml(block.html)
+              : block.type === "heading" ? block.text
+                : block.type === "list" ? block.items.join("\n")
+                  : block.type === "quote" ? block.text
+                    : block.type === "callout" ? `${block.title}\n${block.text}` : "").filter(Boolean).join("\n\n").slice(0, 12000),
+            coverDescription: form.cover_alt,
+          };
+      const response = await blogWriterAi(request);
+      if (response.status === "error") { setAiError(response.message); return; }
+      setAiResult(response.result);
+      setAiResultSelection(response.result.mode === "rewrite" ? aiSelection : null);
+    } catch {
+      setAiError("Could not request writing suggestions. Please try again.");
+    } finally { setAiBusy(false); }
+  }
+  function applyRewrite() {
+    if (aiResult?.mode !== "rewrite" || !aiResultSelection) return;
+    const target = form.draft_content.blocks[aiResultSelection.blockIndex];
+    if (target?.type !== "paragraph") { setAiError("This selection is no longer available. Select it again."); return; }
+    const text = textFromHtml(target.html);
+    if (text.slice(aiResultSelection.start, aiResultSelection.end) !== aiResultSelection.text) {
+      setAiError("The selected text changed. Select it again before applying this rewrite.");
+      return;
+    }
+    const rewritten = `${text.slice(0, aiResultSelection.start)}${aiResult.text}${text.slice(aiResultSelection.end)}`;
+    change((previous) => ({
+      ...previous,
+      draft_content: {
+        version: 1,
+        blocks: previous.draft_content.blocks.map((block, index) => index === aiResultSelection.blockIndex && block.type === "paragraph"
+          ? { ...block, html: escapeHtml(rewritten).replaceAll("\n", "<br>") } : block),
+      },
+    }));
+    setAiResult(null);
+    setAiSelection(null);
+    setAiResultSelection(null);
+  }
+  async function applySuggestions() {
+    if (aiResult?.mode !== "suggest") return;
+    setAiError("");
+    const tagIds = [...form.tag_ids];
+    let tagError = "";
+    for (const name of aiResult.tag_names) {
+      const existing = props.tags.find((tag) => tag.name.trim().toLowerCase() === name.trim().toLowerCase());
+      if (existing) { tagIds.push(existing.id); continue; }
+      try {
+        const result = await createBlogTag(props.siteId, name);
+        if (result.status === "error" || !result.tagId) {
+          tagError = `SEO fields were applied, but the tag “${name}” could not be added.`;
+          break;
+        }
+        tagIds.push(result.tagId);
+      } catch {
+        tagError = `SEO fields were applied, but the tag “${name}” could not be added.`;
+        break;
+      }
+    }
+    change((previous) => ({
+      ...previous,
+      title: aiResult.title || previous.title,
+      subtitle: aiResult.subtitle || previous.subtitle,
+      excerpt: aiResult.excerpt || previous.excerpt,
+      seo_title: aiResult.seo_title || previous.seo_title,
+      seo_description: aiResult.seo_description || previous.seo_description,
+      cover_alt: aiResult.cover_alt || previous.cover_alt,
+      category_id: aiResult.category_id ?? previous.category_id,
+      tag_ids: [...new Set(tagIds)].slice(0, 50),
+    }));
+    setAiError(tagError);
+    setAiResult(null);
+    setAiResultSelection(null);
+    router.refresh();
+  }
+  function applyDraft() {
+    if (aiResult?.mode !== "draft") return;
+    change((previous) => ({
+      ...previous, title: aiResult.title, subtitle: aiResult.subtitle, excerpt: aiResult.excerpt,
+      draft_content: aiResult.content,
+    }));
+    setAiResult(null);
+  }
   const blocks = form.draft_content.blocks;
   const siteHref = `/dashboard/sites/${props.siteId}/blog`;
   const slugMessage = blogSlugSchema.safeParse(form.slug);
@@ -217,6 +334,7 @@ export function BlogPostEditor(props: Props) {
           </p>
         </div>
         <button type="button" className="platform-button" onClick={() => setPreview(!preview)}><Eye size={14} />{preview ? "Continue editing" : "Preview"}</button>
+        <button type="button" className="platform-button" aria-expanded={aiOpen} onClick={() => setAiOpen(!aiOpen)}><Sparkles size={14} />Writing assistant</button>
         <button type="button" disabled={busy || !dirty} onClick={() => void persist()} className="platform-button">Save draft</button>
         <button type="button" onClick={() => setPanel(!panel)} aria-label="Toggle post settings" aria-expanded={panel} className="platform-button"><Settings2 size={15} /></button>
         <button type="button" disabled={busy || (status === "published" && !hasUnpublishedChanges)} onClick={() => void changeStatus("published")} className="platform-button platform-button-primary">
@@ -226,6 +344,14 @@ export function BlogPostEditor(props: Props) {
       <div className={`mx-auto grid min-h-[calc(100vh-64px)] max-w-[1480px] ${panel ? "lg:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}>
         <section className="min-w-0 px-4 py-8 sm:px-8 lg:py-12">
           <div className="mx-auto max-w-[760px]">
+            {aiOpen && !preview ? <BlogAiPanel mode={aiMode} setMode={(mode) => {
+              setAiMode(mode); setAiResult(null); setAiResultSelection(null); setAiError("");
+            }} topic={aiTopic} setTopic={setAiTopic}
+              instruction={aiInstruction} setInstruction={setAiInstruction} tone={aiTone} setTone={setAiTone}
+              selectedText={aiResultSelection?.text ?? aiSelection?.text ?? ""} busy={aiBusy} error={aiError} result={aiResult}
+              categories={props.categories} onRequest={() => void requestBlogAi()} onApplyDraft={applyDraft}
+              onApplyRewrite={applyRewrite} onApplySuggestions={() => void applySuggestions()}
+              onDismiss={() => { setAiOpen(false); setAiResult(null); setAiResultSelection(null); setAiError(""); }} /> : null}
             {preview ? <PostPreview form={form} /> : <>
               <label className="mb-4 block text-xs font-medium uppercase tracking-wide text-zinc-500">Post title
                 <input value={form.title} maxLength={200} onChange={(event) => change((previous) => ({ ...previous, title: event.target.value }))}
@@ -246,6 +372,9 @@ export function BlogPostEditor(props: Props) {
                 {blocks.map((block, index) => <BlockEditor key={`${index}-${block.type}`} block={block} index={index}
                   count={blocks.length} onChange={(next) => updateBlock(index, next)}
                   onMove={(by) => moveBlock(index, by)} onRemove={() => removeBlock(index)}
+                  selected={aiSelection?.blockIndex === index}
+                  onSelection={(start, end, text) => setAiSelection({ blockIndex: index, start, end, text })}
+                  onRewrite={() => { setAiMode("rewrite"); setAiOpen(true); setAiResult(null); setAiResultSelection(null); setAiError(""); }}
                   onChooseImage={() => setPicker(index)} onSlash={() => {
                     setBlockInsertAt(index + 1); setBlockMenuOpen(true);
                   }} />)}
@@ -314,6 +443,106 @@ export function BlogPostEditor(props: Props) {
   }
 }
 
+function BlogAiPanel({ mode, setMode, topic, setTopic, instruction, setInstruction, tone, setTone,
+  selectedText, busy, error, result, categories, onRequest, onApplyDraft, onApplyRewrite,
+  onApplySuggestions, onDismiss }: {
+  mode: "draft" | "rewrite" | "suggest";
+  setMode: (mode: "draft" | "rewrite" | "suggest") => void;
+  topic: string; setTopic: (value: string) => void;
+  instruction: "improve" | "shorten" | "expand" | "tone"; setInstruction: (value: "improve" | "shorten" | "expand" | "tone") => void;
+  tone: string; setTone: (value: string) => void; selectedText: string; busy: boolean; error: string;
+  result: BlogAiResult | null; categories: BlogManagerCategory[];
+  onRequest: () => void; onApplyDraft: () => void; onApplyRewrite: () => void;
+  onApplySuggestions: () => void; onDismiss: () => void;
+}) {
+  const selectedCategory = result?.mode === "suggest"
+    ? categories.find(({ id }) => id === result.category_id)?.name ?? "No category suggestion" : "";
+  return <section aria-label="Blog writing assistant" className="mb-8 rounded-2xl border border-[#DCD9FF] bg-white p-5 shadow-sm sm:p-6">
+    <header className="flex items-start justify-between gap-3">
+      <div><h2 className="flex items-center gap-2 font-semibold"><Sparkles size={16} className="text-[#4B3FE0]" />Writing assistant</h2>
+        <p className="mt-1 text-xs text-zinc-500">Suggestions use your business information and count toward AI credits.</p></div>
+      <button type="button" onClick={onDismiss} aria-label="Close writing assistant" className="rounded p-1 text-zinc-500 hover:bg-zinc-100"><X size={15} /></button>
+    </header>
+    <div className="mt-4 grid grid-cols-3 rounded-lg bg-zinc-100 p-1 text-xs">
+      {(["draft", "rewrite", "suggest"] as const).map((value) => <button key={value} type="button" onClick={() => setMode(value)}
+        aria-pressed={mode === value} className={`rounded-md px-2 py-2 capitalize ${mode === value ? "bg-white font-semibold shadow-sm" : "text-zinc-600"}`}>
+        {value === "suggest" ? "SEO suggestions" : value === "rewrite" ? "Rewrite selection" : "Draft with AI"}
+      </button>)}
+    </div>
+    {mode === "draft" ? <label className="mt-4 block text-sm font-medium">Topic or outline
+      <textarea value={topic} onChange={(event) => setTopic(event.target.value)} maxLength={2000} rows={4}
+        placeholder="Describe the post you want to write, or paste an outline…" className={`${fieldClass} mt-1 resize-y font-normal`} />
+      <span className="mt-1 block text-right text-xs font-normal text-zinc-400">{topic.length}/2000</span>
+    </label> : null}
+    {mode === "rewrite" ? <div className="mt-4 space-y-3">
+      <div className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Selected text</p>
+        {selectedText ? <p className="whitespace-pre-wrap">{selectedText}</p> : <p className="text-zinc-400">Select text inside a paragraph block first.</p>}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-xs font-semibold">Rewrite action<select value={instruction} onChange={(event) => setInstruction(event.target.value as typeof instruction)} className={`${fieldClass} mt-1 font-normal`}>
+          <option value="improve">Improve</option><option value="shorten">Shorten</option><option value="expand">Expand</option><option value="tone">Change tone</option>
+        </select></label>
+        {instruction === "tone" ? <label className="text-xs font-semibold">Desired tone<input value={tone} onChange={(event) => setTone(event.target.value)} maxLength={120} placeholder="e.g. warm and conversational" className={`${fieldClass} mt-1 font-normal`} /></label> : null}
+      </div>
+    </div> : null}
+    {mode === "suggest" ? <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-xs leading-5 text-zinc-600">
+      Suggestions are previews only. Alt text is based on the description you supplied; the assistant has not seen your images.
+    </p> : null}
+    {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
+    {!result || result.mode !== mode ? <button type="button" disabled={busy || (mode === "draft" && !topic.trim()) || (mode === "rewrite" && !selectedText.trim())}
+      onClick={onRequest} className="platform-button platform-button-primary mt-4">
+      <Sparkles size={14} />{busy ? "Preparing preview…" : mode === "draft" ? "Generate draft preview" : mode === "rewrite" ? "Preview rewrite" : "Suggest SEO details"}
+    </button> : null}
+    {result?.mode === "draft" ? <div className="mt-5 rounded-xl border border-[#E8E7E3] bg-[#FBFBFA] p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Draft preview · nothing changed yet</p>
+      <h3 className="mt-2 text-xl font-semibold">{result.title}</h3>
+      {result.subtitle ? <p className="mt-1 text-sm text-zinc-600">{result.subtitle}</p> : null}
+      {result.excerpt ? <p className="mt-3 text-sm">{result.excerpt}</p> : null}
+      <div className="mt-3 max-h-80 space-y-3 overflow-auto border-t pt-3 text-sm leading-6">
+        {result.content.blocks.map((block, index) => block.type === "heading"
+          ? <p key={index} className="font-semibold">{block.text}</p>
+          : block.type === "paragraph" ? <p key={index}>{textFromHtml(block.html)}</p>
+            : block.type === "list" ? <ul key={index} className="list-disc pl-5">{block.items.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>
+              : null)}
+      </div>
+      <p className="mt-3 text-xs text-amber-800">Apply replaces the current title, subtitle, excerpt, and body draft.</p>
+      <AiNotes notes={result.notes} />
+      <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={onApplyDraft} className="platform-button platform-button-primary">Apply draft</button>
+        <button type="button" onClick={onRequest} disabled={busy} className="platform-button">Regenerate</button></div>
+    </div> : null}
+    {result?.mode === "rewrite" ? <div className="mt-5 rounded-xl border border-[#E8E7E3] bg-[#FBFBFA] p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Rewrite preview · selected text only</p>
+      <blockquote className="mt-3 border-l-2 border-zinc-300 pl-3 text-sm text-zinc-500">{selectedText}</blockquote>
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{result.text}</p>
+      <AiNotes notes={result.notes} />
+      <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={onApplyRewrite} className="platform-button platform-button-primary">Apply rewrite</button>
+        <button type="button" onClick={onRequest} disabled={busy} className="platform-button">Regenerate</button></div>
+    </div> : null}
+    {result?.mode === "suggest" ? <div className="mt-5 rounded-xl border border-[#E8E7E3] bg-[#FBFBFA] p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">SEO preview · nothing changed yet</p>
+      <dl className="mt-3 space-y-2 text-sm">
+        {[
+          ["Title", result.title], ["Subtitle", result.subtitle], ["Excerpt", result.excerpt],
+          ["Meta title", result.seo_title], ["Meta description", result.seo_description],
+          ["Category", selectedCategory], ["Cover alt text", result.cover_alt],
+        ].map(([label, value]) => <div key={label}><dt className="text-[11px] font-semibold text-zinc-500">{label}</dt><dd className="whitespace-pre-wrap">{value || "—"}</dd></div>)}
+      </dl>
+      <p className="mt-3 text-xs text-zinc-600">Tags: {result.tag_names.join(", ") || "—"} (new tags will be created when you apply).</p>
+      <AiNotes notes={result.notes} />
+      <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={onApplySuggestions} className="platform-button platform-button-primary">Apply suggestions</button>
+        <button type="button" onClick={onRequest} disabled={busy} className="platform-button">Regenerate</button></div>
+    </div> : null}
+    <p className="mt-4 text-[11px] leading-5 text-zinc-500">AI does not verify claims or image contents. Review every suggestion and replace unknown facts with verified details before publishing.</p>
+  </section>;
+}
+
+function AiNotes({ notes }: { notes: string[] }) {
+  return notes.length ? <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+    <p className="font-semibold">Author review</p><ul className="mt-1 list-disc space-y-1 pl-4">{notes.map((note, index) => <li key={index}>{note}</li>)}</ul>
+  </div> : <p className="mt-3 text-xs text-amber-800">Review all factual claims before publishing.</p>;
+}
+
 function BlockMenu({ open, onToggle, onAdd }: {
   open: boolean; onToggle: (open: boolean) => void; onAdd: (kind: BlockKind) => void;
 }) {
@@ -329,9 +558,11 @@ function BlockMenu({ open, onToggle, onAdd }: {
   </div>;
 }
 
-function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChooseImage, onSlash }: {
+function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChooseImage, onSlash,
+  selected, onSelection, onRewrite }: {
   block: BlogBlock; index: number; count: number; onChange: (block: BlogBlock) => void;
   onMove: (by: number) => void; onRemove: () => void; onChooseImage: () => void; onSlash: () => void;
+  selected: boolean; onSelection: (start: number, end: number, text: string) => void; onRewrite: () => void;
 }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [link, setLink] = useState("");
@@ -366,10 +597,16 @@ function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChoose
       <textarea ref={paragraphRef} value={textFromHtml(block.html)} onKeyDown={(event) => {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setLinkOpen(true); }
         if (event.key === "/" && !event.currentTarget.value) { event.preventDefault(); onSlash(); }
+      }} onSelect={(event) => {
+        const field = event.currentTarget;
+        const start = field.selectionStart;
+        const end = field.selectionEnd;
+        if (end > start) onSelection(start, end, field.value.slice(start, end));
       }} onChange={(event) => setText(event.target.value)} rows={4}
         placeholder="Write a paragraph…" className="w-full resize-y border-0 p-0 text-base leading-7 text-zinc-800 outline-none placeholder:text-zinc-300" />
       <div className="mt-2 flex items-center gap-2 border-t border-zinc-100 pt-2">
         <button type="button" onClick={() => setLinkOpen(!linkOpen)} className="text-xs text-[#4B3FE0] underline">Link (Ctrl/Cmd+K)</button>
+        {selected ? <button type="button" onClick={onRewrite} className="ml-auto inline-flex items-center gap-1 text-xs text-[#4B3FE0] underline"><Sparkles size={12} />Rewrite selection</button> : null}
         {linkOpen ? <form onSubmit={(event) => { event.preventDefault(); applyLink(); }} className="flex flex-1 gap-2">
           <input autoFocus type="url" value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://…" className="min-w-0 flex-1 rounded border px-2 py-1 text-xs" />
           <button type="submit" className="text-xs font-medium">Add link</button>
