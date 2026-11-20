@@ -18,30 +18,36 @@ export default async function BlogPage({ params }: PageProps<"/dashboard/sites/[
     supabase.from("posts").select(`
       id, title, slug, excerpt, cover_image, cover_alt, thumbnail_image, thumbnail_alt, draft_content, created_at, updated_at, published_at, publish_at, status, has_unpublished_changes,
       author_id, author:blog_authors(name), category_id, category:post_categories(name),
-      post_tag_links(tag:post_tags(name))
+      post_tag_links!post_tag_links_site_id_post_id_fkey(tag:post_tags!post_tag_links_site_id_tag_id_fkey(name))
     `).eq("site_id", siteId).order("updated_at", { ascending: false }),
     supabase.from("post_categories").select("id, name, slug, description").eq("site_id", siteId).order("name"),
     supabase.from("blog_authors").select("id, name, bio, photo").eq("site_id", siteId).order("name"),
     supabase.from("post_tags").select("id, name").eq("site_id", siteId).order("name"),
     supabase.from("blog_settings").select("*").eq("site_id", siteId).maybeSingle(),
   ]);
-  if (!siteResult.data) notFound();
   for (const [label, error] of [
-    ["posts", postsResult.error], ["categories", categoriesResult.error], ["authors", authorsResult.error],
+    ["site", siteResult.error], ["posts", postsResult.error], ["categories", categoriesResult.error], ["authors", authorsResult.error],
     ["tags", tagsResult.error], ["settings", settingsResult.error],
   ] as const) {
-    if (error) throw new Error(`Could not load blog ${label}. Apply migration 0029 and retry.`, { cause: error });
+    if (error) {
+      console.error("Could not load Blog Manager data", { resource: label, code: error.code });
+      throw new Error(`Could not load blog ${label}.`, { cause: error });
+    }
   }
+  if (!siteResult.data) notFound();
   const posts: BlogManagerPost[] = (postsResult.data ?? []).map((row) => {
     const author = Array.isArray(row.author) ? row.author[0] : row.author;
     const category = Array.isArray(row.category) ? row.category[0] : row.category;
-    const linkedTags = row.post_tag_links as unknown as ({ tag: { name: string } | null } | null)[] | null;
+    const linkedTags = row.post_tag_links ?? [];
     return {
       ...row,
       status: row.status as BlogManagerPost["status"],
       author_name: author?.name ?? "",
       category_name: category?.name ?? "",
-      tag_names: (linkedTags ?? []).flatMap((link) => link?.tag?.name ? [link.tag.name] : []),
+      tag_names: linkedTags.flatMap(({ tag }) => {
+        const linkedTag = Array.isArray(tag) ? tag[0] : tag;
+        return linkedTag?.name ? [linkedTag.name] : [];
+      }),
     };
   });
   const altEntries: BlogAltEntry[] = [];

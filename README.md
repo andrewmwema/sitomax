@@ -127,6 +127,10 @@ includes a Blog manager for posts, categories, authors, SEO settings and
 site-local scheduling. Public blog routes, feeds and SEO use published
 snapshots; scheduled posts still require an external publishing worker.
 
+If Blog Manager shows a server error, check the deployment runtime logs for
+`Could not load Blog Manager data`. Verify both blog migrations are applied
+to the database used by that deployment.
+
 ## Internal agency sites
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
