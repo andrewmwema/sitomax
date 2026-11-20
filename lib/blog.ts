@@ -45,15 +45,15 @@ const gallery = z.strictObject({
   images: z.array(z.strictObject({ url: imageUrl, alt: z.string().max(500), caption: z.string().max(300) })).min(1).max(20),
 });
 const video = z.strictObject({ type: z.literal("video"), url: z.string().max(500).refine((url) => videoEmbedUrl(url) !== null, "Use a supported video URL."), title: z.string().max(200) });
-const button = z.strictObject({
-  type: z.literal("button"), text: z.string().trim().min(1).max(80),
-  href: z.string().trim().min(1).max(2048).refine(safeLink, "Choose a safe link."),
+export const blogLinkSchema = z.string().trim().min(1).max(2048).refine(safeLink, "Choose a safe link.");
+export const blogButtonSchema = z.strictObject({
+  type: z.literal("button"), text: z.string().trim().min(1).max(80), href: blogLinkSchema,
 });
 const divider = z.strictObject({ type: z.literal("divider") });
 const table = z.strictObject({ type: z.literal("table"), rows: z.array(z.array(z.string().max(500)).min(1).max(8)).min(1).max(30) });
 
 export const blogBlockSchema = z.discriminatedUnion("type", [
-  paragraph, heading, list, quote, callout, image, gallery, video, button, divider, table,
+  paragraph, heading, list, quote, callout, image, gallery, video, blogButtonSchema, divider, table,
 ]);
 
 export const blogContentSchema = z.strictObject({

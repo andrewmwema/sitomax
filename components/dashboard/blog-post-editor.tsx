@@ -6,9 +6,10 @@ import { ArrowDown, ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, 
 import type { CSSProperties } from "react";
 import { MediaPicker } from "@/components/editor/media-picker";
 import { EditorSiteContext } from "@/components/editor/image-upload-field";
-import { blogContentSchema, blogSlugSchema, type BlogBlock, type BlogContent, type BlogPostFields } from "@/lib/blog";
+import { blogButtonSchema, blogContentSchema, blogSlugSchema, type BlogBlock, type BlogContent, type BlogPostFields } from "@/lib/blog";
 import { fontFamily, googleFontsUrl, type CuratedFont } from "@/lib/theme/fonts";
-import { sanitizeRichText, escapeHtml } from "@/lib/richtext";
+import { RichTextContent } from "@/components/blocks/ui/rich-text";
+import { BlogRichTextEditor, type BlogTextSelection } from "./blog-rich-text-editor";
 import { siteDateTimeInput, siteLocalTimeToUtc } from "@/lib/blog-date";
 import { blogManagerHref } from "@/lib/blog-navigation";
 import {
@@ -18,7 +19,7 @@ import { blogWriterAi } from "@/app/(dashboard)/dashboard/sites/[siteId]/blog/ai
 import type { BlogManagerAuthor, BlogManagerCategory, BlogManagerPost, BlogManagerTag } from "./blog-manager";
 
 type Version = { id: string; created_at: string };
-type AiSelection = { blockIndex: number; start: number; end: number; text: string };
+type AiSelection = BlogTextSelection & { blockIndex: number };
 type BlogAiResult =
   | { mode: "draft"; title: string; subtitle: string; excerpt: string; content: BlogContent; notes: string[] }
   | { mode: "rewrite"; text: string; notes: string[] }
@@ -47,7 +48,7 @@ type Props = {
 };
 
 const fieldClass = "w-full rounded-lg border border-[#E8E7E3] bg-white px-3 py-2 text-sm focus:outline-2 focus:outline-[#4B3FE0]";
-const blockKinds = ["paragraph", "heading", "list", "quote", "callout", "image", "gallery", "video", "button", "divider", "table"] as const;
+const blockKinds = ["paragraph", "heading", "list", "quote", "callout", "image", "gallery", "video", "divider", "table"] as const;
 type BlockKind = (typeof blockKinds)[number];
 
 function freshBlock(kind: BlockKind): BlogBlock {
@@ -60,7 +61,6 @@ function freshBlock(kind: BlockKind): BlogBlock {
     case "image": return { type: kind, url: "", alt: "", caption: "" };
     case "gallery": return { type: kind, images: [] };
     case "video": return { type: kind, url: "", title: "" };
-    case "button": return { type: kind, text: "Learn more", href: "" };
     case "divider": return { type: kind };
     case "table": return { type: kind, rows: [["", ""]] };
   }
@@ -75,6 +75,8 @@ function textFromHtml(html: string) {
 export function BlogPostEditor(props: Props) {
   const router = useRouter();
   const [form, setForm] = useState(props.post);
+  const [blockKeys, setBlockKeys] = useState(() => props.post.draft_content.blocks.map((_, index) => index));
+  const nextBlockKey = useRef(blockKeys.length);
   const formRef = useRef(form);
   const revision = useRef(0);
   const autosaveTimer = useRef<number | undefined>(undefined);
@@ -83,8 +85,7 @@ export function BlogPostEditor(props: Props) {
   const [saved, setSaved] = useState(true);
   const [error, setError] = useState("");
   const [panel, setPanel] = useState(true);
-  const [blockMenuOpen, setBlockMenuOpen] = useState(false);
-  const [blockInsertAt, setBlockInsertAt] = useState<number | undefined>();
+  const [blockInsertAt, setBlockInsertAt] = useState<number | null>(null);
   const [tab, setTab] = useState<"status" | "details" | "seo">(props.initialTab);
   const [preview, setPreview] = useState(false);
   const [scheduleTime, setScheduleTime] = useState(() => props.publishAt
@@ -181,14 +182,28 @@ export function BlogPostEditor(props: Props) {
       blocks: previous.draft_content.blocks.map((item, at) => at === index ? block : item),
     } }));
   }
-  function addBlock(kind: BlockKind, before?: number) {
+  function clearSelection() {
+    setAiSelection(null);
+    setAiResultSelection(null);
+  }
+  function addBlock(block: BlogBlock, before?: number) {
+    clearSelection();
+    const key = nextBlockKey.current++;
+    setBlockKeys((keys) => {
+      const next = [...keys];
+      next.splice(before ?? keys.length, 0, key);
+      return next;
+    });
     change((previous) => {
       const blocks = [...previous.draft_content.blocks];
-      blocks.splice(before ?? blocks.length, 0, freshBlock(kind));
+      blocks.splice(before ?? blocks.length, 0, block);
       return { ...previous, draft_content: { version: 1, blocks } };
     });
   }
   function removeBlock(index: number) {
+    clearSelection();
+    setBlockInsertAt(null);
+    setBlockKeys((keys) => keys.filter((_, at) => at !== index));
     change((previous) => ({ ...previous, draft_content: {
       version: 1, blocks: previous.draft_content.blocks.filter((_, at) => at !== index),
     } }));
@@ -196,6 +211,13 @@ export function BlogPostEditor(props: Props) {
   function moveBlock(index: number, by: number) {
     const to = index + by;
     if (to < 0 || to >= form.draft_content.blocks.length) return;
+    clearSelection();
+    setBlockInsertAt(null);
+    setBlockKeys((keys) => {
+      const next = [...keys];
+      [next[index], next[to]] = [next[to], next[index]];
+      return next;
+    });
     change((previous) => {
       const blocks = [...previous.draft_content.blocks];
       [blocks[index], blocks[to]] = [blocks[to], blocks[index]];
@@ -222,7 +244,11 @@ export function BlogPostEditor(props: Props) {
   async function restore(versionId: string) {
     const result = await restoreBlogPostVersion(props.postId, versionId);
     if (result.status === "error") { setError(result.message); return; }
-    if (result.content) change((previous) => ({ ...previous, draft_content: result.content! }));
+    if (result.content) {
+      const content = result.content;
+      resetBlockKeys(content);
+      change((previous) => ({ ...previous, draft_content: content }));
+    }
     setVersionOpen(false);
   }
   async function requestBlogAi() {
@@ -259,22 +285,10 @@ export function BlogPostEditor(props: Props) {
   }
   function applyRewrite() {
     if (aiResult?.mode !== "rewrite" || !aiResultSelection) return;
-    const target = form.draft_content.blocks[aiResultSelection.blockIndex];
-    if (target?.type !== "paragraph") { setAiError("This selection is no longer available. Select it again."); return; }
-    const text = textFromHtml(target.html);
-    if (text.slice(aiResultSelection.start, aiResultSelection.end) !== aiResultSelection.text) {
+    if (!aiResultSelection.replace(aiResult.text)) {
       setAiError("The selected text changed. Select it again before applying this rewrite.");
       return;
     }
-    const rewritten = `${text.slice(0, aiResultSelection.start)}${aiResult.text}${text.slice(aiResultSelection.end)}`;
-    change((previous) => ({
-      ...previous,
-      draft_content: {
-        version: 1,
-        blocks: previous.draft_content.blocks.map((block, index) => index === aiResultSelection.blockIndex && block.type === "paragraph"
-          ? { ...block, html: escapeHtml(rewritten).replaceAll("\n", "<br>") } : block),
-      },
-    }));
     setAiResult(null);
     setAiSelection(null);
     setAiResultSelection(null);
@@ -317,11 +331,17 @@ export function BlogPostEditor(props: Props) {
   }
   function applyDraft() {
     if (aiResult?.mode !== "draft") return;
+    resetBlockKeys(aiResult.content);
     change((previous) => ({
       ...previous, title: aiResult.title, subtitle: aiResult.subtitle, excerpt: aiResult.excerpt,
       draft_content: aiResult.content,
     }));
     setAiResult(null);
+  }
+  function resetBlockKeys(content: BlogContent) {
+    clearSelection();
+    setBlockInsertAt(null);
+    setBlockKeys(content.blocks.map(() => nextBlockKey.current++));
   }
   const blocks = form.draft_content.blocks;
   const siteHref = blogManagerHref(props.siteId, props.editorPageId);
@@ -380,21 +400,23 @@ export function BlogPostEditor(props: Props) {
                 <span className="px-2">·</span><span>{blocks.length} {blocks.length === 1 ? "block" : "blocks"}</span>
                 {form.cover_image ? <button type="button" onClick={() => setPicker("cover")} className="ml-3 text-[#4B3FE0] underline">Edit image</button> : null}
               </div>
+              <BlockMenu open={blockInsertAt === 0} onToggle={() => setBlockInsertAt(blockInsertAt === 0 ? null : 0)}
+                count={blocks.length} onAdd={(block) => { addBlock(block); setBlockInsertAt(null); }} />
               <div className="space-y-4">
-                {blocks.map((block, index) => <BlockEditor key={`${index}-${block.type}`} block={block} index={index}
+                {blocks.map((block, index) => <div key={blockKeys[index]}><BlockEditor block={block} index={index}
                   count={blocks.length} onChange={(next) => updateBlock(index, next)}
                   onMove={(by) => moveBlock(index, by)} onRemove={() => removeBlock(index)}
                   selected={aiSelection?.blockIndex === index}
-                  onSelection={(start, end, text) => setAiSelection({ blockIndex: index, start, end, text })}
+                  onSelection={(selection) => setAiSelection((current) => selection ? { ...selection, blockIndex: index }
+                    : current?.blockIndex === index ? null : current)}
                   onRewrite={() => { setAiMode("rewrite"); setAiOpen(true); setAiResult(null); setAiResultSelection(null); setAiError(""); }}
-                  onChooseImage={() => setPicker(index)} onSlash={() => {
-                    setBlockInsertAt(index + 1); setBlockMenuOpen(true);
-                  }} />)}
+                  onChooseImage={() => setPicker(index)} onSlash={() => setBlockInsertAt(index + 1)} />
+                  <BlockMenu compact open={blockInsertAt === index + 1}
+                    onToggle={() => setBlockInsertAt(blockInsertAt === index + 1 ? null : index + 1)}
+                    count={blocks.length} onAdd={(next) => { addBlock(next, index + 1); setBlockInsertAt(null); }} />
+                </div>)}
               </div>
-              <BlockMenu open={blockMenuOpen} onToggle={setBlockMenuOpen} onAdd={(kind) => {
-                addBlock(kind, blockInsertAt); setBlockInsertAt(undefined);
-              }} />
-              {!blocks.length ? <p className="mt-5 text-sm text-zinc-400">Start writing, type / for blocks, or ✨ Draft with AI</p> : null}
+              {!blocks.length ? <p className="mt-2 text-sm text-zinc-500">Choose Add text to start writing, or start with a draft from the Writing assistant.</p> : null}
               <label className="mt-10 block border-t border-[#E8E7E3] pt-5 text-sm">
                 <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Excerpt</span>
                 <textarea value={form.excerpt} maxLength={500} rows={3} onChange={(event) => change((previous) => ({ ...previous, excerpt: event.target.value }))}
@@ -565,18 +587,50 @@ function AiNotes({ notes }: { notes: string[] }) {
   </div> : <p className="mt-3 text-xs text-amber-800">Review all factual claims before publishing.</p>;
 }
 
-function BlockMenu({ open, onToggle, onAdd }: {
-  open: boolean; onToggle: (open: boolean) => void; onAdd: (kind: BlockKind) => void;
+function BlockMenu({ open, onToggle, onAdd, count, compact = false }: {
+  open: boolean; onToggle: () => void; onAdd: (block: BlogBlock) => void; count: number; compact?: boolean;
 }) {
-  const add = (kind: BlockKind) => { onAdd(kind); onToggle(false); };
-  return <div className="relative mt-5">
-    <button type="button" onClick={() => onToggle(!open)} aria-expanded={open} className="flex items-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:border-[#4B3FE0] hover:text-[#4B3FE0]">
-      <Plus size={15} />Add a block <span className="text-xs text-zinc-400">(/)</span>
-    </button>
-    {open ? <div role="menu" aria-label="Insert block" className="absolute left-0 top-full z-10 mt-2 grid w-full grid-cols-2 gap-1 rounded-xl border border-[#E8E7E3] bg-white p-2 shadow-lg sm:w-96">
-      {blockKinds.map((kind) => <button key={kind} type="button" role="menuitem" onClick={() => add(kind)}
-        className="rounded-lg px-3 py-2 text-left text-sm capitalize hover:bg-zinc-50">{kind}</button>)}
-    </div> : null}
+  const [addingButton, setAddingButton] = useState(false);
+  const [text, setText] = useState("");
+  const [href, setHref] = useState("");
+  const [error, setError] = useState("");
+  if (count >= 500) return compact ? null : <p className="mb-3 text-xs text-zinc-500">This post has reached the 500-block limit.</p>;
+  function addButton(event: FormEvent) {
+    event.preventDefault();
+    const parsed = blogButtonSchema.safeParse({ type: "button", text, href });
+    if (!parsed.success) { setError("Enter a button label and a safe URL or site path."); return; }
+    onAdd(parsed.data);
+    setAddingButton(false); setText(""); setHref(""); setError("");
+  }
+  return <div className={compact ? "mt-2" : "mb-4"}>
+    <div className="flex flex-wrap gap-2">
+      {!compact ? <>
+        <button type="button" className="platform-button" onClick={() => onAdd(freshBlock("paragraph"))}>Add text</button>
+        <button type="button" className="platform-button" aria-expanded={open && addingButton} onClick={() => {
+          if (!open) onToggle();
+          setAddingButton(true);
+        }}>Add button</button>
+      </> : null}
+      <button type="button" onClick={() => { setAddingButton(false); if (!open || !addingButton) onToggle(); }}
+        aria-expanded={open && !addingButton} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100">
+        <Plus size={15} />{compact ? "Insert block here" : "More blocks"}
+      </button>
+    </div>
+    {open && (addingButton ? <form onSubmit={addButton} className="mt-2 space-y-3 rounded-xl border border-zinc-200 bg-white p-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="text-xs">Button label<input autoFocus required maxLength={80} value={text} onChange={(event) => setText(event.target.value)} placeholder="Learn more" className={`${fieldClass} mt-1`} /></label>
+        <label className="text-xs">Button link<input required maxLength={2048} value={href} onChange={(event) => setHref(event.target.value)} placeholder="/contact or https://…" className={`${fieldClass} mt-1`} /></label>
+      </div>
+      {error ? <p role="alert" className="text-xs text-red-700">{error}</p> : null}
+      <div className="flex gap-2">
+        <button type="submit" className="platform-button platform-button-primary">Insert button</button>
+        <button type="button" className="platform-button" onClick={() => { setAddingButton(false); setError(""); }}>Cancel</button>
+      </div>
+    </form> : <div role="group" aria-label="Insert block" className="mt-2 grid grid-cols-2 gap-1 rounded-xl border border-[#E8E7E3] bg-white p-2 sm:grid-cols-4">
+      {blockKinds.map((kind) => <button key={kind} type="button" onClick={() => onAdd(freshBlock(kind))}
+        className="rounded-lg px-3 py-2 text-left text-sm capitalize hover:bg-zinc-50">{kind === "paragraph" ? "Text" : kind}</button>)}
+      <button type="button" onClick={() => setAddingButton(true)} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-50">Button</button>
+    </div>)}
   </div>;
 }
 
@@ -584,28 +638,8 @@ function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChoose
   selected, onSelection, onRewrite }: {
   block: BlogBlock; index: number; count: number; onChange: (block: BlogBlock) => void;
   onMove: (by: number) => void; onRemove: () => void; onChooseImage: () => void; onSlash: () => void;
-  selected: boolean; onSelection: (start: number, end: number, text: string) => void; onRewrite: () => void;
+  selected: boolean; onSelection: (selection: BlogTextSelection | null) => void; onRewrite: () => void;
 }) {
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [link, setLink] = useState("");
-  const paragraphRef = useRef<HTMLTextAreaElement>(null);
-  function setText(text: string) {
-    if (block.type !== "paragraph") return;
-    onChange({ ...block, html: escapeHtml(text).replaceAll("\n", "<br>") });
-  }
-  function applyLink() {
-    const editor = paragraphRef.current;
-    const text = textFromHtml(block.type === "paragraph" ? block.html : "");
-    const start = editor?.selectionStart ?? text.length;
-    const end = editor && editor.selectionEnd > editor.selectionStart ? editor.selectionEnd : start;
-    const selected = end > start ? text.slice(start, end) : link;
-    if (!selected || !/^(https?:\/\/|mailto:|tel:|\/(?!\/))/i.test(link.trim())) return;
-    if (block.type === "paragraph") {
-      const html = `${escapeHtml(text.slice(0, start))}<a href="${escapeHtml(link.trim())}">${escapeHtml(selected)}</a>${escapeHtml(text.slice(end))}`;
-      onChange({ ...block, html: sanitizeRichText(html) });
-    }
-    setLinkOpen(false);
-  }
   return <article className="group relative rounded-xl border border-[#E8E7E3] bg-white p-4 shadow-sm focus-within:border-[#C8C3FF]">
     <div className="mb-3 flex items-center justify-between">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{block.type}</span>
@@ -615,26 +649,8 @@ function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChoose
         <button type="button" aria-label="Remove block" onClick={onRemove} className="rounded p-1 text-zinc-500 hover:bg-red-50 hover:text-red-700"><X size={14} /></button>
       </div>
     </div>
-    {block.type === "paragraph" ? <>
-      <textarea ref={paragraphRef} value={textFromHtml(block.html)} onKeyDown={(event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setLinkOpen(true); }
-        if (event.key === "/" && !event.currentTarget.value) { event.preventDefault(); onSlash(); }
-      }} onSelect={(event) => {
-        const field = event.currentTarget;
-        const start = field.selectionStart;
-        const end = field.selectionEnd;
-        if (end > start) onSelection(start, end, field.value.slice(start, end));
-      }} onChange={(event) => setText(event.target.value)} rows={4}
-        placeholder="Write a paragraph…" className="w-full resize-y border-0 p-0 text-base leading-7 text-zinc-800 outline-none placeholder:text-zinc-300" />
-      <div className="mt-2 flex items-center gap-2 border-t border-zinc-100 pt-2">
-        <button type="button" onClick={() => setLinkOpen(!linkOpen)} className="text-xs text-[#4B3FE0] underline">Link (Ctrl/Cmd+K)</button>
-        {selected ? <button type="button" onClick={onRewrite} className="ml-auto inline-flex items-center gap-1 text-xs text-[#4B3FE0] underline"><Sparkles size={12} />Rewrite selection</button> : null}
-        {linkOpen ? <form onSubmit={(event) => { event.preventDefault(); applyLink(); }} className="flex flex-1 gap-2">
-          <input autoFocus type="url" value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://…" className="min-w-0 flex-1 rounded border px-2 py-1 text-xs" />
-          <button type="submit" className="text-xs font-medium">Add link</button>
-        </form> : null}
-      </div>
-    </> : null}
+    {block.type === "paragraph" ? <BlogRichTextEditor html={block.html} selected={selected} onSelection={onSelection}
+      onChange={(html) => onChange({ ...block, html })} onRewrite={onRewrite} onSlash={onSlash} /> : null}
     {block.type === "heading" ? <div className="flex gap-2"><select value={block.level} onChange={(event) => onChange({ ...block, level: Number(event.target.value) as 2 | 3 | 4 })} className="rounded border px-2 text-sm">
       <option value={2}>H2</option><option value={3}>H3</option><option value={4}>H4</option></select>
       <input value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} maxLength={1000} placeholder="Heading text" className="min-w-0 flex-1 text-lg font-semibold outline-none" /></div> : null}
@@ -663,8 +679,10 @@ function BlockEditor({ block, index, count, onChange, onMove, onRemove, onChoose
       </div><button type="button" disabled={block.images.length >= 20} onClick={onChooseImage} className="platform-button mt-3"><ImagePlus size={14} />Add image</button></div> : null}
     {block.type === "video" ? <div className="space-y-2"><input value={block.url} onChange={(event) => onChange({ ...block, url: event.target.value })} placeholder="YouTube or Vimeo URL" className={fieldClass} />
       <input value={block.title} onChange={(event) => onChange({ ...block, title: event.target.value })} placeholder="Video title" className={fieldClass} /></div> : null}
-    {block.type === "button" ? <div className="grid gap-2 sm:grid-cols-2"><input value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} placeholder="Button text" className={fieldClass} />
-      <input value={block.href} onChange={(event) => onChange({ ...block, href: event.target.value })} placeholder="Button URL" className={fieldClass} /></div> : null}
+    {block.type === "button" ? <div className="grid gap-2 sm:grid-cols-2">
+      <label className="text-xs">Button label<input maxLength={80} value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} className={`${fieldClass} mt-1`} /></label>
+      <label className="text-xs">Button link<input maxLength={2048} value={block.href} onChange={(event) => onChange({ ...block, href: event.target.value })} className={`${fieldClass} mt-1`} /></label>
+    </div> : null}
     {block.type === "divider" ? <hr className="border-zinc-200" /> : null}
     {block.type === "table" ? <div><p className="mb-2 text-xs text-zinc-500">One row per line; separate cells with |.</p>
       <textarea value={block.rows.map((row) => row.join(" | ")).join("\n")} onChange={(event) => onChange({
@@ -831,7 +849,7 @@ function PostPreview({ form }: { form: BlogPostFields }) {
 }
 
 function PreviewBlock({ block }: { block: BlogBlock }) {
-  if (block.type === "paragraph") return <div dangerouslySetInnerHTML={{ __html: sanitizeRichText(block.html) }} />;
+  if (block.type === "paragraph") return <RichTextContent value={block.html} />;
   if (block.type === "heading") {
     const Tag = `h${block.level}` as "h2" | "h3" | "h4";
     return <Tag className="font-semibold">{block.text}</Tag>;
@@ -851,7 +869,10 @@ function PreviewBlock({ block }: { block: BlogBlock }) {
     <img src={image.url} alt={image.alt} className="rounded-xl" />
   </div>)}</div>;
   if (block.type === "video") return <p className="rounded-xl bg-zinc-100 p-5 text-sm">Video: {block.title || block.url}</p>;
-  if (block.type === "button") return <a href={block.href} className="inline-flex rounded-lg bg-[var(--color-primary,#4B3FE0)] px-5 py-3 text-sm font-medium text-white">{block.text}</a>;
+  if (block.type === "button") {
+    const button = blogButtonSchema.safeParse(block);
+    return button.success ? <a href={button.data.href} className="inline-flex rounded-lg bg-[var(--color-primary,#4B3FE0)] px-5 py-3 text-sm font-medium text-white">{button.data.text}</a> : null;
+  }
   if (block.type === "divider") return <hr />;
   if (block.type === "table") return <table className="w-full border-collapse">{block.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} className="border p-2">{cell}</td>)}</tr>)}</table>;
   return null;
