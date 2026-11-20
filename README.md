@@ -87,6 +87,8 @@ Select words directly inside editable canvas text to replace them. Section headi
 and body copy open the floating formatting toolbar, including heading levels 1–6.
 Existing plain section headings keep their original heading level. Button labels
 remain plain-text fields.
+Formatting dropdowns stay open while focus leaves the canvas; click outside
+the toolbar and text, or press Escape, to dismiss the toolbar.
 Use the section toolbar's drag handle to reposition a section instead of dragging
 its content.
 

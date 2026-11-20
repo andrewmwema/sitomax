@@ -145,12 +145,6 @@ export function RichTextToolbar({ editor, readOnly, floating = false, initialHea
       if (element.contains(event.target as Node)) focus();
       else if (!inside(event.target)) hide();
     };
-    const blur = ({ event }: { event: FocusEvent }) => {
-      if (inside(event.relatedTarget)) return;
-      queueMicrotask(() => {
-        if (![...docs].some((doc) => inside(doc.activeElement))) hide();
-      });
-    };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || activeToolbar !== token) return;
       event.preventDefault();
@@ -158,7 +152,8 @@ export function RichTextToolbar({ editor, readOnly, floating = false, initialHea
       hide();
     };
     editor.on("focus", focus);
-    editor.on("blur", blur);
+    // Native dropdowns can blur the canvas before focus reaches the toolbar.
+    // Dismiss on an outside interaction, not that intermediate blur.
     for (const doc of docs) {
       doc.addEventListener("pointerdown", interact, true);
       doc.addEventListener("focusin", interact, true);
@@ -167,7 +162,6 @@ export function RichTextToolbar({ editor, readOnly, floating = false, initialHea
     if (editor.isFocused) focus();
     return () => {
       editor.off("focus", focus);
-      editor.off("blur", blur);
       for (const doc of docs) {
         doc.removeEventListener("pointerdown", interact, true);
         doc.removeEventListener("focusin", interact, true);
