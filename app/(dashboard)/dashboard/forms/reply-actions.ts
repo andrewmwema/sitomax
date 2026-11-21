@@ -69,7 +69,11 @@ export async function sendLeadReply(raw: unknown) {
     if (bcc && !bcc.success) return { error: "No account owner email is available for the copy." };
     let replyTo: string;
     try { replyTo = outboundReplyTo(form.leadId, route.data); }
-    catch { return { error: "The site's reply address is not configured. Check Lead settings." }; }
+    catch (error) {
+      if (!(error instanceof EmailDeliveryError)) throw error;
+      console.error("Could not configure lead reply address", { siteId: context.site.id, mode: route.data.mode });
+      return { error: error.message };
+    }
     const signature = [context.name, context.business.phone, context.business.address, getSiteUrl(context.site)].filter(Boolean).join("\n");
     const branded = agency.data?.show_lead_email_branding ? `Sent via ${agency.data.name || brand.name}` : "";
     const envelope = {
@@ -108,7 +112,7 @@ export async function sendLeadReply(raw: unknown) {
     return deliveryError ? { error: deliveryError, reserved: true } : { success: "Reply accepted for delivery." };
   } catch (error) {
     console.error("Could not send lead reply", { type: error instanceof Error ? error.name : "Unknown" });
-    return { error: "Could not send this reply. Check the conversation before retrying." };
+    return { error: error instanceof EmailDeliveryError ? error.message : "Could not send this reply. Check the conversation before retrying." };
   }
 }
 

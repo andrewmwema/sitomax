@@ -27,7 +27,11 @@ export function leadSender(name: string, domain: string) {
 }
 
 export function outboundReplyTo(leadId: string, route: { mode: "direct" | "tracked"; direct_to: string | null }) {
-  if (route.mode === "direct") return leadEmailAddress.parse(route.direct_to);
+  if (route.mode === "direct") {
+    const address = leadEmailAddress.safeParse(route.direct_to);
+    if (!address.success) throw new EmailDeliveryError("No eligible reply mailbox. Add a notification recipient in Lead settings.");
+    return address.data;
+  }
   const config = inboundReplyConfig();
   if (!config) throw new EmailDeliveryError("Tracked replies are not configured. Contact your agency.");
   return replyAddress(leadId, config.domain, config.tokenSecret);
