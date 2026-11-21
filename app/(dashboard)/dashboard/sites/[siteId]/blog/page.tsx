@@ -4,6 +4,7 @@ import { BlogManager, type BlogAltEntry, type BlogManagerAuthor, type BlogManage
 import type { BlogSettings } from "@/components/dashboard/blog-manager";
 import { blogContentSchema, weakAltText } from "@/lib/blog";
 import { resolveBlogEditorPage } from "@/lib/blog-navigation";
+import { blogSettingsDraftSchema } from "@/lib/blog-settings";
 
 const defaultSettings: BlogSettings = {
   blog_path: "/blog", posts_per_page: 10, index_layout: "grid", default_post_layout: "classic",
@@ -77,7 +78,9 @@ export default async function BlogPage({ params, searchParams }: PageProps<"/das
   const categories = (categoriesResult.data ?? []) as BlogManagerCategory[];
   const authors = (authorsResult.data ?? []) as BlogManagerAuthor[];
   const tags = (tagsResult.data ?? []) as BlogManagerTag[];
-  const settings = { ...defaultSettings, ...(settingsResult.data ?? {}) } as BlogSettings;
+  const draftSettings = blogSettingsDraftSchema.safeParse(settingsResult.data?.draft_settings);
+  const settings = { ...defaultSettings, ...(draftSettings.success ? draftSettings.data : settingsResult.data ?? {}) } as BlogSettings;
+  const settingsTimezone = draftSettings.success ? draftSettings.data.timezone : siteResult.data.timezone;
   if (admin.error || memberships.error) {
     console.error("Could not check blog analytics access", { code: admin.error?.code ?? memberships.error?.code });
   }
@@ -85,5 +88,5 @@ export default async function BlogPage({ params, searchParams }: PageProps<"/das
   return <BlogManager siteId={siteId} editorPageId={editorPageId} siteName={siteResult.data.name ?? siteResult.data.subdomain}
     subdomain={siteResult.data.subdomain} timezone={siteResult.data.timezone} posts={posts}
     categories={categories} authors={authors} tags={tags} altEntries={altEntries} settings={settings}
-    canViewAnalytics={canViewAnalytics} />;
+    settingsTimezone={settingsTimezone} canViewAnalytics={canViewAnalytics} />;
 }

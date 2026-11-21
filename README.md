@@ -111,7 +111,10 @@ with Navigation recovers that original block, including its design, in page-loca
 compatibility mode and suppresses the global header so it cannot appear twice.
 **Use site-wide header again** returns that page to the shared header in one undoable
 step. Restoring newer header versions affects the site's draft header across all
-pages; Publish makes it live.
+pages. The editor's publishing panel lets you publish the current page or choose
+site-wide changes; header and theme drafts are promoted only when their checkboxes
+are selected. Footer blocks remain page content and publish with their page.
+The Pages panel marks unpublished pages and pages with pending edits as Draft.
 
 Click or right-click the header in the canvas for Content, Design, layout,
 hide-on-page and clear-padding actions. The settings drawer follows the current
@@ -122,10 +125,9 @@ and the shared Link Picker; automatic menus follow Pages labels, order and
 visibility. Business info supplies contact details and social profiles.
 
 Page settings also offer **Hide header on this page** and **Transparent header
-over hero**. Saving is draft-only; publishing any page promotes the shared
-header, matching the existing shared-theme behavior. Header saves use an atomic,
-permission-checked RPC and reject conflicting edits from other tabs. Header
-changes are included in version history and undo. Native modal mobile menus
+over hero**. Header saves use an atomic, permission-checked RPC and reject
+conflicting edits from other tabs. Header changes are included in version
+history and undo. Native modal mobile menus
 trap focus, close with Escape and return focus to their trigger; dropdowns
 support Tab, Arrow Down and Escape. Header text/hover/menu-panel/scroll colors
 are contrast-adjusted; image, gradient and transparent backgrounds use solid
@@ -144,7 +146,11 @@ after `0028_global_headers.sql`, then apply
 `supabase/migrations/0030_blog_public_settings.sql`. Each site's dashboard
 includes a Blog manager for posts, categories, authors, SEO settings and
 site-local scheduling. Public blog routes, feeds and SEO use published
-snapshots.
+snapshots. Apply
+[`0039_selective_site_publishing.sql`](supabase/migrations/0039_selective_site_publishing.sql)
+after the preceding migrations to enable selective site publishing and staged
+blog defaults. Blog default and timezone edits are saved as drafts and become
+public only when **Blog settings** is selected in the editor's Publish panel.
 To show recent articles on an existing page, open the website editor and choose
 **Add section → Blog → Latest blog posts**, then publish the page. The live feed
 updates automatically as posts are published. Post links and **View all posts**

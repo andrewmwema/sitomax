@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   openLibrary: vi.fn(),
   header: false,
   plugins: [] as string[],
+  publishState: vi.fn(),
 }));
 
 function puckState() {
@@ -58,6 +59,11 @@ vi.mock("@puckeditor/core", () => ({
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: { components: {} } }));
 vi.mock("@/lib/puck/editor-config", () => ({ editorConfig: () => ({}) }));
+vi.mock("@/app/editor/[pageId]/actions", () => ({
+  getSitePublishState: (...args: unknown[]) => mocks.publishState(...args),
+  publishSiteChanges: vi.fn(),
+  savePageMenuLabel: vi.fn(),
+}));
 vi.mock("./use-draft-persistence", () => ({
   useDraftPersistence: () => ({ dirty: mocks.dirty, busy: mocks.busy, error: null, save: mocks.save,
     buildEmptyPage: mocks.build, buildNotes: [] }),
@@ -93,6 +99,7 @@ const props: ComponentProps<typeof PageEditor> = {
   userId: "user",
   sitePages: [],
   seoPages: [],
+  pendingSiteChanges: { headerChanged: false, themeChanged: false, blogSettingsChanged: false },
   business: emptyBusiness,
   siteSeo: { socialImage: "", googleAnalyticsId: "", metaPixelId: "", googleVerification: "", noindex: false },
 };
@@ -106,6 +113,10 @@ beforeEach(() => {
   mocks.busy = null;
   mocks.dirty = false;
   mocks.header = false;
+  mocks.publishState.mockResolvedValue({ status: "success", data: {
+    pages: [{ id: "home-page", slug: "", title: "Home", published: true, hasChanges: true, footerChanged: false }],
+    headerChanged: false, themeChanged: false, blogSettingsChanged: false, liveUrl: "https://example.test",
+  } });
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   mocks.save.mockResolvedValue(true);
 });
@@ -350,7 +361,9 @@ describe("editor navigation", () => {
       expect(mocks.save).not.toHaveBeenCalled();
       expect(container.textContent).toContain("Some placeholder text");
       await act(async () => button("Publish anyway").click());
-      expect(mocks.save).toHaveBeenLastCalledWith("publish");
+      expect(mocks.publishState).toHaveBeenCalledWith("site");
+      expect(container.textContent).toContain("Publish changes");
+      expect(container.textContent).toContain("Publish this page");
       await act(async () => root.unmount());
     });
   it("keeps the normal editor default when no SEO panel was requested", async () => {

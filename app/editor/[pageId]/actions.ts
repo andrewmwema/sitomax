@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/form-state";
@@ -13,6 +14,12 @@ import {
   collectEmbeds,
   hasUnauthorizedEmbeds,
 } from "@/lib/layout/embed";
+import {
+  hasUnpublishedFooterChanges,
+  hasUnpublishedPageChanges,
+  type PublishSelection,
+} from "@/lib/publishing";
+import { getSiteUrl } from "@/lib/site-url";
 
 /**
  * Editor Server Actions. All queries run with the user-scoped client, so
@@ -188,6 +195,104 @@ export async function saveAiEdit(pageId: string, data: unknown, raw: unknown): P
 
 export async function publishPage(pageId: string, data: unknown): Promise<ActionState> {
   return updatePage(pageId, data, true);
+}
+
+export async function getSitePublishState(siteId: string) {
+  const parsedId = z.uuid().safeParse(siteId);
+  if (!parsedId.success) return { status: "error" as const, message: "Invalid site." };
+  const { supabase } = await requireUser();
+  const [siteResult, pagesResult, blogResult] = await Promise.all([
+    supabase.from("sites")
+      .select("draft_header, published_header, theme, draft_theme, subdomain, custom_domain, domain_verified")
+      .eq("id", parsedId.data).maybeSingle(),
+    supabase.from("pages")
+      .select("id, slug, title, draft_data, published_data, published_at")
+      .eq("site_id", parsedId.data).order("sort_order").order("slug"),
+    supabase.from("blog_settings").select("draft_settings").eq("site_id", parsedId.data).maybeSingle(),
+  ]);
+  if (siteResult.error || pagesResult.error || blogResult.error) {
+    console.error("Could not load site publishing state", {
+      site: siteResult.error?.code, pages: pagesResult.error?.code, blog: blogResult.error?.code,
+    });
+    const migrationMissing = [siteResult.error?.code, pagesResult.error?.code, blogResult.error?.code]
+      .some((code) => code === "42703" || code === "42P01");
+    return { status: "error" as const, message: migrationMissing
+      ? "Could not load unpublished changes. Check that the required database migrations are applied."
+      : "Could not load unpublished changes. Please try again." };
+  }
+  const site = siteResult.data;
+  if (!site) return { status: "error" as const, message: "You do not have access to this site." };
+  return {
+    status: "success" as const,
+    data: {
+      pages: (pagesResult.data ?? []).map((page) => ({
+        id: page.id,
+        slug: page.slug,
+        title: page.title,
+        published: page.published_data !== null,
+        hasChanges: hasUnpublishedPageChanges(page.draft_data, page.published_data),
+        footerChanged: hasUnpublishedFooterChanges(page.draft_data, page.published_data),
+      })),
+      headerChanged: site.draft_header !== null &&
+        JSON.stringify(site.draft_header) !== JSON.stringify(site.published_header),
+      themeChanged: site.draft_theme !== null && JSON.stringify(site.draft_theme) !== JSON.stringify(site.theme),
+      blogSettingsChanged: blogResult.data?.draft_settings != null,
+      liveUrl: getSiteUrl(site),
+    },
+  };
+}
+
+export async function publishSiteChanges(siteId: string, rawSelection: unknown) {
+  const parsedId = z.uuid().safeParse(siteId);
+  const parsedSelection = z.strictObject({
+    pageIds: z.array(z.uuid()),
+    publishHeader: z.boolean(),
+    publishTheme: z.boolean(),
+    publishBlogSettings: z.boolean(),
+  }).safeParse(rawSelection);
+  if (!parsedId.success || !parsedSelection.success) {
+    return { status: "error" as const, message: "Invalid publishing selection." };
+  }
+  const selection = parsedSelection.data satisfies PublishSelection;
+  if (new Set(selection.pageIds).size !== selection.pageIds.length ||
+    (selection.pageIds.length === 0 && !selection.publishHeader && !selection.publishTheme && !selection.publishBlogSettings)) {
+    return { status: "error" as const, message: "Select at least one change to publish." };
+  }
+
+  const { supabase } = await requireUser();
+  const [siteResult, blogResult] = await Promise.all([
+    supabase.from("sites").select("draft_header, draft_theme, subdomain, custom_domain, domain_verified")
+      .eq("id", parsedId.data).maybeSingle(),
+    selection.publishBlogSettings
+      ? supabase.from("blog_settings").select("draft_settings").eq("site_id", parsedId.data).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (siteResult.error || !siteResult.data || blogResult.error) {
+    console.error("Could not load publishing data", { site: siteResult.error?.code, blog: blogResult.error?.code });
+    return { status: "error" as const, message: "Could not load the changes to publish." };
+  }
+  const site = siteResult.data;
+  const { error } = await supabase.rpc("publish_site_changes", {
+    p_site_id: parsedId.data,
+    p_page_ids: selection.pageIds,
+    p_publish_header: selection.publishHeader,
+    p_expected_header: selection.publishHeader ? site.draft_header : null,
+    p_publish_theme: selection.publishTheme,
+    p_expected_theme: selection.publishTheme ? site.draft_theme : null,
+    p_publish_blog_settings: selection.publishBlogSettings,
+    p_expected_blog_settings: selection.publishBlogSettings ? blogResult.data?.draft_settings ?? null : null,
+  });
+  if (error) {
+    console.error("Could not publish site changes", { code: error.code });
+    return { status: "error" as const, message: error.code === "40001"
+      ? "These changes were updated in another editor. Reload and review them before publishing."
+      : error.code === "42501"
+        ? "You no longer have permission to publish these changes."
+        : "Could not publish changes. Check that migration 0039 has been applied, then try again." };
+  }
+  revalidatePath("/s/[site]/[[...slug]]", "page");
+  revalidatePath("/editor/[pageId]", "page");
+  return { status: "success" as const, message: "Changes published.", liveUrl: getSiteUrl(site) };
 }
 
 export async function listPageVersions(pageId: string): Promise<{ id: string; published_at: string; kind: "published" | "ai_edit" | "header_edit" | "header_migration" }[]> {

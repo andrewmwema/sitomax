@@ -26,6 +26,7 @@ export type BlogFeedMetadata = {
   siteBlogPath?: string;
   siteBlogPreview?: boolean;
   siteBlogTimezone?: string;
+  siteBlogSettingsPending?: boolean;
   siteBlogFeedUnavailable?: boolean;
 };
 

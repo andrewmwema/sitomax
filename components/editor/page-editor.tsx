@@ -26,6 +26,7 @@ import {
 } from "@puckeditor/core";
 import { ArrowLeft, ArrowUpRight, BookOpen, Bookmark, Check, Eye, FileText, Globe, Layers, LayoutGrid, Monitor, MoreHorizontal, Palette, PanelLeft, PanelRight, Plus, Redo2, Search, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getSitePublishState, publishSiteChanges } from "@/app/editor/[pageId]/actions";
 import { savePageMenuLabel } from "@/app/editor/[pageId]/actions";
 import { defaultMenuLabel, pageMenuLinks, siteContacts } from "@/lib/page-navigation";
 import { BusinessInfo } from "@/components/dashboard/business-info";
@@ -74,6 +75,13 @@ import { blogManagerHref } from "@/lib/blog-navigation";
 import type { BlogFeedMetadata } from "@/components/blocks/blog-posts";
 import { defaultHeader, extractNavigation, headerSchema, type HeaderRoot } from "@/lib/header";
 import { renderHeaderEditor } from "./header-editor";
+import { PublishChangesDialog, type PublishDialogState } from "./publish-changes-dialog";
+import {
+  hasUnpublishedFooterChanges,
+  hasUnpublishedPageChanges,
+  publishChangeCount,
+  type PublishSelection,
+} from "@/lib/publishing";
 
 type EditorUi = {
   pageId: string;
@@ -92,8 +100,10 @@ type EditorUi = {
   business: Business;
   theme: SiteTheme;
   initialHeader?: unknown;
+  publishedData: unknown;
   headersReady: boolean;
   updateBusiness: (business: Business) => void;
+  pendingSiteChanges: { headerChanged: boolean; themeChanged: boolean; blogSettingsChanged: boolean };
 };
 
 const EditorUiContext = createContext<EditorUi | null>(null);
@@ -114,9 +124,14 @@ function usePersistence() {
 }
 
 function EditorRuntime({ children }: { children: React.ReactNode }) {
-  const { pageId, theme, initialHeader, business, headersReady } = useEditorUi();
-  const { pages } = useInteractions();
-  const persistence = useDraftPersistence(pageId, theme, initialHeader);
+  const { pageId, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
+  const { pages, updatePagePublishState } = useInteractions();
+  const markDraftSaved = useCallback((draft: Data, kind: "save" | "publish") => {
+    if (kind === "publish") updatePagePublishState(pageId, false, false, true);
+    else updatePagePublishState(pageId, hasUnpublishedPageChanges(draft, publishedData),
+      hasUnpublishedFooterChanges(draft, publishedData));
+  }, [pageId, publishedData, updatePagePublishState]);
+  const persistence = useDraftPersistence(pageId, theme, initialHeader, markDraftSaved);
   return <PersistenceContext.Provider value={persistence}><AskAiProvider pageId={pageId} theme={theme} persistence={persistence}
     metadata={{ siteMenu: { links: pageMenuLinks(pages.filter(page => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) },
       siteLinks: linkContext(pages), pagePath: `/${pages.find(page => page.id === pageId)?.slug ?? ""}`, headersReady }}>
@@ -434,13 +449,53 @@ const BLOCK_LABELS = Object.fromEntries(
 function HeaderActions() {
   const getPuck = useGetPuck();
   const askAi = useAskAi();
-  const { siteId, previewUrl, openThemePanel } = useEditorUi();
+  const { siteId, previewUrl, openThemePanel, pendingSiteChanges } = useEditorUi();
   const persistence = usePersistence();
   const { busy } = persistence;
-  const { pages, pageId } = useInteractions();
+  const { pages, pageId, updatePagePublishState } = useInteractions();
   const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
   const [linkIssues, setLinkIssues] = useState<LinkIssue[]>([]);
+  const [publishDialog, setPublishDialog] = useState<PublishDialogState | null>(null);
+  const [preparingPublish, setPreparingPublish] = useState(false);
+  const [publishError, setPublishError] = useState("");
   const run = persistence.save;
+  const router = useRouter();
+
+  const pendingCount = publishChangeCount({
+    pages: pages.map((page) => ({
+      id: page.id,
+      hasChanges: page.hasUnpublishedChanges === true || page.published === false ||
+        (page.id === pageId && persistence.dirty),
+      footerChanged: false,
+    })),
+    ...pendingSiteChanges,
+  });
+
+  const openPublishDialog = useCallback(async () => {
+    if (preparingPublish || busy !== null) return;
+    setPreparingPublish(true);
+    setPublishError("");
+    try {
+      if (persistence.dirty && !(await persistence.save())) return;
+      const result = await getSitePublishState(siteId);
+      if (result.status === "error") {
+        setPublishError(result.message);
+        return;
+      }
+      setPublishDialog({
+        ...result.data,
+        pages: result.data.pages.map((item) => ({
+          ...item,
+          label: item.title?.trim() || (item.slug ? item.slug.replaceAll("/", " / ") : "Home"),
+        })),
+      });
+    } catch (cause) {
+      console.error("Could not prepare site publishing", cause);
+      setPublishError("Could not load unpublished changes. Please try again.");
+    } finally {
+      setPreparingPublish(false);
+    }
+  }, [busy, persistence, preparingPublish, siteId]);
 
   // Publishing first checks for leftover [placeholder] text and broken links.
   const requestPublish = useCallback(() => {
@@ -452,8 +507,20 @@ function HeaderActions() {
       setLinkIssues(broken);
       return;
     }
-    void run("publish");
-  }, [getPuck, run, pages, pageId]);
+    void openPublishDialog();
+  }, [getPuck, openPublishDialog, pages, pageId]);
+
+  const publishSelection = useCallback(async (selection: PublishSelection) => {
+    if (selection.pageIds.includes(pageId) && persistence.dirty && !(await persistence.save())) {
+      return { status: "error" as const, message: "Save the current draft before publishing." };
+    }
+    const result = await publishSiteChanges(siteId, selection);
+    if (result.status === "success") {
+      selection.pageIds.forEach((id) => updatePagePublishState(id, false, false, true));
+      router.refresh();
+    }
+    return result;
+  }, [pageId, persistence, router, siteId, updatePagePublishState]);
 
   const selectSection = useCallback(
     (index: number) => {
@@ -475,6 +542,10 @@ function HeaderActions() {
         {!persistence.error && !busy && !persistence.dirty ? <Check size={12} className="shrink-0 text-[#6B6A66]" /> : null}
         {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
       </span>
+      {pendingCount > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800" aria-label={`${pendingCount} unpublished changes`}>
+        Unpublished changes <span className="rounded-full bg-amber-100 px-1.5">{pendingCount}</span>
+      </span> : null}
+      {publishError ? <span role="alert" className="max-w-48 text-xs text-red-700">{publishError}</span> : null}
       <button type="button" onClick={() => askAi?.open()} disabled={!!askAi?.proposal} aria-keyshortcuts="Control+K Meta+K"
         className="platform-button platform-button-ai"><Sparkles size={13} />Ask AI</button>
       <details className="editor-more" onKeyDown={(event) => {
@@ -508,11 +579,11 @@ function HeaderActions() {
       </a>
       <button
         type="button"
-        disabled={busy !== null}
+        disabled={busy !== null || preparingPublish}
         onClick={requestPublish}
         className="platform-button platform-button-primary"
       >
-        <ArrowUpRight size={14} />{busy === "publish" ? "Publishing…" : "Publish"}
+        <ArrowUpRight size={14} />{preparingPublish ? "Preparing…" : "Publish"}
       </button>
       {placeholderHits ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4">
@@ -572,7 +643,7 @@ function HeaderActions() {
                 type="button"
                 onClick={() => {
                   setPlaceholderHits(null);
-                  void run("publish");
+                  void openPublishDialog();
                 }}
                 className={`${buttonClasses} bg-[#121212] text-white hover:bg-zinc-700`}
               >
@@ -582,6 +653,8 @@ function HeaderActions() {
           </div>
         </div>
       ) : null}
+      {publishDialog ? <PublishChangesDialog state={publishDialog} currentPageId={pageId}
+        onClose={() => setPublishDialog(null)} onPublish={publishSelection} /> : null}
     </div>
   );
 }
@@ -688,6 +761,8 @@ export function PageEditor({
   siteSeo,
   headersReady = true,
   blogFeed,
+  pendingSiteChanges,
+  publishedData,
 }: {
   page: { id: string; slug: string; title: string | null };
   site: { id: string; account_id: string; name: string | null; subdomain: string; custom_domain: string | null; domain_verified: boolean; theme: SiteTheme | null; draft_header?: unknown };
@@ -703,6 +778,8 @@ export function PageEditor({
   siteSeo: SiteSeo;
   headersReady?: boolean;
   blogFeed?: BlogFeedMetadata;
+  pendingSiteChanges: { headerChanged: boolean; themeChanged: boolean; blogSettingsChanged: boolean };
+  publishedData?: unknown;
 }) {
   const searchParams = useSearchParams();
   const initialUi = useMemo(() => searchParams.get("panel") === "seo"
@@ -722,10 +799,30 @@ export function PageEditor({
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("content");
   const [device, setDevice] = useState<DeviceId>("desktop");
   const [menu, setMenu] = useState<InteractionUi["menu"]>(null);
+  const [pageStatusOverride, setPageStatusOverride] = useState<{
+    source: EditorPageLink[];
+    values: Record<string, { hasUnpublishedChanges: boolean; footerChanged: boolean; published?: boolean }>;
+  } | null>(null);
+  const editorPages = useMemo(() => {
+    if (!pageStatusOverride || pageStatusOverride.source !== sitePages) return sitePages;
+    return sitePages.map((item) => ({
+      ...item,
+      ...pageStatusOverride.values[item.id],
+    }));
+  }, [pageStatusOverride, sitePages]);
+  const updatePagePublishState = useCallback((id: string, hasChanges: boolean, footerChanged: boolean, published?: boolean) => {
+    setPageStatusOverride((previous) => ({
+      source: sitePages,
+      values: {
+        ...(previous?.source === sitePages ? previous.values : {}),
+        [id]: { hasUnpublishedChanges: hasChanges, footerChanged, ...(published === undefined ? {} : { published }) },
+      },
+    }));
+  }, [sitePages]);
   const interactionUi = useMemo<InteractionUi>(() => ({
-    pageId: page.id, accountId: site.account_id, userId, pages: sitePages,
+    pageId: page.id, accountId: site.account_id, userId, pages: editorPages, updatePagePublishState,
     tab: inspectorTab, setTab: setInspectorTab, device, setDevice, menu, setMenu,
-  }), [page.id, site.account_id, userId, sitePages, inspectorTab, device, menu]);
+  }), [page.id, site.account_id, userId, editorPages, updatePagePublishState, inspectorTab, device, menu]);
   const closeLibrary = useCallback(() => {
     setPreview(null);
     setLibrary((previous) => ({ ...previous, open: false }));
@@ -748,8 +845,9 @@ export function PageEditor({
       canManageDomains,
       siteSeo,
       business, updateBusiness: setBusiness, theme, initialHeader: site.draft_header, headersReady,
+      pendingSiteChanges, publishedData,
     }),
-    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady, canManageDomains],
+    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady, canManageDomains, pendingSiteChanges, publishedData],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
@@ -852,7 +950,7 @@ export function PageEditor({
               config={config}
               data={data}
               ui={initialUi}
-              metadata={{ theme, siteMenu: { links: pageMenuLinks(sitePages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) }, siteLinks: linkContext(sitePages),
+              metadata={{ theme, siteMenu: { links: pageMenuLinks(editorPages.filter((page) => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) }, siteLinks: linkContext(editorPages),
                 renderHeader: headersReady ? renderHeaderEditor : undefined, pagePath: `/${page.slug}`, ...blogFeed,
               }}
               overrides={overrides}

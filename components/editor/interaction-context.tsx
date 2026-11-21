@@ -10,12 +10,15 @@ export type EditorPageLink = {
   /** Top-level sections with anchor IDs (link picker and link QA). */
   sections?: PageSection[];
   published?: boolean;
+  hasUnpublishedChanges?: boolean;
+  footerChanged?: boolean;
 };
 export type InteractionUi = {
   pageId: string;
   accountId: string;
   userId: string;
   pages: EditorPageLink[];
+  updatePagePublishState: (id: string, hasChanges: boolean, footerChanged: boolean, published?: boolean) => void;
   tab: InspectorTab;
   setTab: (tab: InspectorTab) => void;
   device: DeviceId;

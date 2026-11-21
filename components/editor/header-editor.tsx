@@ -8,6 +8,7 @@ import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
 import { ImageUploadField } from "./image-upload-field";
 import { LinkFieldControl } from "./link-picker";
 import { useAskAi } from "./ask-ai";
+import { useInteractions } from "./interaction-context";
 
 const usePuck = createUsePuck();
 const control = "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm";
@@ -15,6 +16,7 @@ type Tab = "content" | "design" | "layout";
 
 function HeaderSettings({ tab, onTab, close }: { tab: Tab; onTab: (tab: Tab) => void; close: () => void }) {
   const getPuck = useGetPuck();
+  const { pages } = useInteractions();
   const props = usePuck(state => state.appState.data.root.props);
   const width = usePuck(state => state.appState.ui.viewports.current.width);
   const device = width === "100%" || width >= 1024 ? "desktop" : width >= 768 ? "tablet" : "mobile";
@@ -41,7 +43,7 @@ function HeaderSettings({ tab, onTab, close }: { tab: Tab; onTab: (tab: Tab) => 
     <header className="border-b p-5">
       <div className="flex items-center justify-between"><h2 className="font-semibold">Site header</h2><button type="button" className="platform-button" onClick={close}>Close</button></div>
       <span className="mt-2 inline-flex rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">{device[0].toUpperCase() + device.slice(1)} settings</span>
-      <p className="mt-2 text-xs text-zinc-500">Shared across every page. Save as a draft; Publish on any page makes this header live site-wide.</p>
+      <p className="mt-2 text-xs text-zinc-500">Shared across every page. Save as a draft; select Header in the Publish panel to make it live site-wide.</p>
     </header>
     <div className="flex border-b" role="group" aria-label="Header settings">
       {(["content", "design", "layout"] as const).map(item => <button key={item} type="button"
@@ -84,7 +86,13 @@ function HeaderSettings({ tab, onTab, close }: { tab: Tab; onTab: (tab: Tab) => 
           onChange={event => change({ ...header, menu: { ...header.menu, source: event.target.value as "pages" | "custom" } })}>
           <option value="pages">Automatic from Pages</option><option value="custom">Custom links & dropdowns</option>
         </select></label>
-        {header.menu.source === "pages" ? <p className="text-xs text-zinc-500">Use Pages to change menu labels, order and hidden pages.</p> :
+        {header.menu.source === "pages" ? <>
+          <p className="text-xs text-zinc-500">Use Pages to change menu labels, order and hidden pages.</p>
+          {pages.some((page) => page.published === false && !page.hide_from_menu && !page.ai_pending_build) ? <p role="status" className="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">
+            Not published yet — hidden on your live site: {pages.filter((page) => page.published === false && !page.hide_from_menu && !page.ai_pending_build)
+              .map((page) => page.title?.trim() || page.nav_label || page.slug || "Home").join(", ")}.
+          </p> : null}
+        </> :
           <div className="space-y-3">
             {header.menu.items.map((item, index) => <fieldset key={index} className="space-y-2 rounded-lg border p-3">
               <legend className="px-1 text-xs font-medium">Menu item {index + 1}</legend>

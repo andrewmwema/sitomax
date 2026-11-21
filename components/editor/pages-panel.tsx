@@ -131,7 +131,9 @@ export function PagesManager({ siteId, pageId, pages, persistence }: {
             <span className="flex items-center gap-1.5 text-[11px] text-zinc-500">
               <span className="truncate">/{page.slug}</span>
               {page.hide_from_menu ? <span className="inline-flex items-center gap-0.5"><EyeOff size={11} />Hidden</span> : null}
-              {page.published === false ? <span className="rounded bg-zinc-100 px-1">Draft</span> : null}
+              {page.published === false || page.hasUnpublishedChanges
+                ? <span className="inline-flex items-center gap-1"><span aria-hidden className="size-1.5 rounded-full bg-amber-500" />Draft</span>
+                : null}
             </span>
           </button>
           <PageMenu page={page} open={menuFor === page.id} disabled={disabled}

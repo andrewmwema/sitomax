@@ -45,6 +45,7 @@ type Props = {
   subdomain: string;
   siteName: string;
   timezone: string;
+  settingsTimezone: string;
   posts: BlogManagerPost[];
   categories: BlogManagerCategory[];
   authors: BlogManagerAuthor[];
@@ -526,9 +527,9 @@ function AltTextRow({ siteId, editorPageId, entry }: Pick<Props, "siteId" | "edi
   </article>;
 }
 
-function SettingsView({ siteId, settings, timezone }: Props) {
+function SettingsView({ siteId, settings, timezone, settingsTimezone }: Props) {
   const router = useRouter();
-  const [form, setForm] = useState({ ...settings, timezone, cta_link: typeof settings.cta_link === "string" ? settings.cta_link : "" });
+  const [form, setForm] = useState({ ...settings, timezone: settingsTimezone || timezone, cta_link: typeof settings.cta_link === "string" ? settings.cta_link : "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (key: keyof typeof form, value: string | number | boolean) => setForm((old) => ({ ...old, [key]: value }));
@@ -543,7 +544,7 @@ function SettingsView({ siteId, settings, timezone }: Props) {
   }
   return <form onSubmit={save} className="max-w-3xl rounded-xl border border-[#E8E7E3] bg-white p-6">
     <h2 className="text-lg font-semibold">Blog defaults</h2>
-    <p className="mt-1 text-sm text-zinc-500">These defaults are used by the public blog.</p>
+    <p className="mt-1 text-sm text-zinc-500">These defaults are saved as a draft. Publish from the editor to make them live.</p>
     <div className="mt-5 grid gap-4 sm:grid-cols-2">
       <Field label="Blog path"><input value={form.blog_path} onChange={(event) => set("blog_path", event.target.value)} className={control} /></Field>
       <Field label="Posts per page"><input type="number" min={1} max={100} value={form.posts_per_page} onChange={(event) => set("posts_per_page", Number(event.target.value))} className={control} /></Field>

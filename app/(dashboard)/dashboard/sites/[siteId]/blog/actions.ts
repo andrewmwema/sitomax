@@ -7,6 +7,7 @@ import {
   blogContentSchema, blogPostFieldsSchema, blogPublicationSnapshot, blogSlugify, readingMinutes, sanitizeBlogContent,
   type BlogPostFields,
 } from "@/lib/blog";
+import { blogSettingsDraftSchema } from "@/lib/blog-settings";
 import { siteLocalTimeToUtc } from "@/lib/blog-date";
 
 type ActionResult = { status: "success"; message: string; postId?: string; tagId?: string; content?: z.infer<typeof blogContentSchema> }
@@ -437,17 +438,7 @@ export async function saveBlogImageAltText(siteId: string, postId: string, raw: 
 }
 
 export async function saveBlogSettings(siteId: string, raw: unknown): Promise<ActionResult> {
-  const input = z.strictObject({
-    timezone: z.string().trim().min(1).max(64),
-    blog_path: z.string().trim().min(1).max(200),
-    posts_per_page: z.number().int().min(1).max(100),
-    index_layout: z.enum(["grid", "list", "magazine"]),
-    default_post_layout: z.enum(["classic", "wide", "minimal"]),
-    show_author: z.boolean(), show_date: z.boolean(), show_reading_time: z.boolean(), show_share_links: z.boolean(),
-    show_in_menu: z.boolean(), noindex_tags: z.boolean(),
-    cta_text: z.string().max(300), cta_button_text: z.string().max(80),
-    cta_link: z.string().max(2048),
-  }).safeParse(raw);
+  const input = blogSettingsDraftSchema.safeParse(raw);
   if (!uuid.safeParse(siteId).success || !input.success) return failed("Some blog settings are invalid.");
   try {
     new Intl.DateTimeFormat("en", { timeZone: input.data.timezone });
@@ -462,16 +453,17 @@ export async function saveBlogSettings(siteId: string, raw: unknown): Promise<Ac
   const link = cta_link.trim();
   const cta = link && (/^(https?:\/\/|mailto:|tel:)/i.test(link) || (/^\/(?!\/)/.test(link))) ? link : "";
   if (link && !cta) return failed("Enter a safe CTA link.");
-  const [siteResult, settingsResult] = await Promise.all([
-    supabase.rpc("update_blog_site_timezone", { p_site_id: siteId, p_timezone: input.data.timezone }),
-    supabase.from("blog_settings").upsert({ site_id: siteId, ...settings, cta_link: cta }).select("site_id"),
-  ]);
-  if (siteResult.error || settingsResult.error || !settingsResult.data?.length) {
-    console.error("Could not save blog settings", { site: siteResult.error?.code, settings: settingsResult.error?.code });
-    return failed("Could not save blog settings.");
+  const { data, error } = await supabase.rpc("save_draft_blog_settings", {
+    p_site_id: siteId, p_settings: { ...settings, cta_link: cta },
+  });
+  if (error || data !== true) {
+    console.error("Could not save blog settings draft", { code: error?.code });
+    return failed(error?.code === "42501"
+      ? "You do not have permission to change these blog settings."
+      : "Could not save blog settings as a draft. Check that migration 0039 has been applied.");
   }
   refresh(siteId);
-  return ok("Blog settings saved.");
+  return ok("Blog settings saved as a draft. Publish from the editor to make them live.");
 }
 
 export async function listBlogPostVersions(postId: string) {

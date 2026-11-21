@@ -20,7 +20,12 @@ export function editorTheme(data: Data, fallback: SiteTheme): SiteTheme {
 }
 
 const usePuck = createUsePuck();
-export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHeader?: unknown) {
+export function useDraftPersistence(
+  pageId: string,
+  theme: SiteTheme,
+  initialHeader?: unknown,
+  onDraftSaved?: (data: Data, kind: "save" | "publish") => void,
+) {
   const getPuck = useGetPuck();
   const data = usePuck((state) => state.appState.data);
   const [saved, setSaved] = useState(() => JSON.stringify(data));
@@ -61,7 +66,10 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
           markHeaderSaved(snapshot);
           lastOverride.current = override;
           setSaved(JSON.stringify(snapshot));
-          if (kind === "save") return true;
+          if (kind === "save") {
+            onDraftSaved?.(snapshot, kind);
+            return true;
+          }
         }
         const result = await (kind === "publish" ? publishPage : savePageDraft)(pageId, forSaving(snapshot));
         if (result.status !== "success") {
@@ -70,6 +78,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
         }
         setSaved(JSON.stringify(snapshot));
         markHeaderSaved(snapshot);
+        onDraftSaved?.(snapshot, kind);
         return true;
       } catch (cause) {
         console.error("Unable to save editor changes", cause);
@@ -79,7 +88,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, forSaving, markHeaderSaved]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved]);
 
   const applyAi = useCallback(async (base: Data, next: Data, nextTheme?: SiteTheme, capture = true): Promise<boolean> => {
     while (active.current) await active.current;
@@ -106,6 +115,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
         getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } });
         getPuck().dispatch({ type: "setData", data: snapshot, recordHistory: true });
         setSaved(JSON.stringify(snapshot));
+        onDraftSaved?.(snapshot, "save");
         return true;
       } catch {
         setError("Could not save your AI edit. Please retry.");
@@ -114,7 +124,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, forSaving, markHeaderSaved]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved]);
 
   const buildEmptyPage = useCallback(async (): Promise<boolean> => {
     if (active.current) return false;
@@ -147,6 +157,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
         getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } });
         getPuck().dispatch({ type: "setData", data: next, recordHistory: true });
         setSaved(JSON.stringify(next));
+        onDraftSaved?.(next, "save");
         return true;
       } catch {
         setError("Could not build this page. Your local draft has not been replaced.");
@@ -155,7 +166,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, save]);
+  }, [getPuck, pageId, save, onDraftSaved]);
 
   const restore = useCallback(async (versionId: string): Promise<boolean> => {
     while (active.current) await active.current;
@@ -178,6 +189,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
         getPuck().dispatch({ type: "setData", data: restored, recordHistory: true });
         getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } });
         setSaved(JSON.stringify(restored));
+        onDraftSaved?.(restored, "save");
         return true;
       } catch (cause) {
         console.error("Unable to restore editor version", cause);
@@ -187,7 +199,7 @@ export function useDraftPersistence(pageId: string, theme: SiteTheme, initialHea
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme]);
+  }, [getPuck, pageId, theme, onDraftSaved]);
 
   useEffect(() => {
     const timer = setInterval(() => {

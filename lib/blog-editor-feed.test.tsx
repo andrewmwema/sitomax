@@ -6,6 +6,11 @@ import { loadEditorBlogFeed } from "./blog-editor-feed";
 import { brand } from "./brand";
 
 vi.mock("@/components/blocks/ui/rich-text", () => ({ RichTextContent: () => null }));
+vi.mock("@/lib/puck/fields", () => ({
+  designField: () => ({}), iconField: () => ({}), imageField: () => ({}),
+  linkField: () => ({}), richHeadingField: () => ({}), richTextField: () => ({}),
+}));
+vi.mock("@/lib/puck/config", () => ({ puckConfig: { components: {} } }));
 
 const site = { id: "site", subdomain: "client", custom_domain: "example.com", domain_verified: true };
 const metadata = {
@@ -29,7 +34,12 @@ it("renders published images and excerpts in the canvas using the site's blog UR
     const url = new URL(input instanceof Request ? input.url : input);
     if (url.pathname.endsWith("/blog_settings")) {
       expect(url.searchParams.get("site_id")).toBe("eq.site");
-      return Response.json({ blog_path: "/journal" });
+      return Response.json({ blog_path: "/blog", draft_settings: {
+        timezone: "UTC", blog_path: "/journal", posts_per_page: 10, index_layout: "grid",
+        default_post_layout: "classic", show_author: true, show_date: true, show_reading_time: true,
+        show_share_links: true, show_in_menu: true, noindex_tags: true, cta_text: "",
+        cta_button_text: "", cta_link: "",
+      } });
     }
     if (url.pathname.endsWith("/sites")) return Response.json({ timezone: "UTC" });
     expect(url.pathname).toBe("/rest/v1/posts");
@@ -44,6 +54,7 @@ it("renders published images and excerpts in the canvas using the site's blog UR
   });
   const supabase = createClient("https://db.example.test", "key", { global: { fetch }, auth: { persistSession: false } });
   const feed = await loadEditorBlogFeed(supabase, site);
+  expect(feed.siteBlogSettingsPending).toBe(true);
   const markup = renderFeed(feed, { heading: "Our journal", variant: "featured-list" });
   expect(markup).toContain(">Our journal</h2>");
   expect(markup).toContain('src="/samples/kitchen.jpg"');

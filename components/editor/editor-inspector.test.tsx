@@ -23,7 +23,7 @@ function InspectorHarness() {
   const [tab, setTab] = useState<InspectorTab>("content");
   return <InteractionContext.Provider value={{
     pageId: "page", accountId: "account", userId: "user", pages: [], tab, setTab,
-    device: "desktop", setDevice: () => {}, menu: null, setMenu: () => {},
+    updatePagePublishState: () => {}, device: "desktop", setDevice: () => {}, menu: null, setMenu: () => {},
   }}>
     <EditorInspector fields={{ heading: <input defaultValue="[Add a headline]" /> }} isLoading={false} />
   </InteractionContext.Provider>;

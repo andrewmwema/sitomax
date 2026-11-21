@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   data: { content: [], root: { props: { title: "Team" } } } as Data,
-  dispatch: vi.fn(), build: vi.fn(), save: vi.fn(),
+  dispatch: vi.fn(), build: vi.fn(), save: vi.fn(), draftSaved: vi.fn(),
 }));
 vi.mock("@puckeditor/core", () => ({
   createUsePuck: () => (selector: (value: unknown) => unknown) => selector({ appState: { data: mocks.data } }),
@@ -29,7 +29,7 @@ const theme = {};
 let persistence: ReturnType<typeof useDraftPersistence>;
 let root: ReturnType<typeof createRoot>;
 function Harness() {
-  const value = useDraftPersistence("page", theme);
+  const value = useDraftPersistence("page", theme, undefined, mocks.draftSaved);
   useEffect(() => { persistence = value; }, [value]);
   return null;
 }
@@ -46,6 +46,12 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals(); });
 
 describe("empty-page persistence", () => {
+  it("reports a saved page draft so the editor can update its unpublished indicator", async () => {
+    vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved." });
+    await act(async () => { expect(await persistence.save()).toBe(true); });
+    expect(mocks.draftSaved).toHaveBeenCalledWith(base, "save");
+  });
+
   it("saves pending global header edits before a body-only AI build", async () => {
     const header = defaultHeader("Example");
     const props = { ...base.root.props, __editorHeader: header };

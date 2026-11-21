@@ -3,6 +3,7 @@ import "server-only";
 import { blogPublicationSchema } from "@/lib/blog";
 import { blogPublicPath } from "@/lib/blog-navigation";
 import { brand } from "@/lib/brand";
+import { blogSettingsDraftSchema } from "@/lib/blog-settings";
 import type { createClient } from "@/lib/supabase/server";
 import type { BlogFeedMetadata, BlogFeedPost } from "@/components/blocks/blog-posts";
 
@@ -10,19 +11,23 @@ type Site = { id: string; subdomain: string };
 
 export async function loadEditorBlogFeed(supabase: Awaited<ReturnType<typeof createClient>>, site: Site): Promise<BlogFeedMetadata> {
   const [settings, timezone] = await Promise.all([
-    supabase.from("blog_settings").select("blog_path").eq("site_id", site.id).maybeSingle(),
+    supabase.from("blog_settings").select("blog_path, draft_settings").eq("site_id", site.id).maybeSingle(),
     supabase.from("sites").select("timezone").eq("id", site.id).maybeSingle(),
   ]);
   if (settings.error || timezone.error) throw new Error("Could not load editor blog settings.", { cause: settings.error ?? timezone.error });
 
   const posts: BlogFeedPost[] = [];
+  const draftSettings = blogSettingsDraftSchema.safeParse(settings.data?.draft_settings);
   const batchSize = 500;
   for (let offset = 0; ; offset += batchSize) {
     const { data, error } = await supabase.from("posts")
       .select("id, slug, published_at, metadata:published_content->metadata")
       .eq("site_id", site.id).eq("status", "published").not("published_content", "is", null)
       .order("published_at", { ascending: false }).order("id").range(offset, offset + batchSize - 1);
-    if (error) throw new Error("Could not load published posts in the editor.", { cause: error });
+    if (error) {
+      console.error("Could not load published posts in the editor.", { siteId: site.id, code: error.code });
+      return { siteBlogFeedUnavailable: true, siteBlogSettingsPending: draftSettings.success };
+    }
     for (const row of data) {
       const parsed = blogPublicationSchema.shape.metadata.safeParse(row.metadata);
       if (!parsed.success || typeof row.published_at !== "string" || !Number.isFinite(Date.parse(row.published_at))) {
@@ -39,8 +44,9 @@ export async function loadEditorBlogFeed(supabase: Awaited<ReturnType<typeof cre
   }
   return {
     siteBlogPosts: posts,
-    siteBlogPath: `${brand.appUrl}/s/${encodeURIComponent(site.subdomain)}${blogPublicPath(settings.data?.blog_path ?? "/blog")}`,
+    siteBlogPath: `${brand.appUrl}/s/${encodeURIComponent(site.subdomain)}${blogPublicPath(draftSettings.success ? draftSettings.data.blog_path : settings.data?.blog_path ?? "/blog")}`,
     siteBlogPreview: true,
-    siteBlogTimezone: timezone.data?.timezone ?? "UTC",
+    siteBlogTimezone: draftSettings.success ? draftSettings.data.timezone : timezone.data?.timezone ?? "UTC",
+    siteBlogSettingsPending: draftSettings.success,
   };
 }
