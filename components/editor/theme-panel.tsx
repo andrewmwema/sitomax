@@ -110,8 +110,8 @@ function FontPicker({
 
 /**
  * Slide-over panel for the site-wide theme: style preset (Classic or
- * Modern), color palette and logo. Changes preview live (via Puck
- * metadata) and persist to sites.theme on save.
+ * Modern), color palette, logo and favicon. Theme changes preview live (via
+ * Puck metadata) and persist to sites.theme on save.
  */
 export function ThemePanel({
   siteId,
@@ -294,6 +294,18 @@ export function ThemePanel({
             value={theme.logoUrl ?? ""}
             onChange={(logoUrl) => onChange({ ...theme, logoUrl })}
             onSelect={(image) => onChange({ ...theme, logoUrl: image.url, logoAlt: image.alt })}
+          />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+            Browser favicon
+          </h3>
+          <p className="text-xs text-zinc-500">The small icon shown in browser tabs. PNG, JPEG, SVG or WebP.</p>
+          <ImageUploadField
+            value={theme.faviconUrl ?? ""}
+            onChange={(faviconUrl) => onChange({ ...theme, faviconUrl })}
+            imageClassName="size-16 rounded-lg border border-[#E8E7E3] object-contain"
           />
         </section>
 

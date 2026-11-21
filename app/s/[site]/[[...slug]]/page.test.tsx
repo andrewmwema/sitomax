@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Render } from "@puckeditor/core/rsc";
 import { BlogPosts } from "@/components/blocks/blog-posts";
 
-const mocks = vi.hoisted(() => ({ access: vi.fn(), blog: false, feed: false, table: vi.fn() }));
+const mocks = vi.hoisted(() => ({ access: vi.fn(), blog: false, feed: false, table: vi.fn(), theme: {} as Record<string, unknown> }));
 const post = { id: "post", slug: "example", published_at: "2026-11-20T12:00:00Z", tags: [], publication: { blocks: [], metadata: { title: "Example post" } } };
 const feedData = () => ({ content: mocks.feed ? [{ type: "BlogPosts", props: { id: "feed" } }] : [] });
 vi.mock("@/lib/supabase/server", () => ({
@@ -15,7 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/tenant", () => ({
   getSiteUrl: () => "https://example.com",
-  getSiteByHost: async () => ({ id: "site", name: "Example", subdomain: "client", custom_domain: "example.com", domain_verified: true, theme: {}, business: {}, seo: { socialImage: "/share.jpg", googleVerification: "verify123" } }),
+  getSiteByHost: async () => ({ id: "site", name: "Example", subdomain: "client", custom_domain: "example.com", domain_verified: true, theme: mocks.theme, business: {}, seo: { socialImage: "/share.jpg", googleVerification: "verify123" } }),
   getSitePage: async () => ({ id: "page", slug: "about", title: "About", seo: { title: "Search title", description: "Search description", noindex: true }, draft_data: feedData(), published_data: feedData() }),
   getTenantMenuPages: async () => [],
   getTenantLinkPages: async () => [],
@@ -36,6 +36,7 @@ import TenantSitePage, { generateMetadata } from "./page";
 beforeEach(() => {
   mocks.blog = false;
   mocks.feed = false;
+  mocks.theme = {};
   mocks.table.mockClear();
   mocks.access.mockReset();
   mocks.access.mockResolvedValue({ data: null, error: null });
@@ -122,6 +123,7 @@ describe("tenant analytics eligibility", () => {
 
   describe("tenant metadata", () => {
     it("uses canonical, social, verification and noindex settings", async () => {
+      mocks.theme = { faviconUrl: "/favicon.png", logoUrl: "/logo.png" };
       const metadata = await generateMetadata({ params: Promise.resolve({ site: "client", slug: ["about"] }), searchParams: Promise.resolve({}) });
       expect(metadata).toMatchObject({
         metadataBase: new URL("https://example.com/about"),
@@ -129,9 +131,12 @@ describe("tenant analytics eligibility", () => {
         alternates: { canonical: "https://example.com/about" },
         openGraph: { siteName: "Example", title: "Search title", images: ["https://example.com/share.jpg"] },
         twitter: { card: "summary_large_image" },
-        icons: { icon: "/globe.svg" },
+        icons: { icon: "https://example.com/favicon.png" },
         verification: { google: "verify123" }, robots: { index: false },
       });
+      mocks.theme = {};
+      await expect(generateMetadata({ params: Promise.resolve({ site: "client", slug: ["about"] }), searchParams: Promise.resolve({}) }))
+        .resolves.toMatchObject({ icons: { icon: "/globe.svg" } });
     });
     it("does not render third-party tracking on preview requests", async () => {
       mocks.access.mockResolvedValue({ data: { id: "page" }, error: null });

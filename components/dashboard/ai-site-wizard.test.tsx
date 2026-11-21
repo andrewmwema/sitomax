@@ -120,6 +120,9 @@ describe("AI site wizard", () => {
     expect(mocks.push).not.toHaveBeenCalled();
     await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Open editor")!.click());
     expect(mocks.push).toHaveBeenCalledWith(`/editor/${site.accountId}`);
+    mocks.push.mockClear();
+    await clickButton("Open site editor");
+    expect(mocks.push).toHaveBeenCalledWith(`/editor/${site.accountId}`);
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({ siteId: site.id, confirmReplace: true, services: ["Drain repairs"] });
     expect(container.textContent).toContain("Image placeholders were used.");
   });

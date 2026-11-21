@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { blogPublicationSchema, blogSlugify, sanitizeBlogContent, type BlogPublication } from "@/lib/blog";
 import { blogPublicPath } from "@/lib/blog-navigation";
-import { absoluteImage, isNoindex } from "@/lib/seo";
+import { absoluteImage, isNoindex, siteFavicon } from "@/lib/seo";
 import { parseSiteSeo } from "@/lib/seo-public";
 import { getSiteUrl } from "@/lib/site-url";
 import type { TenantSite } from "@/lib/tenant";
@@ -218,7 +218,7 @@ export function blogMetadata(
   const noindex = metadata?.noindex === true ||
     isNoindex({ noindex: tagNoindex || Boolean(route.query) ? true : undefined }, siteSeo);
   const origin = getSiteUrl(site);
-  const tenantIcon = typeof site.theme?.logoUrl === "string" ? absoluteImage(site.theme.logoUrl, origin) : undefined;
+  const tenantIcon = siteFavicon(site.theme, origin);
   const rssUrl = new URL(blogPublicPath(settings.blog_path, "rss.xml"), origin).toString();
   return {
     metadataBase: new URL(origin),

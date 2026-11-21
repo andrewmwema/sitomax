@@ -6,9 +6,9 @@ import type { MediaImage } from "@/lib/media";
 
 export const EditorSiteContext = createContext<{ siteId: string; query?: string } | null>(null);
 
-export function ImageUploadField({ value, onChange, onSelect, readOnly, agency = false, initialQuery }: {
+export function ImageUploadField({ value, onChange, onSelect, readOnly, agency = false, initialQuery, imageClassName }: {
   value: string; onChange: (value: string) => void; onSelect?: (image: MediaImage) => void;
-  readOnly?: boolean; agency?: boolean; initialQuery?: string;
+  readOnly?: boolean; agency?: boolean; initialQuery?: string; imageClassName?: string;
 }) {
   const site = useContext(EditorSiteContext);
   const [open, setOpen] = useState(false);
@@ -16,8 +16,8 @@ export function ImageUploadField({ value, onChange, onSelect, readOnly, agency =
   const available = Boolean(site || agency);
   return <div className="flex flex-col gap-2">
     {value ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={value} alt="" className="h-24 w-full rounded-lg border border-[#E8E7E3] object-cover" />
+      // eslint-disable-next-line @next/next/no-img-element -- configured media URLs are rendered as previews
+      <img src={value} alt="" className={imageClassName ?? "h-24 w-full rounded-lg border border-[#E8E7E3] object-cover"} />
     ) : null}
     <div className="flex gap-2">
       <button type="button" disabled={readOnly || !available} onClick={() => setOpen(true)} className="platform-button flex-1">

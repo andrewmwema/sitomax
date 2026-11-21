@@ -23,18 +23,21 @@ export function AgencySettingsForm({ settings, action, account }: {
   account: { name: string; email: string };
 }) {
   const initial = {
-    name: settings.name, supportEmail: settings.supportEmail ?? "", logoUrl: settings.logoUrl ?? "", primaryColor: settings.primaryColor,
+    name: settings.name, supportEmail: settings.supportEmail ?? "", logoUrl: settings.logoUrl ?? "",
+    faviconUrl: settings.faviconUrl ?? "", primaryColor: settings.primaryColor,
     showLeadEmailBranding: settings.showLeadEmailBranding ?? false,
   };
   const [fields, setFields] = useState(initial);
   const [saved, setSaved] = useState(initial);
   const dirty = fields.name !== saved.name || fields.supportEmail !== saved.supportEmail ||
-    fields.logoUrl !== saved.logoUrl || fields.primaryColor !== saved.primaryColor || fields.showLeadEmailBranding !== saved.showLeadEmailBranding;
+    fields.logoUrl !== saved.logoUrl || fields.faviconUrl !== saved.faviconUrl || fields.primaryColor !== saved.primaryColor ||
+    fields.showLeadEmailBranding !== saved.showLeadEmailBranding;
   const [state, formAction, pending] = useActionState(async (previous: ActionState, formData: FormData) => {
     const submitted = {
       name: String(formData.get("name") ?? "").trim(),
       supportEmail: String(formData.get("support_email") ?? "") || brand.supportEmail,
       logoUrl: String(formData.get("logo_url") ?? ""),
+      faviconUrl: String(formData.get("favicon_url") ?? ""),
       primaryColor: String(formData.get("primary_color") ?? ""),
       showLeadEmailBranding: formData.get("show_lead_email_branding") === "on",
     };
@@ -97,11 +100,17 @@ export function AgencySettingsForm({ settings, action, account }: {
             Include “Sent via {fields.name}” on outbound lead replies</label>
           <div className="grid items-start gap-6 xl:grid-cols-2">
             <div className="flex flex-col gap-5">
-              <div><h3 className="mb-2 text-sm font-medium">Agency logo</h3>
+              <div role="group" aria-label="Agency logo"><h3 className="mb-2 text-sm font-medium">Agency logo</h3>
                 <ImageUploadField agency value={fields.logoUrl} onChange={(logoUrl) => setFields({ ...fields, logoUrl })} readOnly={pending} initialQuery={fields.name} />
                 <input type="hidden" name="logo_url" value={fields.logoUrl} />
                 <p className="mt-2 text-xs text-[var(--platform-muted)]">PNG, JPEG, SVG or WebP, up to 2 MB. Choose, replace or remove using the media picker.</p>
                 <p className="mt-2 text-xs text-[var(--platform-muted)]">Your logo replaces the agency name in navigation. Use a tightly cropped logo with a transparent background; wide wordmarks work best.</p>
+              </div>
+              <div role="group" aria-label="Agency favicon"><h3 className="mb-2 text-sm font-medium">Browser favicon</h3>
+                <ImageUploadField agency value={fields.faviconUrl} onChange={(faviconUrl) => setFields({ ...fields, faviconUrl })}
+                  readOnly={pending} initialQuery={fields.name} imageClassName="size-16 rounded-lg border border-[#E8E7E3] object-contain" />
+                <input type="hidden" name="favicon_url" value={fields.faviconUrl} />
+                <p className="mt-2 text-xs text-[var(--platform-muted)]">Shown in browser tabs for the platform. PNG, JPEG, SVG or WebP, up to 2 MB.</p>
               </div>
               <label className="flex flex-col gap-2 text-sm font-medium">Primary brand color
                 <span className="flex items-center gap-3"><input type="color" name="primary_color" value={fields.primaryColor} onChange={(event) => setFields({ ...fields, primaryColor: event.target.value })} className="h-11 w-14 rounded-lg border border-[var(--platform-line)] bg-white p-1" /><span className="font-mono text-xs font-normal text-[var(--platform-secondary)]">{fields.primaryColor.toUpperCase()}</span></span>

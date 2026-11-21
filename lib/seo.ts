@@ -47,3 +47,9 @@ export function absoluteImage(value: string | undefined, siteUrl: string): strin
   const parsed = imageUrl.safeParse(value);
   return parsed.success ? new URL(parsed.data, siteUrl).toString() : undefined;
 }
+
+export function siteFavicon(theme: Record<string, unknown> | null | undefined, siteUrl: string): string | undefined {
+  const favicon = typeof theme?.faviconUrl === "string" ? absoluteImage(theme.faviconUrl, siteUrl) : undefined;
+  const logo = typeof theme?.logoUrl === "string" ? absoluteImage(theme.logoUrl, siteUrl) : undefined;
+  return favicon ?? logo;
+}

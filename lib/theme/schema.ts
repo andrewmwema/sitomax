@@ -23,4 +23,5 @@ export const themeSchema = z.object({
     .optional(),
   logoUrl: z.union([z.url(), z.literal("")]).optional(),
   logoAlt: z.string().max(500).optional(),
+  faviconUrl: z.union([z.url(), z.literal("")]).optional(),
 });

@@ -354,7 +354,7 @@ function AutoBuildPage() {
 function ThemeTool() {
   const { openThemePanel, siteId, business, updateBusiness } = useEditorUi();
   return <div className="editor-panel min-h-0 overflow-y-auto"><header className="editor-panel-header"><p className="platform-eyebrow mb-1">Visual identity</p><h2 className="font-semibold">Theme</h2>
-    <p className="mt-2 text-xs leading-relaxed text-zinc-500">Update this site&apos;s colors, fonts and style.</p></header>
+    <p className="mt-2 text-xs leading-relaxed text-zinc-500">Update this site&apos;s colors, fonts, browser icon and style.</p></header>
     <button type="button" className="platform-button platform-button-primary mt-4 w-full" onClick={openThemePanel}><Palette size={14} />Edit theme</button>
     <div className="mt-4"><BusinessInfo siteId={siteId} initialBusiness={business} onSave={updateBusiness} /></div>
   </div>;

@@ -39,6 +39,7 @@ export type SiteTheme = {
   };
   logoUrl?: string;
   logoAlt?: string;
+  faviconUrl?: string;
 };
 
 export const DEFAULT_COLORS = {

@@ -55,6 +55,12 @@ export async function updateAgencySettings(
     if (!selected.success) return { status: "error", message: "Use a valid HTTPS logo URL or local path." };
     logoUrl = selected.data;
   }
+  let faviconUrl: string | undefined;
+  if (formData.has("favicon_url")) {
+    const selected = mediaUrlSchema.or(z.literal("")).safeParse(formData.get("favicon_url"));
+    if (!selected.success) return { status: "error", message: "Use a valid HTTPS favicon URL or local path." };
+    faviconUrl = selected.data;
+  }
   const logo = formData.get("logo");
 
   if (logo instanceof File && logo.size > 0) {
@@ -90,6 +96,7 @@ export async function updateAgencySettings(
       support_email: parsed.data.support_email || null,
       show_lead_email_branding: formData.get("show_lead_email_branding") === "on",
       ...(logoUrl !== undefined ? { logo_url: logoUrl || null } : {}),
+      ...(faviconUrl !== undefined ? { favicon_url: faviconUrl || null } : {}),
     })
     .eq("id", 1);
 

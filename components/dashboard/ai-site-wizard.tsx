@@ -134,6 +134,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     <div><dt>Site plan</dt><dd>{values.desiredPages.length} {values.desiredPages.length === 1 ? "page" : "pages"} selected</dd></div>
     <div><dt>Design approach</dt><dd>{values.generationMode === "custom" ? "Original custom layout" : "Curated section designs"}</dd></div>
   </dl>;
+  const editorPageId = result?.pages.find((page) => page.built && page.pageId)?.pageId;
   const advance = () => {
     if (step === 1 && custom) { setError("Add or cancel your custom page before continuing."); return; }
     const tag = service.trim();
@@ -161,7 +162,13 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     {busy ? <p role="status" className="creation-progress">{messages.at(-1)}</p> : null}
     {error ? <p role="alert" className="creation-error">{error}</p> : null}
     <footer className="creation-footer"><span className="creation-hint">Failed-page retries are free. Nothing publishes automatically.</span>
-      <button type="button" className="creation-secondary" onClick={() => router.push(`/dashboard/sites/${result.siteId}`)}>Site overview<ArrowRight size={15} aria-hidden="true" /></button></footer>
+      <div className="creation-footer-actions">
+        {editorPageId ? <button type="button" className="creation-primary" onClick={() => router.push(`/editor/${editorPageId}`)}>
+          Open site editor<ArrowRight size={15} aria-hidden="true" />
+        </button> : null}
+        <button type="button" className="creation-secondary" onClick={() => router.push(`/dashboard/sites/${result.siteId}`)}>Site overview<ArrowRight size={15} aria-hidden="true" /></button>
+      </div>
+    </footer>
     </SiteCreationShell>
   </div>;
   return <form className="site-creation" aria-label="Build a site with AI" onSubmit={(event) => {

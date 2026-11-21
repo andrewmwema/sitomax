@@ -62,7 +62,7 @@ describe("public blog routing and filtering", () => {
   it("adds the RSS alternate and honors the tag noindex setting", () => {
     const site = {
       id: "site", account_id: "account", name: "Example", subdomain: "example",
-      custom_domain: null, domain_verified: false, theme: {}, business: {}, seo: {},
+      custom_domain: null, domain_verified: false, theme: { faviconUrl: "/favicon.svg", logoUrl: "/logo.png" }, business: {}, seo: {},
     };
     const settings: PublicBlogSettings = {
       available: true, blog_path: "/journal", posts_per_page: 10, index_layout: "grid",
@@ -72,8 +72,11 @@ describe("public blog routing and filtering", () => {
     };
     const metadata = blogMetadata(site, settings, { kind: "tag", slug: "tips", page: 1, query: "" });
     expect(metadata.robots).toEqual({ index: false, follow: true });
+    expect(metadata.icons).toEqual({ icon: "https://example.sitomax.com/favicon.svg" });
     expect(metadata.alternates).toMatchObject({
       types: { "application/rss+xml": expect.stringContaining("/journal/rss.xml") },
     });
+    expect(blogMetadata({ ...site, theme: { logoUrl: "/logo.png" } }, settings,
+      { kind: "tag", slug: "tips", page: 1, query: "" }).icons).toEqual({ icon: "https://example.sitomax.com/logo.png" });
   });
 });

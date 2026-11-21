@@ -9,7 +9,7 @@ import { TenantFontHints } from "@/components/tenant-font-hints";
 import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import { TenantTracking } from "@/components/tenant-tracking";
 import { localBusinessJsonLd, parseSiteSeo, publicPageSeo } from "@/lib/seo-public";
-import { absoluteImage, rootSeoSchema } from "@/lib/seo";
+import { absoluteImage, rootSeoSchema, siteFavicon } from "@/lib/seo";
 import { createClient } from "@/lib/supabase/server";
 import { businessSchema, emptyBusiness } from "@/lib/business";
 import { pageMenuLinks, siteContacts, type SiteMenu } from "@/lib/page-navigation";
@@ -268,9 +268,7 @@ export async function generateMetadata({
     noindex: true,
   } : page.seo;
   const seo = publicPageSeo(site, { ...page, seo: previewSeo });
-  const tenantIcon = typeof site.theme?.logoUrl === "string"
-    ? absoluteImage(site.theme.logoUrl, seo.canonical)
-    : undefined;
+  const tenantIcon = siteFavicon(site.theme, seo.canonical);
 
   return {
     metadataBase: new URL(seo.canonical),

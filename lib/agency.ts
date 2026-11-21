@@ -4,6 +4,7 @@ import { brand } from "@/lib/brand";
 export type AgencySettings = {
   name: string;
   logoUrl: string | null;
+  faviconUrl: string | null;
   primaryColor: string;
   supportEmail: string | null;
   showLeadEmailBranding?: boolean;
@@ -19,7 +20,7 @@ export async function getAgencySettings(): Promise<AgencySettings> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("agency_settings")
-    .select("name, logo_url, primary_color, support_email")
+    .select("name, logo_url, favicon_url, primary_color, support_email")
     .eq("id", 1)
     .maybeSingle();
 
@@ -28,6 +29,7 @@ export async function getAgencySettings(): Promise<AgencySettings> {
   return {
     name: savedName && savedName !== "My Agency" ? savedName : brand.name,
     logoUrl: data?.logo_url ?? null,
+    faviconUrl: data?.favicon_url ?? null,
     primaryColor: data?.primary_color ?? FALLBACK_PRIMARY_COLOR,
     supportEmail: savedSupportEmail && savedSupportEmail !== "support@example.com"
       ? savedSupportEmail

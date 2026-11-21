@@ -6,11 +6,14 @@ import { AgencySettingsForm } from "./agency-settings-form";
 import type { ActionState } from "@/lib/form-state";
 
 vi.mock("@/components/editor/image-upload-field", () => ({
-  ImageUploadField: ({ value, onChange, readOnly }: { value: string; onChange: (value: string) => void; readOnly: boolean }) =>
-    <button type="button" disabled={readOnly} onClick={() => onChange(value ? "" : "/logo.png")}>{value ? "Remove image" : "Choose image"}</button>,
+  ImageUploadField: ({ value, onChange, readOnly, imageClassName }: {
+    value: string; onChange: (value: string) => void; readOnly: boolean; imageClassName?: string;
+  }) => <button type="button" disabled={readOnly} onClick={() => onChange(value ? "" : imageClassName ? "/favicon.png" : "/logo.png")}>
+    {value ? "Remove image" : "Choose image"}
+  </button>,
 }));
 
-const settings = { name: "North Agency", supportEmail: "help@example.test", primaryColor: "#4b3fe0", logoUrl: null };
+const settings = { name: "North Agency", supportEmail: "help@example.test", primaryColor: "#4b3fe0", logoUrl: null, faviconUrl: null };
 const account = { name: "Agency Admin", email: "admin@example.test" };
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -66,11 +69,15 @@ describe("agency settings workspace", () => {
     expect(button("Save settings").disabled).toBe(false);
     await act(async () => button("Choose image").click());
     expect(container.querySelector<HTMLInputElement>('[name="logo_url"]')?.value).toBe("/logo.png");
+    const favicon = container.querySelector('[aria-label="Agency favicon"]')!;
+    await act(async () => favicon.querySelector<HTMLButtonElement>("button")!.click());
+    expect(container.querySelector<HTMLInputElement>('[name="favicon_url"]')?.value).toBe("/favicon.png");
     const preview = container.querySelector('[aria-label="Branding preview"]')!;
     expect(preview.querySelector("img")?.alt).toBe("Updated Agency");
     expect(preview.querySelector("strong")).toBeNull();
     await act(async () => container.querySelector("form")!.requestSubmit());
     expect(action.mock.calls[1][1].get("logo_url")).toBe("/logo.png");
+    expect(action.mock.calls[1][1].get("favicon_url")).toBe("/favicon.png");
     expect(button("Save settings").disabled).toBe(true);
     expect(container.querySelector("footer")?.textContent).toContain("Settings saved.");
     await act(async () => changeInput(container.querySelector<HTMLInputElement>('[name="name"]')!, "Another change"));
