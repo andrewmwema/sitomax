@@ -1,5 +1,13 @@
 begin;
 
+do $$
+begin
+  if to_regclass('public.email_suppressions') is null then
+    raise exception 'Apply migration 0036_postmark_email_events.sql before migration 0040';
+  end if;
+end;
+$$;
+
 alter table public.lead_site_settings
   add column new_lead_enabled boolean not null default true,
   add column reply_notifications_enabled boolean not null default true,

@@ -574,7 +574,7 @@ With the default Postmark transactional stream configured above, new inquiries
 notify account owners after the form is saved. Set `NEXT_PUBLIC_APP_URL` to
 the platform origin so **View lead** links open the right lead. Run
 [`0040_lead_notification_controls.sql`](./supabase/migrations/0040_lead_notification_controls.sql)
-before deploying the notification controls. In **Sites → Leads → Notifications**,
+after `0036_postmark_email_events.sql` and before deploying the notification controls. In **Sites → Leads → Notifications**,
 owners can replace the default recipients, see the current eligible new-lead
 recipients, and send a rate-limited test. Site-wide switches restrict delivery
 without overriding personal email preferences. New lead emails include the contact name and form source;

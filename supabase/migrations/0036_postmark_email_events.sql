@@ -11,7 +11,7 @@ create table public.email_suppressions (
 alter table public.email_suppressions enable row level security;
 revoke all on public.email_suppressions from public, anon, authenticated;
 
-create function public.lead_mail_recipients(p_site uuid, p_reply_prefs boolean, p_owners_only boolean) returns text[]
+create or replace function public.lead_mail_recipients(p_site uuid, p_reply_prefs boolean, p_owners_only boolean) returns text[]
 language sql stable set search_path = '' as $$
   with site as (
     select s.account_id, cfg.recipients from public.sites s
