@@ -98,7 +98,7 @@ export async function planCuratedSite(call: SiteToolCall, input: GenerationInput
   }
   if (!result.success) {
     throw new CuratedPlanError(matchingCall ? adminValidationIssues(result.error.issues.slice(0, 5), blocks[0].input)
-      : [{ path: [], code: "missing_tool_call", message: `Expected exactly one ${tool.name} call.`, received: "none" }]);
+      : [{ path: [], code: "custom", message: `Expected exactly one ${tool.name} call.`, received: "none" }]);
   }
   return result.data;
 }
