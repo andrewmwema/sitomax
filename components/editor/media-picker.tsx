@@ -162,12 +162,12 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
         }
       }}>
     <div className="flex max-h-[92dvh] flex-col overflow-hidden">
-      <header className="flex items-center justify-between border-b border-[#E8E7E3] bg-white px-5 py-4">
+      <header className="flex shrink-0 items-center justify-between border-b border-[#E8E7E3] bg-white px-5 py-4">
         <div><p className="platform-eyebrow mb-1">Media studio</p><h2 id={`${id}-title`} className="text-lg font-semibold">Choose image</h2>
           <p id={`${id}-description`} className="mt-1 text-xs text-zinc-500">Find, upload or reuse an image. Changes apply when you choose Use image.</p></div>
         <button type="button" disabled={busy} onClick={onClose} aria-label="Close media picker" className="rounded-lg p-2 hover:bg-zinc-100"><X size={20} /></button>
       </header>
-      <div role="tablist" aria-label="Image source" className="flex overflow-x-auto border-b border-[#E8E7E3] bg-white px-3">
+      <div role="tablist" aria-label="Image source" className="flex shrink-0 overflow-x-auto border-b border-[#E8E7E3] bg-white px-3">
         {tabs.map(({ key, label }, index) => <button key={key} type="button" role="tab" ref={(node) => { tabRefs.current[index] = node; }}
           id={`${id}-${key}`} aria-controls={`${id}-panel`} aria-selected={tab === key} tabIndex={tab === key ? 0 : -1} disabled={busy}
           className={`shrink-0 border-b-2 px-4 py-3 text-sm ${tab === key ? "border-[#4B3FE0] text-[#4B3FE0]" : "border-transparent text-zinc-600"}`}
@@ -177,7 +177,7 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
             if (next >= 0) { event.preventDefault(); chooseTab(tabs[next].key); tabRefs.current[next]?.focus(); }
           }} onClick={() => chooseTab(key)}>{label}</button>)}
       </div>
-      <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`} className="min-h-64 flex-1 overflow-y-auto p-5">
+      <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`} className="min-h-0 flex-1 overflow-y-auto p-5">
         {tab === "stock" || tab === "library" ? <>
           <div className="mb-4 flex flex-wrap items-end gap-3">
             <label className="min-w-40 flex-1 text-xs font-medium">{tab === "stock" ? "Search photos" : "Search filename or alt text"}
@@ -221,7 +221,7 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
         </label>}
         {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
       </div>
-      <footer className="flex flex-wrap items-end gap-3 border-t border-[#E8E7E3] bg-white px-5 py-4">
+      <footer className="flex shrink-0 flex-wrap items-end gap-3 border-t border-[#E8E7E3] bg-white px-5 py-4">
         {candidate ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={candidate.url} alt={alt} className="h-16 w-20 rounded-lg object-cover" />
