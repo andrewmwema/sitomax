@@ -1,23 +1,18 @@
 import { defaultMenuLabel } from "@/lib/page-navigation";
 import { selectedPageName, type GenerationInput } from "./site-input";
+import { presetPurpose } from "./page-blueprints";
 
 type Selection = Pick<GenerationInput, "desiredPages" | "pageDetails" | "desiredSections" | "businessName">;
 
 export function selectedPageBriefs(input: Selection) {
   return input.desiredPages.map((slug) => {
     const detail = input.pageDetails?.find((page) => page.slug === slug);
-    return { slug, label: selectedPageName(slug, input.pageDetails) ?? defaultMenuLabel(slug), purpose: detail?.purpose ?? "" };
+    return { slug, label: selectedPageName(slug, input.pageDetails) ?? defaultMenuLabel(slug), purpose: detail?.purpose ?? presetPurpose(slug) ?? "" };
   });
 }
 
-export function normalizeSelectedPages<T extends { slug: string }>(
-  input: Selection, proposals: T[], fallback: (page: ReturnType<typeof selectedPageBriefs>[number]) => T,
-) {
-  return selectedPageBriefs(input).map((page) => proposals.find(({ slug }) => slug === page.slug) ?? fallback(page));
-}
-
 const sectionPage: Record<Selection["desiredSections"][number], string[]> = {
-  pricing: ["pricing", "services", "features"], faq: ["faq", "services", "contact"],
+  pricing: ["pricing", "services", "features"], faq: ["faq", "pricing", "services", "contact"],
   gallery: ["portfolio", "services", "features"], testimonials: ["testimonials", "portfolio", "about"],
   team: ["team", "about"], process: ["services", "features", "about"], logos: ["about", "portfolio", "features"],
 };

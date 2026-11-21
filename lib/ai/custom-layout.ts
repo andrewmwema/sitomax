@@ -5,13 +5,14 @@ import { puckConfig } from "@/lib/puck/config";
 import { ROW_LAYOUTS, type LayoutItem } from "@/lib/layout/structure";
 import { editDesign, designPatchSchema, readableText } from "./edit-design";
 import { strictTool } from "./strict-tool";
-import type { SitePlan } from "./site-schemas";
+import type { SiteTheme } from "./site-schemas";
 import { escapeHtml, sanitizeRichText } from "@/lib/richtext";
 import { CURATED_FONTS, CURATED_FONT_NAMES } from "@/lib/theme/fonts";
 import { SPACING_SCALE } from "@/lib/layout/spacing";
 import { iconNameSchema, ICON_GENERATION_GUIDANCE } from "@/lib/icons";
 import { DESIRED_SECTION_TYPES, type GenerationInput } from "./site-input";
 import { fallbackPageSeo, requestedSectionsForPage, selectedPageBriefs } from "./selected-pages";
+import { presetSectionKinds } from "./page-blueprints";
 
 export const CUSTOM_LAYOUT_CONTRACT = "custom-layout-v4";
 const LIMIT = { depth: 5, elements: 60, sections: 10, rows: 4, columns: 4, perColumn: 8, goal: 160, title: 80, seoTitle: 59, seoDescription: 159 } as const;
@@ -119,9 +120,15 @@ export function customPlanContract(input: Pick<GenerationInput, "style" | "fontD
     });
     for (const entry of pages) {
       const requested = requestedSectionsForPage(selection, entry.slug);
-      const body = entry.sections.filter(({ kind }) => kind !== "footer" &&
-        !pages.some((other) => other.slug !== entry.slug && requestedSectionsForPage(selection, other.slug).some((item) => item === kind)));
-      for (const kind of requested) if (!body.some((section) => section.kind === kind)) body.push(placeholder(kind));
+      const elsewhere = (kind: string) =>
+        pages.some((other) => other.slug !== entry.slug && requestedSectionsForPage(selection, other.slug).some((item) => item === kind));
+      const body = entry.sections.filter(({ kind }) => kind !== "footer" && !elsewhere(kind));
+      // Preset defaults end with a closing call to action; requested sections go before it.
+      const closing = !body.length && presetSectionKinds(entry.slug).at(-1) === "content" ? 1 : 0;
+      if (!body.length) body.push(...presetSectionKinds(entry.slug).filter((kind) => !elsewhere(kind)).map(placeholder));
+      for (const kind of requested) {
+        if (!body.some((section) => section.kind === kind)) body.splice(body.length - closing, 0, placeholder(kind));
+      }
       if (!body.length) body.unshift(placeholder(entry.slug === "contact" ? "contact" : entry.slug ? "content" : "hero"));
       if (body[0].kind === "contact") body.unshift(placeholder("hero"));
       while (body.length >= LIMIT.sections) {
@@ -194,7 +201,7 @@ function elementItem(value: GeneratedElement) {
   return item(type, props);
 }
 
-export function buildCustomSections(sections: GeneratedSection[], theme: SitePlan["colors"], warnings = new Set<string>()) {
+export function buildCustomSections(sections: GeneratedSection[], theme: SiteTheme["colors"], warnings = new Set<string>()) {
   return sections.map((section) => item("Section", {
     background: section.background,
     width: section.width,
@@ -230,7 +237,7 @@ export function customSectionTask(page: { slug: string; title: string; purpose?:
   styleDirection: string;
   fontDirection: string;
   desiredPages: readonly string[];
-}, theme: Pick<SitePlan, "style" | "colors" | "fonts">) {
+}, theme: SiteTheme) {
   return `Generate only section ${index + 1} of this page. The section property must be a JSON object, not a string containing JSON. Header, footer and contact details are managed by the site; do not generate menus or write contact values in section copy. Use real Button elements (ghost for inline links), never "label: href" text. The first section of each page may use one H1; use H2–H4 elsewhere.
 PAGE PLAN:\n${JSON.stringify({ slug: page.slug, title: page.title, purpose: page.purpose, sectionGoals: page.sections, current: page.sections[index], theme })}
 BUSINESS FACTS:\n${JSON.stringify(input)}

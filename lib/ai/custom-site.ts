@@ -2,7 +2,7 @@ import type { z } from "zod";
 import {
   buildCustomSections, customPlanContract, customPlanTask, customSectionTask, customSiteSectionContract,
 } from "./custom-layout";
-import { fillSiteTool, safeValidationIssues, type SiteToolCall, type SiteToolTrace } from "./site-tool";
+import { adminValidationIssues, fillSiteTool, type SiteToolCall, type SiteToolTrace } from "./site-tool";
 import type { GenerationInput, GenerationProgress } from "./site-input";
 import { puckConfig } from "@/lib/puck/config";
 import type { LayoutItem } from "@/lib/layout/structure";
@@ -10,7 +10,7 @@ import type { LayoutItem } from "@/lib/layout/structure";
 export const customSiteMaxTokens = (toolName: string) => toolName === "plan_custom_site" ? 7000 : 5000;
 
 export class CustomSiteError extends Error {
-  constructor(outcome: string, stage: string, readonly issues: ReturnType<typeof safeValidationIssues>) {
+  constructor(outcome: string, stage: string, readonly issues: ReturnType<typeof adminValidationIssues>) {
     const message = outcome === "incomplete" ? `The AI response for the ${stage} was incomplete. Try simpler design guidance.`
       : outcome === "refused" ? `The AI could not complete the ${stage} with these instructions. Try rephrasing them.`
         : outcome === "missing_tool" ? `The AI did not return the ${stage} in the expected format. Please try again.`
@@ -21,13 +21,13 @@ export class CustomSiteError extends Error {
 
 export async function planCustomSite(call: SiteToolCall, input: GenerationInput, trace: SiteToolTrace) {
   const { schema, tool } = customPlanContract(input);
-  const { result, outcome } = await fillSiteTool(call, tool, schema, customPlanTask(generationBrief(input)), trace);
-  if (!result.success) throw customError(outcome, "website plan", result.error);
+  const { result, outcome, blocks } = await fillSiteTool(call, tool, schema, customPlanTask(generationBrief(input)), trace);
+  if (!result.success) throw customError(outcome, "website plan", result.error, blocks[0]?.input);
   return result.data;
 }
 
-function customError(outcome: string, stage: string, error: z.ZodError) {
-  return new CustomSiteError(outcome, stage, outcome === "validation_failed" ? safeValidationIssues(error.issues.slice(0, 5)) : []);
+function customError(outcome: string, stage: string, error: z.ZodError, input?: unknown) {
+  return new CustomSiteError(outcome, stage, outcome === "validation_failed" ? adminValidationIssues(error.issues.slice(0, 5), input) : []);
 }
 
 type Plan = Awaited<ReturnType<typeof planCustomSite>>;
@@ -58,10 +58,10 @@ export async function writeCustomPage(
         type: "ContactForm",
         props: { ...puckConfig.components.ContactForm.defaultProps, id: `ContactForm-${crypto.randomUUID()}`, variant: "split", image: "" },
       };
-      const { result, outcome } = await fillSiteTool(call, tool, schema, customSectionTask(page, index, brief, {
+      const { result, outcome, blocks } = await fillSiteTool(call, tool, schema, customSectionTask(page, index, brief, {
         style: plan.style, colors: plan.colors, fonts: plan.fonts,
       }), { ...trace, page: page.slug || "home", section: index + 1 });
-      if (!result.success) throw customError(outcome, `${label} section ${index + 1}`, result.error);
+      if (!result.success) throw customError(outcome, `${label} section ${index + 1}`, result.error, blocks[0]?.input);
       return buildCustomSections([result.data.section], plan.colors, warnings)[0];
     }));
     for (const section of batch) {

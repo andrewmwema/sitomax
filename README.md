@@ -290,6 +290,14 @@ to check the planner and four synthetic page schemas without sending requests.
 The planner is strict; page fills are non-strict and get one Zod-driven repair
 before the run stops without saving drafts. The diagnostic prints tool metadata,
 not prompts, business details or keys.
+For SitoMax designs with preset pages, run
+`node scripts/test-anthropic.mjs --curated --plan-only` and then
+`node scripts/test-anthropic.mjs --curated` (Home, Features, Pricing, Examples,
+About and Contact with FAQ and Pricing; prints each page's section and word
+counts, add `--show` for the generated props). Curated pages are built from the
+page-type blueprints in [`lib/ai/page-blueprints.ts`](lib/ai/page-blueprints.ts):
+the model picks the theme, copy and preferred designs, and the application
+guarantees the selected pages, their core sections and a closing call to action.
 Provider errors are logged centrally and sanitized details are shown only to
 super admins.
 For Original Custom Layout, apply

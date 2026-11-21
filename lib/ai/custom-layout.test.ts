@@ -77,7 +77,8 @@ describe("custom AI layout schemas", () => {
     expect(normalized.contrastAdjusted).toBe(true);
     expect(normalized.pages.map(({ slug }) => slug)).toEqual([""]);
     expect(normalized.pages[0].title).toHaveLength(80);
-    expect(normalized.pages[0].sections.map(({ kind }) => kind)).toEqual(["faq", "footer"]);
+    const kinds = normalized.pages[0].sections.map(({ kind }) => kind);
+    expect(kinds).toEqual(["hero", "services", "content", "process", "testimonials", "faq", "content", "footer"]);
   });
 
   it("builds validated layouts from existing Puck primitives and assigns server IDs", () => {

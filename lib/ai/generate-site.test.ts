@@ -19,7 +19,8 @@ vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGenerati
   startDraftCheckpoints: mocks.start, checkpointDraft: mocks.checkpoint, completeDraftCheckpoints: mocks.complete,
   claimPageRetry: mocks.claim, finishPageRetry: mocks.finishRetry }));
 import { buildGeneratedSite, retryGeneratedPage } from "./generate-site";
-import { aiCatalog, blockFields, blockSchemas, PAGE_SLUGS, pageFillContract, PLAN_SITE_TOOL, planSchema, type SitePlan } from "./site-schemas";
+import { aiCatalog, blockFields, blockSchemas, pageFillContract, type PlannedPage } from "./site-schemas";
+import { curatedPlanContract } from "./curated-plan";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
 import { strictTool } from "./strict-tool";
@@ -43,11 +44,9 @@ const seo = { title: "Local Plumbing Nairobi", description: "Plumbing repairs in
 const plan = {
   style: "modern", colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
   fonts: { heading: "Inter", body: "Inter" },
-  pages: PAGE_SLUGS.map((slug) => ({ slug, title: slug || "Home", sections: [
-    { blockType: hero.blockType, designId: hero.id }, { blockType: footer.blockType, designId: footer.id },
-  ] })),
-  seo: { home: seo, about: seo, services: seo, contact: seo },
+  pages: ["home", "about", "services", "contact"].map((page) => ({ page, title: page, seo, sections: [hero.id, footer.id] })),
 };
+const DEFAULT_PAGES = ["", "about", "services", "contact"] as GenerationInput["desiredPages"];
 
 function fieldValue(field: Field): unknown {
   if (field.type === "custom" && "aiKind" in field && field.aiKind === "icon") return "wrench";
@@ -81,8 +80,14 @@ function savedPayload() {
     ...page, data: mocks.checkpoint.mock.calls.find((args) => args[2] === rows[index].retryId)?.[3] ?? null,
   })) };
 }
-function answer(request: { toolName: string; messages: { content: string }[] }) {
-  if (request.toolName === "plan_site") return message("plan_site", structuredClone(plan));
+type PlanRequest = { tools?: { input_schema: object }[] };
+// Strict tool grammars only allow the selected page keys.
+const planFor = (request: PlanRequest) => {
+  const keys: string[] = JSON.parse(JSON.stringify(request.tools?.[0]?.input_schema ?? {}).match(/"page":\{[^{}]*?"enum":(\[[^\]]*\])/)?.[1] ?? "[]");
+  return { ...structuredClone(plan), pages: keys.map((page) => ({ ...structuredClone(plan.pages[0]), page, title: page })) };
+};
+function answer(request: { toolName: string; messages: { content: string }[] } & PlanRequest) {
+  if (request.toolName === "plan_site") return message("plan_site", planFor(request));
   const page = JSON.parse(request.messages[0].content.split("\n")[1]) as {
     slug: string; sections: Record<string, { designId: string }>;
   };
@@ -118,7 +123,7 @@ describe("catalog site generation", () => {
   });
   it("drops extra proposals and fills a missing custom page in user-selected order", async () => {
     mocks.request.mockResolvedValueOnce(message("plan_site", { ...plan, pages: [
-      { ...plan.pages[0], slug: "pricing" }, { slug: "unexpected", sections: [{ designId: "not-a-design" }] },
+      { ...plan.pages[0], page: "pricing" }, { ...plan.pages[1], page: "pricing", sections: [] },
     ] }));
     const result = await buildGeneratedSite({ ...input, desiredPages: ["service-areas", "pricing"],
       pageDetails: [{ slug: "service-areas", name: "Service areas", purpose: "Cities we serve" }], desiredSections: ["pricing"] });
@@ -164,19 +169,20 @@ describe("catalog site generation", () => {
     expect(mocks.admin).not.toHaveBeenCalled();
     expect(mocks.complete).toHaveBeenCalledExactlyOnceWith(accountId, generationId);
   });
-  it("repairs a plan once with the Zod errors, never accepting unknown catalog IDs or long SEO", async () => {
+  it("repairs a plan once with the Zod errors, never accepting unknown catalog IDs, and bounds long SEO", async () => {
     const invalid = structuredClone(plan);
-    invalid.pages[0].sections[0].designId = "invented-design";
-    invalid.seo.home.title = "x".repeat(60);
+    invalid.pages[0].sections[0] = "invented-design";
     mocks.request.mockImplementationOnce(() => message("plan_site", invalid));
     await buildGeneratedSite(input);
     expect(mocks.request).toHaveBeenCalledTimes(6);
     expect(mocks.request.mock.calls[1][0].messages[0].content).toContain("validation errors");
-    expect(mocks.request.mock.calls[1][0].messages[0].content).toContain("seo.home.title");
-    expect(planSchema.safeParse(invalid).success).toBe(false);
-    const mismatch = structuredClone(plan);
-    mismatch.pages[0].sections[0].blockType = footer.blockType;
-    expect(planSchema.safeParse(mismatch).success).toBe(false);
+    expect(mocks.request.mock.calls[1][0].messages[0].content).toContain("pages.0.sections.0");
+    const { schema } = curatedPlanContract({ ...createGenerationInputSchema().parse(input) });
+    expect(schema.safeParse(invalid).success).toBe(false);
+    const long = structuredClone(plan);
+    long.pages[0].seo = { title: "x".repeat(90), description: "y".repeat(300) };
+    const parsed = schema.parse(long);
+    expect(parsed.pages[0].seo).toEqual({ title: "x".repeat(59), description: "y".repeat(159) });
   });
   it("waits for the previous page before starting the next and preserves successful pages after a failure", async () => {
     let release!: () => void;
@@ -347,7 +353,7 @@ describe("catalog site generation", () => {
     const random = vi.spyOn(crypto, "randomUUID").mockReturnValue(futureSiteId);
     const photoHero = aiCatalog.find((design) => design.blockType === "Hero" && design.styles.includes("modern"))!;
     const photoPlan = structuredClone(plan);
-    photoPlan.pages[0].sections[0] = { blockType: photoHero.blockType, designId: photoHero.id };
+    photoPlan.pages[0].sections[0] = photoHero.id;
     mocks.request.mockImplementation((request) => {
       if (request.toolName === "plan_site") return message("plan_site", photoPlan);
       const response = answer(request);
@@ -393,10 +399,22 @@ describe("catalog site generation", () => {
   });
   it("stops after two invalid plans without saving; finalizes already-billed work without free retries", async () => {
     mocks.request.mockResolvedValue(message("plan_site", { style: "invented" }));
-    await expect(buildGeneratedSite(input)).rejects.toThrow("invalid twice");
+    const failure = await buildGeneratedSite(input).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ message: expect.stringContaining("invalid twice") });
+    expect(failure).toHaveProperty("validationIssues", undefined);
     expect(mocks.request).toHaveBeenCalledTimes(2);
     expect(mocks.start).not.toHaveBeenCalled();
     expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
+  });
+  it("shows super admins the first five plan issues with the received shape", async () => {
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin" || name === "is_account_owner", error: null }));
+    const invalid = { ...structuredClone(plan), colors: { primary: "blue", secondary: "red", background: "white", text: "black" },
+      pages: plan.pages.map((page) => ({ ...page, sections: ["invented-design"] })) };
+    mocks.request.mockResolvedValue(message("plan_site", invalid));
+    const failure = await buildGeneratedSite(input).catch((error: unknown) => error) as { validationIssues?: unknown[] };
+    expect(failure.validationIssues).toHaveLength(5);
+    expect(failure.validationIssues?.[0]).toEqual({ path: ["colors", "primary"], code: "invalid_format", message: expect.any(String), received: "string(4)" });
+    expect(JSON.stringify(failure.validationIssues)).not.toContain("blue");
   });
   it("builds strict content contracts directly from all catalog block fields", () => {
     for (const type of Object.keys(blockSchemas)) {
@@ -413,9 +431,10 @@ describe("catalog site generation", () => {
     expect(input_schema).not.toHaveProperty("properties.items.maxItems");
     expect(schema.safeParse({ items: ["one"] }).success).toBe(false);
   });
-  it("keeps all four maximum-size page grammars below 16 KiB and free of unions", () => {
+  it("keeps maximum-size page grammars below 16 KiB and free of unions", () => {
     const bytes = (schema: object) => Buffer.byteLength(JSON.stringify(schema));
-    expect(bytes(PLAN_SITE_TOOL.input_schema)).toBeLessThan(8 * 1024);
+    expect(bytes(curatedPlanContract(createGenerationInputSchema().parse({ ...input,
+      desiredPages: ["", "about", "services", "features", "pricing", "portfolio", "faq", "team", "testimonials", "contact"] })).tool.input_schema)).toBeLessThan(8 * 1024);
     for (const style of ["classic", "modern"] as const) {
       const designs = [...new Map(aiCatalog.filter((design) => design.styles.includes(style))
         .map((design) => [design.blockType, design])).values()];
@@ -423,11 +442,10 @@ describe("catalog site generation", () => {
         .map((section) => ({ section, size: bytes(pageFillContract({
           slug: "", title: "Home", sections: [section],
         }).tool.input_schema) }))
-        .sort((a, b) => b.size - a.size).slice(0, 7).map(({ section }) => section);
-      expect(sections).toHaveLength(7);
-      const largest = planSchema.parse({ ...plan, style, pages: PAGE_SLUGS.map((slug) =>
-        ({ slug, title: slug || "Home", sections })) }) satisfies SitePlan;
-      for (const page of largest.pages) {
+        .sort((a, b) => b.size - a.size).slice(0, 8).map(({ section }) => section);
+      expect(sections).toHaveLength(8);
+      const largest: PlannedPage[] = DEFAULT_PAGES.map((slug) => ({ slug, title: slug || "Home", sections }));
+      for (const page of largest) {
         const { tool, slots } = pageFillContract(page);
         const json = JSON.stringify(tool.input_schema);
         expect(bytes(tool.input_schema)).toBeLessThan(16 * 1024);
@@ -476,7 +494,7 @@ describe("custom site generation", () => {
 
   it.each([
     { type: "Plumber", pages: [""] as GenerationInput["desiredPages"], extras: [] as GenerationInput["desiredSections"] },
-    { type: "SaaS", pages: [...PAGE_SLUGS], extras: ["pricing", "faq", "gallery"] as GenerationInput["desiredSections"] },
+    { type: "SaaS", pages: DEFAULT_PAGES, extras: ["pricing", "faq", "gallery"] as GenerationInput["desiredSections"] },
   ])("assembles editable draft data for $type with pages $pages", async ({ type, pages: desiredPages, extras }) => {
     const layoutPlan = customPlan(desiredPages, extras);
     mocks.request.mockImplementation((request) => {

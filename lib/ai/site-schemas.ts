@@ -3,14 +3,13 @@ import "server-only";
 import { z } from "zod";
 import type { Field } from "@puckeditor/core";
 import { strictTool } from "./strict-tool";
+import { SECTION_COPY_BRIEFS } from "./site-prompt-briefs";
 import { puckConfig } from "@/lib/puck/config";
 import { sectionCatalog } from "@/lib/sections/catalog";
 import { buildDesignItem } from "@/lib/sections/library";
-import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
 import { iconNameSchema } from "@/lib/icons";
 
 type Fields = Record<string, Field>;
-export const PAGE_SLUGS = ["", "about", "services", "contact"] as const;
 export const aiCatalog = sectionCatalog.filter((design) => design.category !== "Blank");
 export const designIds = aiCatalog.map((design) => design.id);
 export const blockTypes = [...new Set(aiCatalog.map((design) => design.blockType))];
@@ -69,65 +68,15 @@ function fieldsSchema(fields: Fields) {
 
 export const blockSchemas = Object.fromEntries(blockTypes.map((type) => [type, fieldsSchema(blockFields(type))]));
 const catalogById = new Map(aiCatalog.map((design) => [design.id, design]));
-const seoSchema = z.strictObject({
-  title: z.string().min(1).max(59),
-  description: z.string().min(1).max(159),
-});
-const color = z.string().regex(/^#[0-9a-f]{6}$/i);
-export const planSchema = z.strictObject({
-  style: z.enum(["classic", "modern"]),
-  colors: z.strictObject({ primary: color, secondary: color, background: color, text: color }),
-  fonts: z.strictObject({ heading: z.enum(CURATED_FONT_NAMES), body: z.enum(CURATED_FONT_NAMES) }),
-  pages: z.array(z.strictObject({
-    slug: z.string().max(60),
-    title: z.string().min(1).max(80),
-    sections: z.array(z.strictObject({
-      blockType: z.enum(blockTypes), designId: z.enum(designIds),
-    })).min(2).max(7),
-    seo: seoSchema.optional(),
-  })).max(16),
-  seo: z.strictObject({ home: seoSchema, about: seoSchema, services: seoSchema, contact: seoSchema }).optional(),
-}).superRefine((plan, ctx) => {
-  plan.pages.forEach((page, pageIndex) => page.sections.forEach(({ blockType, designId }, sectionIndex) => {
-    const design = catalogById.get(designId);
-    if (design?.blockType !== blockType || !design.styles.includes(plan.style)) {
-      ctx.addIssue({ code: "custom", path: ["pages", pageIndex, "sections", sectionIndex],
-        message: "Use a catalog blockType/designId pair that supports the selected style." });
-    }
-  }));
-});
-export type SitePlan = z.infer<typeof planSchema>;
-type PlannedPage = SitePlan["pages"][number];
-
-export const PLAN_SITE_TOOL = strictTool("plan_site", "Return the selected pages, each with its own seo, without section props.", planSchema);
-
-const catalogSectionType: Record<string, string> = { faq: "Faq", gallery: "Gallery", pricing: "Pricing", team: "Team",
-  testimonials: "Testimonials", process: "Process", logos: "Logos" };
-
-export function catalogPageSections(style: SitePlan["style"], page: PlannedPage["sections"], desired: string[], elsewhere: string[] = []) {
-  const entries = [...page];
-  const pick = (type: string) => {
-    const design = aiCatalog.find((item) => item.blockType === type && item.styles.includes(style));
-    return design ? { blockType: design.blockType, designId: design.id } : undefined;
-  };
-  const requested = desired.map((kind) => pick(catalogSectionType[kind])).filter((entry) => entry !== undefined);
-  const excluded = new Set(elsewhere.map((kind) => catalogSectionType[kind]));
-  const hero = entries.find(({ blockType }) => blockType === "Hero") ?? pick("Hero");
-  const body = entries.filter(({ blockType }) => blockType !== "Footer" && blockType !== "Hero" && !excluded.has(blockType));
-  if (!body.length) {
-    const fallback = pick("TextSection");
-    if (fallback) body.push(fallback);
-  }
-  for (const section of requested) if (!body.some(({ blockType }) => blockType === section.blockType)) body.push(section);
-  if (hero) body.unshift(hero);
-  const footer = entries.find(({ blockType }) => blockType === "Footer") ?? pick("Footer");
-  const required = new Set(["Hero", ...requested.map(({ blockType }) => blockType)]);
-  while (body.length > (footer ? 6 : 7)) {
-    const index = body.findLastIndex(({ blockType }) => !required.has(blockType) || body.findIndex((entry) => entry.blockType === blockType) !== body.findLastIndex((entry) => entry.blockType === blockType));
-    body.splice(index, 1);
-  }
-  return footer ? [...body, footer] : body;
-}
+export type SiteTheme = {
+  style: "classic" | "modern";
+  colors: { primary: string; secondary: string; background: string; text: string };
+  fonts: { heading: string; body: string };
+};
+export type PlannedPage = {
+  slug: string; title: string; sections: { blockType: string; designId: string }[];
+  seo?: { title: string; description: string };
+};
 
 const fillPropsByType = new Map(blockTypes.map((blockType) => {
   const imageField = Object.entries(blockFields(blockType)).find(([, field]) => isImageField(field))?.[0];
@@ -159,7 +108,8 @@ export function pageFillContract(page: PlannedPage) {
   const task = `Write only the props for the named section slots in this page plan. Layout variants are set by the application:\n${JSON.stringify({
     slug: page.slug, title: page.title,
     sections: Object.fromEntries(slots.map(({ key, designId, blockType }) => [key, { blockType, designId }])),
-  })}`;
+  })}\nSECTION BRIEFS:\n${[...new Set(slots.map(({ blockType }) => blockType))]
+    .filter((type) => SECTION_COPY_BRIEFS[type]).map((type) => `- ${type}: ${SECTION_COPY_BRIEFS[type]}`).join("\n")}`;
   const tool = { ...strictTool("fill_page", "Return props for the planned page's section slots.", schema), strict: false };
   return { slots, schema, task, tool };
 }

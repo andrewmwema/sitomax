@@ -29,7 +29,7 @@ const sectionLabels: Record<(typeof DESIRED_SECTION_TYPES)[number], string> = {
 const eventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("progress"), message: z.string() }),
   z.object({ type: z.literal("error"), message: z.string(),
-    issues: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])), code: z.string(), message: z.string() })).max(5).optional() }),
+    issues: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])), code: z.string(), message: z.string(), received: z.string().max(40).optional() })).max(5).optional() }),
   z.object({ type: z.literal("result"), siteId: z.uuid(), pageId: z.uuid(), warnings: z.array(z.string()), pages: z.array(generationOutcomeSchema) }),
   z.object({ type: z.literal("retry"), page: generationOutcomeSchema }),
 ]);
@@ -381,7 +381,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     {error ? <div role="alert" className="creation-error">
       <p>{error}</p>
       {issues.length ? <ul className="mt-2 list-disc pl-5">
-        {issues.map(({ path, code, message }, index) => <li key={index}>{path.join(".") || "(root)"} ({code}): {message}</li>)}
+        {issues.map(({ path, code, message, received }, index) => <li key={index}>{path.join(".") || "(root)"} ({code}): {message}{received ? ` Received: ${received}.` : ""}</li>)}
       </ul> : null}
     </div> : null}
     <footer className="creation-footer">

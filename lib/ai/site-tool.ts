@@ -1,8 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import type { PLAN_SITE_TOOL } from "./site-schemas";
+import type { strictTool } from "./strict-tool";
 
-export type SiteTool = Omit<typeof PLAN_SITE_TOOL, "strict"> & { strict: boolean };
+export type SiteTool = Omit<ReturnType<typeof strictTool>, "strict"> & { strict: boolean };
 type SiteToolResponse = Anthropic.Message & { _request_id?: string | null };
 export type SiteToolCall = (tool: SiteTool, messages: Anthropic.MessageParam[]) => Promise<SiteToolResponse>;
 export type SiteToolTrace = {
@@ -28,6 +28,11 @@ function receivedShape(input: unknown, path: PropertyKey[]): string {
   if (typeof value === "string") return `string(${value.length})`;
   if (value === null) return "null";
   return typeof value;
+}
+
+/** Sanitized issues for super admins: generated values are reduced to their shape. */
+export function adminValidationIssues(issues: z.ZodError["issues"], input?: unknown) {
+  return safeValidationIssues(issues).map((issue, index) => ({ ...issue, received: receivedShape(input, issues[index].path) }));
 }
 
 export function validationMessage(error: z.ZodError) {
