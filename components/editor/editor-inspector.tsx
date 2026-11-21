@@ -14,6 +14,7 @@ import { safeHexColor } from "@/lib/sections/design";
 import { resolveContrastBackgrounds } from "@/lib/theme/contrast";
 import { ContrastNotice } from "./contrast-notice";
 import { SectionLibraryContext } from "./section-library";
+import { HexColorInput } from "./hex-color-input";
 
 const usePuck = createUsePuck();
 export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<string, ReactNode>>; isLoading: boolean }) {
@@ -99,12 +100,14 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
       </div> : null}
       {ui.tab === "style" ? <fieldset className="flex flex-col gap-3 rounded-lg border p-3 text-xs">
         <legend className="px-1 capitalize">{device} appearance</legend>
-        {(["backgroundColor", "textColor"] as const).map((key) => <label key={key} className="flex items-center justify-between gap-2">
-          {key === "backgroundColor" ? "Background" : "Text color"}
+        {(["backgroundColor", "textColor"] as const).map((key) => <div key={key} className="flex flex-wrap items-start justify-between gap-2">
+          <span>{key === "backgroundColor" ? "Background" : "Text color"}</span>
           {overrideIndicator(key)}
           <input type="color" aria-label={`${device} ${key}`} value={appearance[key] ?? base[key] ?? (key === "backgroundColor" ? "#ffffff" : "#1c2b3a")}
             onChange={(event) => patchAppearance({ [key]: event.target.value })} />
-        </label>)}
+          <HexColorInput label={`${device} ${key}`} value={appearance[key] ?? base[key] ?? (key === "backgroundColor" ? "#ffffff" : "#1c2b3a")}
+            onChange={(value) => patchAppearance({ [key]: value })} />
+        </div>)}
         <label>Corner radius {overrideIndicator("borderRadius")} <input aria-label="Corner radius" type="range" min={0} max={48} value={appearance.borderRadius ?? base.borderRadius ?? 0}
           onChange={(event) => patchAppearance({ borderRadius: Number(event.target.value) })} /></label>
         <label>Alignment {overrideIndicator("align")} <select aria-label="Block alignment" value={appearance.align ?? base.align ?? "left"}

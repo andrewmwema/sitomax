@@ -56,6 +56,15 @@ it.each([false, true])("keeps dropdowns usable across canvas focus changes (ifra
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(editor.getHTML()).toBe("<p>Example text</p>");
+    await act(async () => editor.commands.setTextSelection({ from: 1, to: 8 }));
+    const color = host.querySelector<HTMLInputElement>('[aria-label="Text color hex"]')!;
+    await act(async () => {
+      color.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(color, "#123456");
+      color.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => color.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(editor.getHTML()).toContain("color: rgb(18, 52, 86)");
     await act(async () => select.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(host.querySelector('[role="toolbar"]')).toBeNull();
     await act(async () => editor.view.dom.dispatchEvent(new Event("pointerdown", { bubbles: true })));

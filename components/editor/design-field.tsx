@@ -23,6 +23,7 @@ import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { VideoUploadField } from "@/components/editor/video-upload-field";
 import { InteractionContext } from "./interaction-context";
 import { ContrastNotice } from "./contrast-notice";
+import { HexColorInput } from "./hex-color-input";
 
 /**
  * Editor UI for the "design" object every block carries (SectionShell).
@@ -250,6 +251,7 @@ function ColorControl({
           onChange={(event) => onChange(event.target.value)}
           className="h-6 w-8 cursor-pointer rounded border border-zinc-300 bg-white p-0.5"
         />
+        <HexColorInput label={label} value={value} onChange={onChange} />
         {allowNone ? (
           <button
             type="button"

@@ -63,6 +63,8 @@ Agency Settings groups the existing profile, logo and accent controls with a liv
 branding preview. Unsaved changes warn on refresh/close and ordinary navigation
 links; successful saves establish a new discard baseline. Reporting timezone and
 account access are shown as information rather than unsupported preferences.
+Agency branding and website editor color controls accept six-digit hex values;
+press Enter or leave the field to apply the color.
 
 The website editor uses save-aware page switching, a compact action bar and
 keyboard-accessible tool rail and Content / Design / Motion tabs. History,

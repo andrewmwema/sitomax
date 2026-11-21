@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Building2, Check, LifeBuoy, Palette, Save, ShieldCheck } from "lucide-react";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
+import { HexColorInput } from "@/components/editor/hex-color-input";
 import { idleState, type ActionState } from "@/lib/form-state";
 import type { AgencySettings } from "@/lib/agency";
 import { brand } from "@/lib/brand";
@@ -112,10 +113,10 @@ export function AgencySettingsForm({ settings, action, account }: {
                 <input type="hidden" name="favicon_url" value={fields.faviconUrl} />
                 <p className="mt-2 text-xs text-[var(--platform-muted)]">Shown in browser tabs for the platform. PNG, JPEG, SVG or WebP, up to 2 MB.</p>
               </div>
-              <label className="flex flex-col gap-2 text-sm font-medium">Primary brand color
-                <span className="flex items-center gap-3"><input type="color" name="primary_color" value={fields.primaryColor} onChange={(event) => setFields({ ...fields, primaryColor: event.target.value })} className="h-11 w-14 rounded-lg border border-[var(--platform-line)] bg-white p-1" /><span className="font-mono text-xs font-normal text-[var(--platform-secondary)]">{fields.primaryColor.toUpperCase()}</span></span>
-                <span className="text-xs leading-relaxed font-normal text-[var(--platform-muted)]">Dashboard accent shades adjust for readability. Your websites keep their own themes.</span>
-              </label>
+              <div className="flex flex-col gap-2 text-sm font-medium"><span>Primary brand color</span>
+                <span className="flex items-start gap-3"><input aria-label="Primary brand color" type="color" name="primary_color" value={fields.primaryColor} onChange={(event) => setFields({ ...fields, primaryColor: event.target.value })} className="h-11 w-14 rounded-lg border border-[var(--platform-line)] bg-white p-1" /><HexColorInput label="Primary brand color" value={fields.primaryColor} onChange={(primaryColor) => setFields({ ...fields, primaryColor })} disabled={pending} /></span>
+                <span className="text-xs leading-relaxed font-normal text-[var(--platform-muted)]">Enter a hex color and press Enter or leave the field to apply it. Dashboard accent shades adjust for readability. Your websites keep their own themes.</span>
+              </div>
             </div>
             <div aria-label="Branding preview" className="overflow-hidden rounded-xl border border-[var(--platform-line)] bg-[var(--platform-ground)]">
               <div className="border-b border-[var(--platform-line)] px-4 py-3"><p className="platform-eyebrow">Live branding preview</p><p className="mt-1 text-xs text-[var(--platform-muted)]">Preview only · {dirty ? "unsaved appearance" : "saved appearance"}</p></div>

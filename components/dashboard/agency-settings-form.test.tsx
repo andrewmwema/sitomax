@@ -31,6 +31,18 @@ function changeInput(input: HTMLInputElement, value: string) {
 const button = (label: string) => [...container.querySelectorAll("button")].find((item) => item.textContent?.trim() === label)!;
 
 describe("agency settings workspace", () => {
+  it("saves a primary brand color entered as hex", async () => {
+    const action = vi.fn<(previous: ActionState, data: FormData) => Promise<ActionState>>()
+      .mockResolvedValue({ status: "success", message: "Settings saved." });
+    await act(async () => root.render(<AgencySettingsForm settings={settings} account={account} action={action} />));
+    const hex = container.querySelector<HTMLInputElement>('[aria-label="Primary brand color hex"]')!;
+    await act(async () => changeInput(hex, "#123456"));
+    await act(async () => hex.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(container.querySelector<HTMLInputElement>('[name="primary_color"]')?.value).toBe("#123456");
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(action.mock.calls[0][1].get("primary_color")).toBe("#123456");
+  });
+
   it("previews changes, warns before losing edits, and discards to the last saved appearance", async () => {
     await act(async () => root.render(<AgencySettingsForm settings={settings} account={account} action={vi.fn()} />));
     expect(button("Save settings").disabled).toBe(true);

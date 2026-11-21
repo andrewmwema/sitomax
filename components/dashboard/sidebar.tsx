@@ -8,19 +8,19 @@ import { AgencyBrand } from "./agency-brand";
 
 const groups = [
   { label: "Workspace", items: [
-    { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-    { href: "/dashboard/sites", label: "Sites", icon: Globe2 },
-    { href: "/dashboard/domains", label: "Domains", icon: Link2 },
-    { href: "/dashboard/clients", label: "Clients", icon: Users, admin: true },
+    { href: "/dashboard", label: "Overview", icon: LayoutDashboard, color: "text-indigo-700" },
+    { href: "/dashboard/sites", label: "Sites", icon: Globe2, color: "text-sky-700" },
+    { href: "/dashboard/domains", label: "Domains", icon: Link2, color: "text-teal-700" },
+    { href: "/dashboard/clients", label: "Clients", icon: Users, color: "text-violet-700", admin: true },
   ] },
   { label: "Operations", items: [
-    { href: "/dashboard/domain-requests", label: "Domain requests", icon: HandHelping, admin: true },
-    { href: "/dashboard/forms", label: "Leads", icon: Inbox },
-    { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+    { href: "/dashboard/domain-requests", label: "Domain requests", icon: HandHelping, color: "text-orange-700", admin: true },
+    { href: "/dashboard/forms", label: "Leads", icon: Inbox, color: "text-rose-700" },
+    { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, color: "text-emerald-700" },
   ] },
   { label: "Management", items: [
-    { href: "/dashboard/ai-usage", label: "AI costs", icon: CircleDollarSign, admin: true },
-    { href: "/dashboard/settings", label: "Settings", icon: Settings },
+    { href: "/dashboard/ai-usage", label: "AI costs", icon: CircleDollarSign, color: "text-amber-700", admin: true },
+    { href: "/dashboard/settings", label: "Settings", icon: Settings, color: "text-fuchsia-700" },
   ] },
 ];
 
@@ -92,7 +92,7 @@ export function Sidebar(props: SidebarProps) {
             return <Link key={item.href} href={item.href} title={item.label} aria-label={compact ? item.label : undefined}
               aria-current={active ? "page" : undefined} onClick={mobile ? closeMobile : undefined}
               className={`platform-nav-link flex min-h-10 items-center gap-3 rounded-[10px] text-[13px] ${compact ? "justify-center px-0" : "px-3"} ${active ? "font-semibold text-[var(--platform-ink)]" : "text-[var(--platform-secondary)]"}`}>
-              <item.icon size={17} strokeWidth={1.7} className={active ? "text-[var(--platform-accent)]" : undefined} />
+              <item.icon size={17} strokeWidth={1.7} className={props.isSuperAdmin ? item.color : active ? "text-[var(--platform-accent)]" : undefined} />
               {!compact ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}
               {item.href === "/dashboard/forms" && props.unreadCount !== 0 ? <span
                 aria-label={props.unreadCount === null ? "Unread count unavailable" : `${props.unreadCount} unread ${props.unreadCount === 1 ? "lead" : "leads"}`}

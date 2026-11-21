@@ -105,6 +105,9 @@ describe("dashboard navigation", () => {
     expect(sidebar.querySelector('a[href="/dashboard/clients"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/domain-requests"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/ai-usage"]')).not.toBeNull();
+    expect(sidebar.querySelector('a[href="/dashboard/sites"] svg')?.classList.contains("text-sky-700")).toBe(true);
+    expect(sidebar.querySelector('a[href="/dashboard/forms"] svg')?.classList.contains("text-rose-700")).toBe(true);
+    expect(sidebar.querySelector('a[href="/dashboard/forms"]')?.getAttribute("aria-current")).toBe("page");
     await act(async () => root.unmount()); container.remove();
   });
 });

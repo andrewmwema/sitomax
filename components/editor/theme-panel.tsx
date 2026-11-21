@@ -18,6 +18,7 @@ import {
 import { saveSiteTheme } from "@/app/editor/[pageId]/actions";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { WorkspaceDialog } from "@/components/dashboard/workspace-dialog";
+import { HexColorInput } from "./hex-color-input";
 
 const COLOR_LABELS = [
   ["primary", "Primary"],
@@ -273,16 +274,21 @@ export function ThemePanel({
           <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
             Custom colors
           </h3>
+          <p className="text-xs text-zinc-500">Enter a hex color and press Enter or leave the field to apply it.</p>
           {COLOR_LABELS.map(([key, label]) => (
-            <label key={key} className="flex items-center justify-between gap-3 text-sm">
-              {label}
+            <div key={key} className="flex items-start justify-between gap-3 text-sm">
+              <span>{label}</span>
+              <div className="flex items-start gap-2">
               <input
                 type="color"
+                aria-label={`${label} color`}
                 value={colors[key]}
                 onChange={(e) => setColor(key, e.target.value)}
                 className="h-8 w-14 cursor-pointer rounded border border-zinc-300"
               />
-            </label>
+              <HexColorInput label={`${label} color`} value={colors[key]} onChange={(value) => setColor(key, value)} />
+              </div>
+            </div>
           ))}
         </section>
 

@@ -9,6 +9,7 @@ import { ImageUploadField } from "./image-upload-field";
 import { LinkFieldControl } from "./link-picker";
 import { useAskAi } from "./ask-ai";
 import { useInteractions } from "./interaction-context";
+import { HexColorInput } from "./hex-color-input";
 
 const usePuck = createUsePuck();
 const control = "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm";
@@ -154,8 +155,11 @@ function HeaderSettings({ tab, onTab, close }: { tab: Tab; onTab: (tab: Tab) => 
         <div className="grid grid-cols-2 gap-3">
           {([["color", "Background"], ["gradientTo", "Gradient end"], ["textColor", "Menu text"], ["hoverColor", "Hover"],
             ["scrollColor", "After scroll"], ["panelColor", "Panel background"], ["panelTextColor", "Panel text"], ["borderColor", "Border"]] as const)
-            .map(([key, label]) => <label className="text-xs font-medium" key={key}>{label}
-              <input type="color" className="mt-1 h-9 w-full" value={design[key]} onChange={event => style({ [key]: event.target.value })} /></label>)}
+            .map(([key, label]) => <div className="min-w-0 text-xs font-medium" key={key}><span>{label}</span>
+              <div className="mt-1 flex flex-wrap items-start gap-1">
+                <input aria-label={`${label} color`} type="color" className="h-9 w-10" value={design[key]} onChange={event => style({ [key]: event.target.value })} />
+                <HexColorInput label={`${label} color`} value={design[key]} onChange={value => style({ [key]: value })} />
+              </div></div>)}
         </div>
         {colors.foreground.toLowerCase() !== design.textColor.toLowerCase() || colors.panel.toLowerCase() !== design.panelTextColor.toLowerCase() ||
           colors.hover.toLowerCase() !== design.hoverColor.toLowerCase() || colors.scrolled.toLowerCase() !== design.textColor.toLowerCase() ||

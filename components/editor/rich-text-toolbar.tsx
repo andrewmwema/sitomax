@@ -16,6 +16,7 @@ import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import { SectionLibraryContext } from "./section-library";
 import { appPoint, InteractionContext } from "./interaction-context";
 import { useOptionalEditorAi } from "./editor-ai-context";
+import { HexColorInput } from "./hex-color-input";
 
 const icons = {
   Bold, Italic, Underline, Strike: Strikethrough, Link: LinkIcon, Bullets: List,
@@ -302,6 +303,10 @@ export function RichTextToolbar({ editor, readOnly, floating = false, initialHea
     return typeof document !== "undefined" ? createPortal(popover, document.body) : popover;
   }
   const palette = { ...DEFAULT_COLORS, ...library?.theme.colors };
+  const currentTextColor = editor.getAttributes("textAppearance").color;
+  const currentHighlight = editor.getAttributes("textAppearance").backgroundColor;
+  const textColor = typeof currentTextColor === "string" && /^#[0-9a-f]{6}$/i.test(currentTextColor) ? currentTextColor : palette.text;
+  const highlightColor = typeof currentHighlight === "string" && /^#[0-9a-f]{6}$/i.test(currentHighlight) ? currentHighlight : "#fef08a";
   const toolbar = (
     <div ref={ref} role="toolbar" aria-label="Text formatting" data-rich-toolbar data-puck-rte-menu
       style={floating ? { ...floatingStyle, width: position?.width ?? "min(1180px, calc(100vw - 24px))", overflowY: position?.constrained ? "auto" : "visible" } : undefined}
@@ -354,13 +359,15 @@ export function RichTextToolbar({ editor, readOnly, floating = false, initialHea
         <input aria-label="Custom font size" type="number" min={10} max={96} className="w-14 rounded border p-1"
           onBlur={(event) => { if (event.target.value) appearance({ fontSize: `${Math.min(96, Math.max(10, Number(event.target.value)))}px` }); }} />
       </label>
-      <label className="flex items-center gap-1 text-xs">Color<input aria-label="Text color" type="color" defaultValue={palette.text}
+      <label className="flex items-center gap-1 text-xs">Color<input aria-label="Text color" type="color" value={textColor}
         onChange={(event) => appearance({ color: event.target.value })} className="h-6 w-7" /></label>
+      <HexColorInput label="Text color" value={textColor} onChange={(color) => appearance({ color })} />
       {Object.entries(palette).map(([name, color]) => <button key={name} type="button" aria-label={`${name} text color`}
         style={{ backgroundColor: color }} onMouseDown={(event) => event.preventDefault()}
         onClick={() => appearance({ color })} className="h-5 w-5 rounded-full border border-zinc-300" />)}
-      <label className="flex items-center gap-1 text-xs">Highlight<input aria-label="Highlight" type="color" defaultValue="#fef08a"
+      <label className="flex items-center gap-1 text-xs">Highlight<input aria-label="Highlight" type="color" value={highlightColor}
         onChange={(event) => appearance({ backgroundColor: event.target.value }, false)} className="h-6 w-7" /></label>
+      <HexColorInput label="Highlight" value={highlightColor} onChange={(color) => appearance({ backgroundColor: color }, false)} />
       </div>
       </details>
       </div>

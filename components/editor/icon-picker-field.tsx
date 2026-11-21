@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { BlockIcon, ICON_NAMES } from "@/components/blocks/ui/icon";
 import { readIcon, type IconValue } from "@/lib/icons";
 import { THEME_COLOR_TOKENS } from "@/lib/layout/guardrails";
+import { HexColorInput } from "./hex-color-input";
 
 /**
  * Custom Puck field: searchable grid over the curated lucide icon set.
@@ -89,10 +90,11 @@ export function IconPickerField({
           <option value="custom">Custom color</option>
         </select>
       </label>
-      {icon.color?.startsWith("#") ? <label className="flex items-center justify-between text-xs">Custom icon color
+      {icon.color?.startsWith("#") ? <div className="flex flex-wrap items-start justify-between gap-2 text-xs"><span>Custom icon color</span>
         <input aria-label="Custom icon color" type="color" disabled={readOnly} value={icon.color}
           onChange={(event) => onChange({ ...icon, color: event.target.value })} />
-      </label> : null}
+        <HexColorInput label="Custom icon color" value={icon.color} disabled={readOnly} onChange={(color) => onChange({ ...icon, color })} />
+      </div> : null}
     </div>
   );
 }

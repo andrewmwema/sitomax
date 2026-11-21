@@ -21,6 +21,7 @@ import {
   type RowLayout,
 } from "@/lib/layout/structure";
 import { SectionLibraryContext } from "@/components/editor/section-library";
+import { HexColorInput } from "./hex-color-input";
 
 /**
  * Sidebar controls behind the layout-system guardrails: theme-palette
@@ -107,6 +108,7 @@ export function ThemeColorControl({
           className="absolute inset-0 cursor-pointer opacity-0"
         />
       </label>
+      <HexColorInput label="Custom color" value={custom ?? undefined} onChange={onChange} disabled={readOnly} />
       <span className="text-[11px] text-zinc-500">
         {current === "auto"
           ? "Matches the section"
