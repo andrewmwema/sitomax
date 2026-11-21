@@ -37,6 +37,17 @@ export function outboundReplyTo(leadId: string, route: { mode: "direct" | "track
   return replyAddress(leadId, config.domain, config.tokenSecret);
 }
 
+export function leadReplyPreview(name: string, leadId: string, route: { mode: "direct" | "tracked"; direct_to: string | null }) {
+  const config = leadMailConfig();
+  const from = config ? leadSender(name, config.domain) : null;
+  try {
+    return { from, replyTo: outboundReplyTo(leadId, route), replyToError: null };
+  } catch (error) {
+    if (!(error instanceof EmailDeliveryError)) throw error;
+    return { from, replyTo: null, replyToError: error.message };
+  }
+}
+
 const forwardJob = z.object({
   message_id: z.uuid(), recipient: z.string(), lease_id: z.uuid(), lead_id: z.uuid(), lead_name: z.string(),
   business: z.string(), lead_email: leadEmailAddress, subject: z.string(), body_text: z.string(), original_text: z.string(),

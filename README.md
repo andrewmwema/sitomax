@@ -39,8 +39,9 @@ native modal focus handling and prevent background scrolling. Loading skeletons
 respect reduced-motion preferences. Overview and Analytics share the same traffic
 chart and accessible daily-values table.
 
-The Clients, Domain Requests, and Forms workspaces share accessible detail
-drawers and compact management tables. Client access labels reflect actual owner
+Clients and leads open in dedicated detail views, with a back link that retains
+the list filters and page. Existing lead links continue to open the lead directly.
+Domain Requests uses an accessible detail drawer. Client access labels reflect actual owner
 memberships, not invitation acceptance (which is not tracked). Completing a domain
 request remains separate from verifying its DNS.
 
@@ -639,7 +640,9 @@ worker configured: it reserves sends, stores replies and retries forwards.
 
 In **Sites → Leads**, tracked delivery is the default. Direct delivery uses
 the first notification address alphabetically and does not thread replies
-to newly sent emails. The agency can adjust the per-account daily send limit
+to newly sent emails. The reply composer shows the sender and reply-to address
+using the current settings; tracked reply-to addresses are unique to each lead.
+The agency can adjust the per-account daily send limit
 (50 by default, midnight UTC reset), and enable optional email footer
 branding in **Settings → Branding**. An accepted send counts as a send
 attempt even if delivery later fails. Forward delivery is retried up to

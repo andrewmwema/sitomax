@@ -6,7 +6,7 @@ vi.mock("@/lib/brand", () => ({ brand: { appUrl: "https://app.example.test", nam
 vi.mock("@/lib/leads/reply-worker", () => ({ leadReplyWorker: () => ({ client: { rpc: mocks.rpc }, secret: "test-worker" }) }));
 vi.mock("@/lib/email", async (load) => ({ ...await load<typeof import("@/lib/email")>(), sendEmail: mocks.send }));
 import { replyAddress, verifyReplyAddress } from "@/lib/leads/reply-token";
-import { outboundReplyTo } from "@/lib/leads/reply-mail";
+import { leadReplyPreview, outboundReplyTo } from "@/lib/leads/reply-mail";
 import { POST } from "./route";
 
 const lead = "00000000-0000-4000-8000-000000000001";
@@ -108,5 +108,24 @@ describe("lead inbound and forwarding", () => {
     expect(verifyReplyAddress(address.replace(domain, "other.example.test"), domain, token)).toBeNull();
     expect(verifyReplyAddress(address.split("@")[0].slice(6), domain, token, true)).toBe(lead);
     expect(address.split("@")[0].length).toBeLessThanOrEqual(64);
+  });
+
+  it("previews the actual sender and tracked or direct reply-to address", () => {
+    expect(leadReplyPreview("Acme", lead, { mode: "tracked", direct_to: null })).toEqual({
+      from: '"Acme" <leads@outbound.example.test>', replyTo: address, replyToError: null,
+    });
+    expect(leadReplyPreview("Acme", lead, { mode: "direct", direct_to: "Owner@example.test" })).toEqual({
+      from: '"Acme" <leads@outbound.example.test>', replyTo: "owner@example.test", replyToError: null,
+    });
+  });
+
+  it("shows configuration errors instead of a misleading address", () => {
+    vi.stubEnv("POSTMARK_LEADS_STREAM", "");
+    vi.stubEnv("LEAD_REPLY_TOKEN_SECRET", "");
+    expect(leadReplyPreview("Acme", lead, { mode: "tracked", direct_to: null })).toEqual({
+      from: null, replyTo: null, replyToError: "Tracked replies are not configured. Contact your agency.",
+    });
+    expect(leadReplyPreview("Acme", lead, { mode: "direct", direct_to: null }).replyToError)
+      .toBe("No eligible reply mailbox. Add a notification recipient in Lead settings.");
   });
 });

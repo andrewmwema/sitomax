@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { CalendarDays, Clock, Download, Inbox, Percent, Search } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, Download, Inbox, Percent, Search } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { WorkspaceMetrics } from "@/components/dashboard/workspace-metrics";
 import { MarkSubmissionRead } from "@/components/dashboard/mark-submission-read";
-import { CopyLeadValue, LeadBulkForm, LeadDrawer, LeadNoteForm, LeadStatusForm } from "@/components/dashboard/lead-controls";
+import { CopyLeadValue, LeadBulkForm, LeadNoteForm, LeadStatusForm } from "@/components/dashboard/lead-controls";
 import { allowedLeadSites, getSubmissionPage, LEAD_COLUMNS, SUBMISSION_PAGE_SIZE } from "@/lib/forms/queries";
 import { leadStatuses, leadStatusLabels, submissionContact, submissionFiltersSchema, submissionQueryString,
   type Lead, type LeadEvent, type LeadNote } from "@/lib/forms/submissions";
@@ -22,9 +22,6 @@ const eventLabels = { created: "Lead received", status_changed: "Status changed"
 
 export default function FormsPage({ searchParams }: PageProps<"/dashboard/forms">) {
   return <section className="flex flex-col gap-6">
-    <header><p className="platform-eyebrow mb-1">Operations · Forms &amp; Submissions</p>
-      <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
-      <p className="mt-2 text-sm text-[var(--platform-muted)]">Track and organize inquiries from your websites.</p></header>
     <Suspense fallback={<div role="status" aria-label="Loading leads" className="h-64 animate-pulse rounded-2xl bg-[var(--platform-subtle)]" />}>
       <FormsContent searchParams={searchParams} />
     </Suspense>
@@ -48,15 +45,34 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
     const site = allowed.find((value) => value.id === id);
     return site?.name || site?.subdomain || "Website";
   };
-  const [results, statsResult, detail, admin] = await Promise.all([
+  const query = submissionQueryString(filters, filters.page);
+  const closeHref = `${route}${query}`;
+  if (filters.lead) {
+    const [detail, admin] = await Promise.all([
+      supabase.from("form_submissions").select(LEAD_COLUMNS).eq("id", filters.lead).maybeSingle<Lead>(),
+      supabase.rpc("is_super_admin"),
+    ]);
+    if (detail.error) throw new Error("Could not load this lead.");
+    if (admin.error) throw new Error("Could not check lead notification warning access.");
+    if (!detail.data) return <div className="space-y-4"><Link href={closeHref} className="platform-button"><ArrowLeft size={15} />Back to leads</Link>
+      <p role="alert">That lead is unavailable or you do not have permission to view it.</p></div>;
+    const [notificationFailures, forwardFailures] = admin.data ? await Promise.all([
+      supabase.from("lead_notification_failures").select("lead_id").eq("lead_id", detail.data.id).limit(1),
+      supabase.from("lead_reply_forwards").select("state, lead_messages!inner(lead_id)")
+        .eq("lead_messages.lead_id", detail.data.id).in("state", ["retrying", "failed"]).limit(1),
+    ]) : [null, null];
+    const warningUnavailable = Boolean(notificationFailures?.error || forwardFailures?.error);
+    return <LeadDetails key={detail.data.id} lead={detail.data} siteName={siteName(detail.data.site_id)} closeHref={closeHref}
+      supabase={supabase} userId={user.id} notificationWarning={Boolean(notificationFailures?.data?.length || forwardFailures?.data?.length)}
+      warningsUnavailable={warningUnavailable} />;
+  }
+  const [results, statsResult, admin] = await Promise.all([
     getSubmissionPage(supabase, allowed, filters, new Date()),
     supabase.rpc("lead_inbox_stats", { p_site_id: filters.site || null }),
-    filters.lead ? supabase.from("form_submissions").select(LEAD_COLUMNS).eq("id", filters.lead).maybeSingle<Lead>() : null,
     supabase.rpc("is_super_admin"),
   ]);
-  if (detail?.error) throw new Error("Could not load this lead.");
   if (admin.error) throw new Error("Could not check lead notification warning access.");
-  const leadIds = [...new Set([...results.rows.map((row) => row.id), ...(detail?.data ? [detail.data.id] : [])])];
+  const leadIds = results.rows.map((row) => row.id);
   const [notificationFailures, forwardFailures] = admin.data && leadIds.length ? await Promise.all([
     supabase.from("lead_notification_failures").select("lead_id").in("lead_id", leadIds),
     supabase.from("lead_reply_forwards").select("state, lead_messages!inner(lead_id)")
@@ -70,10 +86,11 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
   const stats = statsResult.error || !parsedStats.success ? null : parsedStats.data;
   const closed = stats ? stats.won + stats.lost : 0;
   const pages = Math.max(1, Math.ceil(results.count / SUBMISSION_PAGE_SIZE));
-  const query = submissionQueryString(filters, filters.page);
-  const closeHref = `${route}${query}`;
   const archived = filters.archived === "1";
   return <>
+    <header><p className="platform-eyebrow mb-1">Operations · Forms &amp; Submissions</p>
+      <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
+      <p className="mt-2 text-sm text-[var(--platform-muted)]">Track and organize inquiries from your websites.</p></header>
     {warningsUnavailable ? <p role="alert" className="text-sm text-[var(--platform-error)]">Lead notification warnings are unavailable.</p> : null}
     <WorkspaceMetrics metrics={[
       { label: "New this week", value: stats?.received ?? "Unavailable", detail: "Received since Monday · UTC", icon: Inbox },
@@ -117,7 +134,7 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
             return <tr key={row.id} className="align-top">
               <td className="px-4"><input type="checkbox" name="id" value={row.id} form="lead-bulk" aria-label={`Select ${name}, received ${displayDate(row.created_at)} UTC`} /></td>
               <td className="max-w-56 break-words px-4">
-                <Link scroll={false} href={`${closeHref}${query ? "&" : "?"}lead=${row.id}`} className="font-semibold hover:underline">{name}</Link>
+                <Link href={`${closeHref}${query ? "&" : "?"}lead=${row.id}`} className="font-semibold hover:underline">{name}</Link>
                 <div className="text-xs text-[var(--platform-muted)]">{[contact.email, contact.phone].filter(Boolean).join(" · ") || "No contact details"}</div>
               </td>
               <td className="max-w-52 break-words px-4">{siteName(row.site_id)}
@@ -142,13 +159,11 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
         {filters.page < pages ? <Link href={`${route}${submissionQueryString(filters, filters.page + 1)}`} className="platform-button">Next</Link> : <span />}
       </nav> : null}
     </section>
-    {detail?.data ? <LeadDetails key={detail.data.id} lead={detail.data} siteName={siteName(detail.data.site_id)} closeHref={closeHref} supabase={supabase} userId={user.id} notificationWarning={warnings.has(detail.data.id)} />
-      : filters.lead ? <p role="alert">That lead is unavailable or you do not have permission to view it.</p> : null}
   </>;
 }
 
-async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notificationWarning }: {
-  lead: Lead; siteName: string; closeHref: string; supabase: Awaited<ReturnType<typeof requireUser>>["supabase"]; userId: string; notificationWarning: boolean;
+async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notificationWarning, warningsUnavailable }: {
+  lead: Lead; siteName: string; closeHref: string; supabase: Awaited<ReturnType<typeof requireUser>>["supabase"]; userId: string; notificationWarning: boolean; warningsUnavailable: boolean;
 }) {
   const [notes, events] = await Promise.all([
     supabase.from("lead_notes").select("id, author_id, body, created_at").eq("lead_id", lead.id)
@@ -160,10 +175,15 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
   const email = z.email().safeParse(contact.email?.trim());
   const phone = contact.phone?.trim().replace(/[\s().-]/g, "");
   const tel = phone && /^\+?[0-9]{3,20}$/.test(phone) ? `tel:${phone}` : null;
-  return <LeadDrawer title={contact.name || "Lead details"} description={`${siteName} · ${lead.form_name || "Form"} · ${lead.page_path || "/"}`} closeHref={closeHref}>
-    <section className="space-y-2 border-b border-[var(--platform-line)] pb-4">
+  return <article className="mx-auto w-full max-w-6xl space-y-6">
+    <Link href={closeHref} className="platform-button"><ArrowLeft size={15} />Back to leads</Link>
+    <header><p className="platform-eyebrow mb-1">Lead details</p>
+      <h1 className="break-words text-2xl font-semibold tracking-tight">{contact.name || "Lead details"}</h1>
+      <p className="mt-2 text-sm text-[var(--platform-muted)]">{siteName} · {lead.form_name || "Form"} · {lead.page_path || "/"}</p></header>
+    <section className="platform-panel space-y-3 p-5">
       <p className="text-xs text-[var(--platform-muted)]">Received {displayDate(lead.created_at)} UTC</p>
       {notificationWarning ? <p role="status" className="text-sm text-[var(--platform-error)]">A lead notification failed or is awaiting retry. Check notification settings and server logs.</p> : null}
+      {warningsUnavailable ? <p role="alert" className="text-sm text-[var(--platform-error)]">Lead notification warnings are unavailable.</p> : null}
       {contact.email ? <div className="flex flex-wrap items-center gap-2 break-all text-sm">
         {email.success ? <a className="underline" href={`mailto:${encodeURIComponent(email.data)}`}>{contact.email}</a> : <span>{contact.email}</span>}
         <CopyLeadValue value={contact.email} label="Email" />
@@ -174,8 +194,10 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
       <LeadStatusForm lead={lead} />
       {!lead.is_read || lead.has_unread_reply ? <MarkSubmissionRead id={lead.id} /> : null}
     </section>
-    <LeadReplyThread lead={lead} supabase={supabase} />
-    <section className="space-y-3"><h3 className="text-sm font-semibold">Internal notes</h3>
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    <div className="platform-panel min-w-0 p-5 sm:p-6"><LeadReplyThread lead={lead} supabase={supabase} /></div>
+    <div className="space-y-6">
+    <section className="platform-panel space-y-3 p-5"><h2 className="text-sm font-semibold">Internal notes</h2>
       <LeadNoteForm leadId={lead.id} siteId={lead.site_id} />
       {notes.error ? <p role="alert" className="text-sm">Notes are unavailable.</p> : notes.data.map((note) => <article key={note.id} className="platform-panel space-y-2 p-3">
         <p className="whitespace-pre-wrap break-words text-sm">{note.body}</p>
@@ -184,7 +206,7 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
           <LeadNoteForm key={note.body} leadId={lead.id} siteId={lead.site_id} note={note} /></details> : null}
       </article>)}
     </section>
-    <section><h3 className="text-sm font-semibold">Timeline</h3>
+    <section className="platform-panel p-5"><h2 className="text-sm font-semibold">Timeline</h2>
       {events.error ? <p role="alert" className="mt-2 text-sm">The timeline is unavailable.</p> : <ol className="divide-y divide-[var(--platform-line)]">
         {events.data.map((event) => {
           const to = leadStatuses.find((status) => status === event.data?.to);
@@ -194,5 +216,7 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
         })}
       </ol>}
     </section>
-  </LeadDrawer>;
+    </div>
+    </div>
+  </article>;
 }

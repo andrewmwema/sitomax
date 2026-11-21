@@ -1,20 +1,8 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState, useState } from "react";
 import { saveLeadNote, updateLeads } from "@/app/(dashboard)/dashboard/forms/actions";
 import { leadStatuses, leadStatusLabels, type Lead, type LeadNote } from "@/lib/forms/submissions";
-import { WorkspaceDialog } from "./workspace-dialog";
-
-export function LeadDrawer({ title, description, closeHref, children }: {
-  title: string; description: string; closeHref: string; children: ReactNode;
-}) {
-  const router = useRouter();
-  return <WorkspaceDialog title={title} description={description} open onClose={() => router.replace(closeHref, { scroll: false })}>
-    {children}
-  </WorkspaceDialog>;
-}
-
 function ActionMessage({ state }: { state: { error?: string; success?: string } }) {
   return state.error ? <p role="alert" className="text-sm text-[var(--platform-error)]">{state.error}</p>
     : state.success ? <p role="status" className="text-sm text-[var(--platform-success)]">{state.success}</p> : null;

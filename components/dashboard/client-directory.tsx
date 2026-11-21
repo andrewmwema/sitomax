@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Search, Users } from "lucide-react";
-import { WorkspaceDialog } from "./workspace-dialog";
-import { InviteOwnerForm } from "./invite-owner-form";
-import { inviteOwner } from "@/app/(dashboard)/dashboard/clients/actions";
+import { Search, Users } from "lucide-react";
+import { clientDirectoryHref, type ClientDirectoryFilters } from "@/lib/clients/directory";
 import { TableScrollArea } from "./table-scroll-area";
 
 export type ClientAccount = {
@@ -20,10 +18,16 @@ export type ClientAccount = {
   ai_limits: { monthly_site_generations: number; monthly_edits: number; extra_credits: number } | null;
 };
 
-export function ClientDirectory({ accounts }: { accounts: ClientAccount[] }) {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [page, setPage] = useState(1);
+export function ClientDirectory({ accounts, initialFilters = { q: "", access: "all", page: 1 } }: { accounts: ClientAccount[]; initialFilters?: ClientDirectoryFilters }) {
+  const [search, setSearch] = useState(initialFilters.q);
+  const [filter, setFilter] = useState(initialFilters.access);
+  const [page, setPage] = useState(initialFilters.page);
+  function updateFilters(next: ClientDirectoryFilters) {
+    setSearch(next.q);
+    setFilter(next.access);
+    setPage(next.page);
+    window.history.replaceState(null, "", clientDirectoryHref(next));
+  }
   const visible = accounts.filter((account) => {
     const hasOwner = account.account_members.some((member) => member.role === "owner");
     const text = [account.name, ...account.account_members.flatMap(({ profile }) => [profile?.full_name, profile?.email])].join(" ").toLowerCase();
@@ -35,9 +39,12 @@ export function ClientDirectory({ accounts }: { accounts: ClientAccount[] }) {
   return <section aria-label="Client directory" className="platform-panel overflow-hidden">
     <div className="flex flex-wrap items-end gap-3 border-b border-[var(--platform-line)] p-4">
       <label className="relative min-w-48 flex-1"><span className="sr-only">Search clients</span><Search size={16} className="pointer-events-none absolute top-3.5 left-3 text-[var(--platform-muted)]" />
-        <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search clients or owners..." className="w-full border py-2 pl-9 pr-3 text-sm" /></label>
+        <input type="search" maxLength={200} value={search} onChange={(event) => updateFilters({ q: event.target.value, access: filter, page: 1 })} placeholder="Search clients or owners..." className="w-full border py-2 pl-9 pr-3 text-sm" /></label>
       <label className="flex flex-col gap-1 text-xs text-[var(--platform-muted)]">Account access
-        <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1); }} className="border px-3 text-sm">
+        <select value={filter} onChange={(event) => {
+          const access = event.target.value;
+          if (access === "all" || access === "owner" || access === "unassigned") updateFilters({ q: search, access, page: 1 });
+        }} className="border px-3 text-sm">
           <option value="all">All accounts</option><option value="owner">Owner assigned</option><option value="unassigned">Needs owner</option>
         </select>
       </label>
@@ -59,34 +66,9 @@ export function ClientDirectory({ accounts }: { accounts: ClientAccount[] }) {
           <td className="px-5"><span className="platform-status" data-tone={owners.length ? "success" : "warning"}>{owners.length ? "Owner assigned" : "Needs owner"}</span></td>
           <td className="px-5 text-xs text-[var(--platform-muted)]">{new Date(account.created_at).toLocaleDateString("en", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}</td>
           <td className="px-5">
-            <WorkspaceDialog title={account.name} description="Client information, websites and account access." trigger={<>View client<span className="sr-only">: {account.name}</span></>}>
-              <section><h3 className="platform-eyebrow">Client account</h3><dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div><dt className="text-xs text-[var(--platform-muted)]">Joined (UTC)</dt><dd className="mt-1">{new Date(account.created_at).toLocaleDateString("en", { timeZone: "UTC" })}</dd></div>
-                <div><dt className="text-xs text-[var(--platform-muted)]">Team members</dt><dd className="mt-1">{account.account_members.length}</dd></div>
-              </dl></section>
-              <section><h3 className="platform-eyebrow">Websites</h3>
-                {account.sites.length ? <ul className="mt-2 divide-y divide-[var(--platform-line)]">{account.sites.map((site) => <li key={site.id}><Link href={`/dashboard/sites/${site.id}`} className="flex items-center justify-between gap-3 py-3 text-sm font-medium hover:underline">{site.name || site.subdomain}<ArrowUpRight size={14} /></Link></li>)}</ul> : <p className="mt-2 text-sm text-[var(--platform-muted)]">No websites assigned yet.</p>}
-                <Link href="/dashboard/sites/new" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[var(--platform-accent)] hover:underline">Create a website<ArrowUpRight size={13} /></Link>
-              </section>
-              <section><h3 className="platform-eyebrow">User access</h3>
-                {account.account_members.length ? <ul className="mt-2 space-y-3">{account.account_members.map((member, index) => <li key={index} className="flex items-start justify-between gap-3 text-sm">
-                  <span className="min-w-0 break-words">{member.profile?.full_name || member.profile?.email || "Profile unavailable"}
-                    {member.profile?.full_name && member.profile.email ? <span className="mt-1 block text-xs text-[var(--platform-muted)]">{member.profile.email}</span> : null}</span>
-                  <span className="platform-status capitalize">{member.role}</span>
-                </li>)}</ul> : <p className="mt-2 text-sm text-[var(--platform-muted)]">Invite an owner to give this client access.</p>}
-              </section>
-              <section className="border-t border-[var(--platform-line)] pt-5"><h3 className="mb-3 text-sm font-semibold">Invite an account owner</h3><InviteOwnerForm accountId={account.id} action={inviteOwner} />
-                <p className="mt-3 text-xs leading-relaxed text-[var(--platform-muted)]">Invitation delivery feedback appears here after sending. Acceptance status and invitation history are not currently tracked.</p>
-              </section>
-              <section className="rounded-xl border border-[var(--platform-line)] bg-[var(--platform-ground)] p-4"><h3 className="text-sm font-semibold">AI allowance</h3>
-                {account.ai_limits ? <dl className="mt-3 space-y-2 text-sm">
-                  <div className="flex justify-between gap-3"><dt>Site generations / month</dt><dd className="font-medium tabular-nums">{account.ai_limits.monthly_site_generations}</dd></div>
-                  <div className="flex justify-between gap-3"><dt>Edits / month</dt><dd className="font-medium tabular-nums">{account.ai_limits.monthly_edits}</dd></div>
-                  <div className="flex justify-between gap-3"><dt>Extra credits</dt><dd className="font-medium tabular-nums">{account.ai_limits.extra_credits}</dd></div>
-                </dl> : <p className="mt-2 text-sm text-[var(--platform-muted)]">No allowance configured.</p>}
-                <Link href="/dashboard/ai-usage" className="mt-3 inline-block text-xs font-medium text-[var(--platform-accent)] hover:underline">View AI usage and allowances</Link>
-              </section>
-            </WorkspaceDialog>
+            <Link href={clientDirectoryHref({ q: search, access: filter, page: currentPage }, account.id)} className="platform-button">
+              View client<span className="sr-only">: {account.name}</span>
+            </Link>
           </td>
         </tr>;
       })}</tbody>
@@ -95,9 +77,9 @@ export function ClientDirectory({ accounts }: { accounts: ClientAccount[] }) {
       <p className="mt-2 text-sm text-[var(--platform-muted)]">{accounts.length ? "Try another name, email or access filter." : "Add a client account, then invite an owner and create their first website."}</p>
     </div>}
     {pageCount > 1 ? <nav aria-label="Client pagination" className="flex items-center justify-between gap-3 border-t border-[var(--platform-line)] px-5 py-3 text-xs">
-      <button type="button" className="platform-button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button>
+      <button type="button" className="platform-button" disabled={currentPage === 1} onClick={() => updateFilters({ q: search, access: filter, page: currentPage - 1 })}>Previous</button>
       <span className="text-[var(--platform-muted)]">Page {currentPage} of {pageCount}</span>
-      <button type="button" className="platform-button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Next</button>
+      <button type="button" className="platform-button" disabled={currentPage === pageCount} onClick={() => updateFilters({ q: search, access: filter, page: currentPage + 1 })}>Next</button>
     </nav> : null}
   </section>;
 }

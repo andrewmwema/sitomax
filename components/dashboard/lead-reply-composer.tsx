@@ -18,8 +18,9 @@ import { applyLeadTemplate, leadPlaceholders, replyTextHtml } from "@/lib/leads/
 export type LeadReplyTemplate = { id: string; name: string; body_text: string };
 const extensions = [Document, Text, Paragraph, Bold, Italic, HardBreak, Link.configure({ openOnClick: false, autolink: false })];
 
-export function LeadReplyComposer({ leadId, siteId, to, business, firstName, signature, siteUrl, canCopy, templates, pages }: {
+export function LeadReplyComposer({ leadId, siteId, to, from, replyTo, replyToError, replyMode, business, firstName, signature, siteUrl, canCopy, templates, pages }: {
   leadId: string; siteId: string; to: string; business: string; firstName: string;
+  from: string | null; replyTo: string | null; replyToError: string | null; replyMode: "direct" | "tracked";
   signature: string; siteUrl: string; canCopy: boolean; templates: LeadReplyTemplate[]; pages: EditorPageLink[];
 }) {
   const [subject, setSubject] = useState(`Re: your inquiry to ${business}`);
@@ -61,6 +62,12 @@ export function LeadReplyComposer({ leadId, siteId, to, business, firstName, sig
   return <section id="reply" className="space-y-3">
     <h3 className="text-sm font-semibold">Reply by email</h3>
     <div className="text-sm"><span className="font-medium">To:</span> <span className="break-all">{to}</span></div>
+    <div className="text-sm"><span className="font-medium">From:</span> <span className="break-all">{from ?? "Not configured. Contact your agency."}</span></div>
+    <div className="text-sm"><span className="font-medium">Reply-to:</span> <span className="break-all">{replyTo ?? replyToError}</span></div>
+    {replyTo ? <p className="text-xs text-[var(--platform-muted)]">{replyMode === "tracked"
+      ? "Replies from the lead's email address are tracked here when inbound email is configured, and may also be forwarded to notification recipients."
+      : "Replies go directly to this mailbox and do not appear in this conversation."}</p> : null}
+    <p className="text-xs text-[var(--platform-muted)]">Addresses reflect current settings and may change before sending.</p>
     <label className="block text-sm">Subject<input ref={subjectInput} value={subject} maxLength={200} disabled={busy}
       onChange={(event) => setSubject(event.target.value)} className="mt-1 block w-full border px-3" /></label>
     <div className="rounded-lg border border-[var(--platform-line)]">

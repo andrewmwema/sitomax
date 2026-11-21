@@ -4,6 +4,7 @@ import { businessSchema, emptyBusiness } from "@/lib/business";
 import { submissionContact, submissionFields, type Lead } from "@/lib/forms/submissions";
 import { getSiteUrl } from "@/lib/site-url";
 import { cleanLeadEmailHtml } from "@/lib/leads/reply-content";
+import { leadReplyPreview } from "@/lib/leads/reply-mail";
 import { LeadReplyComposer, type LeadReplyTemplate } from "@/components/dashboard/lead-reply-composer";
 
 type Message = {
@@ -32,6 +33,8 @@ export async function LeadReplyThread({ lead, supabase }: {
   const siteUrl = getSiteUrl(site.data);
   const contact = submissionContact(lead.data);
   const email = z.email().safeParse(route.data?.email);
+  const replyRoute = z.object({ mode: z.enum(["direct", "tracked"]), direct_to: z.string().nullable() }).safeParse(route.data);
+  const addresses = replyRoute.success ? leadReplyPreview(name, lead.id, replyRoute.data) : null;
   const date = (value: string) => new Date(value).toLocaleString("en", { timeZone: "UTC" });
   const renderBody = (message: Message) => <>
     <div className="rich-text break-words text-sm" dangerouslySetInnerHTML={{ __html: cleanLeadEmailHtml(message.body_html) }} />
@@ -66,10 +69,12 @@ export async function LeadReplyThread({ lead, supabase }: {
       {route.data?.undeliverable_reason ? <span className="block text-xs">{route.data.undeliverable_reason}</span> : null}
     </p>
       : lead.archived ? <p className="text-sm">Restore this lead before replying.</p>
-      : email.success ? <LeadReplyComposer leadId={lead.id} siteId={lead.site_id} to={email.data} business={name}
+      : !email.success ? <p className="text-sm">No valid email address was submitted for this lead.</p>
+      : !addresses || !replyRoute.success ? <p role="alert" className="text-sm">The reply settings are unavailable.</p>
+      : <LeadReplyComposer leadId={lead.id} siteId={lead.site_id} to={email.data} business={name}
+        from={addresses.from} replyTo={addresses.replyTo} replyToError={addresses.replyToError} replyMode={replyRoute.data.mode}
         firstName={contact.name?.trim().split(/\s+/)[0] ?? ""} siteUrl={siteUrl} canCopy={Boolean(route.data?.owner_copy)}
         signature={[name, business.phone, business.address, siteUrl].filter(Boolean).join("\n")}
-        templates={templates.data} pages={pages.data.map((page) => ({ ...page, sections: [] }))} />
-      : <p className="text-sm">No valid email address was submitted for this lead.</p>}
+        templates={templates.data} pages={pages.data.map((page) => ({ ...page, sections: [] }))} />}
   </section>;
 }
