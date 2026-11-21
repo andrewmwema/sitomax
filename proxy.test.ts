@@ -1,11 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn(), updateSession: vi.fn() }));
 vi.mock("@/lib/brand", () => ({ brand: { appUrl: "https://app.agency.test", marketingSiteSubdomain: "sitomax" } }));
 vi.mock("@/lib/redirect-lookup", () => ({ lookupTenantRedirect: mocks.lookup }));
 vi.mock("@/lib/supabase/proxy", () => ({ updateSession: mocks.updateSession }));
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 function request(url: string, host = new URL(url).host) {
   return new NextRequest(url, { headers: { host } });
@@ -74,6 +75,20 @@ describe("host routing", () => {
     expect(target.searchParams.get("blogPath")).toBe("/journal");
     expect(target.searchParams.get("source")).toBe("menu");
     expect(mocks.lookup).not.toHaveBeenCalled();
+  });
+
+  it("routes metadata through its root handlers on all hosts and redirects www", async () => {
+    for (const path of ["/robots.txt", "/sitemap.xml"]) {
+      expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path })).toBe(true);
+      for (const host of ["agency.test", "client.agency.test", "client.test", "app.agency.test"]) {
+        const response = await proxy(request(`https://${host}${path}`));
+        expect(response.headers.get("x-middleware-next")).toBe("1");
+      }
+      expect((await proxy(request(`https://www.agency.test${path}`))).headers.get("location"))
+        .toBe(`https://agency.test${path}`);
+    }
+    expect(mocks.lookup).not.toHaveBeenCalled();
+    expect(mocks.updateSession).not.toHaveBeenCalled();
   });
 });
 

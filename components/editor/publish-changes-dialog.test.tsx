@@ -16,7 +16,7 @@ it("defaults to site-wide publishing and explains page-scoped footer changes", (
       liveUrl: "https://example.test",
     }}
     onClose={vi.fn()}
-    onPublish={vi.fn(async () => ({ status: "success", message: "Published", liveUrl: "https://example.test" }))}
+    onPublish={vi.fn(async () => ({ status: "success" as const, message: "Published", liveUrl: "https://example.test" }))}
   />);
 
   expect(markup).toMatch(/aria-pressed="true"[^>]*>Publish entire site<\/button>/);

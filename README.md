@@ -414,6 +414,8 @@ query strings, referrer origins only, device, country, and a site-specific
 hash that rotates daily; it never stores the IP. Date ranges use UTC calendar
 days including today. Unique visitors are daily uniques summed over the range,
 not deduplicated across days.
+An invalid salt is logged once per server instance at startup and shown to
+super admins on the Analytics page; visitors' data is not collected until fixed.
 
 Draft previews and signed-in site members are excluded when their session is
 available on the tenant host. Dashboard cookies cannot be sent to unrelated
@@ -442,6 +444,8 @@ longer. The configured Supabase public storage origin is optimized by
 URLs continue to work. Google Analytics and Meta Pixel load only when their IDs
 are configured and never in preview; site operators are responsible for any
 applicable consent requirements.
+Each public site host serves its own `/sitemap.xml` and `/robots.txt`; the
+platform host disallows crawling and does not provide a sitemap.
 
 ## Custom domains
 

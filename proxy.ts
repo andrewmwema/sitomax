@@ -3,21 +3,12 @@ import { brand } from "@/lib/brand";
 import { getRootDomain, getTenantKeyFromHost } from "@/lib/tenant";
 import { updateSession } from "@/lib/supabase/proxy";
 import { lookupTenantRedirect } from "@/lib/redirect-lookup";
+import { hostname, isAppHost } from "@/lib/platform-host";
 
 const PLATFORM_PREFIXES = [
   "/dashboard", "/login", "/signup", "/auth", "/invite", "/editor", "/forgot-password", "/set-password",
 ];
 const PUBLIC_API_PREFIXES = ["/api/forms/submit", "/api/analytics", "/api/cron"];
-
-function hostname(value: string) {
-  return value.toLowerCase().replace(/:\d+$/, "");
-}
-
-function isAppHost(host: string, root: string) {
-  const hostName = hostname(host);
-  return hostName === `app.${root}` || hostName === "localhost" ||
-    hostName.endsWith(".app.github.dev") || hostName.endsWith(".vercel.app");
-}
 
 function matchesPathPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -66,7 +57,10 @@ export async function proxy(request: NextRequest) {
   if (pathname === "/api/email/inbound" || pathname === "/api/email/events") {
     return host === new URL(brand.appUrl).host.toLowerCase() ? NextResponse.next() : new NextResponse("Not found", { status: 404 });
   }
-  if (isAppHost(host, rootHost)) return updateSession(request);
+  if (isAppHost(host, rootHost)) {
+    if (pathname === "/robots.txt" || pathname === "/sitemap.xml") return NextResponse.next();
+    return updateSession(request);
+  }
 
   if (hostname(host) === `www.${rootHost}`) {
     const url = request.nextUrl.clone();
@@ -74,6 +68,8 @@ export async function proxy(request: NextRequest) {
     url.port = root.match(/:(\d+)$/)?.[1] ?? "";
     return NextResponse.redirect(url, 308);
   }
+
+  if (pathname === "/robots.txt" || pathname === "/sitemap.xml") return NextResponse.next();
 
   if (PLATFORM_PREFIXES.some((prefix) => matchesPathPrefix(pathname, prefix))) {
     return new NextResponse("Not found", { status: 404 });

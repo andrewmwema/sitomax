@@ -4,6 +4,7 @@ import { beaconSchema, deviceFromUserAgent, referrerOrigin } from "@/lib/analyti
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSiteByHost, getTenantKeyFromHost } from "@/lib/tenant";
 import { readTextBody } from "@/lib/request-body";
+import { isAnalyticsSaltValid } from "@/lib/analytics-config";
 
 export async function POST(request: Request) {
   const host = request.headers.get("host") ?? "";
@@ -24,10 +25,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return new Response(null, { status: 400 });
 
   const salt = process.env.ANALYTICS_HASH_SALT;
-  if (!salt || salt.length < 32) {
-    console.error("Analytics is unavailable: ANALYTICS_HASH_SALT must be at least 32 characters.");
-    return new Response(null, { status: 503 });
-  }
+  if (!isAnalyticsSaltValid(salt)) return new Response(null, { status: 503 });
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   if (!isIP(ip)) {
     console.error("Analytics is unavailable: the client IP header is missing or invalid.");

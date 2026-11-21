@@ -17,7 +17,7 @@ export type PublishDialogPage = {
   footerChanged: boolean;
 };
 
-export type PublishDialogState = SitePublishState & {
+export type PublishDialogState = Omit<SitePublishState, "pages"> & {
   pages: PublishDialogPage[];
   liveUrl: string;
 };

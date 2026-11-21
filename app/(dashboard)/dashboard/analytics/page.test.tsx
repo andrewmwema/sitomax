@@ -1,5 +1,5 @@
 import { renderToReadableStream } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ authorize: vi.fn(), report: vi.fn(), admin: false, owner: true }));
 vi.mock("@/lib/auth", () => ({ requireUser: mocks.authorize }));
@@ -8,6 +8,7 @@ import AnalyticsPage from "./page";
 const ownSite = "00000000-0000-4000-8000-000000000001";
 const otherSite = "00000000-0000-4000-8000-000000000002";
 beforeEach(() => {
+  vi.stubEnv("ANALYTICS_HASH_SALT", "a".repeat(32));
   vi.resetAllMocks(); mocks.admin = false; mocks.owner = true;
   mocks.report.mockResolvedValue({ data: {
     visits: 0, unique_visitors: 0, form_submissions: 0, daily: [], pages: [], referrers: [], devices: [],
@@ -24,6 +25,7 @@ beforeEach(() => {
       rpc: (name: string, args?: object) => name === "is_super_admin" ? Promise.resolve({ data: mocks.admin, error: null }) : mocks.report(name, args),
     },
   });
+  afterEach(() => vi.unstubAllEnvs());
 });
 
 async function renderReport(params: { site?: string; days?: string }) {
@@ -53,5 +55,16 @@ describe("analytics report access", () => {
   it("rejects unsupported ranges instead of silently reporting a default period", async () => {
     expect(await renderReport({ days: "31" })).toContain("Choose a valid website");
     expect(mocks.report).not.toHaveBeenCalled();
+  });
+  it("shows a salt warning only to super admins when the salt is missing or too short", async () => {
+    for (const salt of ["", "a".repeat(31)]) {
+      vi.stubEnv("ANALYTICS_HASH_SALT", salt);
+      mocks.admin = false;
+      expect(await renderReport({})).not.toContain("ANALYTICS_HASH_SALT");
+      mocks.admin = true;
+      expect(await renderReport({})).toContain("Analytics collection is unavailable");
+    }
+    vi.stubEnv("ANALYTICS_HASH_SALT", "a".repeat(32));
+    expect(await renderReport({})).not.toContain("ANALYTICS_HASH_SALT");
   });
 });

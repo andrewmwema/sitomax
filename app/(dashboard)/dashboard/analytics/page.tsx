@@ -5,6 +5,7 @@ import { BarChart3, CalendarDays } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { analyticsDaysSchema, siteAnalyticsReportSchema } from "@/lib/analytics";
 import { AnalyticsReport } from "@/components/dashboard/analytics-report";
+import { isAnalyticsSaltValid } from "@/lib/analytics-config";
 
 export default function AnalyticsPage({ searchParams }: PageProps<"/dashboard/analytics">) {
   return <section className="flex flex-col gap-6">
@@ -23,21 +24,26 @@ async function AnalyticsContent({ searchParams }: { searchParams: PageProps<"/da
     supabase.rpc("is_super_admin"),
   ]);
   if (sitesError || membershipsError || adminError) throw new Error("Could not load analytics sites.");
+  const warning = admin && !isAnalyticsSaltValid(process.env.ANALYTICS_HASH_SALT)
+    ? <p role="alert" className="platform-panel p-4 text-sm text-[var(--platform-error)]">
+      Analytics collection is unavailable. Set ANALYTICS_HASH_SALT to a secret of at least 32 characters on the server.
+    </p> : null;
   const allowedSites = (sites ?? []).filter((site) => admin || memberships?.some((member) => member.account_id === site.account_id));
   const filters = z.object({ site: z.uuid().optional(), days: analyticsDaysSchema }).safeParse(params);
-  if (!filters.success) return <p role="alert">Choose a valid website and a 7, 30 or 90 day range.</p>;
+  if (!filters.success) return <>{warning}<p role="alert">Choose a valid website and a 7, 30 or 90 day range.</p></>;
   const selected = filters.data.site ? allowedSites.find((site) => site.id === filters.data.site) : allowedSites[0];
-  if (filters.data.site && !selected) return <p role="alert">This site is unavailable or you do not have permission to view its analytics.</p>;
-  if (!selected) return <div className="platform-panel px-6 py-10 text-center"><BarChart3 size={26} className="mx-auto text-[var(--platform-muted)]" />
+  if (filters.data.site && !selected) return <>{warning}<p role="alert">This site is unavailable or you do not have permission to view its analytics.</p></>;
+  if (!selected) return <>{warning}<div className="platform-panel px-6 py-10 text-center"><BarChart3 size={26} className="mx-auto text-[var(--platform-muted)]" />
     <h2 className="mt-3 text-sm font-semibold">Understand what brings visitors to your website</h2><p className="mt-2 text-sm text-[var(--platform-muted)]">Analytics is available to account owners for their websites.</p>
     <Link href="/dashboard/sites" className="platform-button mt-4">View websites</Link>
-  </div>;
+  </div></>;
   const days = Number(filters.data.days);
   const { data, error } = await supabase.rpc("site_analytics", { p_site_id: selected.id, p_days: days });
-  if (error) return <p role="alert" className="platform-panel p-5 text-sm text-[var(--platform-error)]">Could not load analytics. Please retry or ask your agency to apply the analytics migration.</p>;
+  if (error) return <>{warning}<p role="alert" className="platform-panel p-5 text-sm text-[var(--platform-error)]">Could not load analytics. Please retry or ask your agency to apply the analytics migration.</p></>;
   const parsed = siteAnalyticsReportSchema.safeParse(data);
   if (!parsed.success) throw new Error("Analytics returned an invalid report.");
   return <>
+    {warning}
     <form key={`${selected.id}-${days}`} action="/dashboard/analytics" className="platform-panel flex flex-wrap items-end gap-3 p-4">
       <label className="flex min-w-48 flex-1 flex-col gap-1.5 text-xs text-[var(--platform-muted)]">Website<select name="site" defaultValue={selected.id} className="border px-3 text-sm">
         {allowedSites.map((site) => <option key={site.id} value={site.id}>{site.name || site.subdomain}</option>)}</select></label>
