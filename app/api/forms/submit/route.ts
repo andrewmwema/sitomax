@@ -5,7 +5,7 @@ import { contactSubmissionSchema, submissionData } from "@/lib/contact-submissio
 import { readTextBody } from "@/lib/request-body";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSiteByHost, getTenantKeyFromHost } from "@/lib/tenant";
-import { EmailDeliveryError, isEmailConfigured } from "@/lib/email";
+import { EmailDeliveryError } from "@/lib/email";
 import { notifyNewLead } from "@/lib/leads/notifications";
 import { z } from "zod";
 
@@ -61,14 +61,16 @@ export async function POST(request: Request) {
   }
   const id = leadId.data;
   if (!id) return new Response("Too many submissions. Please try again later.", { status: 429 });
-  if (isEmailConfigured()) after(async () => {
+  after(async () => {
     try {
       await notifyNewLead(admin, site, id, { fields, formName: input.data.formName, path: input.data.path });
     } catch (error) {
       console.error("Could not notify owners of a saved form submission", {
-        siteId: site.id,
+        siteId: site.id, leadId: id,
         reason: error instanceof EmailDeliveryError ? error.message : "Unexpected email error.",
       });
+      const failure = await admin.from("lead_notification_failures").insert({ lead_id: id, site_id: site.id, kind: "new_lead" });
+      if (failure.error) console.error("Could not record lead notification failure", { siteId: site.id, leadId: id, code: failure.error.code });
     }
   });
   return new Response("Thank you. Your message has been sent.");

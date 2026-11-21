@@ -572,12 +572,22 @@ Archiving removes a lead from the active inbox without changing past wins.
 
 With the default Postmark transactional stream configured above, new inquiries
 notify account owners after the form is saved. Set `NEXT_PUBLIC_APP_URL` to
-the platform origin so **View lead** links open the right lead. In **Sites →
-Leads**, owners can replace the default recipients and users can set personal
-email preferences. New lead emails include the contact name and form source;
+the platform origin so **View lead** links open the right lead. Run
+[`0040_lead_notification_controls.sql`](./supabase/migrations/0040_lead_notification_controls.sql)
+before deploying the notification controls. In **Sites → Leads → Notifications**,
+owners can replace the default recipients, see the current eligible new-lead
+recipients, and send a rate-limited test. Site-wide switches restrict delivery
+without overriding personal email preferences. New lead emails include the contact name and form source;
 sign-in is required for full answers. Email failure never rolls back a form.
 Opt-in digests are best-effort, at most once per site/user per UTC day; they
-count the previous UTC day's submissions and current leads awaiting reply.
+go to opted-in users' account emails (not the recipient list) and count the
+previous UTC day's submissions and current leads awaiting reply. A site-wide
+digest switch permits existing opt-ins; turning it on does not subscribe anyone.
+Direct email replies bypass tracked forwarding and its notification switch.
+Failed new-lead notifications and missing reply recipients are recorded for
+super admins; failed/retrying tracked forwards are also flagged on the lead.
+Review server logs and notification settings to investigate. Historical failures
+remain visible even after settings are corrected.
 
 For webhooks and digests, set the server-only `CRON_SECRET` and generate a
 **separate** `LEAD_WORKER_SECRET` (`openssl rand -hex 32`). Compute the

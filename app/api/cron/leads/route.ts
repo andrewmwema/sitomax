@@ -23,14 +23,16 @@ export async function GET(request: Request) {
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const emailConfigured = isEmailConfigured();
+  if (!emailConfigured) console.error("Lead digests and reply forwards cannot be sent: email delivery is not configured.");
   const [webhooks, digests] = await Promise.all([
     supabase.rpc("lead_worker_claim_webhooks", { p_secret: secret }),
-    isEmailConfigured() ? supabase.rpc("lead_worker_claim_digests", { p_secret: secret }) : null,
+    emailConfigured ? supabase.rpc("lead_worker_claim_digests", { p_secret: secret }) : null,
   ]);
   if (webhooks.error || digests?.error) console.error("Could not claim lead jobs", {
     webhook: webhooks.error?.code, digest: digests?.error?.code,
   });
-  let failures = Number(Boolean(webhooks.error)) + Number(Boolean(digests?.error));
+  let failures = Number(Boolean(webhooks.error)) + Number(Boolean(digests?.error)) + Number(!emailConfigured);
   const deliveries = (webhooks.data ?? []) as {
     event_id: string; lease_id: string; url: string; secret: string; payload: unknown;
   }[];
@@ -62,7 +64,7 @@ export async function GET(request: Request) {
     ]);
   }
   let forwards = 0;
-  if (isEmailConfigured() && leadMailConfig()) {
+  if (emailConfigured && leadMailConfig()) {
     try {
       const result = await forwardLeadReplies();
       forwards = result.processed;

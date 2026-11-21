@@ -7,6 +7,7 @@ import { SiteSettingsNav } from "@/components/dashboard/site-settings-nav";
 import { LeadSettingsForm } from "@/components/dashboard/lead-settings-form";
 import { CopyLeadValue } from "@/components/dashboard/lead-controls";
 import { TableScrollArea } from "@/components/dashboard/table-scroll-area";
+import { LeadRecipients } from "@/components/dashboard/lead-recipients";
 
 export default function LeadSettingsPage({ params }: PageProps<"/dashboard/sites/[siteId]/leads">) {
   return <Suspense fallback={<p role="status">Loading lead settings…</p>}><LeadSettings params={params} /></Suspense>;
@@ -23,16 +24,18 @@ async function LeadSettings({ params }: { params: PageProps<"/dashboard/sites/[s
   ]);
   if (site.error || access.error || admin.error) throw new Error("Could not check lead settings permissions.");
   if (!site.data || !access.data) notFound();
-  const [settings, preferences, log, limit] = await Promise.all([
-    supabase.from("lead_site_settings").select("recipients, webhook_url, webhook_secret, reply_mode").eq("site_id", siteId)
-      .maybeSingle<{ recipients: string[]; webhook_url: string | null; webhook_secret: string | null; reply_mode: "tracked" | "direct" }>(),
+  const [settings, preferences, log, limit, recipients] = await Promise.all([
+    supabase.from("lead_site_settings").select("recipients, webhook_url, webhook_secret, reply_mode, new_lead_enabled, reply_notifications_enabled, digest_enabled").eq("site_id", siteId)
+      .maybeSingle<{ recipients: string[]; webhook_url: string | null; webhook_secret: string | null; reply_mode: "tracked" | "direct"; new_lead_enabled: boolean; reply_notifications_enabled: boolean; digest_enabled: boolean }>(),
     supabase.from("lead_notification_preferences").select("new_lead, replies, digest").eq("site_id", siteId)
       .eq("user_id", user.id).maybeSingle<{ new_lead: boolean; replies: boolean; digest: boolean }>(),
     supabase.from("lead_webhook_deliveries").select("event_id, event_type, status, attempts, http_status, created_at").eq("site_id", siteId)
       .order("created_at", { ascending: false }).order("event_id", { ascending: false }).limit(50),
     admin.data === true ? supabase.from("lead_send_limits").select("daily_limit").eq("account_id", site.data.account_id).maybeSingle() : null,
+    supabase.rpc("lead_new_notification_recipients", { p_site: siteId }),
   ]);
   if (settings.error || preferences.error) throw new Error("Could not load lead settings.");
+  const effective = z.array(z.email()).safeParse(recipients.data);
   return <section className="flex flex-col gap-6">
     <header className="flex flex-wrap items-end justify-between gap-3"><div>
       <p className="platform-eyebrow">{site.data.name || site.data.subdomain}</p>
@@ -40,13 +43,21 @@ async function LeadSettings({ params }: { params: PageProps<"/dashboard/sites/[s
     </div><Link className="platform-button" href={`/dashboard/forms?site=${siteId}`}>Open lead inbox</Link></header>
     <SiteSettingsNav siteId={siteId} current="leads" canManageDomains />
     <div className="grid gap-4 lg:grid-cols-2">
-      <section className="platform-panel space-y-3 p-5"><h2 className="font-semibold">Notification recipients</h2>
-        <p className="text-sm text-[var(--platform-muted)]">Leave blank to notify account owners. Only add addresses authorized to receive lead summaries for this site.</p>
-        <LeadSettingsForm siteId={siteId} intent="recipients">
-          <label className="block text-sm">Email addresses (one per line or comma separated)
-            <textarea name="recipients" rows={3} maxLength={6500} className="mt-1 block w-full rounded-lg border p-2 text-sm"
-              defaultValue={settings.data?.recipients.join("\n")} /></label>
+      <section className="platform-panel space-y-3 p-5"><h2 className="font-semibold">Notifications</h2>
+        <p className="text-sm text-[var(--platform-muted)]">An empty list uses all account owners. Adding addresses replaces that default, so include owners you want to notify. Only add addresses authorized to receive lead summaries for this site.</p>
+        <LeadRecipients siteId={siteId} initial={settings.data?.recipients ?? []} />
+        {recipients.error || !effective.success ? <p role="alert" className="text-sm text-[var(--platform-error)]">Current recipients are unavailable.</p> :
+          <p className="text-sm">New-lead recipients after personal opt-outs and suppressions: {effective.data.length ? effective.data.join(", ") : "None"}.
+            {settings.data?.new_lead_enabled === false ? " New-lead emails are switched off for this site." : ""}</p>}
+        <LeadSettingsForm siteId={siteId} intent="notifications">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="new_lead_enabled" defaultChecked={settings.data?.new_lead_enabled ?? true} /> Email on new lead</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="reply_notifications_enabled" defaultChecked={settings.data?.reply_notifications_enabled ?? true} /> Email on lead reply</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="digest_enabled" defaultChecked={settings.data?.digest_enabled ?? true} /> Allow daily digests</label>
+          <p className="text-xs text-[var(--platform-muted)]">These switches limit, but do not override, personal preferences. Digests go to opted-in users, not the recipient list.</p>
+          <p className="text-xs text-[var(--platform-muted)]">Reply emails sent directly to your mailbox are not affected by the reply notification switch.</p>
         </LeadSettingsForm>
+        <p className="text-xs text-[var(--platform-muted)]">The test uses saved recipients and personal preferences, even when site-wide new-lead emails are off.</p>
+        <LeadSettingsForm siteId={siteId} intent="test_notification" />
       </section>
       <section className="platform-panel space-y-3 p-5"><h2 className="font-semibold">Your email preferences</h2>
         <p className="text-sm text-[var(--platform-muted)]">New lead preferences apply if your email is a recipient. Your digest goes to your account email.</p>

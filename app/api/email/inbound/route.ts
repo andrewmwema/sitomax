@@ -49,8 +49,21 @@ export async function POST(request: Request) {
     if (typeof saved.data === "string" && !reply.auto) {
       const messageId = saved.data;
       after(async () => {
-        try { await forwardLeadReplies(messageId); }
-        catch { console.error("Reply was saved but could not be forwarded immediately", { messageId }); }
+        try {
+          const status = await client.rpc("lead_reply_notification_status", { p_secret: secret, p_message: messageId });
+          if (status.error || !["ready", "disabled", "no_recipients"].includes(status.data)) throw new Error("Could not check reply notification status.");
+          if (status.data === "disabled") return;
+          if (status.data === "no_recipients") {
+            console.error("Lead reply notification could not be sent: no eligible recipients", { messageId });
+            return;
+          }
+          await forwardLeadReplies(messageId);
+        }
+        catch {
+          console.error("Reply was saved but could not be forwarded immediately", { messageId });
+          const failure = await client.rpc("record_lead_reply_notification_failure", { p_secret: secret, p_message: messageId });
+          if (failure.error || failure.data !== true) console.error("Could not record reply notification failure", { messageId, code: failure.error?.code });
+        }
       });
     } else if (saved.data === null) console.info("Ignored duplicate or unmatched lead inbound message");
     return new Response("OK");

@@ -40,7 +40,7 @@ beforeEach(() => {
 
 describe("lead inbound and forwarding", () => {
   it("authenticates, stores the stripped reply, then forwards full text to the site's resolved recipient only", async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: message }).mockResolvedValueOnce({ data: [{
+    mocks.rpc.mockResolvedValueOnce({ data: message }).mockResolvedValueOnce({ data: "ready" }).mockResolvedValueOnce({ data: [{
       message_id: message, lease_id: lease, lead_id: lead, recipient: "owner-a@example.test", lead_name: "Lead",
       business: "Acme", lead_email: "lead@example.test", subject: original.Subject,
       body_text: original.TextBody, original_text: "Our original reply", has_attachments: true,
@@ -52,13 +52,35 @@ describe("lead inbound and forwarding", () => {
     }));
     expect(mocks.send).not.toHaveBeenCalled();
     await mocks.after.mock.calls[0][0]();
-    expect(mocks.rpc).toHaveBeenNthCalledWith(2, "claim_lead_reply_forwards", expect.objectContaining({ p_message: message }));
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2, "lead_reply_notification_status", expect.objectContaining({ p_message: message }));
+    expect(mocks.rpc).toHaveBeenNthCalledWith(3, "claim_lead_reply_forwards", expect.objectContaining({ p_message: message }));
     expect(mocks.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       to: "owner-a@example.test", replyTo: "lead@example.test", subject: original.Subject,
       text: expect.stringContaining(original.TextBody), html: expect.stringContaining("Our original reply"),
       tag: "lead-forward", stream: "lead-transactional",
     }));
-    expect(mocks.rpc).toHaveBeenNthCalledWith(3, "finish_lead_reply_forward", expect.objectContaining({ p_sent: true, p_lease: lease }));
+    expect(mocks.rpc).toHaveBeenNthCalledWith(4, "finish_lead_reply_forward", expect.objectContaining({ p_sent: true, p_lease: lease }));
+  });
+
+  it.each(["disabled", "no_recipients"])("does not forward when notifications are %s", async (status) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.rpc.mockResolvedValueOnce({ data: message }).mockResolvedValueOnce({ data: status });
+    expect((await POST(inbound(original))).status).toBe(200);
+    await mocks.after.mock.calls[0][0]();
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledTimes(status === "no_recipients" ? 1 : 0);
+    log.mockRestore();
+  });
+
+  it("records an infrastructure failure for the lead without logging reply contents", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.rpc.mockResolvedValueOnce({ data: message }).mockResolvedValueOnce({ error: { code: "failed" } })
+      .mockResolvedValueOnce({ data: true });
+    expect((await POST(inbound(original))).status).toBe(200);
+    await mocks.after.mock.calls[0][0]();
+    expect(mocks.rpc).toHaveBeenNthCalledWith(3, "record_lead_reply_notification_failure", expect.objectContaining({ p_message: message }));
+    expect(JSON.stringify(log.mock.calls)).not.toContain(original.TextBody);
+    log.mockRestore();
   });
 
   it("does not store or forward invalid tokens, requests from other hosts, or bad credentials", async () => {

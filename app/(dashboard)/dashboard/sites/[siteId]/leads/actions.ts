@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { isPublicHttpsUrl } from "@/lib/public-https";
+import { EmailDeliveryError, sendEmail } from "@/lib/email";
+import { emailBody } from "@/lib/email/message";
+import { brand } from "@/lib/brand";
 
 const recipientsSchema = z.array(z.email().max(254)).max(25);
 type Result = { error: string; success?: string };
@@ -16,7 +19,7 @@ function saved(siteId: string): Result {
 
 export async function saveLeadSettings(_previous: Result, form: FormData): Promise<Result> {
   const parsed = z.object({
-    id: z.uuid(), intent: z.enum(["recipients", "webhook", "preferences", "reply_mode", "limit"]),
+    id: z.uuid(), intent: z.enum(["recipients", "notifications", "test_notification", "webhook", "preferences", "reply_mode", "limit"]),
   }).safeParse({ id: form.get("site"), intent: form.get("intent") });
   if (!parsed.success) return { error: "Invalid site settings request." };
   const { id, intent } = parsed.data;
@@ -27,7 +30,52 @@ export async function saveLeadSettings(_previous: Result, form: FormData): Promi
     return { error: "Only site owners and the agency can manage these settings." };
   }
   const table = supabase.from("lead_site_settings");
-  if (intent === "limit") {
+  if (intent === "test_notification") {
+    const [site, recipients] = await Promise.all([
+      supabase.from("sites").select("name, subdomain").eq("id", id).maybeSingle(),
+      supabase.rpc("lead_new_notification_recipients", { p_site: id }),
+    ]);
+    if (site.error || !site.data || recipients.error) {
+      console.error("Could not load test notification recipients", { siteId: id, code: recipients.error?.code ?? site.error?.code });
+      return { error: "Could not load notification recipients." };
+    }
+    const addresses = z.array(z.email().max(254)).max(50).safeParse(recipients.data);
+    if (!addresses.success || !addresses.data.length) {
+      console.error("Lead test notification could not be sent: no eligible recipients", { siteId: id });
+      return { error: "No eligible recipients. Check recipients, personal preferences and suppressed addresses." };
+    }
+    const reservation = await supabase.rpc("reserve_lead_notification_test", { p_site: id });
+    if (reservation.error) {
+      console.error("Could not reserve lead test notification", { siteId: id, code: reservation.error.code });
+      return { error: "Could not send the test notification." };
+    }
+    if (!reservation.data) return { error: "Please wait one minute before sending another test." };
+    const body = emailBody(`This is a test notification for ${site.data.name || site.data.subdomain}. No lead was created.`, {
+      label: "Open leads", url: `${brand.appUrl}/dashboard/forms?site=${id}`,
+    });
+    const results = await Promise.allSettled(addresses.data.map((to) => sendEmail({
+      to, subject: "Test lead notification", ...body, tag: "form-notification", metadata: { site_id: id },
+    })));
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (failures.length) {
+      const error = failures[0].reason;
+      const reason = error instanceof EmailDeliveryError ? error.message : "Unexpected email error.";
+      console.error("Lead test notification could not be sent", { siteId: id, failures: failures.length, reason });
+      return { error: `${failures.length} of ${addresses.data.length} test notifications failed: ${reason}` };
+    }
+    return { error: "", success: `Test notification sent to ${addresses.data.length} ${addresses.data.length === 1 ? "recipient" : "recipients"}.` };
+  } else if (intent === "notifications") {
+    const seed = await table.upsert({ site_id: id }, { ignoreDuplicates: true });
+    const error = seed.error ?? (await table.update({
+      new_lead_enabled: form.get("new_lead_enabled") === "on",
+      reply_notifications_enabled: form.get("reply_notifications_enabled") === "on",
+      digest_enabled: form.get("digest_enabled") === "on",
+    }).eq("site_id", id)).error;
+    if (error) {
+      console.error("Could not save site notification controls", { code: error.code });
+      return { error: "Could not save notification controls." };
+    }
+  } else if (intent === "limit") {
     const admin = await supabase.rpc("is_super_admin");
     if (admin.error || admin.data !== true) return { error: "Only the agency can change the daily limit." };
     const limit = z.string().regex(/^\d{1,5}$/).transform(Number).pipe(z.number().int().min(0).max(10000)).safeParse(form.get("daily_limit"));
