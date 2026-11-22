@@ -18,11 +18,22 @@ describe("parsePostmarkEvent", () => {
       reason: "User marked the message as spam",
       messageStream: "outbound",
       occurredAt: "2025-01-02T03:04:05.000Z",
+      messageId: null, requestId: null, tag: "",
     });
   });
 
   it("ignores other record types and rejects malformed suppression addresses", () => {
-    expect(parsePostmarkEvent({ RecordType: "Delivery" })).toEqual({ ignored: true });
+    expect(parsePostmarkEvent({ RecordType: "Open" })).toEqual({ ignored: true });
+    expect(parsePostmarkEvent({ RecordType: "Delivery" })).toBeNull();
     expect(parsePostmarkEvent({ RecordType: "Bounce", Email: "invalid" })).toBeNull();
+  });
+
+  it("parses delivery metadata and the recipient-specific timestamp", () => {
+    expect(parsePostmarkEvent({ RecordType: "Delivery", Recipient: "Lead@example.test", MessageID: "postmark-id",
+      Tag: "lead-reply", MessageStream: "leads", DeliveredAt: "2025-01-02T03:04:05Z",
+      Metadata: { request_id: "00000000-0000-4000-8000-000000000001" },
+    })).toMatchObject({ email: "lead@example.test", type: "delivery", messageId: "postmark-id",
+      requestId: "00000000-0000-4000-8000-000000000001", occurredAt: "2025-01-02T03:04:05.000Z" });
+    expect(parsePostmarkEvent({ RecordType: "Delivery", Recipient: "lead@example.test", DeliveredAt: "invalid" })).toBeNull();
   });
 });

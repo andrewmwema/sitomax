@@ -36,13 +36,39 @@ export async function POST(request: Request) {
   if (event.ignored) return new Response("OK");
   try {
     const { client, secret } = leadReplyWorker();
-    const { error } = await client.rpc("record_postmark_email_event", {
-      p_secret: secret, p_email: event.email, p_event_type: event.type,
-      p_reason: event.reason, p_message_stream: event.messageStream, p_occurred_at: event.occurredAt,
-    });
-    if (error) console.error("Could not save an authenticated Postmark delivery event", { code: error.code });
+    if (event.type !== "delivery") {
+      const { error } = await client.rpc("record_postmark_email_event", {
+        p_secret: secret, p_email: event.email, p_event_type: event.type,
+        p_reason: event.reason, p_message_stream: event.messageStream, p_occurred_at: event.occurredAt,
+      });
+      if (error) {
+        console.error("Could not save an authenticated Postmark suppression event", { code: error.code });
+        return new Response("Temporarily unavailable", { status: 503 });
+      }
+    }
+    const stream = process.env.POSTMARK_LEADS_STREAM?.trim();
+    if (event.type !== "spam_complaint" && event.tag === "lead-reply" && !stream) {
+      console.error("Lead delivery status cannot be recorded: lead stream is not configured");
+      return new Response("Temporarily unavailable", { status: 503 });
+    }
+    if (event.type !== "spam_complaint" && event.tag === "lead-reply" && stream && event.messageStream === stream) {
+      if (!event.messageId) {
+        console.error("Lead delivery event is missing its message identifier");
+        return new Response("Temporarily unavailable", { status: 503 });
+      }
+      const { data, error } = await client.rpc("record_lead_delivery_event", {
+        p_secret: secret, p_message_id: event.messageId, p_request_id: event.requestId,
+        p_recipient: event.email, p_status: event.type === "delivery" ? "delivered" : "bounced",
+        p_occurred_at: event.occurredAt,
+      });
+      if (error || (data !== "recorded" && data !== "ignored")) {
+        console.error("Could not save lead delivery status", { code: error?.code ?? "message_not_found" });
+        return new Response("Temporarily unavailable", { status: 503 });
+      }
+    }
   } catch {
     console.error("Could not process an authenticated Postmark delivery event");
+    return new Response("Temporarily unavailable", { status: 503 });
   }
   return new Response("OK");
 }

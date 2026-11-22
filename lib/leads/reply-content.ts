@@ -21,6 +21,10 @@ export function cleanLeadEmailHtml(html: string) {
   return sanitizeRichText(html);
 }
 
+export function stripQuotedReply(text: string) {
+  return text.split(/^\s*(?:On .+ wrote:|From: .+|-----Original Message-----|>).*$/im, 1)[0].trim();
+}
+
 export function leadPlaceholders(text: string) {
   return [...new Set(text.match(/\[[^\]\n]{1,120}\]/g) ?? [])];
 }

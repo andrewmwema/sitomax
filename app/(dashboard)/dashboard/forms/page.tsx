@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, CalendarDays, Clock, Download, Inbox, Percent, Search } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { WorkspaceMetrics } from "@/components/dashboard/workspace-metrics";
-import { MarkSubmissionRead } from "@/components/dashboard/mark-submission-read";
+import { LocalTime } from "@/components/dashboard/local-time";
 import { CopyLeadValue, LeadBulkForm, LeadNoteForm, LeadStatusForm } from "@/components/dashboard/lead-controls";
 import { allowedLeadSites, getSubmissionPage, LEAD_COLUMNS, SUBMISSION_PAGE_SIZE } from "@/lib/forms/queries";
 import { leadStatuses, leadStatusLabels, submissionContact, submissionFiltersSchema, submissionQueryString,
@@ -31,7 +31,7 @@ export default function FormsPage({ searchParams }: PageProps<"/dashboard/forms"
 async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashboard/forms">["searchParams"] }) {
   const { supabase, user } = await requireUser();
   const params = await searchParams;
-  const parsed = submissionFiltersSchema.extend({ lead: z.uuid().optional() }).safeParse(params);
+  const parsed = submissionFiltersSchema.extend({ lead: z.uuid().optional(), message: z.uuid().optional() }).safeParse(params);
   if (!parsed.success) return <p role="alert" className="text-sm text-[var(--platform-error)]">Choose valid filters and keep searches under 200 characters.</p>;
   const filters = parsed.data;
   const allowed = await allowedLeadSites(supabase, user.id);
@@ -64,7 +64,7 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
     const warningUnavailable = Boolean(notificationFailures?.error || forwardFailures?.error);
     return <LeadDetails key={detail.data.id} lead={detail.data} siteName={siteName(detail.data.site_id)} closeHref={closeHref}
       supabase={supabase} userId={user.id} notificationWarning={Boolean(notificationFailures?.data?.length || forwardFailures?.data?.length)}
-      warningsUnavailable={warningUnavailable} />;
+      warningsUnavailable={warningUnavailable} selectedMessage={filters.message} />;
   }
   const [results, statsResult, admin] = await Promise.all([
     getSubmissionPage(supabase, allowed, filters, new Date()),
@@ -126,7 +126,7 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
       {results.rows.length ? <>
         <LeadBulkForm archived={archived} />
         <TableScrollArea label="Leads"><table className="w-full min-w-[790px] text-left text-sm">
-          <thead><tr>{["Select", "Contact", "Source", "Status", "Received (UTC)", "Last activity (UTC)"].map((heading) =>
+          <thead><tr>{["Select", "Contact", "Source", "Status", "Received", "Last activity"].map((heading) =>
             <th key={heading} scope="col" className="px-4 font-medium">{heading}</th>)}</tr></thead>
           <tbody>{results.rows.map((row) => {
             const contact = submissionContact(row.data);
@@ -134,7 +134,7 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
             return <tr key={row.id} className="align-top">
               <td className="px-4"><input type="checkbox" name="id" value={row.id} form="lead-bulk" aria-label={`Select ${name}, received ${displayDate(row.created_at)} UTC`} /></td>
               <td className="max-w-56 break-words px-4">
-                <Link href={`${closeHref}${query ? "&" : "?"}lead=${row.id}`} className="font-semibold hover:underline">{name}</Link>
+                <Link href={`${closeHref}${query ? "&" : "?"}lead=${row.id}`} className={`${row.has_unread_reply || !row.is_read ? "font-bold" : "font-medium"} hover:underline`}>{name}</Link>
                 <div className="text-xs text-[var(--platform-muted)]">{[contact.email, contact.phone].filter(Boolean).join(" · ") || "No contact details"}</div>
               </td>
               <td className="max-w-52 break-words px-4">{siteName(row.site_id)}
@@ -144,8 +144,8 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
                 {row.has_unread_reply ? <span className="mt-1 flex items-center gap-1 text-xs"><span aria-hidden className="size-2 rounded-full bg-[var(--platform-accent)]" />Unread reply</span>
                   : !row.is_read ? <span className="mt-1 block text-xs text-[var(--platform-muted)]">Unread</span> : null}
               </td>
-              <td className="px-4 text-xs text-[var(--platform-muted)]">{displayDate(row.created_at)}</td>
-              <td className="px-4 text-xs text-[var(--platform-muted)]">{displayDate(row.last_activity_at)}</td>
+              <td className="px-4 text-xs text-[var(--platform-muted)]"><LocalTime value={row.created_at} /></td>
+              <td className="px-4 text-xs text-[var(--platform-muted)]"><LocalTime value={row.last_activity_at} /></td>
             </tr>;
           })}</tbody>
         </table></TableScrollArea>
@@ -162,8 +162,8 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
   </>;
 }
 
-async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notificationWarning, warningsUnavailable }: {
-  lead: Lead; siteName: string; closeHref: string; supabase: Awaited<ReturnType<typeof requireUser>>["supabase"]; userId: string; notificationWarning: boolean; warningsUnavailable: boolean;
+async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notificationWarning, warningsUnavailable, selectedMessage }: {
+  lead: Lead; siteName: string; closeHref: string; supabase: Awaited<ReturnType<typeof requireUser>>["supabase"]; userId: string; notificationWarning: boolean; warningsUnavailable: boolean; selectedMessage?: string;
 }) {
   const [notes, events] = await Promise.all([
     supabase.from("lead_notes").select("id, author_id, body, created_at").eq("lead_id", lead.id)
@@ -181,7 +181,7 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
       <h1 className="break-words text-2xl font-semibold tracking-tight">{contact.name || "Lead details"}</h1>
       <p className="mt-2 text-sm text-[var(--platform-muted)]">{siteName} · {lead.form_name || "Form"} · {lead.page_path || "/"}</p></header>
     <section className="platform-panel space-y-3 p-5">
-      <p className="text-xs text-[var(--platform-muted)]">Received {displayDate(lead.created_at)} UTC</p>
+      <p className="text-xs text-[var(--platform-muted)]">Received <LocalTime value={lead.created_at} /></p>
       {notificationWarning ? <p role="status" className="text-sm text-[var(--platform-error)]">A lead notification failed or is awaiting retry. Check notification settings and server logs.</p> : null}
       {warningsUnavailable ? <p role="alert" className="text-sm text-[var(--platform-error)]">Lead notification warnings are unavailable.</p> : null}
       {contact.email ? <div className="flex flex-wrap items-center gap-2 break-all text-sm">
@@ -192,16 +192,15 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
         {tel ? <a className="underline" href={tel}>{contact.phone}</a> : <span>{contact.phone}</span>}<CopyLeadValue value={contact.phone} label="Phone" />
       </div> : null}
       <LeadStatusForm lead={lead} />
-      {!lead.is_read || lead.has_unread_reply ? <MarkSubmissionRead id={lead.id} /> : null}
     </section>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-    <div className="platform-panel min-w-0 p-5 sm:p-6"><LeadReplyThread lead={lead} supabase={supabase} /></div>
+    <div className="platform-panel min-w-0 p-5 sm:p-6"><LeadReplyThread lead={lead} supabase={supabase} selectedMessage={selectedMessage} /></div>
     <div className="space-y-6">
     <section className="platform-panel space-y-3 p-5"><h2 className="text-sm font-semibold">Internal notes</h2>
       <LeadNoteForm leadId={lead.id} siteId={lead.site_id} />
       {notes.error ? <p role="alert" className="text-sm">Notes are unavailable.</p> : notes.data.map((note) => <article key={note.id} className="platform-panel space-y-2 p-3">
         <p className="whitespace-pre-wrap break-words text-sm">{note.body}</p>
-        <p className="text-xs text-[var(--platform-muted)]">{displayDate(note.created_at)} UTC {note.author_id === userId ? "· Your note" : ""}</p>
+        <p className="text-xs text-[var(--platform-muted)]"><LocalTime value={note.created_at} /> {note.author_id === userId ? "· Your note" : ""}</p>
         {note.author_id === userId ? <details><summary className="cursor-pointer text-sm">Edit or delete</summary>
           <LeadNoteForm key={note.body} leadId={lead.id} siteId={lead.site_id} note={note} /></details> : null}
       </article>)}
@@ -211,8 +210,12 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
         {events.data.map((event) => {
           const to = leadStatuses.find((status) => status === event.data?.to);
           const from = leadStatuses.find((status) => status === event.data?.from);
-          return <li key={event.id} className="py-2 text-sm">{eventLabels[event.type]}{from && to ? `: ${leadStatusLabels[from]} → ${leadStatusLabels[to]}` : ""}
-            <div className="text-xs text-[var(--platform-muted)]">{displayDate(event.created_at)} UTC</div></li>;
+          const messageId = z.uuid().safeParse(event.data?.message_id);
+          const label = eventLabels[event.type];
+          const link = (event.type === "email_sent" || event.type === "reply_received") && messageId.success
+            ? `${closeHref}${closeHref.includes("?") ? "&" : "?"}lead=${lead.id}&message=${messageId.data}#message-${messageId.data}` : null;
+          return <li key={event.id} className="py-2 text-sm">{link ? <Link className="text-[var(--platform-accent)] underline" href={link}>{label}</Link> : label}{from && to ? `: ${leadStatusLabels[from]} → ${leadStatusLabels[to]}` : ""}
+            <div className="text-xs text-[var(--platform-muted)]"><LocalTime value={event.created_at} /></div></li>;
         })}
       </ol>}
     </section>

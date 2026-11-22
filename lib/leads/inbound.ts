@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { cleanLeadEmailHtml, replyHtmlText, replyTextHtml } from "./reply-content";
+import { cleanLeadEmailHtml, replyHtmlText, replyTextHtml, stripQuotedReply } from "./reply-content";
 import { verifyReplyAddress } from "./reply-token";
 
 export const leadEmailAddress = z.email().max(254).transform((email) => email.toLowerCase());
@@ -39,7 +39,7 @@ export function parseLeadInbound(raw: unknown, domain: string, secret: string) {
     || /^(bulk|junk|list|auto_reply)$/i.test(header("precedence") ?? "");
   const fullHtml = cleanLeadEmailHtml(input.HtmlBody);
   const fullText = input.TextBody.trim() || replyHtmlText(fullHtml) || input.StrippedTextReply.trim();
-  const reply = input.StrippedTextReply.trim() || fullText.split(/^\s*(?:On .+ wrote:|From: .+|-----Original Message-----|>).*$/im, 1)[0].trim();
+  const reply = input.StrippedTextReply.trim() || stripQuotedReply(fullText);
   return {
     leadId: [...leadIds][0], from: sender.data, providerId: input.MessageID, subject: input.Subject.trim(),
     inReplyTo: header("in-reply-to")?.slice(0, 998) || null, fullText, reply,

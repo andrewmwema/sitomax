@@ -53,7 +53,7 @@ describe("dashboard navigation", () => {
     expect(sidebar.querySelector('a[href="/dashboard/ai-usage"]')).toBeNull();
     await act(async () => sidebar.querySelector<HTMLButtonElement>('[aria-label="Collapse sidebar"]')!.click());
     expect(sidebar.querySelector('[aria-label="Expand sidebar"]')?.getAttribute("aria-expanded")).toBe("false");
-    expect(sidebar.querySelector('a[aria-label="Leads"]')).not.toBeNull();
+    expect(sidebar.querySelector('a[aria-label="Leads, 2 unread leads"] .platform-nav-count')).not.toBeNull();
     await act(async () => sidebar.querySelector<HTMLButtonElement>('[aria-label="Expand sidebar"]')!.click());
     expect(sidebar.textContent).toContain("Operations");
     await act(async () => root.unmount()); container.remove();

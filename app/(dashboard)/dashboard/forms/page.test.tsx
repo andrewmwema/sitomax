@@ -1,11 +1,11 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), allowed: vi.fn(), page: vi.fn(), detail: true }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), allowed: vi.fn(), page: vi.fn(), detail: true, events: [] as unknown[] }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: { from: mocks.from, rpc: mocks.rpc }, user: { id: "owner" } }) }));
 vi.mock("@/lib/forms/queries", () => ({ allowedLeadSites: mocks.allowed, getSubmissionPage: mocks.page, LEAD_COLUMNS: "*", SUBMISSION_PAGE_SIZE: 25 }));
 vi.mock("./reply-thread", () => ({ LeadReplyThread: () => <div>Reply conversation</div> }));
-vi.mock("@/components/dashboard/mark-submission-read", () => ({ MarkSubmissionRead: () => null }));
+vi.mock("@/components/dashboard/mark-lead-viewed", () => ({ MarkLeadViewed: () => <div>Auto mark read</div> }));
 vi.mock("@/components/dashboard/lead-controls", () => ({
   CopyLeadValue: () => null, LeadBulkForm: () => null, LeadNoteForm: () => <div>Note form</div>, LeadStatusForm: () => <div>Status form</div>,
 }));
@@ -18,7 +18,7 @@ const lead = { id, site_id: site, form_name: "Contact", page_path: "/contact", d
   has_unread_reply: false, status: "new", archived: false };
 
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.detail = true;
+  vi.resetAllMocks(); mocks.detail = true; mocks.events = [];
   mocks.allowed.mockResolvedValue([{ id: site, name: "Example", subdomain: "example" }]);
   mocks.page.mockResolvedValue({ rows: [lead], count: 1 });
   mocks.rpc.mockImplementation(async (name: string) => name === "is_super_admin"
@@ -27,7 +27,7 @@ beforeEach(() => {
     const query = {
       select: () => query, eq: () => query, order: () => query,
       maybeSingle: async () => ({ data: mocks.detail && table === "form_submissions" ? lead : null, error: null }),
-      returns: async () => ({ data: [], error: null }),
+      returns: async () => ({ data: table === "lead_events" ? mocks.events : [], error: null }),
     };
     return query;
   });
@@ -60,5 +60,12 @@ describe("lead detail navigation", () => {
     const missing = await render({ lead: id, q: "roof" });
     expect(missing).toContain('href="/dashboard/forms?q=roof"');
     expect(missing).toContain("That lead is unavailable");
+  });
+
+  it("links timeline messages with their selected ID and keeps list filters", async () => {
+    const message = "00000000-0000-4000-8000-000000000003";
+    mocks.events = [{ id: "event", type: "email_sent", data: { message_id: message }, created_at: lead.created_at }];
+    const html = await render({ lead: id, q: "roof" });
+    expect(html).toContain(`href="/dashboard/forms?q=roof&amp;lead=${id}&amp;message=${message}#message-${message}"`);
   });
 });

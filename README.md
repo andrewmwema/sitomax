@@ -649,10 +649,15 @@ attempt even if delivery later fails. Forward delivery is retried up to
 three times after the first attempt. Auto-replies are stored collapsed but
 not forwarded. Attachments are not stored. Apply
 [`0036_postmark_email_events.sql`](./supabase/migrations/0036_postmark_email_events.sql)
-after `0035` and before deploying bounce/spam handling. In Postmark, configure
-the Bounce and Spam Complaint webhooks to the exact `NEXT_PUBLIC_APP_URL`
+after `0035` and before deploying bounce/spam handling. Apply
+[`0041_lead_delivery_status.sql`](./supabase/migrations/0041_lead_delivery_status.sql)
+before deploying conversation delivery status. In Postmark, configure Delivery
+and Bounce webhooks on the lead transactional stream, and Bounce and Spam
+Complaint webhooks on streams used for other email, to the exact `NEXT_PUBLIC_APP_URL`
 origin at `/api/email/events`, using the same Basic Auth credentials as the
-inbound webhook. Suppressed addresses are excluded from lead replies,
+inbound webhook. A delivered status means the recipient's mail server accepted
+the message, not that it reached the inbox; older messages without delivery
+events remain sent. Open and click tracking are disabled. Suppressed addresses are excluded from lead replies,
 notifications, forwards, and daily digests; matching leads show an
 undeliverable warning. Any future report sender must also exclude
 `public.email_suppressions`.

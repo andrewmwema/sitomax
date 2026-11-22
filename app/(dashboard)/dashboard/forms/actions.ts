@@ -20,6 +20,20 @@ export async function markSubmissionRead(_previous: { error: string }, formData:
   return { error: "" };
 }
 
+export async function markLeadViewed(raw: unknown) {
+  const parsed = z.object({ id: z.uuid(), lastActivity: z.string().min(1) }).safeParse(raw);
+  if (!parsed.success) return { error: "Could not mark this lead as read. Refresh and try again." };
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase.from("form_submissions").update({ is_read: true })
+    .eq("id", parsed.data.id).eq("last_activity_at", parsed.data.lastActivity).select("id");
+  if (error || !data?.length) {
+    console.error("Could not automatically mark lead as read", { code: error?.code ?? "changed_or_unavailable" });
+    return { error: "Could not mark this lead as read. Refresh and try again." };
+  }
+  revalidatePath("/dashboard", "layout");
+  return { error: "" };
+}
+
 export async function updateLeads(_previous: { error: string; success?: string }, formData: FormData) {
   const parsed = selectedLeadIdsSchema.safeParse(formData.getAll("id"));
   if (!parsed.success) return { error: "Select one or more leads on this page." };
