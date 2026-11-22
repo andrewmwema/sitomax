@@ -8,6 +8,7 @@ function escapeHtml(text: string): string {
 export function emailBody(text: string, action?: { label: string; url: string }) {
   const paragraphs = escapeHtml(text).split("\n\n").map((paragraph) => `<p>${paragraph.replaceAll("\n", "<br>")}</p>`).join("");
   return {
+    preheader: text.slice(0, 140).replace(/\n/g, " "),
     text: action ? `${text}\n\n${action.label}: ${action.url}` : text,
     html: action ? `${paragraphs}<p><a href="${escapeHtml(action.url)}">${escapeHtml(action.label)}</a></p>` : paragraphs,
   };

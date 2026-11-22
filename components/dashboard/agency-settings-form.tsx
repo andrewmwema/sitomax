@@ -136,6 +136,7 @@ export function AgencySettingsForm({ settings, action, account }: {
             <div><dt className="text-xs text-[var(--platform-muted)]">Workspace role</dt><dd className="mt-1"><span className="platform-status">Super admin</span></dd></div></dl>
           <p className="mt-4 text-xs leading-relaxed text-[var(--platform-muted)]">Client owners and editors are managed within their client accounts. Analytics and allowance reporting use UTC; the dashboard greeting uses each viewer&apos;s local time.</p>
           <Link href="/dashboard/clients" className="platform-button mt-4">Manage client access</Link>
+          <Link href="/dashboard/settings/emails" className="platform-button mt-4 ml-2">Preview email templates</Link>
         </section>
       </fieldset>
 

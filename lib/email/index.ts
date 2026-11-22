@@ -8,6 +8,7 @@ export type EmailMessage = {
   subject: string;
   html: string;
   text: string;
+  preheader?: string;
   replyTo?: string;
   bcc?: string;
   from?: string;
