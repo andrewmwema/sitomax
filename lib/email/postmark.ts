@@ -11,14 +11,14 @@ function configuration() {
 }
 
 function deliveryError(code: number, status: number, detail: string): EmailDeliveryError {
-  if (code === 406) return new EmailDeliveryError("The recipient is inactive or bounced. Check their address.", "inactive-recipient");
+  if (code === 406) return new EmailDeliveryError("The recipient is inactive or bounced. Check their address.", "inactive-recipient", code, status, detail);
   if (code === 400 || code === 401 || (code === 300 && /sender signature|sender domain|from address.+(?:verif|confirm)/i.test(detail))) {
-    return new EmailDeliveryError("The sender is not verified. Verify the sending address or domain before retrying.");
+    return new EmailDeliveryError("The sender is not verified. Verify the sending address or domain before retrying.", undefined, code, status, detail);
   }
-  if (code === 412 || code === 413) return new EmailDeliveryError("The email account is pending approval or is not approved to send. Check its approval status before retrying.");
-  if (code === 10 || status === 401) return new EmailDeliveryError("Email authentication failed. Ask your agency to check the email service credentials.");
-  if (code === 1235 || code === 1236) return new EmailDeliveryError("The configured email message stream cannot send. Check the transactional stream settings.");
-  return new EmailDeliveryError("Could not send the email. Please try again or contact your agency.");
+  if (code === 412 || code === 413) return new EmailDeliveryError("The email account is pending approval or is not approved to send. Check its approval status before retrying.", undefined, code, status, detail);
+  if (code === 10 || status === 401) return new EmailDeliveryError("Email authentication failed. Ask your agency to check the email service credentials.", undefined, code, status, detail);
+  if (code === 1235 || code === 1236) return new EmailDeliveryError("The configured email message stream cannot send. Check the transactional stream settings.", undefined, code, status, detail);
+  return new EmailDeliveryError("Could not send the email. Please try again or contact your agency.", undefined, code, status, detail);
 }
 
 export const postmarkProvider: EmailProvider = {

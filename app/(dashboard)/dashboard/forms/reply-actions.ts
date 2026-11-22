@@ -1,5 +1,6 @@
 "use server";
 
+import { createElement } from "react";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
@@ -11,6 +12,7 @@ import { getSiteUrl } from "@/lib/site-url";
 import { requestAi } from "@/lib/ai/client";
 import { strictTool } from "@/lib/ai/strict-tool";
 import { cleanLeadEmailHtml, leadPlaceholders, replyHtmlText, replyTextHtml } from "@/lib/leads/reply-content";
+import { LeadReplyEmail, renderEmailTemplate } from "@/lib/email/templates";
 import { leadEmailAddress } from "@/lib/leads/inbound";
 import { leadMailConfig, leadSender, outboundReplyTo } from "@/lib/leads/reply-mail";
 import { leadReplyWorker } from "@/lib/leads/reply-worker";
@@ -37,7 +39,10 @@ async function loadLead(id: string) {
   if (site.error) throw new Error("Could not load the lead's website.", { cause: site.error.code });
   if (!site.data) return null;
   const business = businessSchema.parse({ ...emptyBusiness, ...site.data.business });
-  return { supabase, user, lead: lead.data, site: site.data, business, name: business.businessName || site.data.name || site.data.subdomain };
+  const profile = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle();
+  if (profile.error) throw new Error("Could not load your profile.", { cause: profile.error.code });
+  return { supabase, user, lead: lead.data, site: site.data, business, name: business.businessName || site.data.name || site.data.subdomain,
+    isSuperAdmin: Boolean(profile.data?.is_super_admin) };
 }
 
 export async function sendLeadReply(raw: unknown) {
@@ -45,10 +50,12 @@ export async function sendLeadReply(raw: unknown) {
   if (!input.success) return { error: "Enter a valid subject and reply." };
   const config = leadMailConfig();
   if (!config || !isEmailConfigured()) return { error: "Lead email is not configured. Contact your agency." };
+  let isSuperAdmin = false;
   try {
     const form = input.data;
     const context = await loadLead(form.leadId);
     if (!context) return { error: "This lead is unavailable." };
+    isSuperAdmin = context.isSuperAdmin;
     const [routeResult, agency] = await Promise.all([
       context.supabase.rpc("get_lead_reply_route", { p_lead: form.leadId }),
       context.supabase.from("agency_settings").select("name, show_lead_email_branding").eq("id", 1).maybeSingle(),
@@ -72,10 +79,15 @@ export async function sendLeadReply(raw: unknown) {
     catch { return { error: "The site's reply address is not configured. Check Lead settings." }; }
     const signature = [context.name, context.business.phone, context.business.address, getSiteUrl(context.site)].filter(Boolean).join("\n");
     const branded = agency.data?.show_lead_email_branding ? `Sent via ${agency.data.name || brand.name}` : "";
+    const rendered = await renderEmailTemplate(createElement(LeadReplyEmail, {
+      html,
+      signature,
+      branded,
+    }));
     const envelope = {
       to: route.data.email, subject: form.subject, replyTo, from: leadSender(context.name, config.domain), stream: config.stream,
-      html: `${html}${replyTextHtml(signature)}${branded ? replyTextHtml(branded).replace(/^<p>(.*)<\/p>$/, "<p><small>$1</small></p>") : ""}`,
-      text: [text, signature, branded].filter(Boolean).join("\n\n"),
+      html: rendered.html,
+      text: rendered.text,
       bcc: bcc?.data === route.data.email ? undefined : bcc?.data,
       tag: "lead-reply" as const, metadata: { lead_id: form.leadId, site_id: context.site.id, request_id: form.requestId },
     };
@@ -90,25 +102,43 @@ export async function sendLeadReply(raw: unknown) {
     if (reserve.data !== "reserved") return { error: "This lead or its reply settings changed. Refresh the inbox before retrying." };
     let providerId: string | null = null;
     let deliveryError: string | undefined;
+    let deliveryDetail: string | undefined;
     let bounced = false;
     try { providerId = (await sendEmail(envelope)).messageId; }
     catch (error) {
       bounced = error instanceof EmailDeliveryError && error.reason === "inactive-recipient" && !envelope.bcc;
       deliveryError = error instanceof EmailDeliveryError ? error.message : "The email service did not confirm delivery.";
+      if (error instanceof EmailDeliveryError) {
+        deliveryDetail = error.providerCode
+          ? `Postmark error ${error.providerCode}${error.providerStatus ? ` (${error.providerStatus})` : ""}${error.providerMessage ? `: ${error.providerMessage}` : ""}`
+          : undefined;
+      } else if (error instanceof Error) {
+        deliveryDetail = `Render error: ${error.name}: ${error.message}`;
+      }
       console.error("Lead reply was not confirmed", { requestId: form.requestId, bounced });
     }
-    const finish = await client.rpc("finish_lead_reply", {
-      p_secret: secret, p_request: form.requestId, p_provider_id: providerId, p_bounced: bounced,
-    });
+    let finish;
+    try {
+      finish = await client.rpc("finish_lead_reply", {
+        p_secret: secret, p_request: form.requestId, p_provider_id: providerId, p_bounced: bounced,
+      });
+    } catch (error) {
+      console.error("Could not record the lead reply outcome", { requestId: form.requestId });
+      return { error: "The reply outcome could not be saved. Check the conversation before attempting another send.", reserved: true,
+        detail: isSuperAdmin && error instanceof Error ? `Worker error: ${error.name}: ${error.message}` : undefined };
+    }
     revalidatePath("/dashboard", "layout");
     if (finish.error || finish.data !== true) {
       console.error("Could not record the lead reply outcome", { requestId: form.requestId, code: finish.error?.code });
       return { error: "The reply outcome could not be saved. Check the conversation before attempting another send.", reserved: true };
     }
-    return deliveryError ? { error: deliveryError, reserved: true } : { success: "Reply accepted for delivery." };
+    return deliveryError
+      ? { error: deliveryError, reserved: true, detail: isSuperAdmin ? deliveryDetail : undefined }
+      : { success: "Reply accepted for delivery." };
   } catch (error) {
     console.error("Could not send lead reply", { type: error instanceof Error ? error.name : "Unknown" });
-    return { error: "Could not send this reply. Check the conversation before retrying." };
+    return { error: "Could not send this reply. Check the conversation before retrying.",
+      detail: isSuperAdmin && error instanceof Error ? `Render error: ${error.name}: ${error.message}` : undefined };
   }
 }
 

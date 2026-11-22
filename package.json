@@ -13,11 +13,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:lead-email": "npx vitest run lib/leads/email-redesign.test.tsx"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.9.0",
     "@puckeditor/core": "^0.24.0",
+    "@react-email/render": "^2.3.1",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.0",
     "@tiptap/core": "^3.34.0",

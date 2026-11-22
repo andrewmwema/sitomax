@@ -32,6 +32,7 @@ export function LeadReplyComposer({ leadId, siteId, to, business, firstName, sig
   const [templateText, setTemplateText] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
   const [problem, setProblem] = useState("");
+  const [problemDetail, setProblemDetail] = useState("");
   const [notice, setNotice] = useState("");
   const [requestId, setRequestId] = useState<string>();
   const [busy, start] = useTransition();
@@ -49,7 +50,7 @@ export function LeadReplyComposer({ leadId, siteId, to, business, firstName, sig
   const placeholders = leadPlaceholders(`${subject}\n${body}`);
   const current = templates.find((template) => template.id === templateId);
   function run(action: () => Promise<void>) {
-    setProblem(""); setNotice("");
+    setProblem(""); setProblemDetail(""); setNotice("");
     start(async () => { try { await action(); } catch { setProblem("The request could not be completed. Refresh the conversation before retrying."); } });
   }
   function setContent(html: string) {
@@ -130,10 +131,12 @@ export function LeadReplyComposer({ leadId, siteId, to, business, firstName, sig
         const id = requestId ?? crypto.randomUUID();
         setRequestId(id);
         const result = await sendLeadReply({ leadId, requestId: id, subject, html: editor?.getHTML() ?? "", bcc });
-        if (result.error) { setProblem(result.error); if (result.reserved) setRequestId(undefined); }
+        if (result.error) { setProblem(result.error); setProblemDetail("detail" in result && typeof result.detail === "string" ? result.detail : "");
+          if (result.reserved) setRequestId(undefined); }
         else { setNotice(result.success ?? "Reply submitted."); setContent(""); setRequestId(undefined); setBcc(false); }
       })}>{busy ? "Working…" : "Send reply"}</button>
     {problem ? <p role="alert" className="text-sm text-[var(--platform-error)]">{problem}</p> : null}
+    {problemDetail ? <p role="note" className="whitespace-pre-wrap break-words text-xs text-[var(--platform-muted)]">{problemDetail}</p> : null}
     {notice ? <p role="status" className="text-sm text-[var(--platform-success)]">{notice}</p> : null}
   </section>;
 }

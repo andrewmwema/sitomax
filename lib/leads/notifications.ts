@@ -1,9 +1,11 @@
 import "server-only";
 
+import { createElement } from "react";
 import { z } from "zod";
 import { brand } from "@/lib/brand";
 import { EmailDeliveryError, sendEmail } from "@/lib/email";
 import { emailBody } from "@/lib/email/message";
+import { NewLeadEmail, renderEmailTemplate } from "@/lib/email/templates";
 import { getAccountOwnerEmails } from "@/lib/email/recipients";
 import { submissionContact } from "@/lib/forms/submissions";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -49,7 +51,8 @@ export async function notifyNewLead(admin: Admin, site: { id: string; account_id
     `Source: ${submission.formName || "Form"} (${submission.path})`,
     "Sign in to see contact details and the full submission.",
   ].join("\n");
-  const message = emailBody(summary, { label: "View lead", url: `${brand.appUrl}/dashboard/forms?lead=${leadId}` });
+  const leadUrl = `${brand.appUrl}/dashboard/forms?lead=${leadId}`;
+  const message = await renderEmailTemplate(createElement(NewLeadEmail, { summary, leadUrl }));
   const results = await Promise.allSettled(recipients.map((to) => sendEmail({
     to, subject: "New website lead", ...message,
     tag: "form-notification", metadata: { site_id: site.id, lead_id: leadId },
