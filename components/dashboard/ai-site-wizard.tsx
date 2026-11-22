@@ -20,7 +20,7 @@ const steps = [
 const stepFields: (keyof GenerationInput)[][] = [
   ["accountId", "businessName", "businessType", "city", "services", "difference", "tone", "openingHours", "phone", "email", "address", "description"],
   ["desiredPages", "pageDetails", "desiredSections"],
-  ["style", "generationMode", "styleDirection", "fontDirection", "designDescription", "primaryColor", "secondaryColor"],
+  ["style", "styleDirection", "fontDirection", "designDescription", "primaryColor", "secondaryColor"],
 ];
 const sectionLabels: Record<(typeof DESIRED_SECTION_TYPES)[number], string> = {
   gallery: "Gallery", testimonials: "Testimonials", faq: "FAQ", pricing: "Pricing",
@@ -132,7 +132,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
   const summary = <dl className="space-y-4">
     <div><dt>Business</dt><dd>{values.businessName || "Your business, your starting point"}</dd></div>
     <div><dt>Site plan</dt><dd>{values.desiredPages.length} {values.desiredPages.length === 1 ? "page" : "pages"} selected</dd></div>
-    <div><dt>Design approach</dt><dd>{values.generationMode === "custom" ? "Original custom layout" : "Curated section designs"}</dd></div>
+    <div><dt>Design approach</dt><dd>Curated section designs</dd></div>
   </dl>;
   const editorPageId = result?.pages.find((page) => page.built && page.pageId)?.pageId;
   const advance = () => {
@@ -301,17 +301,11 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
         <fieldset className="sm:col-span-2">
           <legend className="creation-section-title">Design approach</legend>
           <div className="creation-options">
-            {([
-              ["catalog", "SitoMax designs", "A cohesive site built with curated section designs."],
-              ["custom", "Original custom layout", "An original composition built from editable layout blocks."],
-            ] as const).map(([mode, label, description]) => (
-              <label key={mode} className="creation-option">
-                <input type="radio" name="generationMode" value={mode} checked={values.generationMode === mode}
-                  onChange={() => set("generationMode", mode)} />
-                <span><span className="font-medium">{label}</span>
-                <span className="creation-hint mt-1 block">{description}</span></span>
-              </label>
-            ))}
+            <div className="creation-option sm:col-span-2">
+              <Check size={16} className="mt-1 shrink-0" aria-hidden="true" />
+              <span><span className="font-medium">SitoMax designs</span>
+                <span className="creation-hint mt-1 block">A cohesive site built with curated section designs.</span></span>
+            </div>
           </div>
         </fieldset>
         <label className="text-sm font-medium">Visual direction
@@ -356,7 +350,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
           <div><dt>Business</dt><dd>{values.businessName}</dd></div>
           <div><dt>Location</dt><dd>{values.city}</dd></div>
           <div><dt>Services</dt><dd>{values.services.join(", ")}</dd></div>
-          <div><dt>Design</dt><dd>{values.generationMode === "custom" ? "Original custom layout" : "Curated sections"} · {values.styleDirection === "auto" ? "AI-chosen style" : values.styleDirection}</dd></div>
+          <div><dt>Design</dt><dd>Curated sections · {values.styleDirection === "auto" ? "AI-chosen style" : values.styleDirection}</dd></div>
           <div><dt>Contact details</dt><dd>{[values.email, values.phone, values.address].filter(Boolean).join("\n") || "Not provided"}</dd></div>
           <div><dt>Brand colors</dt><dd>{[values.primaryColor, values.secondaryColor].filter(Boolean).join(" / ") || "Let AI choose"}</dd></div>
           <div className="sm:col-span-2"><dt>Pages, in order</dt><dd>{values.desiredPages.map((slug) => choices.find((page) => page.slug === slug)?.label ?? slug).join(" → ")}</dd></div>

@@ -307,9 +307,12 @@ counts, add `--show` for the generated props). Curated pages are built from the
 page-type blueprints in [`lib/ai/page-blueprints.ts`](lib/ai/page-blueprints.ts):
 the model picks the theme, copy and preferred designs, and the application
 guarantees the selected pages, their core sections and a closing call to action.
+New AI site builds use these curated designs; Original Custom Layout is no
+longer offered for new builds. Previously unfinished custom pages can still be
+retried, and existing custom layouts remain editable.
 Provider errors are logged centrally and sanitized details are shown only to
 super admins.
-For Original Custom Layout, apply
+For existing Original Custom Layout retries, apply
 [`0024_custom_generation_call_budget.sql`](supabase/migrations/0024_custom_generation_call_budget.sql)
 before using per-section generation. The generation still consumes one credit;
 section calls and repairs are metered against the same generation. To verify
@@ -328,7 +331,7 @@ or length instead of generated text. Only super admins see validation issues in
 the wizard.
 
 Apply [`0026_selected_ai_pages.sql`](supabase/migrations/0026_selected_ai_pages.sql)
-before deploying the page picker. Both AI modes build only the selected pages,
+before deploying the page picker. AI builds use only the selected pages,
 in the chosen order. One generation covers up to six pages; pages seven
 through ten cost two shared credits each. Super admins are unlimited.
 Successful drafts are saved even when another page fails. Retry unfinished
@@ -346,7 +349,7 @@ generation. If a run is interrupted, reopen the site's **Build pages with AI**;
 unfinished pages become available for free retry after the 15-minute active-run
 window. Unknown provider usage remains reserved for reconciliation.
 
-Both AI modes require one H1, at least 30 words of substantive supporting copy
+AI-generated pages require one H1, at least 30 words of substantive supporting copy
 (excluding headings, menus and placeholders), a working body button or form,
 and one final footer before a page is marked **Built**. Failed checks receive a
 bounded repair attempt; rejected pages remain retryable, not successful.

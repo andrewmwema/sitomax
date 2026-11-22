@@ -95,6 +95,13 @@ describe("AI site wizard", () => {
     expect(field.value).toBe("Friendly");
     expect(container.textContent).toContain("Repairs");
   });
+  it("uses curated SitoMax designs without offering original custom layouts", async () => {
+    await design();
+    expect(container.textContent).toContain("SitoMax designs");
+    expect(container.textContent).toContain("curated section designs");
+    expect(container.textContent).not.toContain("Original custom layout");
+    expect(container.querySelector('input[name="generationMode"]')).toBeNull();
+  });
   it("requires confirmation only for selected rebuilds and shows a summary before opening the editor", async () => {
     await pages();
     const home = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Home — Rebuild"))!.querySelector("input")!;
@@ -199,7 +206,7 @@ describe("AI site wizard", () => {
     await submit();
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({
       subdomain: "local-plumbing", services: ["Drain repairs"], designDescription: "A restrained editorial layout",
-      desiredPages: ["", "about", "services", "contact"],
+      desiredPages: ["", "about", "services", "contact"], generationMode: "catalog",
     });
   });
 });

@@ -24,7 +24,6 @@ import { curatedPlanContract } from "./curated-plan";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
 import { strictTool } from "./strict-tool";
-import { customSystemPrompt } from "./custom-layout";
 import type { GenerationInput } from "./site-input";
 import { createGenerationInputSchema, extraPageCredits, slugFromPageName } from "./site-input";
 import { emptyBusiness } from "@/lib/business";
@@ -469,138 +468,11 @@ describe("catalog site generation", () => {
   });
 });
 
-describe("custom site generation", () => {
-  function customPlan(desiredPages: GenerationInput["desiredPages"], extras: GenerationInput["desiredSections"] = []) {
-    return {
-      style: "modern", colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },
-      fonts: { heading: "Lora", body: "Inter" },
-      pages: Object.fromEntries(desiredPages.map((slug) => [slug || "home", { title: slug || "Home", seo, sections: [
-        { kind: slug === "contact" ? "contact" : "hero", goal: "Welcome visitors" },
-        ...(slug === "" ? extras.map((kind) => ({ kind, goal: `Explain ${kind} with supplied facts` })) : []),
-        { kind: "footer", goal: "Contact details" },
-      ] }])),
-    };
-  }
-  const generatedSection = (heading: string) => ({
-      background: "default", width: "contained", rowGap: 48, design: {},
-      rows: [{ layout: "1", gap: 32, reverseOnMobile: false, columns: [{
-        surface: "none", verticalAlign: "top", gap: 16,
-        elements: [{ type: "Heading", text: heading, level: "h2", align: "left" },
-          { type: "Text", text: bodyCopy, align: "left" },
-          { type: "Button", label: "Contact us", href: "/", variant: "primary", size: "md", align: "left" }],
-      }] }],
-  });
-  const requestId = "00000000-0000-4000-8000-000000000005";
-
-  it.each([
-    { type: "Plumber", pages: [""] as GenerationInput["desiredPages"], extras: [] as GenerationInput["desiredSections"] },
-    { type: "SaaS", pages: DEFAULT_PAGES, extras: ["pricing", "faq", "gallery"] as GenerationInput["desiredSections"] },
-  ])("assembles editable draft data for $type with pages $pages", async ({ type, pages: desiredPages, extras }) => {
-    const layoutPlan = customPlan(desiredPages, extras);
-    mocks.request.mockImplementation((request) => {
-      if (request.toolName === "plan_custom_site") return message("plan_custom_site", layoutPlan);
-      const { current } = JSON.parse(request.messages[0].content.split("\n")[2]);
-      return message("fill_custom_section", { section: generatedSection(current.goal) });
-    });
-    const progress: string[] = [];
-    const result = await buildGeneratedSite({
-      ...input, businessType: type, generationMode: "custom", desiredPages, desiredSections: extras,
-      styleDirection: "organic", fontDirection: "serif", designDescription: "Warm natural materials.",
-    }, ({ message }) => progress.push(message), requestId);
-    expect(result).toMatchObject({ siteId, pageId });
-    expect(mocks.begin).toHaveBeenCalledExactlyOnceWith(accountId, siteId, desiredPages.length);
-    expect(mocks.request.mock.calls.map(([request]) => request.toolName))
-      .toEqual(["plan_custom_site", ...Array(desiredPages.length + extras.length).fill("fill_custom_section")]);
-    for (const [request] of mocks.request.mock.calls) {
-      expect(request).toMatchObject({
-        action: "generate_site", tools: [{ strict: request.toolName === "plan_custom_site" }],
-        cacheTtl: "5m", system: customSystemPrompt(), generationId, correlationId: requestId,
-      });
-    }
-    const save = savedPayload();
-    expect(save.p_pages.map((page: { slug: string }) => page.slug)).toEqual(desiredPages);
-    expect(save.p_pages[0].data.content.length).toBeGreaterThanOrEqual(3);
-    expect(save.p_pages[0]).toMatchObject({ nav_label: "Home", data: { root: { props: { title: "Home", seoTitle: seo.title, description: seo.description } } } });
-    expect(save.p_pages[0].data.content.at(-1)).toMatchObject({ type: "Footer" });
-    if (desiredPages.includes("contact")) {
-      expect(save.p_pages.find((page: { slug: string }) => page.slug === "contact").data.content.map((block: { type: string }) => block.type))
-        .toEqual(["Navigation", "Section", "ContactForm", "Footer"]);
-    }
-    expect(save.p_pages[0].data.content[1]).toMatchObject({ type: "Section" });
-    const rows = save.p_pages[0].data.content[1].props.rows as {
-      type: string;
-      props: { columns: { type: string; props: { content: { type: string }[] } }[] };
-    }[];
-    expect(rows[0].props.columns[0].props.content[0].type).toBe("Heading");
-    expect(save).not.toHaveProperty("p_theme");
-    expect(progress[0]).toBe("Planning your site…");
-    expect(progress.some((entry) => entry.startsWith("Designing Home"))).toBe(true);
-    expect(progress.at(-1)).toBe("Unpublished drafts saved.");
-    expect(mocks.finish).not.toHaveBeenCalled();
-  });
-
-  it("repairs a plan with the original brief, actual tool ID and actionable issue; logs no generated values", async () => {
-    const valid = customPlan([""], ["faq"]);
-    const invalid = structuredClone(valid);
-    invalid.pages.home.sections[1] = { kind: "invalid", goal: "PRIVATE GENERATED VALUE" };
-    const first = { ...message("plan_custom_site", invalid), _request_id: "req_first_attempt" };
-    mocks.request.mockResolvedValueOnce(first)
-      .mockResolvedValueOnce(message("plan_custom_site", valid))
-      .mockResolvedValue(message("fill_custom_section", { section: generatedSection("Site section") }));
-    await buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: [""], desiredSections: ["faq"] }, undefined, requestId);
-    const [initial, assistant, feedback] = mocks.request.mock.calls[1][0].messages;
-    expect(initial).toEqual(mocks.request.mock.calls[0][0].messages[0]);
-    expect(initial.content).toContain('"desiredSections":["faq"]');
-    expect(assistant).toEqual({ role: "assistant", content: first.content });
-    expect(feedback.content[0]).toMatchObject({
-      type: "tool_result", tool_use_id: "toolu_test", is_error: true, content: expect.stringContaining("pages.home.sections.1.kind (invalid_value)"),
-    });
-    expect(console.info).toHaveBeenCalledWith("AI custom generation attempt", expect.objectContaining({
-      requestId, generationId, attempt: 1, providerRequestId: "req_first_attempt", outcome: "validation_failed",
-      issues: [expect.objectContaining({ path: "pages.home.sections.1.kind", code: "invalid_value", received: "string(7)" })],
-    }));
-    expect(console.info).toHaveBeenCalledWith("AI custom generation attempt", expect.objectContaining({ requestId, attempt: 2, outcome: "valid" }));
-    expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain("PRIVATE GENERATED VALUE");
-  });
-
-  it("saves the earlier custom draft when a later page still fails after its automatic retry", async () => {
-    const good = generatedSection("Welcome");
-    const invalid = structuredClone(good);
-    invalid.rows[0].columns[0].elements = [{ type: "Heading", text: "Malformed", level: "h9", align: "left" }];
-    mocks.request.mockResolvedValueOnce(message("plan_custom_site", customPlan(["", "services"])))
-      .mockResolvedValueOnce(message("fill_custom_section", { section: good }))
-      .mockResolvedValueOnce(message("fill_custom_section", { section: invalid }))
-      .mockResolvedValueOnce(message("fill_custom_section", { section: invalid }));
-    mocks.request.mockResolvedValue(message("fill_custom_section", { section: invalid }));
-    await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: ["", "services"] }))
-      .resolves.toMatchObject({ pages: [{ slug: "", built: true }, { slug: "services", built: false, retryId }] });
-    expect(mocks.request).toHaveBeenCalledTimes(6);
-    expect(mocks.request.mock.calls[3][0].messages[2].content[0]).toMatchObject({
-      type: "tool_result", content: expect.stringContaining("section.rows.0.columns.0.elements.0.level (invalid_value)"),
-    });
-    expect(savedPayload()).toMatchObject({ p_pages: [
-      expect.objectContaining({ slug: "", data: expect.any(Object) }), expect.objectContaining({ slug: "services", data: null }),
-    ] });
-  });
-
-  it("distinguishes truncation and never echoes a partial tool call back to the provider", async () => {
-    mocks.request.mockResolvedValue({ ...message("plan_custom_site", {}), stop_reason: "max_tokens" });
-    await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: [""] }))
-      .rejects.toThrow("response for the website plan was incomplete");
-    expect(mocks.request).toHaveBeenCalledTimes(2);
-    const repair = mocks.request.mock.calls[1][0].messages;
-    expect(repair).toEqual([{ role: "user", content: expect.stringContaining('"desiredPages":[""]') }]);
-    expect(repair[0].content).toContain("previous response was incomplete");
-    expect(mocks.finish).toHaveBeenCalledExactlyOnceWith(generationId, false);
-  });
-
-  it("exposes at most five sanitized validation issues to super admins only", async () => {
-    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
-    mocks.request.mockResolvedValue(message("plan_custom_site", {
-      style: "invalid", colors: { primary: "bad", secondary: "bad", background: "bad", text: "bad" },
-      fonts: { heading: "bad", body: "bad" }, pages: {},
-    }));
-    await expect(buildGeneratedSite({ ...input, generationMode: "custom", desiredPages: [""] }))
-      .rejects.toMatchObject({ validationIssues: Array(5).fill(expect.objectContaining({ code: expect.any(String), message: expect.any(String) })) });
+describe("disabled custom site generation", () => {
+  it("rejects custom layout generation before reserving credits or calling the AI provider", async () => {
+    await expect(buildGeneratedSite({ ...input, generationMode: "custom" }))
+      .rejects.toThrow("Original custom layout generation is no longer available.");
+    expect(mocks.begin).not.toHaveBeenCalled();
+    expect(mocks.request).not.toHaveBeenCalled();
   });
 });

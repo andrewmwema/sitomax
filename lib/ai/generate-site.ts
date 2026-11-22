@@ -6,7 +6,7 @@ import { puckConfig } from "@/lib/puck/config";
 import { sanitizePuckData } from "@/lib/richtext";
 import { businessSchema, emptyBusiness } from "@/lib/business";
 import { isReservedForAccountSite } from "@/lib/reserved-subdomains";
-import { DEFAULT_COLORS, type SiteTheme } from "@/lib/theme/presets";
+import type { SiteTheme } from "@/lib/theme/presets";
 import { requestAi } from "./client";
 import { AiProviderError } from "./provider-error";
 import { beginSiteGeneration, checkpointDraft, claimPageRetry, completeDraftCheckpoints, finishPageRetry, finishSiteGeneration, startDraftCheckpoints } from "./usage";
@@ -150,6 +150,9 @@ export async function buildGeneratedSite(
   raw: unknown, emit: (event: GenerationProgress) => void = () => {}, requestId: string = crypto.randomUUID(),
 ): Promise<GenerationResult> {
   const input = createGenerationInputSchema(brand.marketingSiteSubdomain, true).parse(raw);
+  if (input.generationMode === "custom") {
+    throw new SiteGenerationError("Original custom layout generation is no longer available.");
+  }
   const { supabase, isAdmin, existingTheme, expectedBusiness, savedBusiness } = await authorize(input);
   const existing = input.siteId ? await supabase.from("pages").select("id, slug, title, nav_label, draft_data, published_data")
     .eq("site_id", input.siteId).order("sort_order") : null;
@@ -184,17 +187,8 @@ export async function buildGeneratedSite(
   const prompt = (task: string) => `${task}\nBUSINESS DATA:\n${business}`;
   try {
     emit({ message: "Planning your site…" });
-    let planPages: BuildPage[];
-    let plan: Pick<CustomPlan, "style" | "colors" | "fonts" | "contrastAdjusted">;
-    if (input.generationMode === "custom") {
-      const customPlan = await planCustomSite(call, input, trace);
-      planPages = customPlan.pages.map((page) => ({ mode: "custom", page, plan: customPlan }));
-      plan = customPlan;
-    } else {
-      const curatedPlan = await planCuratedSite(call, input, prompt);
-      planPages = curatedPlan.pages.map((page) => ({ mode: "catalog", page }));
-      plan = curatedPlan;
-    }
+    const plan = await planCuratedSite(call, input, prompt);
+    const planPages = plan.pages.map((page) => ({ mode: "catalog" as const, page }));
     const { style: planStyle, colors: planColors, fonts: planFonts } = plan;
     if (plan.contrastAdjusted) warnings.add("Theme text color was adjusted to meet WCAG AA contrast.");
     const briefs = selectedPageBriefs(input);
@@ -206,16 +200,12 @@ export async function buildGeneratedSite(
     if (input.secondaryColor) planColors.secondary = input.secondaryColor;
     const assetSiteId = input.siteId ?? crypto.randomUUID();
     const theme = existingTheme ?? { style: planStyle, colors: planColors, headingFont: planFonts.heading, bodyFont: planFonts.body };
-    const firstFooter = planPages.flatMap((build) => build.mode === "catalog"
-      ? build.page.sections.filter(({ blockType }) => blockType === "Footer") : [])[0];
+    const firstFooter = planPages.flatMap(({ page }) => page.sections.filter(({ blockType }) => blockType === "Footer"))[0];
     const footer = sharedSiteFooter(current, firstFooter ? defaultSection(firstFooter.designId) : undefined);
     const writes = planPages.map((build) => {
       const { slug, title } = build.page;
       const label = briefs.find((brief) => brief.slug === slug)!.label;
       const menu = menuPages.map(({ slug, nav_label }) => ({ slug, nav_label: nav_label ?? defaultMenuLabel(slug) }));
-      if (build.mode === "custom" && existingTheme) {
-        build.plan = { ...build.plan, colors: { ...DEFAULT_COLORS, ...existingTheme.colors } };
-      }
       const spec: RetrySpec = { input, build, theme, menu, footer };
       const previous = current.find((page) => page.slug === slug);
       return { slug, title, label, nav_label: menu.find((page) => page.slug === slug)!.nav_label,
