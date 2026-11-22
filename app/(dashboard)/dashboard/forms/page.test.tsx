@@ -55,7 +55,7 @@ describe("lead detail navigation", () => {
 
   it("links from the filtered list and offers a return when the lead is unavailable", async () => {
     const list = await render({ q: "roof", page: "2" });
-    expect(list).toContain(`href="/dashboard/forms?q=roof&amp;page=2&amp;lead=${id}"`);
+    expect(list).toContain(`href="/dashboard/leads/${id}?q=roof&amp;page=2"`);
     mocks.detail = false;
     const missing = await render({ lead: id, q: "roof" });
     expect(missing).toContain('href="/dashboard/forms?q=roof"');

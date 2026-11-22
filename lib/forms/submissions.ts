@@ -20,6 +20,10 @@ export type Submission = {
 };
 export type Lead = Submission & {
   status: z.infer<typeof leadStatusSchema>; last_activity_at: string; has_unread_reply: boolean; archived: boolean;
+  starred?: boolean; archived_at?: string | null; deleted_at?: string | null;
+  snoozed_until?: string | null; remind_at?: string | null;
+  last_message_direction?: "in" | "out" | null; last_message_at?: string | null;
+  last_message_preview?: string | null; unread?: boolean;
 };
 export type LeadNote = { id: string; author_id: string | null; body: string; created_at: string };
 export type LeadEvent = {

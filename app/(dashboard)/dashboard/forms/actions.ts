@@ -7,7 +7,13 @@ import { requireUser } from "@/lib/auth";
 import { leadStatusSchema, selectedLeadIdsSchema } from "@/lib/forms/submissions";
 import { leadInboxActionSchema } from "@/lib/forms/inbox";
 
-export async function applyLeadInboxAction(raw: unknown) {
+export async function applyLeadInboxAction(_previous: { error: string; success?: string }, formData: FormData) {
+  const raw = {
+    action: formData.get("action"),
+    leadIds: formData.getAll("leadIds"),
+    remindAt: formData.get("remindAt") || null,
+    snoozeUntil: formData.get("snoozeUntil") || null,
+  };
   const parsed = leadInboxActionSchema.safeParse(raw);
   if (!parsed.success) return { error: "Choose a valid lead inbox action." };
   const { action, leadIds, remindAt, snoozeUntil } = parsed.data;

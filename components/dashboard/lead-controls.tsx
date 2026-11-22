@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { saveLeadNote, updateLeads } from "@/app/(dashboard)/dashboard/forms/actions";
+import { applyLeadInboxAction, saveLeadNote, updateLeads } from "@/app/(dashboard)/dashboard/forms/actions";
 import { leadStatuses, leadStatusLabels, type Lead, type LeadNote } from "@/lib/forms/submissions";
 function ActionMessage({ state }: { state: { error?: string; success?: string } }) {
   return state.error ? <p role="alert" className="text-sm text-[var(--platform-error)]">{state.error}</p>
@@ -59,4 +59,34 @@ export function CopyLeadValue({ value, label }: { value: string; label: string }
     try { await navigator.clipboard.writeText(value); setFeedback(`${label} copied.`); }
     catch { setFeedback(`Could not copy ${label.toLowerCase()}.`); }
   }}>Copy {label.toLowerCase()}</button>{feedback ? <span role="status" className="text-xs">{feedback}</span> : null}</>;
+}
+
+export function LeadInboxHeaderActions({ lead }: { lead: Lead }) {
+  const [state, action, busy] = useActionState(applyLeadInboxAction, { error: "" });
+  return <div className="flex flex-wrap items-center gap-2">
+    <form action={action}>
+      <input type="hidden" name="leadIds" value={lead.id} />
+      <input type="hidden" name="action" value={lead.starred ? "unstar" : "star"} />
+      <button type="submit" className="platform-button" disabled={busy}>{lead.starred ? "Unstar" : "Star"}</button>
+    </form>
+    <form action={action}>
+      <input type="hidden" name="leadIds" value={lead.id} />
+      <input type="hidden" name="action" value={lead.archived ? "unarchive" : "archive"} />
+      <button type="submit" className="platform-button" disabled={busy}>{lead.archived ? "Unarchive" : "Archive"}</button>
+    </form>
+    <ActionMessage state={state} />
+  </div>;
+}
+
+export function LeadStarButton({ lead }: { lead: Lead }) {
+  const [state, action, busy] = useActionState(applyLeadInboxAction, { error: "" });
+  return <form action={action}>
+    <input type="hidden" name="leadIds" value={lead.id} />
+    <input type="hidden" name="action" value={lead.starred ? "unstar" : "star"} />
+    <button type="submit" aria-label={lead.starred ? "Unstar lead" : "Star lead"} disabled={busy}
+      className={`rounded p-1 text-sm ${lead.starred ? "text-[var(--platform-accent)]" : "text-[var(--platform-muted)]"} opacity-70 group-hover:opacity-100`}>
+      {lead.starred ? "★" : "☆"}
+    </button>
+    {state.error ? <span className="sr-only">{state.error}</span> : null}
+  </form>;
 }

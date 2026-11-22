@@ -134,7 +134,7 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
             return <tr key={row.id} className="align-top">
               <td className="px-4"><input type="checkbox" name="id" value={row.id} form="lead-bulk" aria-label={`Select ${name}, received ${displayDate(row.created_at)} UTC`} /></td>
               <td className="max-w-56 break-words px-4">
-                <Link href={`${closeHref}${query ? "&" : "?"}lead=${row.id}`} className={`${row.has_unread_reply || !row.is_read ? "font-bold" : "font-medium"} hover:underline`}>{name}</Link>
+                <Link href={`/dashboard/leads/${row.id}${query}`} className={`${row.has_unread_reply || !row.is_read ? "font-bold" : "font-medium"} hover:underline`}>{name}</Link>
                 <div className="text-xs text-[var(--platform-muted)]">{[contact.email, contact.phone].filter(Boolean).join(" · ") || "No contact details"}</div>
               </td>
               <td className="max-w-52 break-words px-4">{siteName(row.site_id)}

@@ -15,7 +15,7 @@ const groups = [
   ] },
   { label: "Operations", items: [
     { href: "/dashboard/domain-requests", label: "Domain requests", icon: HandHelping, color: "text-orange-700", admin: true },
-    { href: "/dashboard/forms", label: "Leads", icon: Inbox, color: "text-rose-700" },
+    { href: "/dashboard/leads", label: "Leads", icon: Inbox, color: "text-rose-700" },
     { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, color: "text-emerald-700" },
   ] },
   { label: "Management", items: [
@@ -90,12 +90,12 @@ export function Sidebar(props: SidebarProps) {
           {visible.map((item) => {
             const active = !item.href.includes("#") && (item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(`${item.href}/`) || pathname === item.href);
             const unreadLabel = props.unreadCount === null ? "Unread count unavailable" : `${props.unreadCount} unread ${props.unreadCount === 1 ? "lead" : "leads"}`;
-            return <Link key={item.href} href={item.href} title={item.label} aria-label={compact ? `${item.label}${item.href === "/dashboard/forms" && props.unreadCount !== 0 ? `, ${unreadLabel}` : ""}` : undefined}
+            return <Link key={item.href} href={item.href} title={item.label} aria-label={compact ? `${item.label}${item.href === "/dashboard/leads" && props.unreadCount !== 0 ? `, ${unreadLabel}` : ""}` : undefined}
               aria-current={active ? "page" : undefined} onClick={mobile ? closeMobile : undefined}
               className={`platform-nav-link relative flex min-h-10 items-center gap-3 rounded-[10px] text-[13px] ${compact ? "justify-center px-0" : "px-3"} ${active ? "font-semibold text-[var(--platform-ink)]" : "text-[var(--platform-secondary)]"}`}>
               <item.icon size={17} strokeWidth={1.7} className={props.isSuperAdmin ? item.color : active ? "text-[var(--platform-accent)]" : undefined} />
               {!compact ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}
-              {item.href === "/dashboard/forms" && props.unreadCount !== 0 ? <span
+              {item.href === "/dashboard/leads" && props.unreadCount !== 0 ? <span
                 aria-label={unreadLabel}
                 className={`platform-nav-count ${compact ? "absolute right-0 top-0" : ""}`}>{props.unreadCount === null ? "!" : props.unreadCount}</span> : null}
             </Link>;

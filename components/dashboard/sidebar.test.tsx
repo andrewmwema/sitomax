@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./sidebar";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/forms" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard/leads" }));
 
 const props = {
   agencyName: "Example Agency", logoUrl: null, isSuperAdmin: false,
@@ -46,7 +46,7 @@ describe("dashboard navigation", () => {
     const root = createRoot(container);
     await act(async () => root.render(<Sidebar {...props} />));
     const sidebar = container.querySelector("aside")!;
-    expect(sidebar.querySelector('a[href="/dashboard/forms"]')?.getAttribute("aria-current")).toBe("page");
+    expect(sidebar.querySelector('a[href="/dashboard/leads"]')?.getAttribute("aria-current")).toBe("page");
     expect(sidebar.querySelector('a[href="/dashboard/domains"]')?.textContent).toContain("Domains");
     expect(sidebar.querySelector('[aria-label="2 unread leads"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/clients"]')).toBeNull();
@@ -69,7 +69,7 @@ describe("dashboard navigation", () => {
     const opener = container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!;
     expect(opener.getAttribute("aria-controls")).toBe(drawer.id);
     expect(opener.getAttribute("aria-expanded")).toBe("true");
-    const forms = drawer.querySelector<HTMLAnchorElement>('a[href="/dashboard/forms"]')!;
+    const forms = drawer.querySelector<HTMLAnchorElement>('a[href="/dashboard/leads"]')!;
     forms.addEventListener("click", (event) => event.preventDefault());
     await act(async () => forms.click());
     expect(drawer.open).toBe(false);
@@ -106,8 +106,8 @@ describe("dashboard navigation", () => {
     expect(sidebar.querySelector('a[href="/dashboard/domain-requests"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/ai-usage"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/sites"] svg')?.classList.contains("text-sky-700")).toBe(true);
-    expect(sidebar.querySelector('a[href="/dashboard/forms"] svg')?.classList.contains("text-rose-700")).toBe(true);
-    expect(sidebar.querySelector('a[href="/dashboard/forms"]')?.getAttribute("aria-current")).toBe("page");
+    expect(sidebar.querySelector('a[href="/dashboard/leads"] svg')?.classList.contains("text-rose-700")).toBe(true);
+    expect(sidebar.querySelector('a[href="/dashboard/leads"]')?.getAttribute("aria-current")).toBe("page");
     await act(async () => root.unmount()); container.remove();
   });
 });

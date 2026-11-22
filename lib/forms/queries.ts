@@ -4,7 +4,7 @@ import type { createClient } from "@/lib/supabase/server";
 import { submissionSearchMatches, type Lead, type SubmissionFilters, type SubmissionSite } from "./submissions";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
-export const LEAD_COLUMNS = "id, site_id, form_name, page_path, data, created_at, is_read, status, last_activity_at, has_unread_reply, archived";
+export const LEAD_COLUMNS = "id, site_id, form_name, page_path, data, created_at, is_read, status, last_activity_at, has_unread_reply, archived, starred, archived_at, deleted_at, snoozed_until, remind_at, last_message_direction, last_message_at, last_message_preview, unread";
 export const SUBMISSION_PAGE_SIZE = 25;
 
 export class SubmissionQueryError extends Error {
@@ -17,7 +17,7 @@ export class SubmissionQueryError extends Error {
 export async function allowedLeadSites(supabase: Client, userId: string): Promise<SubmissionSite[]> {
   const [sites, memberships, admin] = await Promise.all([
     supabase.from("sites").select("id, account_id, name, subdomain"),
-    supabase.from("account_members").select("account_id").eq("user_id", userId).eq("role", "owner"),
+    supabase.from("account_members").select("account_id").eq("user_id", userId),
     supabase.rpc("is_super_admin"),
   ]);
   if (sites.error || memberships.error || admin.error) throw new SubmissionQueryError(sites.error ?? memberships.error ?? admin.error);

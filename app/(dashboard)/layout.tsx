@@ -42,7 +42,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       .maybeSingle(),
     getAgencySettings(),
     supabase.from("form_submissions").select("id", { count: "exact", head: true })
-      .eq("archived", false).or("is_read.eq.false,has_unread_reply.eq.true"),
+      .eq("archived", false).is("deleted_at", null).or("is_read.eq.false,has_unread_reply.eq.true,unread.eq.true"),
   ]);
   if (unread.error) console.error("Could not load unread submissions:", unread.error.message);
   const accent = nearestContrast(settings.primaryColor, ["#ffffff", "#e5e3e1"]) ?? "#4b3fe0";
