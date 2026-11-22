@@ -160,7 +160,8 @@ async function EditorLoader({
         headerChanged: headersReady && site.draft_header != null &&
           JSON.stringify(site.draft_header) !== JSON.stringify(site.published_header),
         themeChanged: site.draft_theme != null && JSON.stringify(site.draft_theme) !== JSON.stringify(site.theme),
-        blogSettingsChanged: blogFeed.siteBlogSettingsPending === true,
+        blogSettingsChanged: "siteBlogSettingsPending" in blogFeed &&
+          blogFeed.siteBlogSettingsPending === true,
       }}
       generationWarnings={generated.data?.root?.props?.generationWarnings ?? []}
     />

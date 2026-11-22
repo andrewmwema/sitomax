@@ -484,10 +484,7 @@ function HeaderActions() {
       }
       setPublishDialog({
         ...result.data,
-        pages: result.data.pages.map((item) => ({
-          ...item,
-          label: item.title?.trim() || (item.slug ? item.slug.replaceAll("/", " / ") : "Home"),
-        })),
+        pages: result.data.pages,
       });
     } catch (cause) {
       console.error("Could not prepare site publishing", cause);

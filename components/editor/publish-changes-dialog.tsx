@@ -6,23 +6,26 @@ import {
   defaultPublishScope,
   initialPublishSelection,
   type PublishSelection,
-  type SitePublishState,
 } from "@/lib/publishing";
 
 export type PublishDialogPage = {
   id: string;
-  label: string;
+  slug: string;
+  title: string | null;
   published: boolean;
   hasChanges: boolean;
   footerChanged: boolean;
 };
 
-export type PublishDialogState = SitePublishState & {
+export type PublishDialogState = {
   pages: PublishDialogPage[];
+  headerChanged: boolean;
+  themeChanged: boolean;
+  blogSettingsChanged: boolean;
   liveUrl: string;
 };
 
-type PublishResult = { status: "success"; message: string; liveUrl: string } | { status: "error"; message: string };
+export type PublishResult = { status: "success"; message: string; liveUrl: string } | { status: "error"; message: string };
 
 export function PublishChangesDialog({
   state,
@@ -112,7 +115,10 @@ export function PublishChangesDialog({
             <input type="checkbox" className="mt-0.5" checked={selection.pageIds.includes(page.id)} disabled={working}
               onChange={(event) => togglePage(page.id, event.target.checked)} />
             <span className="min-w-0">
-              <span className="block font-medium text-zinc-800">{page.label}{!page.published ? " · Draft" : ""}</span>
+              <span className="block font-medium text-zinc-800">
+                {page.title?.trim() || (page.slug ? page.slug.replaceAll("/", " / ") : "Home")}
+                {!page.published ? " · Draft" : ""}
+              </span>
               {page.footerChanged ? <span className="block text-xs text-zinc-500">Includes unpublished footer changes</span> : null}
             </span>
           </label>)}
