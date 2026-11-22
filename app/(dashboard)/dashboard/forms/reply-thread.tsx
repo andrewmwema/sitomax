@@ -5,6 +5,7 @@ import { submissionContact, submissionFields, type Lead } from "@/lib/forms/subm
 import { getSiteUrl } from "@/lib/site-url";
 import { cleanLeadEmailHtml } from "@/lib/leads/reply-content";
 import { LeadReplyComposer, type LeadReplyTemplate } from "@/components/dashboard/lead-reply-composer";
+import { LeadReplyActions } from "@/components/dashboard/lead-reply-actions";
 
 type Message = {
   id: string; direction: "in" | "out"; subject: string; body_html: string; delivery_state: string;
@@ -56,6 +57,12 @@ export async function LeadReplyThread({ lead, supabase }: {
         {message.lead_reply_forwards.some(({ state }) => state === "failed" || state === "retrying") ? <p role="status" className="text-xs text-[var(--platform-error)]">
           This reply was saved, but {message.lead_reply_forwards.some(({ state }) => state === "retrying") ? "not all copies forwarded yet; retry scheduled." : "one or more email copies could not be forwarded."}
         </p> : null}
+        {message.direction === "out" ? <LeadReplyActions
+          leadId={lead.id}
+          messageId={message.id}
+          stalePending={message.delivery_state === "sending"}
+          failed={message.delivery_state === "failed"}
+        /> : null}
       </li>)}
     </ol>
     {route.data?.mode === "direct" ? <p className="text-xs text-[var(--platform-muted)]">New replies go directly to the notification mailbox and do not appear in this conversation.</p> : null}

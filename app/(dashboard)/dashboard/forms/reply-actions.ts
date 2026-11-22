@@ -51,11 +51,14 @@ export async function sendLeadReply(raw: unknown) {
   const config = leadMailConfig();
   if (!config || !isEmailConfigured()) return { error: "Lead email is not configured. Contact your agency." };
   let isSuperAdmin = false;
+  let stage = "lead/load";
   try {
     const form = input.data;
+    stage = "lead/load";
     const context = await loadLead(form.leadId);
     if (!context) return { error: "This lead is unavailable." };
     isSuperAdmin = context.isSuperAdmin;
+    stage = "reply/settings";
     const [routeResult, agency] = await Promise.all([
       context.supabase.rpc("get_lead_reply_route", { p_lead: form.leadId }),
       context.supabase.from("agency_settings").select("name, show_lead_email_branding").eq("id", 1).maybeSingle(),
@@ -79,11 +82,22 @@ export async function sendLeadReply(raw: unknown) {
     catch { return { error: "The site's reply address is not configured. Check Lead settings." }; }
     const signature = [context.name, context.business.phone, context.business.address, getSiteUrl(context.site)].filter(Boolean).join("\n");
     const branded = agency.data?.show_lead_email_branding ? `Sent via ${agency.data.name || brand.name}` : "";
-    const rendered = await renderEmailTemplate(createElement(LeadReplyEmail, {
-      html,
-      signature,
-      branded,
-    }));
+    stage = "template/render";
+    let rendered;
+    try {
+      rendered = await renderEmailTemplate(createElement(LeadReplyEmail, { html, signature, branded }));
+    } catch (error) {
+      console.error("Lead reply template render failed", {
+        requestId: form.requestId,
+        leadId: form.leadId,
+        type: error instanceof Error ? error.name : "Unknown",
+        message: error instanceof Error ? error.message : "Unknown",
+      });
+      return {
+        error: "Could not send this reply. Check the conversation before retrying.",
+        detail: isSuperAdmin && error instanceof Error ? `Template render error: ${error.name}: ${error.message}` : undefined,
+      };
+    }
     const envelope = {
       to: route.data.email, subject: form.subject, replyTo, from: leadSender(context.name, config.domain), stream: config.stream,
       html: rendered.html,
@@ -91,19 +105,45 @@ export async function sendLeadReply(raw: unknown) {
       bcc: bcc?.data === route.data.email ? undefined : bcc?.data,
       tag: "lead-reply" as const, metadata: { lead_id: form.leadId, site_id: context.site.id, request_id: form.requestId },
     };
-    const { client, secret } = leadReplyWorker();
+    stage = "worker/reserve";
+    let worker;
+    try {
+      worker = leadReplyWorker();
+    } catch (error) {
+      console.error("Lead reply worker configuration failed", { requestId: form.requestId, leadId: form.leadId,
+        type: error instanceof Error ? error.name : "Unknown", message: error instanceof Error ? error.message : "Unknown" });
+      return { error: "Could not send this reply. Check the conversation before retrying.",
+        detail: isSuperAdmin && error instanceof Error ? `Worker configuration error: ${error.message}` : undefined };
+    }
+    const { client, secret } = worker;
     const reserve = await client.rpc("reserve_lead_reply", {
       p_secret: secret, p_lead: form.leadId, p_actor: context.user.id, p_request: form.requestId, p_to: envelope.to,
       p_from: `leads@${config.domain}`, p_subject: envelope.subject, p_text: envelope.text, p_html: envelope.html, p_mode: route.data.mode,
     });
-    if (reserve.error) throw new Error("Could not reserve the reply.", { cause: reserve.error.code });
-    if (reserve.data === "limited") return { error: "This account has reached its daily reply limit. Try again after midnight UTC." };
-    if (reserve.data === "duplicate") return { error: "This send has already been submitted. Check the conversation before trying again." };
-    if (reserve.data !== "reserved") return { error: "This lead or its reply settings changed. Refresh the inbox before retrying." };
+    if (reserve.error) {
+      console.error("Lead reply worker reservation rejected", { requestId: form.requestId, leadId: form.leadId, code: reserve.error.code, message: reserve.error.message });
+      throw new Error("Could not reserve the reply.", { cause: reserve.error.code });
+    }
+    if (reserve.data === "limited") {
+      console.error("Lead reply reservation limited", { requestId: form.requestId, leadId: form.leadId, condition: "daily-limit" });
+      return { error: "This account has reached its daily reply limit. Try again after midnight UTC.",
+        detail: isSuperAdmin ? "Reservation condition: daily-limit" : undefined };
+    }
+    if (reserve.data === "duplicate") {
+      console.error("Lead reply reservation duplicate", { requestId: form.requestId, leadId: form.leadId, condition: "duplicate-send" });
+      return { error: "This send has already been submitted. Check the conversation before trying again.",
+        detail: isSuperAdmin ? "Reservation condition: duplicate-send guard" : undefined };
+    }
+    if (reserve.data !== "reserved") {
+      console.error("Lead reply reservation unavailable", { requestId: form.requestId, leadId: form.leadId, condition: reserve.data });
+      return { error: "This lead or its reply settings changed. Refresh the inbox before retrying.",
+        detail: isSuperAdmin ? `Reservation condition: ${String(reserve.data)}` : undefined };
+    }
     let providerId: string | null = null;
     let deliveryError: string | undefined;
     let deliveryDetail: string | undefined;
     let bounced = false;
+    stage = "postmark/provider";
     try { providerId = (await sendEmail(envelope)).messageId; }
     catch (error) {
       bounced = error instanceof EmailDeliveryError && error.reason === "inactive-recipient" && !envelope.bcc;
@@ -115,9 +155,15 @@ export async function sendLeadReply(raw: unknown) {
       } else if (error instanceof Error) {
         deliveryDetail = `Render error: ${error.name}: ${error.message}`;
       }
-      console.error("Lead reply was not confirmed", { requestId: form.requestId, bounced });
+      console.error("Lead reply provider rejected or failed", {
+        requestId: form.requestId, leadId: form.leadId, bounced,
+        code: error instanceof EmailDeliveryError ? error.providerCode : undefined,
+        status: error instanceof EmailDeliveryError ? error.providerStatus : undefined,
+        message: error instanceof EmailDeliveryError ? error.providerMessage : error instanceof Error ? error.message : undefined,
+      });
     }
     let finish;
+    stage = "worker/finish";
     try {
       finish = await client.rpc("finish_lead_reply", {
         p_secret: secret, p_request: form.requestId, p_provider_id: providerId, p_bounced: bounced,
@@ -130,15 +176,73 @@ export async function sendLeadReply(raw: unknown) {
     revalidatePath("/dashboard", "layout");
     if (finish.error || finish.data !== true) {
       console.error("Could not record the lead reply outcome", { requestId: form.requestId, code: finish.error?.code });
-      return { error: "The reply outcome could not be saved. Check the conversation before attempting another send.", reserved: true };
+      return { error: "The reply outcome could not be saved. Check the conversation before attempting another send.", reserved: true,
+        detail: isSuperAdmin ? `Worker finish error: ${finish.error?.code ?? "finish returned false"}` : undefined };
     }
     return deliveryError
       ? { error: deliveryError, reserved: true, detail: isSuperAdmin ? deliveryDetail : undefined }
       : { success: "Reply accepted for delivery." };
   } catch (error) {
-    console.error("Could not send lead reply", { type: error instanceof Error ? error.name : "Unknown" });
+    console.error("Could not send lead reply", {
+      stage,
+      type: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : "Unknown",
+      cause: error instanceof Error && error.cause ? String(error.cause) : undefined,
+    });
     return { error: "Could not send this reply. Check the conversation before retrying.",
-      detail: isSuperAdmin && error instanceof Error ? `Render error: ${error.name}: ${error.message}` : undefined };
+      detail: isSuperAdmin && error instanceof Error
+        ? `Failure stage: ${stage}; ${error.name}: ${error.message}${error.cause ? ` (cause: ${String(error.cause)})` : ""}`
+        : isSuperAdmin ? `Failure stage: ${stage}` : undefined };
+  }
+}
+
+export async function retryLeadReply(raw: unknown) {
+  const input = z.object({
+    leadId: z.uuid(),
+    messageId: z.uuid(),
+  }).safeParse(raw);
+  if (!input.success) return { error: "Choose a valid lead reply to retry." };
+  const { supabase } = await requireUser();
+  const message = await supabase.from("lead_messages").select("subject, body_html")
+    .eq("id", input.data.messageId).eq("lead_id", input.data.leadId).eq("direction", "out").maybeSingle();
+  if (message.error) {
+    console.error("Could not load failed lead reply for retry", { messageId: input.data.messageId, code: message.error.code });
+    return { error: "Could not load this reply. Refresh the conversation." };
+  }
+  if (!message.data) return { error: "This reply is no longer available." };
+  return sendLeadReply({
+    leadId: input.data.leadId,
+    requestId: crypto.randomUUID(),
+    subject: message.data.subject,
+    html: cleanLeadEmailHtml(message.data.body_html),
+    bcc: false,
+  });
+}
+
+export async function discardFailedLeadReply(raw: unknown) {
+  const input = z.object({ leadId: z.uuid(), messageId: z.uuid() }).safeParse(raw);
+  if (!input.success) return { error: "Choose a valid lead reply to discard." };
+  try {
+    const { client, secret } = leadReplyWorker();
+    const result = await client.rpc("discard_lead_reply", {
+      p_secret: secret,
+      p_request: input.data.messageId,
+      p_lead: input.data.leadId,
+    });
+    if (result.error) {
+      console.error("Could not discard lead reply", { messageId: input.data.messageId, code: result.error.code });
+      return { error: "Could not discard this failed reply. Refresh the conversation." };
+    }
+    if (result.data !== true) return { error: "This reply is no longer failed or stale." };
+    revalidatePath("/dashboard", "layout");
+    return { success: "Failed message discarded." };
+  } catch (error) {
+    console.error("Could not discard lead reply", {
+      messageId: input.data.messageId,
+      type: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : "Unknown",
+    });
+    return { error: "Could not discard this failed reply. Refresh the conversation." };
   }
 }
 
