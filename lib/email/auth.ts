@@ -1,7 +1,7 @@
 import "server-only";
 
 import { brand } from "@/lib/brand";
-import { emailBody } from "./message";
+import { renderPasswordEmail } from "@/emails/registry";
 
 export function passwordSetupUrl(type: "invite" | "recovery", tokenHash: string): URL {
   const url = new URL("/auth/callback", brand.appUrl);
@@ -11,15 +11,6 @@ export function passwordSetupUrl(type: "invite" | "recovery", tokenHash: string)
   return url;
 }
 
-export function passwordEmail(type: "invite" | "recovery", tokenHash: string) {
-  const invite = type === "invite";
-  return emailBody(
-    invite
-      ? `You've been invited to manage a website on ${brand.name}. Set your password to accept your invitation.`
-      : `We received a request to reset your ${brand.name} password. If you did not request this, you can ignore this email.`,
-    {
-      label: invite ? "Accept invitation" : "Reset password",
-      url: passwordSetupUrl(type, tokenHash).href,
-    },
-  );
+export async function passwordEmail(type: "invite" | "recovery", tokenHash: string) {
+  return renderPasswordEmail(type, passwordSetupUrl(type, tokenHash).href);
 }

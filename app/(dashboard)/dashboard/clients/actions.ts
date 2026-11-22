@@ -131,8 +131,8 @@ export async function inviteOwner(
   if (tokenHash) {
     try {
       await sendEmail({
-        to: email, subject: "You're invited to manage your website", tag: "invite",
-        ...passwordEmail("invite", tokenHash),
+        to: email, tag: "invite",
+        ...(await passwordEmail("invite", tokenHash)),
         metadata: { account_id: accountId },
       });
     } catch (error) {

@@ -3,11 +3,10 @@ import "server-only";
 import { z } from "zod";
 import { brand } from "@/lib/brand";
 import { EmailDeliveryError, sendEmail } from "@/lib/email";
-import { escapeHtml } from "@/lib/richtext";
 import { leadEmailAddress } from "./inbound";
-import { replyTextHtml } from "./reply-content";
 import { replyAddress, safeMailDomain } from "./reply-token";
 import { leadReplyWorker } from "./reply-worker";
+import { renderLeadForwardEmail } from "@/emails/registry";
 
 export function leadMailConfig() {
   const domain = safeMailDomain(process.env.LEADS_FROM_DOMAIN);
@@ -66,17 +65,26 @@ export async function forwardLeadReplies(messageId?: string) {
     await Promise.all(jobs.slice(offset, offset + 10).map(async (job) => {
       let sent = false;
       try {
-        const url = `${brand.appUrl}/dashboard/forms?lead=${job.lead_id}`;
         const note = "Replies sent from your email won't appear in SitoMax history — reply in SitoMax to keep it.";
         const subject = job.subject.replace(/[\r\n\x00]/g, " ").trim();
-        const heading = `${job.lead_name} replied`;
         const attachments = job.has_attachments ? "Attachments not shown." : "";
+        const rendered = await renderLeadForwardEmail({
+          leadName: job.lead_name,
+          business: job.business,
+          bodyText: job.body_text,
+          originalText: job.original_text,
+          attachments,
+          leadId: job.lead_id,
+          note,
+          subject: /^re:/i.test(subject) ? subject : `Re: ${subject || "your inquiry"}`,
+        });
         await sendEmail({
           to: leadEmailAddress.parse(job.recipient), replyTo: job.lead_email,
-          subject: /^re:/i.test(subject) ? subject : `Re: ${subject || "your inquiry"}`,
           from: leadSender(`${job.lead_name} via ${job.business}`, config.domain), stream: config.stream, tag: "lead-forward",
-          text: `${heading}\n\n${job.body_text}\n\n${attachments}\n\nOriginal message:\n${job.original_text.split(/\r?\n/).map((line) => `> ${line}`).join("\n")}\n\nView conversation: ${url}\nReply in SitoMax: ${url}#reply\n\n${note}`,
-          html: `<p><strong>${escapeHtml(heading)}</strong></p>${replyTextHtml(job.body_text)}${attachments ? `<p>${attachments}</p>` : ""}<p>Original message:</p><blockquote>${replyTextHtml(job.original_text)}</blockquote><p><a href="${escapeHtml(url)}">View conversation</a> · <a href="${escapeHtml(url)}#reply">Reply in SitoMax</a></p><p><small>${escapeHtml(note)}</small></p>`,
+          subject: rendered.subject,
+          text: rendered.text,
+          html: rendered.html,
+          preheader: rendered.preheader,
         });
         sent = true;
       } catch {

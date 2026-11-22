@@ -11,6 +11,7 @@ import { getSiteUrl } from "@/lib/site-url";
 import { requestAi } from "@/lib/ai/client";
 import { strictTool } from "@/lib/ai/strict-tool";
 import { cleanLeadEmailHtml, leadPlaceholders, replyHtmlText, replyTextHtml } from "@/lib/leads/reply-content";
+import { renderOutgoingLeadReplyEmail } from "@/emails/registry";
 import { leadEmailAddress } from "@/lib/leads/inbound";
 import { leadMailConfig, leadSender, outboundReplyTo } from "@/lib/leads/reply-mail";
 import { leadReplyWorker } from "@/lib/leads/reply-worker";
@@ -74,16 +75,33 @@ export async function sendLeadReply(raw: unknown) {
       console.error("Could not configure lead reply address", { siteId: context.site.id, mode: route.data.mode });
       return { error: error.message };
     }
-    const signature = [context.name, context.business.phone, context.business.address, getSiteUrl(context.site)].filter(Boolean).join("\n");
+    let worker: ReturnType<typeof leadReplyWorker>;
+    try {
+      worker = leadReplyWorker();
+    } catch (error) {
+      if (error instanceof EmailDeliveryError) return { error: error.message };
+      throw error;
+    }
     const branded = agency.data?.show_lead_email_branding ? `Sent via ${agency.data.name || brand.name}` : "";
+    const rendered = await renderOutgoingLeadReplyEmail({
+      businessName: context.name,
+      bodyHtml: html,
+      bodyText: text,
+      phone: context.business.phone,
+      address: context.business.address,
+      website: getSiteUrl(context.site),
+      branded,
+      subject: form.subject,
+    });
     const envelope = {
-      to: route.data.email, subject: form.subject, replyTo, from: leadSender(context.name, config.domain), stream: config.stream,
-      html: `${html}${replyTextHtml(signature)}${branded ? replyTextHtml(branded).replace(/^<p>(.*)<\/p>$/, "<p><small>$1</small></p>") : ""}`,
-      text: [text, signature, branded].filter(Boolean).join("\n\n"),
+      to: route.data.email, subject: rendered.subject, replyTo, from: leadSender(context.name, config.domain), stream: config.stream,
+      html: rendered.html,
+      text: rendered.text,
+      preheader: rendered.preheader,
       bcc: bcc?.data === route.data.email ? undefined : bcc?.data,
       tag: "lead-reply" as const, metadata: { lead_id: form.leadId, site_id: context.site.id, request_id: form.requestId },
     };
-    const { client, secret } = leadReplyWorker();
+    const { client, secret } = worker;
     const reserve = await client.rpc("reserve_lead_reply", {
       p_secret: secret, p_lead: form.leadId, p_actor: context.user.id, p_request: form.requestId, p_to: envelope.to,
       p_from: `leads@${config.domain}`, p_subject: envelope.subject, p_text: envelope.text, p_html: envelope.html, p_mode: route.data.mode,

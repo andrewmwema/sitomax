@@ -7,13 +7,14 @@ import { emailBody } from "@/lib/email/message";
 import { getAccountOwnerEmails } from "@/lib/email/recipients";
 import type { DnsRecord } from "@/lib/domains";
 import { getProvider } from "./providers";
-import { brand } from "@/lib/brand";
+import { renderDomainLiveEmail, type RenderedEmail } from "@/emails/registry";
 
 export class DomainEmailError extends Error {}
 
-export async function sendDomainEmail(to: string[], subject: string, text: string, reference: string): Promise<void> {
+export async function sendDomainEmail(to: string[], subject: string, text: string | RenderedEmail, reference: string): Promise<void> {
+  const body = typeof text === "string" ? { subject, ...emailBody(text) } : text;
   await sendEmail({
-    to, subject, ...emailBody(text), tag: "domain",
+    to, subject: body.subject, html: body.html, text: body.text, preheader: body.preheader, tag: "domain",
     metadata: { notification_ref: createHash("sha256").update(reference).digest("hex") },
   });
 }
@@ -47,8 +48,8 @@ export async function notifyDomainLive(siteId: string): Promise<void> {
   if (!site) return;
   try {
     const recipients = await getAccountOwnerEmails(admin, site.account_id);
-    const text = `Your domain is live\n\nhttps://${site.custom_domain} is now connected to your website.\nThe www address redirects to your root domain.\n\nManage your site: ${brand.appUrl}/dashboard/sites/${site.id}/domains`;
-    await sendDomainEmail(recipients, "Your domain is live", text,
+    const rendered = await renderDomainLiveEmail(`https://${site.custom_domain}`, site.id);
+    await sendDomainEmail(recipients, rendered.subject, rendered,
       `domain-live:${site.id}:${site.domain_pending_since}:${recipients.join(",")}`);
     const saved = await admin.from("sites").update({
       domain_notification_sent_at: new Date().toISOString(), domain_notification_claimed_at: null,

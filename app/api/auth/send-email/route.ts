@@ -35,9 +35,8 @@ export async function POST(request: Request) {
   try {
     await sendEmail({
       to: parsed.data.user.email,
-      subject: "Reset your password",
       tag: "password-reset",
-      ...passwordEmail("recovery", parsed.data.email_data.token_hash),
+      ...(await passwordEmail("recovery", parsed.data.email_data.token_hash)),
     });
     return Response.json({});
   } catch (error) {

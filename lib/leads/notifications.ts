@@ -1,10 +1,9 @@
 import "server-only";
 
 import { z } from "zod";
-import { brand } from "@/lib/brand";
 import { EmailDeliveryError, sendEmail } from "@/lib/email";
-import { emailBody } from "@/lib/email/message";
 import { submissionContact } from "@/lib/forms/submissions";
+import { renderLeadDigestEmail, renderNewLeadEmail } from "@/emails/registry";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -26,15 +25,16 @@ export async function notifyNewLead(admin: Admin, site: { id: string; account_id
   const recipients = await newLeadRecipients(admin, site);
   if (!recipients.length) throw new EmailDeliveryError("No eligible lead notification recipients.");
   const name = submissionContact(submission.fields).name?.trim().slice(0, 120);
-  const summary = [
-    `A new inquiry was saved for ${site.name ?? site.subdomain}.`,
-    `Contact: ${name || "Not provided"}`,
-    `Source: ${submission.formName || "Form"} (${submission.path})`,
-    "Sign in to see contact details and the full submission.",
-  ].join("\n");
-  const message = emailBody(summary, { label: "View lead", url: `${brand.appUrl}/dashboard/forms?lead=${leadId}` });
+  const message = await renderNewLeadEmail({
+    siteName: site.name ?? site.subdomain,
+    leadId,
+    name,
+    fields: submission.fields,
+    formName: submission.formName,
+    path: submission.path,
+  });
   const results = await Promise.allSettled(recipients.map((to) => sendEmail({
-    to, subject: "New website lead", ...message,
+    to, ...message,
     tag: "form-notification", metadata: { site_id: site.id, lead_id: leadId },
   })));
   const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
@@ -44,12 +44,9 @@ export async function notifyNewLead(admin: Admin, site: { id: string; account_id
 
 export async function sendLeadDigest(digest: { email: string; site_id: string; site_name: string; received: number; awaiting: number }) {
   const to = emailAddress.parse(digest.email);
-  const leadText = `${digest.received} new ${digest.received === 1 ? "lead" : "leads"}, ${digest.awaiting} awaiting reply`;
   await sendEmail({
-    to, subject: "Your daily lead digest",
-    ...emailBody(`${digest.site_name}: ${leadText}.\nNew leads are from the previous UTC day.`, {
-      label: "Open leads", url: `${brand.appUrl}/dashboard/forms?site=${digest.site_id}`,
-    }),
+    to,
+    ...(await renderLeadDigestEmail(digest)),
     tag: "form-notification", metadata: { site_id: digest.site_id },
   });
 }

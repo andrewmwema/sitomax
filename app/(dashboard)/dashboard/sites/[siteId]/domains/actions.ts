@@ -12,6 +12,8 @@ import { checkAndSaveDomain, DomainCheckError, domainSiteColumns, expiredDomainI
 import { DomainEmailError, instructionEmail, notifyDomainLive, sendDomainEmail } from "@/lib/domains/email";
 import { EmailDeliveryError } from "@/lib/email";
 import { brand } from "@/lib/brand";
+import { getProvider } from "@/lib/domains/providers";
+import { renderDomainInstructionsEmail } from "@/emails/registry";
 
 const columns = domainSiteColumns;
 
@@ -203,7 +205,16 @@ export async function emailDomainInstructions(siteId: string, email: string, pro
       return { error: "DNS instructions are incomplete. Retry the connection first.", success: "" };
     }
     const text = instructionEmail(access.site.custom_domain, parsed.data.providerId, connection.records);
-    await sendDomainEmail([parsed.data.email], `Connect ${access.site.custom_domain}`, text,
+    const provider = getProvider(parsed.data.providerId);
+    const rendered = await renderDomainInstructionsEmail({
+      domain: access.site.custom_domain,
+      providerName: provider.name,
+      steps: provider.steps,
+      records: [...connection.records],
+      dnsUrl: provider.dnsUrl,
+    });
+    rendered.text = text;
+    await sendDomainEmail([parsed.data.email], rendered.subject, rendered,
       `instructions:${siteId}:${parsed.data.email}:${Math.floor(Date.now() / 60_000)}:${text}`);
     return { error: "", success: "Instructions sent." };
   } catch (error) { return { error: serviceError(error), success: "" }; }

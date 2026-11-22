@@ -94,7 +94,8 @@ describe("form submission endpoint", () => {
     expect(mocks.recipients).toHaveBeenCalledWith({ p_site: "site-1" });
     expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({
       to: "owner@example.test", tag: "form-notification",
-      text: expect.stringContaining("Contact: Alex"), html: expect.stringContaining(`/dashboard/forms?lead=${leadId}`),
+      subject: "New lead from Acme",
+      text: expect.stringContaining("Alex"), html: expect.stringContaining(`/dashboard/forms?lead=${leadId}`),
     }));
     expect(JSON.stringify(mocks.send.mock.calls)).not.toContain(valid.Email);
   });

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DomainEmailError, sendDomainEmail } from "./email";
 import { EmailDeliveryError, isEmailConfigured } from "@/lib/email";
 import { getAccountOwnerEmails } from "@/lib/email/recipients";
-import { brand } from "@/lib/brand";
+import { renderDomainCompleteEmail } from "@/emails/registry";
 
 export async function notifyDomainRequestDone(requestId: string): Promise<void> {
   if (!isEmailConfigured()) throw new DomainEmailError("Completion emails are not configured. Ask your agency to enable domain emails.");
@@ -21,8 +21,8 @@ export async function notifyDomainRequestDone(requestId: string): Promise<void> 
     const site = await admin.from("sites").select("account_id").eq("id", request.site_id).maybeSingle();
     if (site.error || !site.data) throw new DomainEmailError("Could not load the account for the completion email.");
     const recipients = await getAccountOwnerEmails(admin, site.data.account_id);
-    await sendDomainEmail(recipients, "Your domain setup request is complete",
-      `Our team has completed your setup request for ${request.domain}.\n\nReview connection status: ${brand.appUrl}/dashboard/sites/${request.site_id}/domains\n\nDNS changes can take up to 48 hours. You can now revoke our delegated access at your domain provider. We will never ask for your password.`,
+    const rendered = await renderDomainCompleteEmail(request.domain, request.site_id);
+    await sendDomainEmail(recipients, rendered.subject, rendered,
       `domain-request:${request.id}:${request.done_at}:${recipients.join(",")}`);
     const saved = await admin.from("domain_requests").update({
       notification_sent_at: new Date().toISOString(), notification_claimed_at: null,

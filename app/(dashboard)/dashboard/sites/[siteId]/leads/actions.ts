@@ -6,8 +6,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { isPublicHttpsUrl } from "@/lib/public-https";
 import { EmailDeliveryError, sendEmail } from "@/lib/email";
-import { emailBody } from "@/lib/email/message";
-import { brand } from "@/lib/brand";
+import { renderLeadTestEmail } from "@/emails/registry";
 
 const recipientsSchema = z.array(z.email().max(254)).max(25);
 type Result = { error: string; success?: string };
@@ -50,11 +49,9 @@ export async function saveLeadSettings(_previous: Result, form: FormData): Promi
       return { error: "Could not send the test notification." };
     }
     if (!reservation.data) return { error: "Please wait one minute before sending another test." };
-    const body = emailBody(`This is a test notification for ${site.data.name || site.data.subdomain}. No lead was created.`, {
-      label: "Open leads", url: `${brand.appUrl}/dashboard/forms?site=${id}`,
-    });
+    const body = await renderLeadTestEmail(site.data.name || site.data.subdomain, id);
     const results = await Promise.allSettled(addresses.data.map((to) => sendEmail({
-      to, subject: "Test lead notification", ...body, tag: "form-notification", metadata: { site_id: id },
+      to, ...body, tag: "form-notification", metadata: { site_id: id },
     })));
     const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
     if (failures.length) {

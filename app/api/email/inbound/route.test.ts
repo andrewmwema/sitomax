@@ -56,7 +56,7 @@ describe("lead inbound and forwarding", () => {
     expect(mocks.rpc).toHaveBeenNthCalledWith(3, "claim_lead_reply_forwards", expect.objectContaining({ p_message: message }));
     expect(mocks.send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       to: "owner-a@example.test", replyTo: "lead@example.test", subject: original.Subject,
-      text: expect.stringContaining(original.TextBody), html: expect.stringContaining("Our original reply"),
+      text: expect.stringContaining(original.StrippedTextReply), html: expect.stringContaining("Our original reply"),
       tag: "lead-forward", stream: "lead-transactional",
     }));
     expect(mocks.rpc).toHaveBeenNthCalledWith(4, "finish_lead_reply_forward", expect.objectContaining({ p_sent: true, p_lease: lease }));

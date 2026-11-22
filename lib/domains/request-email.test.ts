@@ -33,9 +33,11 @@ describe("domain request completion notifications", () => {
     expect(mocks.owners).toHaveBeenCalledWith(expect.anything(), "account");
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(mocks.send).toHaveBeenCalledWith(["owner1@example.com", "owner2@example.com"],
-      "Your domain setup request is complete", expect.stringContaining("example.com"), expect.stringContaining(request.done_at));
+      "Your domain setup request is complete",
+      expect.objectContaining({ subject: "Your domain setup request is complete", text: expect.stringContaining("example.com") }),
+      expect.stringContaining(request.done_at));
     expect(mocks.update).toHaveBeenCalledWith({ notification_sent_at: expect.any(String), notification_claimed_at: null });
-    expect(mocks.send.mock.calls[0][2]).toContain("revoke our delegated access");
+    expect(mocks.send.mock.calls[0][2].text).toContain("revoke delegated access");
   });
   it("leaves failed deliveries retryable with the same notification reference", async () => {
     mocks.claim.mockReset().mockResolvedValue({ data: request, error: null });
