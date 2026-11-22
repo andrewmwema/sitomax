@@ -106,7 +106,10 @@ export async function sendLeadReply(raw: unknown) {
       p_secret: secret, p_lead: form.leadId, p_actor: context.user.id, p_request: form.requestId, p_to: envelope.to,
       p_from: `leads@${config.domain}`, p_subject: envelope.subject, p_text: envelope.text, p_html: envelope.html, p_mode: route.data.mode,
     });
-    if (reserve.error) throw new Error("Could not reserve the reply.", { cause: reserve.error.code });
+    if (reserve.error) {
+      console.error("Could not reserve lead reply", { requestId: form.requestId, code: reserve.error.code });
+      return { error: "Could not reserve this reply. Refresh the conversation before retrying." };
+    }
     if (reserve.data === "limited") return { error: "This account has reached its daily reply limit. Try again after midnight UTC." };
     if (reserve.data === "duplicate") return { error: "This send has already been submitted. Check the conversation before trying again." };
     if (reserve.data !== "reserved") return { error: "This lead or its reply settings changed. Refresh the inbox before retrying." };
@@ -129,7 +132,18 @@ export async function sendLeadReply(raw: unknown) {
     }
     return deliveryError ? { error: deliveryError, reserved: true } : { success: "Reply accepted for delivery." };
   } catch (error) {
-    console.error("Could not send lead reply", { type: error instanceof Error ? error.name : "Unknown" });
+    const cause = error instanceof Error ? error.cause : undefined;
+    console.error("Could not send lead reply", {
+      type: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : undefined,
+      code: typeof cause === "string" ? cause : undefined,
+    });
+    if (error instanceof Error && [
+      "Could not load the lead.",
+      "Could not load the lead's website.",
+      "Could not load reply settings.",
+      "Could not reserve the reply.",
+    ].includes(error.message)) return { error: `${error.message} Check the conversation before retrying.` };
     return { error: error instanceof EmailDeliveryError ? error.message : "Could not send this reply. Check the conversation before retrying." };
   }
 }

@@ -15,6 +15,11 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/email", async (original) => ({ ...await original<typeof import("@/lib/email")>(),
   sendEmail: mocks.send, isEmailConfigured: () => true }));
 vi.mock("@/lib/leads/reply-worker", () => ({ leadReplyWorker: mocks.worker }));
+vi.mock("@/emails/registry", () => ({
+  renderOutgoingLeadReplyEmail: vi.fn(async ({ subject }: { subject: string }) => ({
+    subject, html: "<p>Hello</p>", text: "Hello", preheader: "Reply",
+  })),
+}));
 import { EmailDeliveryError } from "@/lib/email";
 import { sendLeadReply } from "./reply-actions";
 
@@ -35,6 +40,16 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("lead reply configuration", () => {
+  it("reports a reservation failure instead of collapsing it into a generic send error", async () => {
+    mocks.worker.mockReturnValue({
+      secret: "test-worker-secret-at-least-32-characters",
+      client: { rpc: vi.fn().mockResolvedValue({ data: null, error: { code: "42501" } }) },
+    });
+    expect(await sendLeadReply(input)).toEqual({
+      error: "Could not reserve this reply. Refresh the conversation before retrying.",
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it("explains when tracked replies are not configured", async () => {
     vi.stubEnv("INBOUND_REPLY_DOMAIN", "");
     expect(await sendLeadReply(input)).toEqual({ error: "Tracked replies are not configured. Contact your agency." });

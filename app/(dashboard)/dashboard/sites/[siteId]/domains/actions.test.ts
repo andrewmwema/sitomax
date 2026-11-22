@@ -199,7 +199,8 @@ describe("domain actions", () => {
     ] });
     expect((await emailDomainInstructions(id, "web@example.com", "godaddy")).success).toBe("Instructions sent.");
     expect(mocks.send).toHaveBeenCalledWith(["web@example.com"], "Connect example.com",
-      expect.stringContaining("192.0.2.1"), expect.any(String));
+      expect.objectContaining({ subject: "Connect example.com", text: expect.stringContaining("192.0.2.1"), html: expect.stringContaining("GoDaddy") }),
+      expect.any(String));
     mocks.connection.mockClear();
     mocks.site.mockResolvedValue({ data: { ...connectedSite, account_id: id,
       domain_pending_since: new Date(Date.now() - 15 * 86_400_000).toISOString() }, error: null });
