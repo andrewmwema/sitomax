@@ -5,8 +5,9 @@ import type { Lead } from "@/lib/forms/submissions";
 import type { SubmissionSite } from "@/lib/forms/submissions";
 import type { LeadInboxCounts, LeadInboxView } from "@/lib/forms/inbox";
 import { submissionContact } from "@/lib/forms/submissions";
-import { LeadStarButton } from "./lead-controls";
+import { LeadStarButton, LeadTrashActions } from "./lead-controls";
 import { RelativeLeadTime } from "./lead-relative-time";
+import { LeadInboxShortcuts } from "./lead-inbox-shortcuts";
 
 const views: { value: LeadInboxView; label: string }[] = [
   { value: "needs_reply", label: "Needs reply" },
@@ -48,7 +49,7 @@ export function LeadsInboxLayout({ rows, allowed, counts, view, search, site, se
         return <article key={lead.id} className={`group border-b border-[var(--platform-line)] px-3 py-3 ${selectedLeadId === lead.id ? "bg-[var(--platform-subtle)]" : "hover:bg-[var(--platform-subtle)]"}`}>
           <div className="flex items-start gap-2">
             <span aria-hidden className={`mt-2 size-2 shrink-0 rounded-full ${lead.unread || lead.has_unread_reply || !lead.is_read ? "bg-[var(--platform-accent)]" : "bg-transparent"}`} />
-            <Link href={href} className="min-w-0 flex-1">
+            <Link href={href} data-lead-link className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
                 <span className={`${lead.unread || lead.has_unread_reply || !lead.is_read ? "font-bold" : "font-semibold"} truncate text-sm`}>{name}</span>
                 <RelativeLeadTime value={lead.last_message_at || lead.last_activity_at} />
@@ -57,9 +58,11 @@ export function LeadsInboxLayout({ rows, allowed, counts, view, search, site, se
               <div className="mt-1 flex items-center gap-2 text-[10px] text-[var(--platform-muted)]">
                 <span className="truncate">{allowed.find((item) => item.id === lead.site_id)?.name || allowed.find((item) => item.id === lead.site_id)?.subdomain || "Website"}</span>
                 <span className="platform-status" data-tone={lead.status === "new" ? "accent" : undefined}>{lead.status}</span>
+                {lead.snoozed_until && new Date(lead.snoozed_until) > new Date() ? <span className="platform-status">Snoozed</span> : null}
+                {lead.remind_at ? <span className="platform-status">Reminder</span> : null}
               </div>
             </Link>
-            <LeadStarButton lead={lead} />
+            {lead.deleted_at ? <LeadTrashActions lead={lead} /> : <LeadStarButton lead={lead} />}
           </div>
         </article>;
       })}
@@ -89,6 +92,7 @@ export function LeadsInboxLayout({ rows, allowed, counts, view, search, site, se
   </section> : null;
 
   return <>
+    <LeadInboxShortcuts />
     <div className="md:hidden">{mobileDetail || mobileList}</div>
     <div className="hidden h-[calc(100vh-8.5rem)] overflow-hidden rounded-2xl border border-[var(--platform-line)] bg-[var(--platform-ground)] md:grid md:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[180px_340px_minmax(0,1fr)]">
       {sidebar}

@@ -10,7 +10,7 @@ export type LeadInboxView = (typeof leadInboxViews)[number];
 export const leadInboxActionSchema = z.object({
   action: z.enum([
     "star", "unstar", "read", "unread", "archive", "unarchive",
-    "snooze", "unsnooze", "remind", "clear_reminder", "trash", "restore",
+    "snooze", "unsnooze", "remind", "clear_reminder", "trash", "restore", "delete_forever",
   ]),
   leadIds: z.array(z.uuid()).min(1).max(25),
   remindAt: z.string().datetime().nullable().optional(),

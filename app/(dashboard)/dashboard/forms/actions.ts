@@ -8,11 +8,16 @@ import { leadStatusSchema, selectedLeadIdsSchema } from "@/lib/forms/submissions
 import { leadInboxActionSchema } from "@/lib/forms/inbox";
 
 export async function applyLeadInboxAction(_previous: { error: string; success?: string }, formData: FormData) {
+  const normalizeDate = (value: FormDataEntryValue | null) => {
+    if (typeof value !== "string" || !value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  };
   const raw = {
     action: formData.get("action"),
     leadIds: formData.getAll("leadIds"),
-    remindAt: formData.get("remindAt") || null,
-    snoozeUntil: formData.get("snoozeUntil") || null,
+    remindAt: normalizeDate(formData.get("remindAt")),
+    snoozeUntil: normalizeDate(formData.get("snoozeUntil")),
   };
   const parsed = leadInboxActionSchema.safeParse(raw);
   if (!parsed.success) return { error: "Choose a valid lead inbox action." };
