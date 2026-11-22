@@ -23,7 +23,7 @@ const shell = (children: ReactNode) => (
 export function LeadReplyEmail({ html, signature, branded }: { html: string; signature: string; branded: string }) {
   return shell(
     <>
-      <div dangerouslySetInnerHTML={{ __html: html }} />
+      <div style={{ lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: html }} />
       {signature ? <p style={{ whiteSpace: "pre-wrap", marginTop: "24px", color: "#475569" }}>{signature}</p> : null}
       {branded ? <p style={{ color: "#64748b", fontSize: "12px" }}>{branded}</p> : null}
     </>,

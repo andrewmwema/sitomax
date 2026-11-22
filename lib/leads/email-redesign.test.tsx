@@ -21,7 +21,7 @@ afterEach(() => {
 describe("redesign lead email templates", () => {
   it("renders and sends a lead reply with HTML and text alternatives", async () => {
     const rendered = await renderEmailTemplate(
-      <LeadReplyEmail html="<p>Thanks for your inquiry.</p>" signature="Acme\n555-0100" branded="Sent via SitoMax" />,
+      <LeadReplyEmail html="<p>Thanks for your <strong>inquiry</strong>. <a href=&quot;https://example.test&quot;>Learn more</a></p><ul><li>Option one</li></ul>" signature="Acme\n555-0100" branded="Sent via SitoMax" />,
     );
     fetchMock.mockResolvedValueOnce(Response.json({ MessageID: "reply-id", ErrorCode: 0 }));
     await sendEmail({
@@ -34,7 +34,11 @@ describe("redesign lead email templates", () => {
       html: rendered.html,
       text: rendered.text,
     });
-    expect(rendered.html).toContain("Thanks for your inquiry.");
+    expect(rendered.html).toContain("Thanks for your ");
+    expect(rendered.html).toContain("inquiry");
+    expect(rendered.html).toContain("<strong>");
+    expect(rendered.html).toContain("<a");
+    expect(rendered.html).toContain("<ul>");
     expect(rendered.text).toContain("Thanks for your inquiry.");
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
       Subject: "Re: your inquiry",
@@ -63,5 +67,16 @@ describe("redesign lead email templates", () => {
       Subject: "New website lead",
       Tag: "form-notification",
     });
+  });
+
+  it("renders a forwarded lead reply and original message without React HTML injection", async () => {
+    const html = "<p><strong>Sam replied</strong></p><p>Please <em>call</em> me.</p><p>Original message:</p><blockquote><p>I need help.</p></blockquote><p><a href=\"https://app.example.test/dashboard/forms?lead=lead-id\">View conversation</a></p>";
+    const rendered = await renderEmailTemplate(
+      <LeadReplyEmail html={html} signature="" branded="" />,
+    );
+    expect(rendered.html).toContain("Sam replied");
+    expect(rendered.html).toContain("Please ");
+    expect(rendered.html).toContain("call");
+    expect(rendered.text).toContain("I need help.");
   });
 });
