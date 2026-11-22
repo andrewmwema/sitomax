@@ -5,6 +5,7 @@ import { brand } from "@/lib/brand";
 import { Button, EmailLayout, Heading, InfoCard, MessageQuote, StatRow, Text, emailTokens } from "./components";
 import { renderEmail, type RenderedEmail } from "./render";
 import { submissionFields } from "@/lib/forms/submissions";
+import { cleanLeadEmailHtml } from "@/lib/leads/reply-content";
 import { Html, Head, Preview, Body, Container, Text as EmailText, Section } from "@react-email/components";
 
 export type { RenderedEmail } from "./render";
@@ -193,7 +194,7 @@ export async function renderOutgoingLeadReplyEmail(input: {
       <Preview>{input.subject} — {input.businessName}</Preview>
       <Body style={{ backgroundColor: "#FFFFFF", margin: 0, padding: "20px 16px", color: emailTokens.body, fontFamily: emailTokens.font, fontSize: 16, lineHeight: 1.6 }}>
         <Container style={{ maxWidth: 600 }}>
-          <Section dangerouslySetInnerHTML={{ __html: input.bodyHtml }} />
+          <Section><div dangerouslySetInnerHTML={{ __html: cleanLeadEmailHtml(input.bodyHtml) }} /></Section>
           <Section style={{ borderTop: `1px solid ${emailTokens.border}`, marginTop: 24, paddingTop: 16 }}>
             {signatureLines.map((line) => <EmailText key={line} style={{ color: emailTokens.muted, fontFamily: emailTokens.font, fontSize: 13, lineHeight: 1.5, margin: "0 0 2px" }}>{line}</EmailText>)}
             {input.branded ? <EmailText style={{ color: emailTokens.muted, fontFamily: emailTokens.font, fontSize: 11, margin: "8px 0 0" }}>{input.branded}</EmailText> : null}
