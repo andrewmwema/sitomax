@@ -29,10 +29,12 @@ export async function GET(request: Request) {
     supabase.rpc("lead_worker_claim_webhooks", { p_secret: secret }),
     emailConfigured ? supabase.rpc("lead_worker_claim_digests", { p_secret: secret }) : null,
   ]);
-  if (webhooks.error || digests?.error) console.error("Could not claim lead jobs", {
-    webhook: webhooks.error?.code, digest: digests?.error?.code,
+  const maintenance = await supabase.rpc("lead_worker_maintenance", { p_secret: secret });
+  if (webhooks.error || digests?.error || maintenance.error) console.error("Could not claim lead jobs", {
+    webhook: webhooks.error?.code, digest: digests?.error?.code, maintenance: maintenance.error?.code,
   });
-  let failures = Number(Boolean(webhooks.error)) + Number(Boolean(digests?.error)) + Number(!emailConfigured);
+  let failures = Number(Boolean(webhooks.error)) + Number(Boolean(digests?.error))
+    + Number(Boolean(maintenance.error)) + Number(!emailConfigured);
   const deliveries = (webhooks.data ?? []) as {
     event_id: string; lease_id: string; url: string; secret: string; payload: unknown;
   }[];
@@ -71,5 +73,11 @@ export async function GET(request: Request) {
       failures += result.failures;
     } catch { console.error("Could not process pending reply forwards"); failures++; }
   }
-  return Response.json({ webhooks: deliveries.length, digests: emails.length, forwards, failures }, { status: failures ? 500 : 200 });
+  return Response.json({
+    webhooks: deliveries.length,
+    digests: emails.length,
+    forwards,
+    maintenance: maintenance.data ?? null,
+    failures,
+  }, { status: failures ? 500 : 200 });
 }
