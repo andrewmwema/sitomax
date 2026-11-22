@@ -3,6 +3,7 @@ import { LifeBuoy, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getAgencySettings } from "@/lib/agency";
 import { AgencySettingsForm } from "@/components/dashboard/agency-settings-form";
+import { EmailSignatureForm } from "@/components/dashboard/email-signature-form";
 import { updateAgencySettings } from "./actions";
 
 /**
@@ -42,6 +43,10 @@ async function SettingsContent() {
     getAgencySettings(),
   ]);
   if (profileError) throw new Error("Could not load workspace access.", { cause: profileError });
+  // Read separately: the column arrives with migration 0044 and the rest of Settings must load without it.
+  const saved = await supabase.from("profiles").select("email_signature").eq("id", user.id).maybeSingle();
+  if (saved.error) console.error("Could not load the saved email signature", { code: saved.error.code });
+  const signature = <EmailSignatureForm signature={typeof saved.data?.email_signature === "string" ? saved.data.email_signature : ""} />;
 
   if (!profile?.is_super_admin) {
     return (
@@ -69,12 +74,16 @@ async function SettingsContent() {
           )}
         </p>
         </section>
+        <div className="lg:col-span-2">{signature}</div>
       </div>
     );
   }
 
   const branding = await supabase.from("agency_settings").select("show_lead_email_branding").eq("id", 1).maybeSingle();
   if (branding.error) throw new Error("Could not load lead email branding.", { cause: branding.error.code });
-  return <AgencySettingsForm settings={{ ...settings, showLeadEmailBranding: branding.data?.show_lead_email_branding ?? false }}
-    action={updateAgencySettings} account={{ name: profile.full_name ?? "", email: profile.email ?? user.email ?? "" }} />;
+  return <div className="flex flex-col gap-5">
+    <AgencySettingsForm settings={{ ...settings, showLeadEmailBranding: branding.data?.show_lead_email_branding ?? false }}
+      action={updateAgencySettings} account={{ name: profile.full_name ?? "", email: profile.email ?? user.email ?? "" }} />
+    <div className="grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div className="hidden lg:block" />{signature}</div>
+  </div>;
 }

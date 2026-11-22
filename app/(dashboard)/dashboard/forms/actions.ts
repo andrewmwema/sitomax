@@ -110,6 +110,6 @@ export async function saveLeadNote(_previous: { error: string; success?: string 
     console.error("Could not save lead note", { code: error?.code ?? "not_accessible" });
     return { error: "Could not save this note. You can only change your own notes." };
   }
-  revalidatePath("/dashboard/forms");
+  revalidatePath("/dashboard", "layout");
   return { error: "", success: intent === "delete" ? "Note deleted." : "Note saved." };
 }

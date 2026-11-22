@@ -1,0 +1,663 @@
+/* Leads inbox. Scoped to .leads-ui so the rest of the platform keeps its own tokens. */
+.leads-ui {
+  --lead-blue: #1e51f7;
+  --lead-blue-strong: #1740c4;
+  --lead-blue-soft: #eef3ff;
+  --lead-navy: #151829;
+  --lead-body: #3a3f55;
+  --lead-muted: #6b7085;
+  --lead-line: #e6e8ef;
+  --lead-bg: #f5f6fa;
+  --lead-surface: #ffffff;
+  --lead-hover: #f3f5fa;
+  --lead-float: 0 12px 32px rgb(21 24 41 / 14%), 0 2px 6px rgb(21 24 41 / 6%);
+  --platform-accent: var(--lead-blue);
+  --platform-ink: var(--lead-navy);
+  --platform-muted: var(--lead-muted);
+  --platform-line: var(--lead-line);
+  color: var(--lead-body);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.leads-ui :where(h1, h2, h3) {
+  color: var(--lead-navy);
+}
+
+.leads-ui :where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--lead-blue);
+  outline-offset: 2px;
+}
+
+/* The inbox fills the viewport below the app header; each pane scrolls on its own. */
+main:has(> .platform-content > .leads-inbox) {
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.platform-content:has(> .leads-inbox) {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  padding: 0;
+}
+
+.leads-inbox {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--lead-bg);
+}
+
+.leads-list-pane {
+  display: flex;
+  width: var(--leads-list-width, 360px);
+  min-height: 0;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--lead-line);
+  background: var(--lead-surface);
+}
+
+.leads-resizer {
+  position: relative;
+  z-index: 5;
+  width: 9px;
+  margin-inline: -5px -4px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.leads-resizer::after {
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+  content: "";
+  transition: background-color 120ms ease;
+}
+
+.leads-resizer:is(:hover, :focus-visible, [data-dragging="true"])::after {
+  background: var(--lead-blue);
+}
+
+.leads-conversation-pane {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.leads-header {
+  container-type: inline-size;
+}
+
+.leads-header-grid {
+  display: grid;
+  grid-template-areas: "avatar name actions" "avatar meta meta";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.leads-header-avatar { grid-area: avatar; }
+.leads-header-name { grid-area: name; }
+.leads-header-meta { grid-area: meta; }
+.leads-header-actions { grid-area: actions; }
+
+@container (max-width: 560px) {
+  .leads-header-grid {
+    grid-template-areas: "avatar name" "avatar meta" "actions actions";
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .leads-header-actions {
+    margin-top: 8px;
+    justify-self: end;
+  }
+}
+
+/* Platform headings balance their lines, which defeats truncation; this opts back in. */
+.leads-ui .leads-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leads-meta {
+  overflow: hidden;
+}
+
+.leads-meta > div {
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: -15px;
+}
+
+.leads-ui .leads-meta-item {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  padding-left: 15px;
+}
+
+.leads-meta-item::before {
+  position: absolute;
+  left: 5px;
+  content: "·";
+}
+
+.leads-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #cfd3df transparent;
+  scrollbar-width: thin;
+}
+
+.leads-details {
+  display: flex;
+  width: 340px;
+  min-height: 0;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--lead-line);
+  background: var(--lead-surface);
+}
+
+@media (max-width: 1199px) {
+  .leads-list-pane {
+    width: 320px;
+  }
+
+  .leads-resizer {
+    display: none;
+  }
+
+  .leads-details {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 30;
+    max-width: 100%;
+    box-shadow: var(--lead-float);
+  }
+}
+
+@media (max-width: 767px) {
+  .leads-list-pane {
+    width: 100%;
+    border-right: 0;
+  }
+
+  .leads-inbox[data-open="true"] .leads-list-pane,
+  .leads-inbox[data-open="false"] .leads-conversation-pane {
+    display: none;
+  }
+}
+
+/* Rows outside the viewport skip layout and paint, which keeps long inboxes fast. */
+.leads-row {
+  position: relative;
+  border-bottom: 1px solid var(--lead-line);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 92px;
+  transition: background-color 120ms ease;
+}
+
+.leads-row:hover {
+  background: var(--lead-hover);
+}
+
+.leads-row[data-selected="true"] {
+  background: var(--lead-blue-soft);
+  box-shadow: inset 3px 0 0 var(--lead-blue);
+}
+
+.leads-row-check,
+.leads-row-star {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.leads-row:is(:hover, :focus-within) :is(.leads-row-check, .leads-row-star),
+.leads-row-check[data-on="true"],
+.leads-row-star[data-on="true"] {
+  opacity: 1;
+}
+
+.leads-row:is(:hover, :focus-within) .leads-row-avatar,
+.leads-row-avatar[data-hidden="true"] {
+  visibility: hidden;
+}
+
+/* Lists stay usable without hover: selection and stars are always reachable. */
+@media (hover: none) {
+  .leads-row-star {
+    opacity: 1;
+  }
+}
+
+/* In the components layer so utilities (size, padding, color, hidden) can refine them. */
+@layer components {
+  .leads-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+
+  .leads-pill[data-status="new"] { background: #eaf0ff; color: #1740c4; }
+  .leads-pill[data-status="contacted"] { background: #eef0f5; color: #3a3f55; }
+  .leads-pill[data-status="won"] { background: #e6f5ec; color: #0b6238; }
+  .leads-pill[data-status="lost"] { background: #f7eded; color: #96281f; }
+
+  .leads-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--lead-line);
+    border-radius: 999px;
+    padding: 2px 4px 2px 10px;
+    background: var(--lead-surface);
+    color: var(--lead-body);
+    font-size: 12px;
+  }
+
+  .leads-icon-button {
+    position: relative;
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: var(--lead-muted);
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+
+  .leads-icon-button:not(:disabled):hover,
+  .leads-icon-button[aria-expanded="true"],
+  .leads-icon-button[aria-pressed="true"] {
+    background: #eceff6;
+    color: var(--lead-navy);
+  }
+
+  .leads-icon-button.is-plain[aria-pressed="true"]:not(:hover) {
+    background: transparent;
+  }
+
+  .leads-icon-button[data-active="true"] {
+    color: var(--lead-blue);
+  }
+
+  .leads-icon-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+}
+
+/* Tooltips: the accessible name stays on aria-label. */
+.leads-ui [data-tip]::after {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--lead-navy);
+  color: #fff;
+  content: attr(data-tip);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease 0ms;
+  white-space: nowrap;
+}
+
+.leads-ui [data-tip][data-tip-side="top"]::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.leads-ui [data-tip][data-tip-align="end"]::after {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.leads-ui [data-tip][data-tip-align="start"]::after {
+  left: 0;
+  transform: none;
+}
+
+.leads-ui [data-tip]:is(:hover, :focus-visible, :has(:focus-visible)):not([aria-expanded="true"])::after {
+  opacity: 1;
+  transition-delay: 350ms;
+}
+
+.leads-menu {
+  position: absolute;
+  z-index: 50;
+  min-width: 200px;
+  border: 1px solid var(--lead-line);
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--lead-surface);
+  box-shadow: var(--lead-float);
+  animation: leads-pop 120ms ease;
+}
+
+.leads-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--lead-body);
+  font-size: 13px;
+  text-align: left;
+}
+
+.leads-menu-item:is(:hover, :focus-visible):not(:disabled) {
+  background: var(--lead-hover);
+  color: var(--lead-navy);
+}
+
+.leads-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.leads-menu-item[data-tone="danger"] {
+  color: #96281f;
+}
+
+.leads-menu-label {
+  padding: 6px 10px 4px;
+  color: var(--lead-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.leads-menu-rule {
+  margin: 6px 0;
+  border-top: 1px solid var(--lead-line);
+}
+
+/* Platform form controls are styled globally; these opt a field out. */
+.platform-ui .leads-bare,
+.leads-ui .leads-bare {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  outline: none;
+}
+
+.platform-ui .leads-bare:focus,
+.leads-ui .leads-bare:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.platform-ui .leads-input,
+.leads-ui .leads-input {
+  min-height: 36px;
+  width: 100%;
+  border: 1px solid var(--lead-line);
+  border-radius: 10px;
+  padding: 6px 10px;
+  background: var(--lead-surface);
+  box-shadow: none;
+  color: var(--lead-navy);
+  font-size: 13px;
+}
+
+.platform-ui .leads-input:focus,
+.leads-ui .leads-input:focus {
+  border-color: var(--lead-blue);
+  box-shadow: 0 0 0 3px rgb(30 81 247 / 12%);
+  outline: none;
+}
+
+@layer components {
+  .leads-button {
+    position: relative;
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--lead-line);
+    border-radius: 10px;
+    padding: 6px 12px;
+    background: var(--lead-surface);
+    color: var(--lead-navy);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .leads-button:not(:disabled):hover {
+    background: var(--lead-hover);
+  }
+
+  .leads-button[data-variant="primary"] {
+    border-color: var(--lead-blue);
+    background: var(--lead-blue);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .leads-button[data-variant="primary"]:not(:disabled):hover {
+    border-color: var(--lead-blue-strong);
+    background: var(--lead-blue-strong);
+  }
+
+  .leads-button[data-variant="danger"] {
+    border-color: #f0cfcb;
+    color: #96281f;
+  }
+
+  .leads-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .leads-card {
+    border: 1px solid var(--lead-line);
+    border-radius: 12px;
+    background: var(--lead-surface);
+  }
+}
+
+.leads-card[data-flash="true"] {
+  animation: leads-flash 1.6s ease;
+}
+
+/* Email bodies, in the thread and in the composer. */
+.leads-rich {
+  color: var(--lead-body);
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.leads-rich :where(p, ul, ol, blockquote) {
+  margin-block: 0 0.6em;
+}
+
+.leads-rich > :last-child {
+  margin-bottom: 0;
+}
+
+.leads-rich :where(ul, ol) {
+  padding-inline-start: 1.4em;
+}
+
+.leads-rich ul { list-style: disc; }
+.leads-rich ol { list-style: decimal; }
+.leads-rich li > p { margin: 0; }
+
+.leads-rich a {
+  color: var(--lead-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.leads-rich blockquote {
+  border-inline-start: 2px solid var(--lead-line);
+  padding-inline-start: 12px;
+  color: var(--lead-muted);
+}
+
+.leads-rich :where(h1, h2, h3, h4, h5, h6) {
+  margin-block: 0.8em 0.4em;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.leads-rich[data-muted="true"] {
+  color: var(--lead-muted);
+  font-size: 13px;
+}
+
+.leads-editor .tiptap {
+  min-height: 96px;
+  outline: none;
+}
+
+.leads-editor .tiptap p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: #9498a8;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.leads-editor mark,
+.leads-placeholder {
+  border-radius: 4px;
+  padding: 0 3px;
+  background: #fff1c2;
+  color: #5c4300;
+}
+
+/* The composer is a dialog element: docked in the pane, or modal when popped out. */
+dialog.leads-composer {
+  position: static;
+  display: none;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  flex-direction: column;
+  overflow: visible;
+  border: 1px solid var(--lead-line);
+  border-radius: 12px;
+  padding: 0;
+  background: var(--lead-surface);
+  box-shadow: 0 6px 20px rgb(21 24 41 / 8%);
+  color: var(--lead-body);
+}
+
+dialog.leads-composer[open] {
+  display: flex;
+}
+
+dialog.leads-composer:modal {
+  position: fixed;
+  inset: 0;
+  width: min(860px, calc(100vw - 48px));
+  height: min(760px, calc(100dvh - 48px));
+  margin: auto;
+  box-shadow: var(--lead-float);
+}
+
+dialog.leads-composer::backdrop {
+  background: rgb(21 24 41 / 45%);
+}
+
+.leads-composer-body {
+  max-height: 50vh;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+dialog.leads-composer:modal .leads-composer-body {
+  max-height: none;
+  flex: 1;
+}
+
+.leads-ui textarea.leads-signature {
+  display: block;
+  width: 100%;
+  resize: none;
+  field-sizing: content;
+  color: var(--lead-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.leads-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--lead-navy);
+  box-shadow: var(--lead-float);
+  color: #fff;
+  font-size: 13px;
+  animation: leads-pop 160ms ease;
+}
+
+.leads-toast[data-tone="error"] {
+  background: #96281f;
+}
+
+.leads-skeleton {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eceef4 25%, #f5f6fa 37%, #eceef4 63%);
+  background-size: 400% 100%;
+  animation: leads-shimmer 1.4s ease infinite;
+}
+
+@keyframes leads-pop {
+  from { opacity: 0; transform: translateY(-2px) scale(0.98); }
+}
+
+@keyframes leads-flash {
+  0%, 60% { border-color: var(--lead-blue); box-shadow: 0 0 0 3px rgb(30 81 247 / 14%); }
+}
+
+@keyframes leads-shimmer {
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leads-ui *,
+  .leads-ui *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

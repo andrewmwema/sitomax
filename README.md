@@ -643,8 +643,9 @@ worker configured: it reserves sends, stores replies and retries forwards.
 
 In **Sites → Leads**, tracked delivery is the default. Direct delivery uses
 the first notification address alphabetically and does not thread replies
-to newly sent emails. The reply composer shows the sender and reply-to address
-using the current settings; tracked reply-to addresses are unique to each lead.
+to newly sent emails. The reply composer keeps the sender and reply-to behind
+**⋯ → Email details** (open by default for the agency); tracked reply-to
+addresses are unique to each lead and are never displayed.
 The agency can adjust the per-account daily send limit
 (50 by default, midnight UTC reset), and enable optional email footer
 branding in **Settings → Branding**. An accepted send counts as a send
@@ -664,3 +665,28 @@ events remain sent. Open and click tracking are disabled. Suppressed addresses a
 notifications, forwards, and daily digests; matching leads show an
 undeliverable warning. Any future report sender must also exclude
 `public.email_suppressions`.
+
+## Leads inbox
+
+Run [`0044_lead_email_signature.sql`](./supabase/migrations/0044_lead_email_signature.sql)
+in the Supabase SQL Editor after `0043`. Until it is applied the inbox works
+with the default signature, and **Settings → Email signature** cannot save.
+
+**Leads** (`/dashboard/leads`) is a two-pane inbox on desktop: a resizable lead
+list (320–440px) and the open conversation, with an optional Details drawer
+(Contact, Notes, Timeline). The list is loaded in the browser 50 leads at a
+time and stays in place while conversations open; the view, search and site
+filter live in the address. List width, the Details drawer, "Show notes in
+thread" and unsent reply drafts are remembered per user in that browser.
+
+Replies are written in a composer docked under the thread (↗ opens it larger).
+The signature is part of the reply and can be edited per message; each user
+sets a default in **Settings → Email signature**, with the variables `{name}`,
+`{business_name}`, `{phone}` and `{website}` filled from the website the lead
+belongs to. The newest message of the conversation is appended as quoted
+history. **Send**, **Send & mark Won** and **Send & archive** share one button;
+Ctrl/Cmd+Enter sends. AI drafts ("Friendly", "Professional", "Brief",
+"Improve my draft") use the same credits and rules as before, and email
+addresses and phone numbers in a draft being improved are never sent to the
+model. When a send fails, the agency also sees the technical cause.
+

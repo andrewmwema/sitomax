@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Building2, Check, LifeBuoy, Palette, Save, ShieldCheck } from "lucide-react";
+import { Building2, Check, LifeBuoy, Palette, Save, ShieldCheck, PenLine } from "lucide-react";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { HexColorInput } from "@/components/editor/hex-color-input";
 import { idleState, type ActionState } from "@/lib/form-state";
@@ -16,6 +16,7 @@ const sections = [
   { id: "agency-profile", label: "Agency profile", icon: Building2 },
   { id: "agency-branding", label: "Branding", icon: Palette },
   { id: "account-access", label: "Account & access", icon: ShieldCheck },
+  { id: "email-signature", label: "Email signature", icon: PenLine },
 ];
 
 export function AgencySettingsForm({ settings, action, account }: {

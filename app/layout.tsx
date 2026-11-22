@@ -3,6 +3,7 @@ import { brand } from "@/lib/brand";
 import { getAgencySettings } from "@/lib/agency";
 import "./globals.css";
 import "./platform.css";
+import "./leads.css";
 
 const siteUrl = new URL(brand.appUrl);
 

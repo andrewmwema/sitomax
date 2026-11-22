@@ -5,7 +5,7 @@ import { brand } from "@/lib/brand";
 import { Button, EmailLayout, Heading, InfoCard, MessageQuote, StatRow, Text, emailTokens } from "./components";
 import { renderEmail, type RenderedEmail } from "./render";
 import { submissionFields } from "@/lib/forms/submissions";
-import { cleanLeadEmailHtml } from "@/lib/leads/reply-content";
+import { cleanLeadEmailHtml, type LeadReplyQuote } from "@/lib/leads/reply-content";
 import { Html, Head, Preview, Body, Container, Text as EmailText, Section } from "@react-email/components";
 
 export type { RenderedEmail } from "./render";
@@ -181,32 +181,42 @@ export async function renderOutgoingLeadReplyEmail(input: {
   businessName: string;
   bodyHtml: string;
   bodyText: string;
-  phone: string;
-  address: string;
-  website: string;
+  signature: string;
+  quote: LeadReplyQuote | null;
   branded: string;
   subject: string;
 }): Promise<RenderedEmail> {
-  const signatureLines = [input.businessName, input.phone, input.address, input.website].filter(Boolean);
+  const muted = { color: emailTokens.muted, fontFamily: emailTokens.font, fontSize: 13, lineHeight: 1.5, margin: "0 0 2px" };
+  const signatureLines = input.signature.trim() ? ["--", ...input.signature.trim().split(/\r?\n/)] : [];
+  // The data-reply-part markers let the conversation view show each part separately.
   const element = (
     <Html lang="en">
       <Head><meta name="color-scheme" content="light" /><meta name="supported-color-schemes" content="light" /></Head>
       <Preview>{input.subject} — {input.businessName}</Preview>
       <Body style={{ backgroundColor: "#FFFFFF", margin: 0, padding: "20px 16px", color: emailTokens.body, fontFamily: emailTokens.font, fontSize: 16, lineHeight: 1.6 }}>
         <Container style={{ maxWidth: 600 }}>
-          <Section><div dangerouslySetInnerHTML={{ __html: cleanLeadEmailHtml(input.bodyHtml) }} /></Section>
-          <Section style={{ borderTop: `1px solid ${emailTokens.border}`, marginTop: 24, paddingTop: 16 }}>
-            {signatureLines.map((line) => <EmailText key={line} style={{ color: emailTokens.muted, fontFamily: emailTokens.font, fontSize: 13, lineHeight: 1.5, margin: "0 0 2px" }}>{line}</EmailText>)}
-            {input.branded ? <EmailText style={{ color: emailTokens.muted, fontFamily: emailTokens.font, fontSize: 11, margin: "8px 0 0" }}>{input.branded}</EmailText> : null}
-          </Section>
+          <Section><div data-reply-part="body" dangerouslySetInnerHTML={{ __html: cleanLeadEmailHtml(input.bodyHtml) }} /></Section>
+          {signatureLines.length ? <Section style={{ marginTop: 20 }}><div data-reply-part="signature">
+            {signatureLines.map((line, index) => <p key={index} style={muted}>{line || "\u00a0"}</p>)}
+          </div></Section> : null}
+          {input.branded ? <Section><EmailText style={{ color: emailTokens.muted, fontFamily: emailTokens.font, fontSize: 11, margin: "8px 0 0" }}>{input.branded}</EmailText></Section> : null}
+          {input.quote ? <Section style={{ marginTop: 24 }}><div data-reply-part="quote">
+            <p style={{ ...muted, margin: "0 0 8px" }}>{input.quote.header}</p>
+            <blockquote style={{ borderLeft: `2px solid ${emailTokens.border}`, color: emailTokens.muted, fontSize: 14, margin: 0, padding: "0 0 0 12px" }}>
+              {input.quote.text.split(/\r?\n/).map((line, index) => <p key={index} style={{ margin: 0 }}>{line || "\u00a0"}</p>)}
+            </blockquote>
+          </div></Section> : null}
         </Container>
       </Body>
     </Html>
   );
   const rendered = await renderEmail(input.subject, `${input.subject} — ${input.businessName}`, element);
-  if (!rendered.text.includes(input.businessName)) {
-    rendered.text = [input.bodyText, input.businessName, input.phone, input.address, input.website, input.branded].filter(Boolean).join("\n\n");
-  }
+  rendered.text = [
+    input.bodyText,
+    signatureLines.join("\n"),
+    input.branded,
+    input.quote ? `${input.quote.header}\n${input.quote.text.split(/\r?\n/).map((line) => `> ${line}`).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
   return rendered;
 }
 

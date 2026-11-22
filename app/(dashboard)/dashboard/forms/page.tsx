@@ -194,7 +194,7 @@ async function LeadDetails({ lead, siteName, closeHref, supabase, userId, notifi
       <LeadStatusForm lead={lead} />
     </section>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-    <div className="platform-panel min-w-0 p-5 sm:p-6"><LeadReplyThread lead={lead} supabase={supabase} selectedMessage={selectedMessage} /></div>
+    <div className="platform-panel min-w-0 p-5 sm:p-6"><LeadReplyThread lead={lead} supabase={supabase} userId={userId} siteName={siteName} selectedMessage={selectedMessage} /></div>
     <div className="space-y-6">
     <section className="platform-panel space-y-3 p-5"><h2 className="text-sm font-semibold">Internal notes</h2>
       <LeadNoteForm leadId={lead.id} siteId={lead.site_id} />

@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin, requireUser } from "@/lib/auth";
 import type { ActionState } from "@/lib/form-state";
 import { mediaUrlSchema } from "@/lib/media";
+import { LEAD_SIGNATURE_MAX } from "@/lib/leads/reply-content";
 
 const settingsSchema = z.object({
   name: z
@@ -107,4 +108,19 @@ export async function updateAgencySettings(
   // Branding feeds the whole app (login, sidebar, theme color).
   revalidatePath("/", "layout");
   return { status: "success", message: "Settings saved." };
+}
+
+/** Saves the signed-in user's own signature for lead replies; empty restores the default. */
+export async function saveEmailSignature(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = z.string().max(LEAD_SIGNATURE_MAX).safeParse(formData.get("signature") ?? "");
+  if (!parsed.success) return { status: "error", message: `Keep the signature under ${LEAD_SIGNATURE_MAX} characters.` };
+  const { supabase, user } = await requireUser();
+  const signature = parsed.data.replace(/\r\n/g, "\n").replace(/[^\S\n]+$/gm, "").trim();
+  const { data, error } = await supabase.from("profiles").update({ email_signature: signature || null }).eq("id", user.id).select("id");
+  if (error || !data?.length) {
+    console.error("Could not save the email signature", { code: error?.code ?? "not_updated" });
+    return { status: "error", message: "Could not save the signature." };
+  }
+  revalidatePath("/dashboard", "layout");
+  return { status: "success", message: "Signature saved." };
 }

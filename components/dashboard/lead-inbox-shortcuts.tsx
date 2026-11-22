@@ -8,7 +8,7 @@ export function LeadInboxShortcuts() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, [contenteditable='true'], select")) return;
+      if (target?.closest("input, textarea, [contenteditable='true'], select, [role='menu'], dialog")) return;
       const key = event.key;
       if (key === "/") {
         event.preventDefault();
@@ -26,7 +26,9 @@ export function LeadInboxShortcuts() {
         links[next]?.focus();
       } else if (key === "r") {
         event.preventDefault();
-        document.querySelector<HTMLElement>('[aria-label="Reply body"]')?.focus();
+        const body = document.querySelector<HTMLElement>('[aria-label="Reply body"]');
+        if (body) body.focus();
+        else document.querySelector<HTMLButtonElement>("button[data-lead-reply]")?.click();
       } else if (key === "e") {
         event.preventDefault();
         document.querySelector<HTMLButtonElement>("button[data-lead-archive]")?.click();
