@@ -697,6 +697,25 @@ follows `visualViewport` and respects safe-area insets. Cancel or Escape keeps
 the draft; saved phone drafts stay collapsed until Reply is tapped again.
 Owners and super admins can export; editors cannot.
 
+Notification emails link directly to `/dashboard/leads/[leadId]`, without view
+filters. Login returns to that conversation, even when the lead is archived,
+trashed or outside the current list view; existing account permissions still
+apply. Test notifications and digests open the new inbox with a site filter.
+Forwarded-reply links also preserve `#reply` through login to open the composer.
+
+The visible inbox refreshes its list and open conversation every 45 seconds,
+and when returning to the tab. Polling pauses while offline, while another
+refresh is pending, or during a lead/composer action. Loaded rows, scroll
+position and unsent drafts are retained. Incoming messages follow the thread
+only when already reading at the bottom. Failed optimistic actions immediately
+restore the affected fields before reconciling with the server.
+
+With a desktop/tablet keyboard, **j/k** focus the next/previous lead and
+**Enter** opens it. **r** replies, **e** archives, **s** toggles the star, **u** marks
+unread, **#** moves an authorized lead to Trash, **/** searches and **?** opens
+shortcut help. Shortcuts do not intercept typing or menus/dialogs.
+**Esc** closes the composer or Details; composer drafts are kept.
+
 Replies are written in a composer docked under the thread (↗ opens it larger).
 The signature is part of the reply and can be edited per message; each user
 sets a default in **Settings → Email signature**, with the variables `{name}`,

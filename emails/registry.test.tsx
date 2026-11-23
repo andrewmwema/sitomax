@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { leadReplyParts } from "@/lib/leads/reply-content";
-import { emailTemplates, renderEmailTemplate, renderLeadForwardEmail, renderNewLeadEmail, renderOutgoingLeadReplyEmail } from "./registry";
+import { brand } from "@/lib/brand";
+import { emailTemplates, renderEmailTemplate, renderLeadDigestEmail, renderLeadTestEmail, renderLeadForwardEmail, renderNewLeadEmail, renderOutgoingLeadReplyEmail } from "./registry";
 
 describe("email template foundation", () => {
   it("renders every registered template with HTML, text and preheader", async () => {
@@ -75,6 +76,25 @@ describe("email template foundation", () => {
       }
       expect(forward.text).toContain("Hello there");
       expect(lead.text).toContain("Message");
+      for (const [rendered, suffix] of [[lead, ""], [forward, "#reply"]] as const) {
+        const url = `${brand.appUrl}/dashboard/leads/lead-id${suffix}`;
+        expect(rendered.html).toContain(`href="${url}"`);
+        expect(rendered.text).toContain(url);
+        expect(rendered.html).not.toContain("/dashboard/forms");
+        expect(rendered.html).not.toContain("?view=");
+      }
+    });
+
+    it("opens the new site-filtered inbox for test notifications and digests", async () => {
+      const emails = await Promise.all([
+        renderLeadTestEmail("Example", "site-id"),
+        renderLeadDigestEmail({ email: "owner@example.test", site_id: "site-id", site_name: "Example", received: 2, awaiting: 1 }),
+      ]);
+      for (const rendered of emails) {
+        const url = `${brand.appUrl}/dashboard/leads?site=site-id`;
+        expect(rendered.html).toContain(`href="${url}"`);
+        expect(rendered.text).toContain(url);
+      }
     });
   });
 });

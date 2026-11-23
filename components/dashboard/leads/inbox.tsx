@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition,
   type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode,
 } from "react";
-import { useParams, usePathname, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { fetchLeadInbox } from "@/app/(dashboard)/dashboard/leads/actions";
 import type { LeadInboxCounts, LeadInboxView } from "@/lib/forms/inbox";
 import type { Lead, SubmissionSite } from "@/lib/forms/submissions";
@@ -29,8 +29,8 @@ export type LeadInbox = {
   error: string | null; hasMore: boolean; loadingMore: boolean; refreshing: boolean; counts: LeadInboxCounts | null;
   selectedLeadId: string | null;
   loadMore: () => void; reload: () => void;
-  /** Applies a change locally right away; the next refresh confirms or reverts it. */
-  patch: (ids: string[], changes: Partial<Lead>) => void;
+  /** Applies a change immediately and returns a field-scoped rollback. */
+  patch: (ids: string[], changes: Partial<Lead>) => () => void;
 };
 
 const InboxContext = createContext<LeadInbox | null>(null);
@@ -49,6 +49,8 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
   children: ReactNode;
 }) {
   const params = useSearchParams();
+  const router = useRouter();
+  const [polling, startPoll] = useTransition();
   const pathname = usePathname();
   const { leadId } = useParams<{ leadId?: string }>();
   const view = parseLeadView(params.get("view"));
@@ -62,10 +64,27 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
   const [nonce, setNonce] = useState(0);
   const loaded = useRef({ key: "", count: 0 });
   const generation = useRef(0);
+  const fetching = useRef(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (polling || fetching.current || document.visibilityState !== "visible" || navigator.onLine === false
+        || root.current?.querySelector('[data-lead-mutating="true"]')) return;
+      startPoll(() => router.refresh());
+    };
+    const timer = window.setInterval(refresh, 45_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [polling, router]);
 
   useEffect(() => {
     let active = true;
     const run = ++generation.current;
+    fetching.current = true;
     // A refresh keeps as many rows as were already loaded, so the list never jumps while scrolled.
     const target = loaded.current.key === key ? Math.max(PAGE_SIZE, loaded.current.count) : PAGE_SIZE;
     (async () => {
@@ -73,7 +92,7 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
       let hasMore = true;
       let counts: LeadInboxCounts | null = null;
       let error: string | null = null;
-      for (let page = 0; page < 4 && hasMore && rows.length < target; page++) {
+      for (let page = 0; hasMore && rows.length < target; page++) {
         const last = rows.at(-1);
         const result = await fetchLeadInbox({
           view, q, site, counts: page === 0, limit: Math.min(100, Math.max(PAGE_SIZE, target - rows.length)),
@@ -85,6 +104,7 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
         rows = [...rows, ...result.rows];
         hasMore = result.hasMore;
       }
+      fetching.current = false;
       if (error && loaded.current.key === key && loaded.current.count) {
         leadToast(error, "error");
         setRefreshing(false);
@@ -93,7 +113,7 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
       setState({ key, rows, hasMore: error ? false : hasMore, counts, error });
       setRefreshing(false);
     })();
-    return () => { active = false; };
+    return () => { active = false; fetching.current = false; };
   }, [key, view, q, site, refreshKey, nonce]);
 
   const current = state?.key === key ? state : null;
@@ -102,8 +122,9 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
   }, [current]);
   const loadMore = useCallback(() => {
     const last = current?.rows.at(-1);
-    if (!current?.hasMore || !last || loadingMore) return;
+    if (!current?.hasMore || !last || loadingMore || fetching.current) return;
     const run = generation.current;
+    fetching.current = true;
     setLoadingMore(true);
     fetchLeadInbox({ view, q, site, limit: PAGE_SIZE, cursor: { at: last.last_activity_at, id: last.id } })
       .catch(() => ({ error: "Could not load more leads. Check your connection and try again." }))
@@ -116,7 +137,10 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
           return { ...previous, rows: [...previous.rows, ...result.rows.filter((row) => !known.has(row.id))], hasMore: result.hasMore };
         });
       })
-      .finally(() => setLoadingMore(false));
+      .finally(() => {
+        if (run === generation.current) fetching.current = false;
+        setLoadingMore(false);
+      });
   }, [current, key, loadingMore, q, site, view]);
 
   const setQuery = useCallback((patch: Partial<LeadQuery>) => {
@@ -124,10 +148,24 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
     window.history.replaceState(null, "", `${pathname}${leadQueryString({ view, q, site, ...patch })}`);
   }, [pathname, q, site, view]);
   const patch = useCallback((ids: string[], changes: Partial<Lead>) => {
+    const originals = new Map(state?.rows.filter((row) => ids.includes(row.id)).map((row) => [row.id, row]));
+    const fields = Object.keys(changes) as (keyof Lead)[];
     setState((previous) => previous && {
       ...previous, rows: previous.rows.map((row) => ids.includes(row.id) ? { ...row, ...changes } : row),
     });
-  }, []);
+    return () => setState((previous) => {
+      if (!previous || previous.key !== state?.key) return previous;
+      return { ...previous, rows: previous.rows.map((row) => {
+        const original = originals.get(row.id);
+        if (!original) return row;
+        const restored = { ...row };
+        for (const field of fields) {
+          if (Object.is(row[field], changes[field])) Object.assign(restored, { [field]: original[field] });
+        }
+        return restored;
+      }) };
+    });
+  }, [state]);
   const reload = useCallback(() => { setRefreshing(true); setNonce((value) => value + 1); }, []);
 
   const inbox = useMemo<LeadInbox>(() => ({
@@ -168,7 +206,7 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
   };
 
   return <InboxContext.Provider value={inbox}>
-    <div className="leads-ui leads-inbox" data-open={leadId ? "true" : "false"} style={{ "--leads-list-width": `${width}px` } as CSSProperties}>
+    <div ref={root} className="leads-ui leads-inbox" data-open={leadId ? "true" : "false"} style={{ "--leads-list-width": `${width}px` } as CSSProperties}>
       <LeadInboxShortcuts />
       <section className="leads-list-pane" aria-label="Leads"><LeadList /></section>
       <div role="separator" tabIndex={0} aria-orientation="vertical" aria-label="Resize the lead list"

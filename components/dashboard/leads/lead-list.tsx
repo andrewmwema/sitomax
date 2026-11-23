@@ -49,10 +49,11 @@ export function LeadList() {
     if (action === "delete_forever" && !window.confirm(ids.length === 1
       ? "Delete this lead forever? This cannot be undone." : `Delete ${ids.length} leads forever? This cannot be undone.`)) return false;
     setBusy(true);
-    patch(ids, leadActionPatch(action));
+    const rollback = patch(ids, leadActionPatch(action));
     const error = await runLeadAction(action, ids);
     setBusy(false);
     if (error) {
+      rollback();
       leadToast(error, "error");
       reload();
       return false;
@@ -72,10 +73,10 @@ export function LeadList() {
   const changeStatus = async (status: Lead["status"]) => {
     if (busy) return;
     setBusy(true);
-    patch(selection, { status });
+    const rollback = patch(selection, { status });
     const error = await setLeadStatus(selection, status);
     setBusy(false);
-    if (error) { leadToast(error, "error"); reload(); return; }
+    if (error) { rollback(); leadToast(error, "error"); reload(); return; }
     leadToast(`${selection.length === 1 ? "Lead" : `${selection.length} leads`} marked ${leadStatusLabels[status]}.`);
     select([]);
   };
@@ -83,6 +84,7 @@ export function LeadList() {
   const moreActive = moreViews.find((view) => view.value === query.view);
   const onTabKey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
     const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
     const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
     tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length]?.focus();
@@ -165,7 +167,7 @@ export function LeadList() {
     </div>}
 
     <div ref={scroller} id={panelId} role="tabpanel" aria-label={`${[...primaryViews, ...moreViews].find((view) => view.value === query.view)?.label} leads`}
-      aria-busy={rows === null || inbox.refreshing} className="leads-list-scroll leads-scroll flex-1"
+      aria-busy={rows === null || inbox.refreshing} data-lead-mutating={busy} className="leads-list-scroll leads-scroll flex-1"
       onTouchStart={(event) => {
         if (!mobile || scroller.current?.scrollTop || inbox.refreshing || event.touches.length !== 1) return;
         const touch = event.touches[0];
@@ -283,7 +285,7 @@ function LeadRow({ lead, now, current, href, checked, selecting, site, trash, bu
         : <>{lead.archived ? <ArchiveRestore size={20} /> : <Archive size={20} />}<span>{lead.archived ? "Unarchive" : "Archive"}</span></>}
     </div> : null}
     <div className="leads-row-content" style={offset ? { transform: `translateX(${offset}px)` } : undefined}>
-    <Link href={href} data-lead-link aria-current={current ? "true" : undefined} className="block py-3 pl-[60px] pr-3 -outline-offset-2">
+    <Link href={href} prefetch={false} data-lead-link aria-current={current ? "true" : undefined} className="block py-3 pl-[60px] pr-3 -outline-offset-2">
       <span className="flex items-center gap-2">
         {unread ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-[var(--lead-blue)]" /> : null}
         <span className={`truncate text-sm text-[var(--lead-navy)] ${unread ? "font-bold" : "font-medium"}`}>{name}</span>
@@ -312,7 +314,7 @@ function LeadRow({ lead, now, current, href, checked, selecting, site, trash, bu
         <IconButton label="Delete forever" tipSide="top" tipAlign="end" className="size-7" disabled={busy} onClick={() => onAction("delete_forever")}><Trash2 size={14} /></IconButton>
       </> : <IconButton label={lead.starred ? "Remove star" : "Star"} tipSide="top" tipAlign="end" aria-pressed={Boolean(lead.starred)}
         className="leads-row-star is-plain size-7" data-on={Boolean(lead.starred)} disabled={busy} onClick={() => onAction(lead.starred ? "unstar" : "star")}>
-        <Star size={15} fill={lead.starred ? "#f5b301" : "none"} color={lead.starred ? "#c98f00" : "currentColor"} />
+        <Star size={15} fill={lead.starred ? "#f5b301" : "none"} color={lead.starred ? "#9a6a00" : "currentColor"} />
       </IconButton>}
     </span>
     </div>

@@ -728,7 +728,7 @@ main:has(> .platform-content > .leads-inbox) {
 .leads-editor .tiptap p.is-editor-empty:first-child::before {
   float: left;
   height: 0;
-  color: #9498a8;
+  color: var(--lead-muted);
   content: attr(data-placeholder);
   pointer-events: none;
 }

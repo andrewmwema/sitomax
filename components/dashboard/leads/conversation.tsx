@@ -34,6 +34,7 @@ export function LeadConversationView({ lead, siteName, canTrash, userId, convers
         onToggleDetails={toggleDetails} showNotes={showNotes} onToggleNotes={toggleNotes} />
       {mobile ? <div role="tablist" aria-label="Conversation sections" className="leads-conversation-tabs" onKeyDown={(event) => {
         if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+        event.preventDefault();
         const tabs = ["conversation", "details", "notes"] as const;
         const index = tabs.indexOf(mobileTab);
         const next = tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];

@@ -72,6 +72,7 @@ export function Popover({ trigger, children, label, role = "menu", align = "star
     if (refocus) setReturned((count) => count + 1);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || (event.target as HTMLElement).closest('[role="menu"], [role="dialog"]') !== event.currentTarget) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -79,7 +80,7 @@ export function Popover({ trigger, children, label, role = "menu", align = "star
       return;
     }
     if (role !== "menu") return;
-    if (event.key === "Tab") { close(false); return; }
+    if (event.key === "Tab") { button.current?.focus(); close(false); return; }
     const list = [...event.currentTarget.querySelectorAll<HTMLElement>(ITEMS)];
     const index = list.indexOf(document.activeElement as HTMLElement);
     const next = event.key === "ArrowDown" ? list[(index + 1) % list.length]

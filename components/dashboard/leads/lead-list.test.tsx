@@ -9,7 +9,10 @@ vi.mock("@/app/(dashboard)/dashboard/forms/actions", () => ({ applyLeadInboxActi
 vi.mock("@/app/(dashboard)/dashboard/leads/actions", () => ({ fetchLeadInbox: vi.fn() }));
 vi.mock("@/components/dashboard/lead-inbox-shortcuts", () => ({ LeadInboxShortcuts: () => null }));
 vi.mock("next/navigation", () => ({ useParams: () => ({}), usePathname: () => "/dashboard/leads", useSearchParams: () => new URLSearchParams() }));
-vi.mock("next/link", () => ({ default: ({ children, ...props }: { children: ReactNode; href: string }) => <a {...props}>{children}</a> }));
+vi.mock("next/link", () => ({ default: ({ children, prefetch, ...props }: { children: ReactNode; href: string; prefetch?: boolean }) => {
+  void prefetch;
+  return <a {...props}>{children}</a>;
+} }));
 import { leadDisplayName } from "./format";
 import { LeadInboxProvider, type LeadInbox } from "./inbox";
 import { LeadList } from "./lead-list";
@@ -46,7 +49,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.resetAllMocks();
   setQuery = vi.fn();
-  patch = vi.fn();
+  patch = vi.fn(() => vi.fn());
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -58,6 +61,18 @@ afterEach(async () => {
 });
 
 describe("lead list", () => {
+  it("rolls back a failed list action before reloading", async () => {
+    const rollback = vi.fn();
+    patch.mockReturnValue(rollback);
+    mocks.inboxAction.mockResolvedValue({ error: "Could not star this lead." });
+    const reload = vi.fn();
+    await mount({ reload });
+    await act(async () => container.querySelector<HTMLButtonElement>('.leads-row [aria-label="Star"]')!.click());
+    expect(rollback).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+    expect(container.querySelector('.leads-toast[data-tone="error"]')?.textContent).toContain("Could not star this lead.");
+  });
+
   const mobile = () => vi.stubGlobal("matchMedia", (query: string) => ({
     matches: query === "(max-width: 767px)", addEventListener: vi.fn(), removeEventListener: vi.fn(),
   }));

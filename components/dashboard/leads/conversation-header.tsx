@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LEAD_TRASH_EVENT } from "@/components/dashboard/lead-inbox-shortcuts";
 import {
   AlarmClock, Archive, ArchiveRestore, ArrowLeft, Bell, Check, ChevronDown, Copy, Download, Ellipsis, Info, Mail, MailOpen,
   RotateCcw, Star, StickyNote, Trash2, X,
@@ -49,11 +50,12 @@ export function ConversationHeader({ lead: saved, siteName, canTrash, canExport,
     if (busy) return false;
     setBusy(true);
     setPending({ base: saved, changes });
-    inbox?.patch([saved.id], changes);
+    const rollback = inbox?.patch([saved.id], changes);
     const error = await request();
     setBusy(false);
     if (error) {
       setPending(null);
+      rollback?.();
       inbox?.reload();
       leadToast(error, "error");
       return false;
@@ -75,8 +77,15 @@ export function ConversationHeader({ lead: saved, siteName, canTrash, canExport,
     if (action === "delete_forever" && !window.confirm("Delete this lead forever? This cannot be undone.")) return;
     if (await act(action, undefined, done)) router.push(listHref);
   };
+  const trashShortcut = useEffectEvent(() => {
+    if (canTrash && !trashed && !busy) void leave("trash", "Lead moved to Trash.");
+  });
+  useEffect(() => {
+    window.addEventListener(LEAD_TRASH_EVENT, trashShortcut);
+    return () => window.removeEventListener(LEAD_TRASH_EVENT, trashShortcut);
+  }, []);
 
-  return <header className="leads-header shrink-0 border-b border-[var(--lead-line)] bg-[var(--lead-surface)] px-5 py-3">
+  return <header data-lead-mutating={busy} className="leads-header shrink-0 border-b border-[var(--lead-line)] bg-[var(--lead-surface)] px-5 py-3">
     {/* Name and actions share a row; in a narrow pane (Details open) the actions move below the contact line. */}
     <div className="leads-header-grid">
       <div className="leads-header-avatar flex items-center gap-1">
@@ -108,7 +117,7 @@ export function ConversationHeader({ lead: saved, siteName, canTrash, canExport,
         {trashed || mobile ? null : <>
           <IconButton label={lead.starred ? "Remove star" : "Star"} data-lead-star aria-pressed={Boolean(lead.starred)} className="is-plain" disabled={busy}
             onClick={() => void act(lead.starred ? "unstar" : "star")}>
-            <Star size={17} fill={lead.starred ? "#f5b301" : "none"} color={lead.starred ? "#c98f00" : "currentColor"} /></IconButton>
+            <Star size={17} fill={lead.starred ? "#f5b301" : "none"} color={lead.starred ? "#9a6a00" : "currentColor"} /></IconButton>
           <IconButton label={lead.archived ? "Unarchive" : "Archive"} data-lead-archive disabled={busy}
             onClick={() => void act(lead.archived ? "unarchive" : "archive", undefined, lead.archived ? "Lead restored to the inbox." : "Lead archived.")}>
             {lead.archived ? <ArchiveRestore size={17} /> : <Archive size={17} />}</IconButton>

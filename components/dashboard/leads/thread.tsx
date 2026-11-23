@@ -27,6 +27,8 @@ export function LeadThread({ lead, siteName, conversation, notes = [], focus }: 
   focus?: ThreadFocus | null;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const atBottom = useRef(true);
+  const opened = useRef<{ leadId: string; selectedId: string | null } | null>(null);
   // Viewing marks a lead read once per visit, so "Mark unread" sticks until it is opened again.
   const [openedUnread] = useState(() => leadIsUnread(lead));
   const hydrated = useHydrated();
@@ -52,14 +54,26 @@ export function LeadThread({ lead, siteName, conversation, notes = [], focus }: 
   }));
   const name = leadDisplayName(lead.data);
   const selectedId = conversation.selectedId;
+  const newestId = messages.at(-1)?.id;
 
-  // Inside a scrolling pane, opening a lead or receiving a message lands on the newest message.
   useLayoutEffect(() => {
+    const pane = root.current?.closest<HTMLElement>("[data-thread-pane]");
+    if (!pane) return;
+    const track = () => { atBottom.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; };
+    pane.addEventListener("scroll", track, { passive: true });
+    return () => pane.removeEventListener("scroll", track);
+  }, []);
+
+  // Follow incoming messages only when the reader was already at the bottom.
+  useLayoutEffect(() => {
+    if (!hydrated) return;
     const selected = selectedId ? document.getElementById(elementId(selectedId)) : null;
     const pane = root.current?.closest<HTMLElement>("[data-thread-pane]");
-    if (selected) selected.scrollIntoView({ block: "start" });
-    else if (pane) pane.scrollTop = pane.scrollHeight;
-  }, [lead.id, messages.length, hydrated, selectedId]);
+    const opening = opened.current?.leadId !== lead.id;
+    if (selected && (opening || opened.current?.selectedId !== selectedId)) selected.scrollIntoView({ block: "start" });
+    else if (pane && (opening || atBottom.current)) pane.scrollTop = pane.scrollHeight;
+    opened.current = { leadId: lead.id, selectedId };
+  }, [lead.id, messages.length, newestId, hydrated, selectedId]);
   useLayoutEffect(() => {
     if (focus) document.getElementById(elementId(focus.id))?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [focus]);

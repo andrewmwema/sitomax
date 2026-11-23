@@ -44,13 +44,13 @@ function sampleTemplate(id: EmailTemplateId): ReactElement {
     case "client-invite":
       return <EmailLayout preheader="You have been invited to manage a website" branding={branding}><Heading>You&apos;re invited</Heading><Text>Your agency has invited you to manage a website with {brand.name}.</Text><Button href={actionUrl}>Accept invitation</Button></EmailLayout>;
     case "new-lead":
-      return <EmailLayout preheader="A new website lead needs your attention" branding={branding}><Heading>New lead from Northside Plumbing</Heading><Text>A new inquiry is ready to review.</Text><InfoCard items={[{ label: "Name", value: "Alex Johnson" }, { label: "Email", value: "alex@example.com" }, { label: "Phone", value: "(555) 123-4567" }, { label: "Message", value: "I need a quote for water heater replacement." }]} /><Button href={`${actionUrl}/dashboard/forms?lead=sample`}>Reply now</Button></EmailLayout>;
+      return <EmailLayout preheader="A new website lead needs your attention" branding={branding}><Heading>New lead from Northside Plumbing</Heading><Text>A new inquiry is ready to review.</Text><InfoCard items={[{ label: "Name", value: "Alex Johnson" }, { label: "Email", value: "alex@example.com" }, { label: "Phone", value: "(555) 123-4567" }, { label: "Message", value: "I need a quote for water heater replacement." }]} /><Button href={`${brand.appUrl}/dashboard/leads/sample`}>Reply now</Button></EmailLayout>;
     case "lead-test":
-      return <EmailLayout preheader="This is a test lead notification" branding={branding}><Heading>Test lead notification</Heading><Text>This is a test notification for Northside Plumbing. No lead was created.</Text><Button href={`${actionUrl}/dashboard/forms`}>Open leads</Button></EmailLayout>;
+      return <EmailLayout preheader="This is a test lead notification" branding={branding}><Heading>Test lead notification</Heading><Text>This is a test notification for Northside Plumbing. No lead was created.</Text><Button href={`${brand.appUrl}/dashboard/leads`}>Open leads</Button></EmailLayout>;
     case "lead-digest":
-      return <EmailLayout preheader="Your daily lead summary" branding={branding}><Heading>Daily lead digest</Heading><StatRow stats={[{ label: "New leads", value: "8" }, { label: "Awaiting reply", value: "3" }]} /><Button href={`${actionUrl}/dashboard/forms`}>Open leads</Button></EmailLayout>;
+      return <EmailLayout preheader="Your daily lead summary" branding={branding}><Heading>Daily lead digest</Heading><StatRow stats={[{ label: "New leads", value: "8" }, { label: "Awaiting reply", value: "3" }]} /><Button href={`${brand.appUrl}/dashboard/leads`}>Open leads</Button></EmailLayout>;
     case "reply-forward":
-      return <EmailLayout preheader="A lead replied to your email" branding={branding}><Heading>Alex Johnson replied</Heading><MessageQuote>Thanks, Tuesday afternoon works for me.</MessageQuote><Button href={`${actionUrl}/dashboard/forms?lead=sample#reply`}>Reply in SitoMax</Button></EmailLayout>;
+      return <EmailLayout preheader="A lead replied to your email" branding={branding}><Heading>Alex Johnson replied</Heading><MessageQuote>Thanks, Tuesday afternoon works for me.</MessageQuote><Button href={`${brand.appUrl}/dashboard/leads/sample#reply`}>Reply in SitoMax</Button></EmailLayout>;
     case "outgoing-reply":
       return <EmailLayout preheader="A reply from Northside Plumbing" branding={branding}><Heading>Northside Plumbing</Heading><Text>Hi Alex, Tuesday afternoon works for us. We look forward to helping.</Text><Text muted>Northside Plumbing<br />555-555-0123<br />northsideplumbing.example</Text></EmailLayout>;
     case "domain-instructions":
@@ -110,7 +110,7 @@ export async function renderNewLeadEmail(input: {
     .slice(0, 12)
     .map(([label, value]) => ({ label, value: String(value).slice(0, 500) }));
   const subject = `New lead from ${input.siteName}`;
-  const url = `${brand.appUrl}/dashboard/forms?lead=${input.leadId}`;
+  const url = `${brand.appUrl}/dashboard/leads/${input.leadId}`;
   return renderEmail(subject, "A new inquiry is ready to review",
     <EmailLayout preheader="A new inquiry is ready to review" branding={{ name: brand.name, supportEmail: brand.supportEmail }}>
       <Heading>{subject}</Heading>
@@ -128,7 +128,7 @@ export async function renderNewLeadEmail(input: {
 
 export async function renderLeadTestEmail(siteName: string, siteId: string): Promise<RenderedEmail> {
   const subject = "Test lead notification";
-  const url = `${brand.appUrl}/dashboard/forms?site=${siteId}`;
+  const url = `${brand.appUrl}/dashboard/leads?site=${siteId}`;
   return renderEmail(subject, "This is a test lead notification",
     <EmailLayout preheader="This is a test lead notification" branding={{ name: brand.name, supportEmail: brand.supportEmail }}>
       <Heading>Test lead notification</Heading>
@@ -140,7 +140,7 @@ export async function renderLeadTestEmail(siteName: string, siteId: string): Pro
 
 export async function renderLeadDigestEmail(digest: { email: string; site_id: string; site_name: string; received: number; awaiting: number }): Promise<RenderedEmail> {
   const subject = "Your daily lead digest";
-  const url = `${brand.appUrl}/dashboard/forms?site=${digest.site_id}`;
+  const url = `${brand.appUrl}/dashboard/leads?site=${digest.site_id}`;
   return renderEmail(subject, `${digest.received} new leads and ${digest.awaiting} awaiting reply`,
     <EmailLayout preheader={`${digest.received} new leads and ${digest.awaiting} awaiting reply`} branding={{ name: brand.name, supportEmail: brand.supportEmail }}>
       <Heading>{digest.site_name} · Daily lead digest</Heading>
@@ -162,7 +162,7 @@ export async function renderLeadForwardEmail(input: {
   note: string;
   subject: string;
 }): Promise<RenderedEmail> {
-  const url = `${brand.appUrl}/dashboard/forms?lead=${input.leadId}`;
+  const url = `${brand.appUrl}/dashboard/leads/${input.leadId}`;
   return renderEmail(input.subject, `${input.leadName} replied`,
     <EmailLayout preheader={`${input.leadName} replied`} branding={{ name: brand.name, supportEmail: brand.supportEmail }}>
       <Heading>{input.leadName} replied</Heading>

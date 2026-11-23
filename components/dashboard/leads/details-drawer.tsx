@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { AlarmClock, Bell, Copy, FileText, Mail, Pencil, Reply, StickyNote, Tag, Trash2, X } from "lucide-react";
 import { saveLeadNote } from "@/app/(dashboard)/dashboard/forms/actions";
 import { leadStatuses, leadStatusLabels, submissionContact, submissionFields, type Lead, type LeadEvent } from "@/lib/forms/submissions";
@@ -35,6 +35,23 @@ export function LeadDetailsDrawer({ id, lead, siteName, notes, events, showNotes
   const base = useId();
   const availableTabs = mode === "details" ? tabs.filter((item) => item.value !== "notes") : tabs;
   const activeTab = mode === "notes" ? "notes" : tab;
+  const close = () => {
+    dialog.current?.close();
+    onClose();
+    document.querySelector<HTMLElement>(`[aria-controls="${id}"]`)?.focus();
+  };
+  const closeOnEscape = useEffectEvent(close);
+  useEffect(() => {
+    if (mode !== "drawer" || overlay) return;
+    const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented
+        || (event.target as HTMLElement | null)?.closest('dialog, [role="dialog"], [role="menu"]')) return;
+      event.preventDefault();
+      closeOnEscape();
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [id, mode, overlay]);
   useEffect(() => {
     const element = dialog.current;
     if (!overlay || !element) return;
@@ -43,6 +60,7 @@ export function LeadDetailsDrawer({ id, lead, siteName, notes, events, showNotes
   }, [overlay]);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
     const index = availableTabs.findIndex((item) => item.value === tab);
     const next = availableTabs[(index + (event.key === "ArrowRight" ? 1 : -1) + availableTabs.length) % availableTabs.length].value;
     setTab(next);
@@ -60,7 +78,7 @@ export function LeadDetailsDrawer({ id, lead, siteName, notes, events, showNotes
           {item.label}{item.value === "notes" && notes?.length ? <span className="ml-1 text-xs font-normal text-[var(--lead-muted)]">{notes.length}</span> : null}
         </button>)}
       </div>
-      {mode === "drawer" ? <IconButton label="Close details" tipAlign="end" className="mb-2" onClick={onClose}><X size={16} /></IconButton> : null}
+      {mode === "drawer" ? <IconButton label="Close details" tipAlign="end" className="mb-2" onClick={close}><X size={16} /></IconButton> : null}
     </div>}
     <div role={mode === "notes" ? undefined : "tabpanel"} id={`${base}-${activeTab}`}
       aria-labelledby={mode === "notes" ? undefined : `${base}-${activeTab}-tab`} className="leads-scroll flex-1 p-4">
@@ -74,8 +92,8 @@ export function LeadDetailsDrawer({ id, lead, siteName, notes, events, showNotes
     </div>
   </aside>;
   return overlay ? <dialog ref={dialog} aria-label="Lead details" className="leads-ui leads-details-overlay"
-    onCancel={(event) => { event.preventDefault(); onClose(); }}
-    onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>{content}</dialog> : content;
+    onCancel={(event) => { event.preventDefault(); close(); }}
+    onClick={(event) => { if (event.target === event.currentTarget) close(); }}>{content}</dialog> : content;
 }
 
 function Row({ label, children, copyValue }: { label: string; children: ReactNode; copyValue?: string }) {

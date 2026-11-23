@@ -140,6 +140,31 @@ describe("lead reply composer", () => {
     expect(container.textContent).toContain("Draft saved");
   });
 
+  it("keeps the active editor and draft intact across a refreshed conversation", async () => {
+    window.localStorage.setItem(key, JSON.stringify(draft));
+    await mount();
+    const body = container.querySelector('[aria-label="Reply body"]')!;
+    await mount({ ...config, subject: "Re: A new incoming message", quote: { header: "A newer reply:", text: "Thursday?" } });
+    expect(container.querySelector('[aria-label="Reply body"]')).toBe(body);
+    expect(body.textContent).toBe("Tuesday works for us.");
+    expect(container.querySelector<HTMLInputElement>("dialog input")?.value).toBe(draft.subject);
+    await act(async () => body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(key)!)).toMatchObject(draft);
+  });
+
+  it.each(["ctrlKey", "metaKey"] as const)("sends with %s + Enter", async (modifier) => {
+    window.localStorage.setItem(key, JSON.stringify(draft));
+    mocks.send.mockResolvedValue({ success: "Reply sent." });
+    await mount();
+    await act(async () => container.querySelector('[aria-label="Reply body"]')!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", [modifier]: true, bubbles: true, cancelable: true }),
+    ));
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ html: draft.html, after: "none" }));
+    expect(window.localStorage.getItem(key)).toBeNull();
+  });
+
   it("sends with the signature and quoted message, then clears the draft", async () => {
     window.localStorage.setItem(key, JSON.stringify(draft));
     mocks.send.mockResolvedValue({ success: "Reply sent." });

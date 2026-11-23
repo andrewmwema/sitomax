@@ -95,5 +95,32 @@ describe("responsive lead conversation", () => {
     expect(dialog.open).toBe(true);
     await act(async () => dialog.dispatchEvent(new Event("cancel", { cancelable: true })));
     expect(container.querySelector("dialog.leads-details-overlay")).toBeNull();
+    expect(document.activeElement).toBe(button("Show details"));
+  });
+
+  it("keeps arrow keys inside a nested scheduling popover and returns focus on Escape", async () => {
+    await mount();
+    await act(async () => button("More actions").click());
+    const snooze = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === "Snooze")!;
+    await act(async () => snooze.click());
+    const input = container.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+    input.focus();
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(input);
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(snooze);
+    expect(container.querySelector('[role="menu"][aria-label="More actions"]')).not.toBeNull();
+  });
+
+  it("closes desktop Details with Escape and returns focus to its toggle", async () => {
+    mocks.mobile = false;
+    await mount();
+    const toggle = button("Show details");
+    await act(async () => toggle.click());
+    const contact = tab("Contact");
+    contact.focus();
+    await act(async () => contact.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(container.querySelector(".leads-details")).toBeNull();
+    expect(document.activeElement).toBe(toggle);
   });
 });

@@ -292,14 +292,12 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
     const command = event.metaKey || event.ctrlKey;
-    if (command && event.key === "Enter") {
-      event.preventDefault();
-      void send("none");
-    } else if (command && event.key.toLowerCase() === "k") {
+    if (command && event.key.toLowerCase() === "k") {
       event.preventDefault();
       setFormatting(true);
       setLinking(true);
     } else if (event.key === "Escape" && !modal && !mobile && !event.defaultPrevented) {
+      event.preventDefault();
       collapse();
     }
   };
@@ -327,7 +325,15 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
   </div>;
 
   return <dialog ref={dialog} open id="reply" aria-label={`Reply to ${config.to.name || config.to.email}`} className="leads-ui leads-composer"
-    data-mobile={mobile} onKeyDown={onKeyDown} onCancel={(event) => { event.preventDefault(); if (mobile) collapse(); else dock(); }}
+    onKeyDownCapture={(event) => {
+      // Send before the editor interprets Ctrl+Enter as a hard break.
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        void send("none");
+      }
+    }}
+    data-mobile={mobile} data-lead-mutating={busy} onKeyDown={onKeyDown} onCancel={(event) => { event.preventDefault(); if (mobile) collapse(); else dock(); }}
     // A browser may close a modal dialog on a repeated Escape; bring the reply back docked instead of losing it.
     onClose={(event) => {
       if (event.currentTarget.open) return;

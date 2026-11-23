@@ -44,6 +44,7 @@ export function Sidebar(props: SidebarProps) {
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (mobileDialog.current?.open) mobileDialog.current.close();

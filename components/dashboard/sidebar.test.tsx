@@ -114,4 +114,15 @@ describe("dashboard navigation", () => {
     expect(sidebar.querySelector('a[href="/dashboard/leads"]')?.getAttribute("aria-current")).toBe("page");
     await act(async () => root.unmount()); container.remove();
   });
+
+  it("does not steal Ctrl+K already handled by the reply editor", async () => {
+    const container = document.createElement("div"); document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<Sidebar {...props} />));
+    const event = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, cancelable: true });
+    event.preventDefault();
+    await act(async () => window.dispatchEvent(event));
+    expect(container.querySelector<HTMLDialogElement>('[aria-label="Search navigation"]')?.open).toBe(false);
+    await act(async () => root.unmount()); container.remove();
+  });
 });

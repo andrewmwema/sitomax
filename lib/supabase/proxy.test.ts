@@ -37,4 +37,17 @@ describe("app host session routing", () => {
     const location = new URL(response.headers.get("location")!);
     expect(location.searchParams.get("next")).toBe(`/dashboard/forms?lead=${id}`);
   });
+
+  it("preserves a modern conversation deep link through the login gate, without list filters", async () => {
+    const path = "/dashboard/leads/00000000-0000-4000-8000-000000000003";
+    mocks.getUser.mockResolvedValueOnce({ data: { user: null } });
+    const signedOut = await updateSession(new NextRequest(`https://app.example.test${path}?view=waiting&q=private`));
+    const login = new URL(signedOut.headers.get("location")!);
+    expect(login.pathname).toBe("/login");
+    expect(login.searchParams.get("next")).toBe(path);
+    mocks.getUser.mockResolvedValueOnce({ data: { user: { id: "owner" } } });
+    const signedIn = await updateSession(new NextRequest(`https://app.example.test${login.searchParams.get("next")}`));
+    expect(signedIn.headers.get("location")).toBeNull();
+    expect(signedIn.headers.get("x-middleware-next")).toBe("1");
+  });
 });
