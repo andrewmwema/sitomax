@@ -33,6 +33,30 @@ begin
     raise exception 'Expected default agent limits of 30 an hour and 150 a day.';
   end if;
 
+  delete from public.ai_limits where account_id = acct;
+  perform public.reserve_ai_agent_slot(owner_id, acct);
+  insert into public.ai_agent_request_log(account_id, user_id)
+    select acct, owner_id from generate_series(1, 29);
+  begin
+    perform public.reserve_ai_agent_slot(owner_id, acct);
+    raise exception 'Expected the default hourly limit when the limits row is missing.';
+  exception when sqlstate 'P0001' then
+    get stacked diagnostics message = message_text;
+    if message not like 'Your account has reached its hourly AI agent limit.%' then raise exception 'Unexpected message: %', message; end if;
+  end;
+  delete from public.ai_agent_request_log where account_id = acct;
+  insert into public.ai_agent_request_log(account_id, user_id, created_at)
+    select acct, owner_id, clock_timestamp() - interval '2 hours' from generate_series(1, 150);
+  begin
+    perform public.reserve_ai_agent_slot(owner_id, acct);
+    raise exception 'Expected the default daily limit when the limits row is missing.';
+  exception when sqlstate 'P0001' then
+    get stacked diagnostics message = message_text;
+    if message not like 'Your account has reached its daily AI agent limit.%' then raise exception 'Unexpected message: %', message; end if;
+  end;
+  delete from public.ai_agent_request_log where account_id = acct;
+  insert into public.ai_limits(account_id) values (acct);
+
   ---------------------------------------------------------------------------
   -- Account rate limit: shared by every member, agency exempt.
   ---------------------------------------------------------------------------
