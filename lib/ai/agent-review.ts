@@ -87,6 +87,24 @@ export function footerChanges(before: unknown, after: unknown): Record<string, u
   return Object.fromEntries(Object.entries(after).filter(([key, value]) => key !== "id" && !equal(base[key], value)));
 }
 
+/**
+ * The patches of a footer change, one group per page footer it touches plus
+ * one for the shared copy. Null for other changes, and for footer changes
+ * staged before they were written into each page.
+ */
+export function footerPatchGroups(change: { kind: string; patches: ReviewPatch[] }) {
+  if (change.kind !== "footer" || !change.patches.some((patch) => patch.path[0] === "pages")) return null;
+  const groups = new Map<string, { pageId: string | null; patches: ReviewPatch[] }>();
+  for (const patch of change.patches) {
+    const target = patch.path[1];
+    const pageId = patch.path[0] === "pages" && typeof target === "object" ? target.id : null;
+    const group = groups.get(pageId ?? "") ?? { pageId, patches: [] };
+    group.patches.push(patch);
+    groups.set(pageId ?? "", group);
+  }
+  return [...groups.values()];
+}
+
 function itemId(item: unknown): string | undefined {
   if (!isObject(item)) return undefined;
   if (typeof item.id === "string") return item.id;
@@ -254,7 +272,10 @@ export function previewAgentReview(
   try {
     payload.changes.slice(0, throughIndex + 1).forEach((change) => {
       if (decisions[change.id] === "undone" || change.kind === "create_blog_post" || change.kind === "update_blog_post") return;
-      for (const patch of change.patches) {
+      // A footer change reaches every page's footer. A page whose creation was undone is simply not there to change.
+      const patches = footerPatchGroups(change)?.filter((group) => !group.pageId || snapshot.pages.some((page) => itemId(page) === group.pageId))
+        .flatMap((group) => group.patches) ?? change.patches;
+      for (const patch of patches) {
         if ("order" in patch) { applyPatch(snapshot, patch); continue; }
         const current = readPath(snapshot, patch.path);
         const matchesBefore = current.present === patch.before.present &&

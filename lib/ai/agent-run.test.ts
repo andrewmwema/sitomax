@@ -129,6 +129,42 @@ describe("AI agent request", () => {
     expect(resumed.at(-1)).toMatchObject({ type: "done", status: "completed" });
   });
 
+  it("never ends an approved plan quietly: open steps are listed with Continue, and skipped ones with the reason", async () => {
+    const call = (name: string, input: unknown) => reply([{ type: "tool_use", id: `call-${name}`, name, input }]);
+    const waiting = newAgentState([
+      { role: "user", content: "Rewrite the home and about pages" },
+      { role: "assistant", content: [{ type: "tool_use", id: "plan-1", name: "plan", input: {} }] },
+    ], reservation);
+    waiting.awaiting = { kind: "plan", toolUseId: "plan-1", toolName: "plan",
+      payload: { steps: ["Rewrite the Home hero", "Rewrite the About intro", "Add our prices"] } };
+    savedRun.status = "awaiting_approval";
+    mocks.usage.loadAiAgentRunState.mockResolvedValue(waiting);
+
+    // The model does the first page and then stops, however often it is told to carry on.
+    const events = await request({ action: "approve_plan", threadId, runId }, script(edit));
+    expect(events.at(-1)).toMatchObject({
+      type: "paused", continueAvailable: true, summary: expect.stringContaining("before the plan was finished"),
+      unfinished: [{ step: "Rewrite the Home hero" }, { step: "Rewrite the About intro" }, { step: "Add our prices" }],
+    });
+    expect(lastSave()).toMatchObject({ status: "paused", finished_at: null });
+    expect(mocks.usage.recordUsage).not.toHaveBeenCalled();
+
+    // Continue resumes from the saved plan; what cannot be done is reported, not dropped.
+    const paused = (mocks.usage.saveAiAgentRun.mock.calls.at(-1)![3] as { run_state: unknown; changeset: unknown });
+    savedRun.status = "paused";
+    savedRun.changeset = paused.changeset;
+    mocks.usage.loadAiAgentRunState.mockResolvedValue(structuredClone(paused.run_state));
+    const resumed = await request({ action: "continue", threadId, runId }, script(
+      call("update_section_props", { pageId: fixtureIds.about, sectionId: "about-text", props: { heading: "About Harbour Plumbing" } }),
+      call("report_progress", { steps: [{ step: 1, status: "done" }, { step: 2, status: "done" },
+        { step: 3, status: "skipped", note: "No prices are on file." }] }),
+    ));
+    expect(resumed.at(-1)).toMatchObject({
+      type: "done", status: "completed", unfinished: [{ step: "Add our prices", reason: "No prices are on file." }],
+      review: { changes: [{ kind: "section_props" }, { kind: "section_props" }] },
+    });
+  });
+
   it("ends a run the AI service rejects, keeping the staged changes for review and charging only for work done", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const events = await request(start, script(edit, providerError(400, "invalid_request_error")));

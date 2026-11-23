@@ -6,6 +6,7 @@ import { useGetPuck } from "@puckeditor/core";
 import { Check, ChevronDown, LoaderCircle, MessageSquarePlus, Pencil, Sparkles, Square, Trash2, X } from "lucide-react";
 import { applyAgentChanges } from "@/app/editor/[pageId]/agent-actions";
 import { appliedChangesSchema, type AppliedAgentChanges } from "@/lib/ai/agent-apply-types";
+import { unfinishedStepSchema, type UnfinishedStep } from "@/lib/ai/agent-plan";
 import { agentReviewPayloadSchema, type AgentReviewPayload } from "@/lib/ai/agent-review";
 import { agentRunUsageSchema, describeAgentUsage, type AgentRunUsage } from "@/lib/ai/agent-usage";
 import { useInteractions } from "./interaction-context";
@@ -177,11 +178,14 @@ type Pending =
   | { kind: "question"; question: string; options: string[] }
   | { kind: "credit"; message: string; credits: number };
 type Run = { id: string; status: string };
+/** What a run did not get to, and why it stopped if it can be continued. */
+type Unfinished = { steps: UnfinishedStep[]; reason: string | null };
 type LatestRun = Run & {
   awaiting?: { kind: string; payload: Record<string, unknown> } | null;
   review: AgentReviewPayload | null;
   applied: AppliedAgentChanges | null;
   usage: AgentRunUsage | null;
+  unfinished: Unfinished;
 };
 type ThreadResponse = {
   threads: Thread[];
@@ -211,6 +215,13 @@ function parseEvent(line: string): Record<string, unknown> | null {
   }
 }
 
+function unfinishedWork(steps: unknown, reason: unknown): Unfinished {
+  return {
+    steps: Array.isArray(steps) ? steps.flatMap((step) => unfinishedStepSchema.safeParse(step).data ?? []) : [],
+    reason: typeof reason === "string" && reason ? reason : null,
+  };
+}
+
 function responseMessage(payload: unknown) {
   return isRecord(payload) && typeof payload.message === "string" ? payload.message : "The request could not be completed.";
 }
@@ -232,6 +243,7 @@ function threadRunResponse(value: unknown): ThreadResponse | null {
       review: agentReviewPayloadSchema.safeParse(rawRun.review).data ?? null,
       applied: appliedChangesSchema.safeParse(rawRun.applied).data ?? null,
       usage: agentRunUsageSchema.safeParse(rawRun.usage).data ?? null,
+      unfinished: unfinishedWork(rawRun.unfinished, rawRun.pauseReason),
     }
     : null;
   return { threads, messages, latestRun };
@@ -270,7 +282,8 @@ function toolLabel(name: unknown, rawInput: unknown, pages: Page[]) {
     case "list_section_designs": return "Checking section designs";
     case "update_theme": return "Updating the site theme";
     case "update_header": return "Updating the header";
-    case "update_footer": return "Updating the footer";
+    case "update_footer": return "Updating the footer on every page";
+    case "report_progress": return "Checking off the plan";
     case "insert_section": return `Adding a section to ${pageName}`;
     case "create_page": return `Creating ${String(input.title ?? "a page")}`;
     case "update_page_settings": return `Updating ${pageName} settings`;
@@ -312,6 +325,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
   const [applyReport, setApplyReport] = useState<AgentApplyReport | null>(null);
   const [working, setWorking] = useState<"apply" | "undo" | null>(null);
   const [usage, setUsage] = useState<AgentRunUsage | null>(null);
+  const [unfinished, setUnfinished] = useState<Unfinished | null>(null);
   const threadIdRef = useRef<string | null>(threadId);
   const controller = useRef<AbortController | null>(null);
   const loadSequence = useRef(0);
@@ -336,6 +350,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     setApplied(null);
     setApplyReport(null);
     setUsage(null);
+    setUnfinished(null);
     setError("");
     setPending(null);
     setRun(null);
@@ -358,6 +373,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       setPending(makePending(data.latestRun));
       setApplied(data.latestRun?.applied ?? null);
       setUsage(data.latestRun?.usage ?? null);
+      setUnfinished(data.latestRun?.unfinished ?? null);
       setReviewSession(data.latestRun?.review?.changes.length
         ? { threadId: nextThreadId, review: newAgentReview(data.latestRun.review) } : null);
     } catch (cause) {
@@ -414,6 +430,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       setApplied(null);
       setApplyReport(null);
       setUsage(null);
+      setUnfinished(null);
       setRun({ id: event.runId, status: "running" });
       setPending(null);
       try { await refreshThreads(); }
@@ -455,6 +472,9 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
         ...previous,
         status: typeof event.status === "string" ? event.status : event.type === "done" ? "completed" : event.type as string,
       } : previous);
+      if (event.type === "done" || event.type === "paused") {
+        setUnfinished(unfinishedWork(event.unfinished, event.type === "paused" ? event.summary : null));
+      }
       if (event.type === "done") {
         if (!responseHasText.current && typeof event.summary === "string" && event.summary) {
           addAssistantText(event.summary);
@@ -527,17 +547,18 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
   }
 
   function contextualPrompt(value: string) {
+    // The agent addresses a section by its page and its id together.
     const selected = contexts.includes("section") && section
-      ? `selected section "${section.label}" (section ID ${section.id}) on page ${section.pageId}`
+      ? `selected section "${section.label}" (pageId ${section.pageId}, sectionId ${section.id})`
       : null;
     const context = [
-      contexts.includes("home") && homePage ? `Home page ${homePage.id}` : null,
+      contexts.includes("home") && homePage ? `Home page (pageId ${homePage.id})` : null,
       contexts.includes("header") ? "the global site header" : null,
       selected,
     ].filter(Boolean);
     const focused = context.length ? `${value}\n\nFocus on this context: ${context.join("; ")}.` : value;
     return insert
-      ? `${focused}\n\nInsert the new section on page ${insert.pageId} at position ${insert.position} (0 is the top of the page).`
+      ? `${focused}\n\nInsert the new section on the page with pageId ${insert.pageId} at position ${insert.position} (0 is the top of the page).`
       : focused;
   }
 
@@ -798,8 +819,19 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
           <button type="button" disabled={streaming} className="rounded-lg border border-amber-300 px-3 py-2 text-xs disabled:opacity-50" onClick={() => void respond("reject_large_run")}>Decline</button>
         </div>
       </section> : null}
-      {run?.status === "paused" && !pending && !streaming ? <button type="button" className="rounded-lg border px-3 py-2 text-xs"
-        onClick={() => void respond("continue")}>Continue this run</button> : null}
+      {!pending && !streaming && (run?.status === "paused" || unfinished?.steps.length) ? <section aria-label="Unfinished work"
+        className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+        <h3 className="text-xs font-semibold text-amber-950">{run?.status === "paused" ? "Paused before everything was done" : "Not everything was done"}</h3>
+        {run?.status === "paused" ? <p className="mt-1 text-xs text-amber-900">{unfinished?.reason ?? "This run was paused. Everything so far is saved."}</p> : null}
+        {unfinished?.steps.length ? <>
+          <p className="mt-2 text-xs font-medium text-amber-950">{run?.status === "paused" ? "Still to do:" : "Not done:"}</p>
+          <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-amber-950">{unfinished.steps.map((item, index) => <li key={`${index}-${item.step}`}>
+            {item.step}{item.reason ? <span className="block text-amber-800">{item.reason}</span> : null}
+          </li>)}</ul>
+        </> : null}
+        {run?.status === "paused" ? <button type="button" className="mt-3 rounded-lg bg-amber-700 px-3 py-2 text-xs font-medium text-white"
+          onClick={() => void respond("continue")}>Continue</button> : null}
+      </section> : null}
     </div>
     {error ? <p role="alert" className="mx-4 mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p> : null}
     {pending?.kind !== "plan" && pending?.kind !== "question" && pending?.kind !== "credit" ? <div className="border-t border-zinc-200 p-3">

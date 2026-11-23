@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
-import { closeOpenToolCalls, dropThinking, MEMORY_LIMITS, summarizeHistory, trimToolResults } from "./agent-memory";
+import { planNudge } from "./agent-plan";
+import {
+  appendUserContent, closeOpenToolCalls, compactToolResults, dropThinking, MEMORY_LIMITS, summarizeHistory, withTurnContext,
+} from "./agent-memory";
 
 type Message = Anthropic.MessageParam;
 const call = (id: string, name: string, input: unknown = {}): Message =>
@@ -38,14 +41,62 @@ describe("AI agent thread memory", () => {
     expect(messages[1].content).toHaveLength(2);
   });
 
-  it("keeps only the latest tool results in full while a run is working", () => {
-    const long = "x".repeat(MEMORY_LIMITS.toolResultChars + 1);
-    const messages = Array.from({ length: 5 }, (_, index) => [call(`t${index}`, "get_page"), result(`t${index}`, index === 1 ? "short" : long)]).flat();
-    const trimmed = trimToolResults(messages, 2);
-    expect(resultsOf(trimmed).map((block) => block.content === long ? "full" : block.content === "short" ? "short" : "removed"))
-      .toEqual(["removed", "short", "removed", "full", "full"]);
-    expect(resultsOf(messages).filter((block) => block.content === long)).toHaveLength(4);
-    expect(trimToolResults(trimmed, 2)).toEqual(trimmed);
+  it("leaves a run's conversation exactly as it was sent until it is long, then shortens it in one go", () => {
+    const page = "x".repeat(20_000);
+    const read = (index: number) => [call(`p${index}`, "get_page"), result(`p${index}`, page)];
+    const edit = (index: number) => [call(`e${index}`, "update_section_props"), result(`e${index}`, "staged")];
+    const kinds = (messages: Message[]) => resultsOf(messages).map((block) => block.content === page ? "page" : block.content === "staged" ? "staged" : "removed");
+    const short = [...read(1), ...edit(1), ...read(2)];
+    // Rewriting an earlier message would discard the provider's cached copy of everything after it.
+    expect(compactToolResults(short).messages).toBe(short);
+
+    const long = [...short, ...edit(2), ...read(3), ...Array.from({ length: 6 }, (_, index) => edit(index + 3)).flat()];
+    const { messages: compacted, compactedChars } = compactToolResults(long);
+    // The page being worked on stays in full however many steps ago it was read; finished pages go, short results stay.
+    expect(kinds(compacted)).toEqual(["removed", "staged", "removed", "staged", "page", ...Array.from({ length: 6 }, () => "staged")]);
+    expect(compactedChars).toBe(JSON.stringify(compacted).length);
+    expect(compactToolResults(compacted, compactedChars).messages).toBe(compacted);
+    expect(kinds(long).filter((kind) => kind === "page")).toHaveLength(3);
+
+    // No more goes than is needed to halve it, starting with the oldest.
+    const designs = "d".repeat(25_000);
+    const mixed = [call("a", "list_section_designs"), result("a", designs), call("b", "search_site"), result("b", designs), ...read(1), ...edit(1)];
+    expect(resultsOf(compactToolResults(mixed).messages).map((block) => block.content === designs ? "designs" : block.content === page ? "page" : block.content === "staged" ? "staged" : "removed"))
+      .toEqual(["removed", "removed", "page", "staged"]);
+
+    // What must stay can itself be long. The next shortening waits for real growth instead of rewriting history on every call.
+    const post = "y".repeat(MEMORY_LIMITS.contextChars);
+    const label = (messages: Message[]) => resultsOf(messages).map((block) =>
+      block.content === page ? "page" : block.content === post ? "post" : block.content === "staged" ? "staged" : "removed");
+    const heavy = compactToolResults([...read(1), call("b", "get_post"), result("b", post)]);
+    expect(label(heavy.messages)).toEqual(["page", "post"]);
+    const next = [...heavy.messages, ...edit(1), ...edit(2)];
+    expect(compactToolResults(next, heavy.compactedChars).messages).toBe(next);
+    const grown = [...next, call("c", "get_post"), result("c", post)];
+    expect(label(compactToolResults(grown, heavy.compactedChars).messages)).toEqual(["page", "removed", "staged", "staged", "post"]);
+  });
+
+  it("marks the saved conversation as cacheable and adds the per-call context after it, without saving it", () => {
+    const messages: Message[] = [{ role: "user", content: "Improve the home page" }, call("a", "get_page"), result("a", "page")];
+    const sent = withTurnContext(messages, "OVERVIEW 1");
+    expect(sent).toEqual([
+      { role: "user", content: [{ type: "text", text: "Improve the home page" }] }, messages[1],
+      { role: "user", content: [
+        { type: "tool_result", tool_use_id: "a", content: "page", cache_control: { type: "ephemeral", ttl: "5m" } },
+        { type: "text", text: "OVERVIEW 1" },
+      ] },
+    ]);
+    expect(JSON.stringify(messages)).not.toContain("OVERVIEW");
+    // The first message is sent in the same form on every call.
+    expect(withTurnContext([messages[0]], "OVERVIEW 0")[0].content).toEqual([
+      { type: "text", text: "Improve the home page", cache_control: { type: "ephemeral", ttl: "5m" } }, { type: "text", text: "OVERVIEW 0" },
+    ]);
+
+    // Text for the model joins the tool results it follows, so the user's turn is never doubled.
+    const nudged = appendUserContent(messages, [{ type: "text", text: "Carry on." }]);
+    expect(nudged).toHaveLength(3);
+    expect(nudged[2].content).toEqual([{ type: "tool_result", tool_use_id: "a", content: "page" }, { type: "text", text: "Carry on." }]);
+    expect(appendUserContent([messages[0], messages[1]], [{ type: "text", text: "Continue." }]).at(-1)).toEqual({ role: "user", content: [{ type: "text", text: "Continue." }] });
   });
 
   it("leaves a short history untouched and summarises a long one without tool payloads", () => {
@@ -57,6 +108,7 @@ describe("AI agent thread memory", () => {
       { role: "user", content: "Never use blue. Make the home page warmer." },
       call("a", "get_page"), result("a", page),
       call("b", "plan", { steps: ["Warm palette", "Rewrite hero"] }), result("b", "The user approved the plan. Proceed."),
+      { role: "user", content: planNudge({ steps: [{ text: "Warm palette", status: "pending" }] }) },
       call("c", "update_theme"), result("c", page),
       call("d", "update_section_props"), result("d", page),
       call("e", "update_section_props"), result("e", page),
@@ -72,6 +124,8 @@ describe("AI agent thread memory", () => {
     expect(text).toContain("Agent: I warmed the palette and rewrote the hero.");
     expect(text).toContain("Update site theme; Update Hero section");
     expect(text).not.toContain("PAGE-PAYLOAD");
+    // What the app told the model along the way is not remembered as something the user said.
+    expect(text).not.toContain("You stopped");
     expect(text.length).toBeLessThan(MEMORY_LIMITS.summaryChars + 3_000);
 
     // A later summary carries the earlier one forward instead of nesting it.

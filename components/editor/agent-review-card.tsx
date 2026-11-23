@@ -6,6 +6,7 @@ import { Check, Eye, RotateCcw, Sparkles } from "lucide-react";
 import { z } from "zod";
 import {
   footerChanges,
+  footerPatchGroups,
   previewAgentReview,
   type AgentReviewDecision,
   type AgentReviewPayload,
@@ -70,7 +71,11 @@ const previewDataSchema = z.looseObject({
   zones: z.record(z.string(), z.array(previewSectionSchema)).optional(),
 });
 
-function reviewData(snapshot: AgentReviewPayload["working"], pageId: string, baselineFooter: unknown): Data | null {
+/**
+ * `sharedFooter` is the footer before a run that only changed the shared copy;
+ * newer runs write footer changes into each page, so the page already has them.
+ */
+function reviewData(snapshot: AgentReviewPayload["working"], pageId: string, sharedFooter?: { before: unknown }): Data | null {
   const page = pageFor(snapshot, pageId);
   if (!isRecord(page) || !isRecord(page.draft_data)) return null;
   const parsed = previewDataSchema.safeParse(page.draft_data);
@@ -79,7 +84,7 @@ function reviewData(snapshot: AgentReviewPayload["working"], pageId: string, bas
   const raw = parsed.data;
   const content: Data["content"] = raw.content.filter((item) => item.type !== "Navigation");
   // Shows what applying does: changed footer fields land on every page that has a footer.
-  const footer = footerChanges(baselineFooter, snapshot.footer);
+  const footer = sharedFooter ? footerChanges(sharedFooter.before, snapshot.footer) : {};
   const index = content.findIndex((item) => item.type === "Footer");
   if (index >= 0 && Object.keys(footer).length) {
     content[index] = { ...content[index], props: { ...content[index].props, ...footer } };
@@ -265,9 +270,11 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
     : previewAgentReview(review, review.decisions);
   const selected = review.comparison === "before" ? before : after;
   const selectedPage = selected.snapshot ? pageFor(selected.snapshot, targetPageId) : null;
-  const preview = selected.snapshot ? reviewData(selected.snapshot, targetPageId, review.baseline.footer) : null;
-  const beforePage = before.snapshot ? reviewData(before.snapshot, targetPageId, review.baseline.footer) : null;
-  const afterPage = after.snapshot ? reviewData(after.snapshot, targetPageId, review.baseline.footer) : null;
+  const sharedFooter = review.changes.some((change) => change.kind === "footer" && !footerPatchGroups(change))
+    ? { before: review.baseline.footer } : undefined;
+  const preview = selected.snapshot ? reviewData(selected.snapshot, targetPageId, sharedFooter) : null;
+  const beforePage = before.snapshot ? reviewData(before.snapshot, targetPageId, sharedFooter) : null;
+  const afterPage = after.snapshot ? reviewData(after.snapshot, targetPageId, sharedFooter) : null;
   const changedIds = changedSectionIds(beforePage, afterPage);
   if (activeChange?.kind === "theme" || (!activeChange && JSON.stringify(review.baseline.theme) !== JSON.stringify(review.working.theme))) {
     for (const id of sectionIds(preview)) changedIds.add(id);

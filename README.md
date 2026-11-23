@@ -334,6 +334,34 @@ The agent's tools read numbers written as text, such as `"8"` or `"8px"` for a
 radius, spacing or height, as numbers before validating them. Percentages,
 other units and words such as `"large"` are still refused.
 
+**Pages and sections.** The agent addresses a section by its `pageId` and
+`sectionId` together, because the same section id can exist on several pages.
+The site overview lists the section ids of every page. Each section tool checks
+the pair before it changes anything; on a mismatch it answers with the pairs
+that do exist (the page the section is really on, or the sections of the page
+named), so the agent's one repair attempt can succeed. A slip that was repaired
+no longer counts against later steps of the same run.
+
+**Footer.** There is no site-wide footer yet: every page holds its own Footer
+section. `update_footer` therefore finds the Footer section on each page and
+applies the same change (content, design or both) to all of them, keeping
+whatever else differs between them, and reports any page that has no footer.
+It is reviewed as one change. On apply each page's footer is written
+separately, so a footer edited by hand since the run keeps that edit and is
+reported, while the other pages still get the change. Pages the agent creates
+start from the changed footer. Section tools refuse a footer id and point to
+`update_footer`. Runs staged before this, which changed only a shared copy,
+still apply as before.
+
+**Plans.** Once a plan is approved it is tracked in the run until every step is
+done. The agent reports progress with `report_progress`, and a step it cannot
+do must be reported as skipped with the reason. If the agent ends its turn with
+steps still open it is told to carry on; if it still does not, or a run limit is
+reached first, the run is paused and the panel lists what is still to do with a
+**Continue** button. A finished run lists any skipped steps with their reasons.
+A run never ends looking complete while approved steps are open. A reply cut
+off by the output limit is resumed instead of being treated as the end.
+
 **Undo these changes**, on the applied card and under **History → AI changes
 across the site**, reverses one apply across the whole site in one transaction.
 Any member who can edit the site may undo. Items edited or published since are
@@ -371,9 +399,19 @@ service is busy or does not respond, the run is paused with its progress saved
 and **Continue** retries it without a new charge; the agency also sees the
 Anthropic error type.
 
-**Memory.** A long conversation is carried into the next request as a summary
-of what was asked, answered and done. While a run works, only its most recent
-tool results are kept in full. The model's reasoning is never sent back to it.
+**Memory and input size.** A long conversation is carried into the next request
+as a summary of what was asked, answered and done, including plan steps left
+unfinished. The model's reasoning is never sent back to it.
+Each step sends the model three things. The rules and tools never change. The
+conversation so far only grows, so both are read from the provider's prompt
+cache at a tenth of the input price. Only a compact site overview is new on
+every step: it follows the cached part, is rebuilt after each change and is
+never saved into the conversation. Page content is sent only for the pages the
+agent reads (`get_page`, optionally just the sections it needs), and a change
+is confirmed with its ids instead of echoing the content back. When the
+conversation grows past about 60,000 characters it is shortened once: older
+tool results go, the page being worked on stays. The per-run token allowance
+counts cached input at a tenth.
 
 **Evals.** `node scripts/agent-evals.mjs --dry-run` checks the eval harness
 with a scripted model and sends nothing to the provider.

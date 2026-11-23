@@ -4,6 +4,7 @@ import {
   type AgentChangeset, type AgentEvent, type AgentModel, type AgentToolContext,
 } from "@/lib/ai/agent";
 import { planAgentApply, type ApplyMeta } from "@/lib/ai/agent-apply-plan";
+import { unfinishedPlanSteps } from "@/lib/ai/agent-plan";
 import { createAgentReviewPayload, jsonEqual, previewAgentReview } from "@/lib/ai/agent-review";
 import { SITE_GENERATION_MODEL } from "@/lib/ai/models";
 import { calculateCostUsd, type TokenUsage } from "@/lib/ai/pricing";
@@ -176,7 +177,7 @@ export const EVAL_CASES: EvalCase[] = [
       ? null : "No reviews section was added to the home page." },
   { id: "careers", request: "Create a Careers page and add it to the menu. We are hiring a plumber and an apprentice.",
     verify: (changeset) => changeset.working.pages.some((page) => page.slug === "careers" && !page.hide_from_menu) ? null : "No Careers page in the menu." },
-  { id: "hero-button", request: `Change the hero button on the home page to say "Book a visit" and link it to the contact page.\n\nFocus on this context: selected section "Hero" (section ID home-hero) on page ${fixtureIds.home}.`,
+  { id: "hero-button", request: `Change the hero button on the home page to say "Book a visit" and link it to the contact page.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
     verify: (changeset) => {
       const props = content(changeset.working, fixtureIds.home).find((item) => item.props.id === "home-hero")?.props ?? {};
       const link = props.buttonLink;
@@ -249,6 +250,9 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
       : `The run failed: ${cause instanceof Error ? cause.message.slice(0, 300) : "unknown error"}`);
   }
   if (terminal !== "completed" && !failures.length) failures.push(`The run ended ${terminal} instead of completing.`);
+  // An approved plan must be carried out in full.
+  const unfinished = unfinishedPlanSteps(state.plan);
+  if (unfinished.length) failures.push(`The approved plan was not finished: ${unfinished.map(({ step }) => step).join("; ")}`);
   const quality = changeset.changes.length ? reviewChangesetQuality(changeset) : { fixed: [], notes: [] };
   if (!changeset.changes.length) failures.push("The run staged no changes.");
   else {

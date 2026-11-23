@@ -54,6 +54,24 @@ describe("agent review canvas data", () => {
     }));
   });
 
+  it("shows a footer change written into each page as it is, without laying the shared copy over it", () => {
+    const base = review({ root: {}, content: [{ type: "Footer", props: { id: "footer", tagline: "Page tagline", variant: "compact", design: { shadow: "soft" } } }] });
+    renderToStaticMarkup(<AgentReviewCanvas pageId="home" review={{
+      ...base,
+      // The shared copy differs from this page's footer in ways the change did not touch.
+      baseline: { ...base.baseline, footer: { tagline: "Shared", variant: "columns", design: {} } },
+      working: { ...base.working, footer: { tagline: "Shared", variant: "compact", design: { shadow: "none" } } },
+      changes: [{ id: "footer", kind: "footer", label: "Update footer on 1 page", patches: [
+        { path: ["footer", "variant"], before: { present: true, value: "columns" }, after: { present: true, value: "compact" } },
+        { path: ["pages", { id: "home" }, "draft_data", "content", { id: "footer" }, "props", "variant"],
+          before: { present: true, value: "columns" }, after: { present: true, value: "compact" } },
+      ] }],
+    }} />);
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({
+      content: [{ type: "Footer", props: { id: "footer", tagline: "Page tagline", variant: "compact", design: { shadow: "soft" } } }],
+    }));
+  });
+
   it("reports invalid sections instead of passing them to the renderer", () => {
     const markup = renderToStaticMarkup(<AgentReviewCanvas pageId="home" review={review({
       root: {}, content: [{ type: "Hero", props: {} }],

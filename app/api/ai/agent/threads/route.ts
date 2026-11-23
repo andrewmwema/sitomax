@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { appliedChangesSchema } from "@/lib/ai/agent-apply-types";
+import { agentPlanSchema, unfinishedPlanSteps } from "@/lib/ai/agent-plan";
 import { createAgentReviewPayload } from "@/lib/ai/agent-review";
 import { deleteAiAgentThread, getAiAgentRunUsage, loadAiAgentRunState, renameAiAgentThread } from "@/lib/ai/usage";
 import { createClient } from "@/lib/supabase/server";
@@ -12,6 +13,8 @@ const runStateSchema = z.object({
     kind: z.enum(["plan", "question", "credit"]),
     payload: z.record(z.string(), z.unknown()),
   }).optional(),
+  plan: agentPlanSchema.optional().catch(undefined),
+  pauseReason: z.string().optional().catch(undefined),
 }).passthrough();
 
 async function authenticatedClient() {
@@ -119,6 +122,9 @@ export async function GET(request: Request) {
       review: applied ? null : createAgentReviewPayload(runResult.data.changeset),
       applied,
       usage,
+      // What an approved plan left open, so a paused or finished run never looks complete when it is not.
+      unfinished: runState?.success ? unfinishedPlanSteps(runState.data.plan) : [],
+      pauseReason: runState?.success && runResult.data.status === "paused" ? runState.data.pauseReason ?? null : null,
     } : null,
   });
 }

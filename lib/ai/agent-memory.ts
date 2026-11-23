@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { APP_NOTE } from "./agent-plan";
 
 type Message = Anthropic.MessageParam;
 type Block = Exclude<Message["content"], string>[number];
@@ -9,8 +10,9 @@ export const MEMORY_LIMITS = {
   summaryChars: 8_000,
   requestChars: 1_200,
   replyChars: 800,
-  /** Tool results kept in full while a run is working. */
-  recentToolResults: 6,
+  /** A run's conversation is left as it is, and so stays cached, until it is longer than this. */
+  contextChars: 60_000,
+  /** Tool results up to this length are never removed. */
   toolResultChars: 600,
 } as const;
 
@@ -56,8 +58,8 @@ export function closeOpenToolCalls(messages: Message[]): Message[] {
 
 /**
  * The model's private reasoning is signed against the exact conversation it was
- * written in, including the site map in the system prompt. That map changes
- * with every staged change and old tool results are trimmed, so a returned
+ * written in. The site overview at the end of that conversation changes with
+ * every staged change and old tool results are trimmed, so a returned
  * reasoning block would be rejected. Reasoning is therefore never sent back.
  */
 export function dropThinking(messages: Message[]): Message[] {
@@ -70,24 +72,67 @@ export function dropThinking(messages: Message[]): Message[] {
 }
 
 /**
- * Old tool results are most of a long run's context, and the site map already
- * shows their effect. All but the most recent are replaced by a short note.
+ * A run's conversation only grows, so the provider can reuse its cached copy
+ * of everything already sent. Rewriting old messages discards that copy, so
+ * the conversation is shortened in one go, and only once it is long. Tool
+ * results are replaced by a short note, oldest first, until it is half the
+ * limit; the latest page read stays because the agent is working on it, and
+ * so does the result the model has not answered yet.
+ * What must stay can itself be long, so the next shortening also waits until
+ * the conversation has grown by half the limit again; `compactedChars` is its
+ * length after the last one.
  */
-export function trimToolResults(messages: Message[], keep: number = MEMORY_LIMITS.recentToolResults): Message[] {
-  let seen = 0;
-  const trimmed = [...messages];
-  for (let index = trimmed.length - 1; index >= 0; index--) {
-    const message = trimmed[index];
-    if (message.role !== "user" || typeof message.content === "string") continue;
+export function compactToolResults(messages: Message[], compactedChars = 0, limit: number = MEMORY_LIMITS.contextChars) {
+  let size = JSON.stringify(messages).length;
+  if (size <= Math.max(limit, compactedChars + limit / 2)) return { messages, compactedChars };
+  let pageRead: string | undefined;
+  let latest: string | undefined;
+  for (const message of messages) {
+    for (const block of blocks(message)) {
+      if (block.type === "tool_use" && block.name === "get_page") pageRead = block.id;
+      if (block.type === "tool_result") latest = block.tool_use_id;
+    }
+  }
+  const compacted = messages.map((message) => {
+    if (message.role !== "user" || typeof message.content === "string") return message;
     let changed = false;
-    const content = [...message.content].reverse().map((block) => {
-      if (block.type !== "tool_result" || ++seen <= keep || resultText(block).length <= MEMORY_LIMITS.toolResultChars) return block;
+    const content = message.content.map((block) => {
+      if (block.type !== "tool_result" || block.tool_use_id === pageRead || block.tool_use_id === latest) return block;
+      const length = resultText(block).length;
+      if (size <= limit / 2 || length <= MEMORY_LIMITS.toolResultChars) return block;
+      size -= length - OMITTED.length;
       changed = true;
       return { ...block, content: OMITTED };
-    }).reverse();
-    if (changed) trimmed[index] = { ...message, content };
-  }
-  return trimmed;
+    });
+    return changed ? { ...message, content } : message;
+  });
+  return { messages: compacted, compactedChars: JSON.stringify(compacted).length };
+}
+
+/**
+ * What one model call is sent: the saved conversation, marked as cacheable up
+ * to its end, followed by context that is only true for this call. The context
+ * is never saved, so the next call's conversation still starts with the cached one.
+ */
+export function withTurnContext(messages: Message[], context: string): Message[] {
+  const note = { type: "text" as const, text: context };
+  // Every message is sent in the same form on every call, so the cached copy keeps matching.
+  const sent = messages.map((message): Message => typeof message.content === "string" && message.role !== "system"
+    ? { role: message.role, content: blocks(message) } : message);
+  const last = sent.at(-1);
+  if (!last || last.role === "system") return [...sent, { role: "user", content: [note] }];
+  const content = blocks(last);
+  const marked = content.map((block, index) => index === content.length - 1 && block.type !== "thinking" && block.type !== "redacted_thinking"
+    ? { ...block, cache_control: { type: "ephemeral" as const, ttl: "5m" as const } } : block);
+  if (last.role === "user") return [...sent.slice(0, -1), { role: "user", content: [...marked, note] }];
+  return [...sent.slice(0, -1), { role: "assistant", content: marked }, { role: "user", content: [note] }];
+}
+
+/** Adds to the user's side of the conversation without leaving two user turns in a row. */
+export function appendUserContent(messages: Message[], content: Block[]): Message[] {
+  const last = messages.at(-1);
+  if (last?.role !== "user") return [...messages, { role: "user", content }];
+  return [...messages.slice(0, -1), { role: "user", content: [...blocks(last), ...content] }];
 }
 
 /**
@@ -110,6 +155,8 @@ export function summarizeHistory(messages: Message[], options: { staged?: string
   for (const message of history) {
     for (const block of blocks(message)) {
       if (block.type === "text" && block.text.trim()) {
+        // What the app told the model while it worked is not something the user said.
+        if (message.role === "user" && block.text.startsWith(APP_NOTE)) continue;
         if (message.role === "user" && block.text.startsWith(SUMMARY_MARK)) {
           lines.push(...block.text.slice(SUMMARY_MARK.length).split("\n").map((line) => line.trim()).filter(Boolean));
           continue;

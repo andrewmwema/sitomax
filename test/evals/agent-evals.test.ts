@@ -22,9 +22,19 @@ describe("AI agent evals harness", () => {
       ["plan", { steps: ["Rewrite the hero"] }],
       ["ask_user", { question: "Which tone?", options: ["Friendly", "Formal"] }],
       hero({ heading: "Friendly local plumbers" }),
+      ["report_progress", { steps: [{ step: 1, status: "done" }] }],
       "Done.",
     ]));
     expect(result).toMatchObject({ passed: true, terminal: "completed", changes: 1 });
+
+    // A run that stops with approved steps still open has not done what was asked.
+    const partial = await runEval(anything, scriptedModel([
+      ["plan", { steps: ["Rewrite the hero", "Rewrite the About page"] }],
+      hero({ heading: "Friendly local plumbers" }),
+      ["report_progress", { steps: [{ step: 1, status: "done" }] }],
+      "Done.",
+    ]));
+    expect(partial.failures).toEqual(["The approved plan was not finished: Rewrite the About page"]);
   });
 
   it("fails runs that invent facts, break links or stage nothing", async () => {

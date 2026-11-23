@@ -15,7 +15,11 @@ for (let depth = 1; depth <= 5; depth++) {
   ]));
 }
 const jsonObject = z.record(z.string(), jsonValues[5]);
-const sectionRef = z.object({ pageId: z.uuid(), sectionId: z.string().min(1).max(200) });
+// A section is always addressed by the page it is on and its id there: ids repeat across pages.
+const sectionRef = z.object({
+  pageId: z.uuid().describe("The page the section is on, as listed in the site overview."),
+  sectionId: z.string().min(1).max(200).describe("The section's id on that page, as listed in the site overview or returned by get_page."),
+});
 // The same rules as the Pages panel and the database, so staged page settings can always be applied.
 const navLabel = z.string().trim().min(1).max(40).regex(/^\S+( \S+){0,2}$/, "Use at most three words for a menu label.");
 const pageSlug = z.string().trim().min(1).max(60).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
@@ -31,8 +35,10 @@ const blogBlocks = z.array(blogBlockSchema).min(1).max(200);
 const CUSTOM_LAYOUT = "A custom layout is rows of columns of elements. Text elements take plain text with blank lines between paragraphs and optional **bold** or *emphasis*. An Image element's query is only a search hint: the image is inserted empty, then chosen with set_image. Gaps and spacing are numbers from this scale: 0, 4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 128.";
 
 const specs = [
-  { name: "get_site_overview", description: "Read a compact map of pages, theme, header, footer, business, blog, and SEO.", schema: z.object({}) },
-  { name: "get_page", description: "Read one page's complete validated sections.", schema: z.object({ pageId: z.uuid() }) },
+  { name: "get_site_overview", description: "Read the site overview: every page with its pageId and the sectionId of each of its sections, plus theme, header, footer, business, blog and SEO. The latest overview is already at the end of the conversation, so this is rarely needed.", schema: z.object({}) },
+  { name: "get_page", description: "Read a page's sections in full. Pass sectionIds to read only the sections you are changing.", schema: z.object({
+    pageId: z.uuid(), sectionIds: z.array(z.string().min(1).max(200)).min(1).max(30).optional(),
+  }) },
   { name: "search_site", description: "Search text across pages and blog posts.", schema: z.object({ query: z.string().trim().min(1).max(200) }) },
   { name: "list_section_designs", description: "List curated section designs. With a blockType, also returns that block's editable props.", schema: z.object({ blockType: z.string().max(80).optional() }) },
   { name: "get_blog_posts", description: "List blog draft and published post summaries.", schema: z.object({
@@ -40,15 +46,23 @@ const specs = [
     limit: z.number().int().min(1).max(30).default(10),
   }) },
   { name: "get_post", description: "Read a blog post draft by ID.", schema: z.object({ postId: z.uuid() }) },
-  { name: "plan", description: "Present an ordered plan and wait for approval before broad changes.", schema: z.object({
+  { name: "plan", description: "Present an ordered plan and wait for approval before broad changes. Name the page each step works on. Once approved, every step must be carried out or reported as skipped.", schema: z.object({
     steps: z.array(z.string().trim().min(1).max(240)).min(1).max(12), rationale: z.string().max(1000).optional(),
+  }) },
+  { name: "report_progress", description: "Record progress on the approved plan. Report a step as done once every change it needs is staged, or as skipped, with the reason in note, when it cannot be done. Several steps can be reported at once.", schema: z.object({
+    steps: z.array(z.object({
+      step: z.number().int().min(1).max(12).describe("The step's number in the approved plan, starting at 1."),
+      status: z.enum(["done", "skipped"]), note: z.string().trim().max(300).optional(),
+    }).refine((entry) => entry.status === "done" || Boolean(entry.note), "Give the reason a step was skipped in note.")).min(1).max(12),
   }) },
   { name: "ask_user", description: "Ask one genuinely ambiguous question and optionally provide choices.", schema: z.object({
     question: z.string().trim().min(1).max(1000), options: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
   }) },
   { name: "update_theme", description: "Stage site theme changes. Send only what changes: style, headingFont, bodyFont, radius, buttonStyle, colors (primary, secondary, accent, background, text as hex). Text is kept contrast-safe.", schema: z.object({ patch: jsonObject }) },
   { name: "update_header", description: "Stage global header settings. Send only the settings to change; they are merged into the current header.", schema: z.object({ header: jsonObject }) },
-  { name: "update_footer", description: "Stage shared footer props. Send only the props to change. Phone, email, address and hours come from Business information and cannot be changed.", schema: z.object({ props: jsonObject }) },
+  { name: "update_footer", description: "Stage a footer change. The footer is a section repeated on every page, so the same change is applied to the footer of every page. Send only what changes: props (businessName, tagline, variant, navigation, socialLinks) and/or design (as in update_section_design). Phone, email, address and hours come from Business information and cannot be changed.", schema: z.object({
+    props: jsonObject.optional(), design: jsonObject.optional(),
+  }).refine((input) => input.props !== undefined || input.design !== undefined, "Send props or design to change.") },
   { name: "update_section_props", description: "Stage content changes to a section or a nested layout element (use its id as sectionId). Send only the props to change; a list prop is replaced whole. Images are changed with set_image, design with update_section_design.", schema: sectionRef.extend({ props: jsonObject }) },
   { name: "update_section_design", description: "Stage design changes (background, spacing, appearance, border, shadow, animation) to a section or a nested layout element.", schema: sectionRef.extend({ design: jsonObject }) },
   { name: "switch_section_design", description: "Switch a section to a curated design while preserving compatible content.", schema: sectionRef.extend({
@@ -94,7 +108,7 @@ const specs = [
 export const agentToolRegistry = specs.map((spec) => ({
   ...spec,
   write: ![
-    "get_site_overview", "get_page", "search_site", "list_section_designs", "get_blog_posts", "get_post", "plan", "ask_user",
+    "get_site_overview", "get_page", "search_site", "list_section_designs", "get_blog_posts", "get_post", "plan", "report_progress", "ask_user",
   ].includes(spec.name),
 }));
 

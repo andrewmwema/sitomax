@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { defaultHeader } from "@/lib/header";
 import { puckConfig } from "@/lib/puck/config";
 import { contrastRatio } from "@/lib/theme/presets";
-import { makeToolResult } from "./agent";
+import { fixtureChangeset, fixtureIds } from "@/test/fixtures/agent-site";
+import { makeToolResult, ToolInputError } from "./agent";
+import { planAgentApply, type ApplyMeta } from "./agent-apply-plan";
 import { createAgentReviewPayload, previewAgentReview } from "./agent-review";
 import { aiCatalog } from "./site-schemas";
 
@@ -83,7 +85,7 @@ describe("AI agent tool guardrails", () => {
       ["hero", { variant: "diagonal" }, "Invalid option"],
       ["hero", { backgroundImage: "https://example.com/unapproved.jpg" }, "set_image"],
       ["embed", { code: "<script>alert(1)</script>" }, "does not support AI content editing"],
-      ["footer", { tagline: "Edited as a section" }, "not on this page"],
+      ["footer", { tagline: "Edited as a section" }, "update_footer"],
     ] as const) {
       await expect(run(changeset, "update_section_props", { pageId, sectionId, props })).rejects.toThrow(message);
     }
@@ -136,8 +138,8 @@ describe("AI agent tool guardrails", () => {
     await run(changeset, "delete_section", { pageId, sectionId: "hero" });
     expect(sections(changeset.working).map((item) => item.props.id)).toEqual(["custom", "footer"]);
     expect(sections(changeset.baseline)).toHaveLength(3);
-    await expect(run(changeset, "delete_section", { pageId, sectionId: "footer" })).rejects.toThrow("not on this page");
-    await expect(run(changeset, "move_section", { pageId, sectionId: "row", position: 0 })).rejects.toThrow("not on this page");
+    await expect(run(changeset, "delete_section", { pageId, sectionId: "footer" })).rejects.toThrow("update_footer");
+    await expect(run(changeset, "move_section", { pageId, sectionId: "row", position: 0 })).rejects.toThrow("whole sections");
   });
 
   it("reads custom layouts and searches the site without exposing embed code", async () => {
@@ -162,8 +164,8 @@ describe("AI agent tool guardrails", () => {
     await run(changeset, "update_section_design", { pageId, sectionId: "heading", design: { shadow: "soft" } });
     const photos: Context = { ...context, choosePhoto: async (query, alt) => ({ url: `https://assets.example/${query}.jpg`, alt: alt ?? "Stock photo" }) };
     await makeToolResult("set_image", { pageId, sectionId: "image", field: "src", query: "plumber", alt: "A plumber at work" }, changeset, photos);
-    const services = await run(changeset, "insert_section", { pageId, designId: aiCatalog.find((entry) => entry.blockType === "Services")!.id }) as { after: Section };
-    await makeToolResult("set_image", { pageId, sectionId: services.after.props.id, field: "services.0.image", query: "pipes" }, changeset, photos);
+    const services = await run(changeset, "insert_section", { pageId, designId: aiCatalog.find((entry) => entry.blockType === "Services")!.id }) as { sectionId: string };
+    await makeToolResult("set_image", { pageId, sectionId: services.sectionId, field: "services.0.image", query: "pipes" }, changeset, photos);
     expect((sections(changeset.working).at(-2)!.props.services as Record<string, unknown>[])[0]).toMatchObject({ image: "https://assets.example/pipes.jpg" });
     await expect(makeToolResult("set_image", { pageId, sectionId: "heading", field: "text", query: "pipes" }, changeset, photos)).rejects.toThrow("supported image field");
 
@@ -293,8 +295,139 @@ describe("AI agent tool guardrails", () => {
 
     await run(changeset, "update_footer", { props: { tagline: "Here to help" } });
     expect(changeset.working.footer.tagline).toBe("Here to help");
+    expect(sections(changeset.working).at(-1)!.props).toMatchObject({ id: "footer", tagline: "Here to help" });
     await expect(run(changeset, "update_footer", { props: { phone: "555 0100" } })).rejects.toThrow("Business information");
+    await expect(run(changeset, "update_footer", {})).rejects.toThrow("props or design");
     expectReplays(changeset);
+  });
+
+  it("applies a footer change to the footer section of every page, keeping what differs between them", async () => {
+    const changeset = fixtureChangeset();
+    const footer = (snapshot: Changeset["working"], id: string) => sections(snapshot, snapshot.pages.findIndex((page) => page.id === id)).at(-1)!;
+    // One page words its footer differently, and one has no footer at all.
+    footer(changeset.working, fixtureIds.about).props.businessName = "Harbour Plumbing Ltd";
+    sections(changeset.working, 3).pop();
+    changeset.baseline = structuredClone(changeset.working);
+
+    const result = await run(changeset, "update_footer", {
+      props: { tagline: "Here to help", variant: "centered" }, design: { background: { type: "color", color: "#0b2545" } },
+    }) as { footers: unknown[]; pagesWithoutFooter: unknown[] };
+    expect(result.footers).toEqual([
+      { pageId: fixtureIds.home, sectionId: "footer-home" }, { pageId: fixtureIds.about, sectionId: "footer-about" },
+      { pageId: fixtureIds.pricing, sectionId: "footer-pricing" },
+    ]);
+    expect(result.pagesWithoutFooter).toEqual([expect.objectContaining({ pageId: fixtureIds.contact })]);
+    for (const id of [fixtureIds.home, fixtureIds.about, fixtureIds.pricing]) {
+      expect(footer(changeset.working, id).props, id).toMatchObject({
+        tagline: "Here to help", variant: "centered", design: { background: { type: "color", color: "#0b2545" } },
+      });
+    }
+    expect(footer(changeset.working, fixtureIds.about).props.businessName).toBe("Harbour Plumbing Ltd");
+    expect(sections(changeset.working, 3).some((item) => item.type === "Footer")).toBe(false);
+    // One change to review, and pages the agent creates afterwards start from the changed footer.
+    expect(changeset.changes).toEqual([expect.objectContaining({ kind: "footer", label: "Update footer on 3 pages" })]);
+    await run(changeset, "create_page", { title: "Careers", slug: "careers", navLabel: "Careers", sections: [] });
+    expect(sections(changeset.working, 4).at(-1)!.props).toMatchObject({ tagline: "Here to help", variant: "centered" });
+    expectReplays(changeset);
+
+    // Applying writes each page's own footer. A footer edited by hand since keeps that edit.
+    const current = structuredClone(changeset.baseline);
+    footer(current, fixtureIds.pricing).props.tagline = "Edited by hand";
+    const meta: ApplyMeta = {
+      draftHeader: null, posts: {},
+      pages: Object.fromEntries(current.pages.map((page) => [page.id, { draftVersion: "v1", published: false, rawDraft: page.draft_data }])),
+    };
+    const plan = planAgentApply(current, meta, createAgentReviewPayload(changeset)!.changes, new Set());
+    expect(plan.dropped).toEqual([]);
+    expect(plan.changes[0]).toMatchObject({ label: "Update footer on 3 pages", items: [`page:${fixtureIds.home}`, `page:${fixtureIds.about}`] });
+    expect(plan.notes).toEqual([expect.stringContaining("left out of 1 page")]);
+    const written = (id: string) => (plan.items.find((item) => item.key === `page:${id}`) as { draft_data: { content: Section[] } } | undefined)?.draft_data.content.at(-1)!.props;
+    expect(written(fixtureIds.about)).toMatchObject({ tagline: "Here to help", businessName: "Harbour Plumbing Ltd" });
+    expect(written(fixtureIds.pricing)).toBeUndefined();
+
+    // A footer change also reaches a page created earlier in the run. Undoing that page leaves the rest reviewable and applicable.
+    const later = fixtureChangeset();
+    await run(later, "create_page", { title: "Careers", slug: "careers", navLabel: "Careers", sections: [] });
+    await run(later, "update_footer", { props: { tagline: "Here to help" } });
+    const [created] = later.changes;
+    const review = createAgentReviewPayload(later)!;
+    const kept = previewAgentReview(review, { [created.id]: "undone" });
+    expect(kept.error).toBeNull();
+    expect((kept.snapshot!.pages as Changeset["working"]["pages"]).map((page) => (page.draft_data as { content: Section[] }).content.at(-1)!.props.tagline))
+      .toEqual(Array.from({ length: 4 }, () => "Here to help"));
+    const freshMeta: ApplyMeta = {
+      ...meta, posts: Object.fromEntries(later.baseline.posts.map((post) => [post.id, { updatedAt: post.updated_at }])),
+      pages: Object.fromEntries(later.baseline.pages.map((page) => [page.id, { draftVersion: "v1", published: false, rawDraft: page.draft_data }])),
+    };
+    const withoutPage = planAgentApply(later.baseline, freshMeta, review.changes, new Set([created.id]));
+    expect(withoutPage).toMatchObject({ dropped: [], notes: [] });
+    expect(withoutPage.items.map((item) => item.kind)).toEqual(["page", "page", "page", "page"]);
+
+    const none = fixtureChangeset();
+    for (const index of [0, 1, 2, 3]) sections(none.working, index).pop();
+    await expect(run(none, "update_footer", { props: { tagline: "Nowhere to go" } })).rejects.toThrow("No page on this site has a footer");
+  });
+
+  it("checks that a pageId and sectionId belong together, and answers a mismatch with the pairs that do", async () => {
+    const changeset = fixtureChangeset();
+    const choices = async (name: string, input: unknown) => {
+      const error = await run(changeset, name, input).catch((cause: unknown) => cause);
+      expect(error, name).toBeInstanceOf(ToolInputError);
+      return error as ToolInputError;
+    };
+    // The overview names every section by the page it is on.
+    const overview = await run(changeset, "get_site_overview", {}) as { pages: { pageId: string; sections: { sectionId: string }[]; footerSectionId: string }[] };
+    expect(overview.pages.map((page) => [page.pageId, page.sections.map((entry) => entry.sectionId), page.footerSectionId])).toEqual([
+      [fixtureIds.home, ["home-hero", "home-services", "home-why-section"], "footer-home"],
+      [fixtureIds.about, ["about-text"], "footer-about"],
+      [fixtureIds.pricing, ["pricing-plans"], "footer-pricing"],
+      [fixtureIds.contact, ["contact-form"], "footer-contact"],
+    ]);
+
+    // Right section, wrong page: the answer is the pair that exists.
+    const wrongPage = await choices("update_section_props", { pageId: fixtureIds.about, sectionId: "home-hero", props: { heading: "Moved" } });
+    expect(wrongPage.message).toContain("is not on pageId");
+    expect(wrongPage.choices).toEqual([expect.objectContaining({ pageId: fixtureIds.home, sectionId: "home-hero", title: "Home" })]);
+    expect(wrongPage.forModel()).toContain(`"pageId":"${fixtureIds.home}","title":"Home","slug":"","sectionId":"home-hero"`);
+
+    // Unknown section: this page's sections. Unknown page: the site's pages, or the page the section is on.
+    const unknown = await choices("delete_section", { pageId: fixtureIds.about, sectionId: "about-txt" });
+    expect(unknown.choices).toEqual([expect.objectContaining({ pageId: fixtureIds.about, sectionId: "about-text", blockType: "TextSection" })]);
+    const noPage = "00000000-0000-4000-8000-0000000000ff";
+    expect((await choices("get_page", { pageId: noPage })).choices).toHaveLength(4);
+    expect((await choices("move_section", { pageId: noPage, sectionId: "pricing-plans", position: 0 })).choices)
+      .toEqual([expect.objectContaining({ pageId: fixtureIds.pricing, sectionId: "pricing-plans" })]);
+    // A nested element where a whole section is needed: the section that holds it.
+    expect((await choices("duplicate_section", { pageId: fixtureIds.home, sectionId: "home-why-0" })).choices)
+      .toEqual([{ pageId: fixtureIds.home, sectionId: "home-why-section", blockType: "Section" }]);
+
+    // The same sectionId on two pages is told apart by its page.
+    sections(changeset.working, 1)[0].props.id = "home-hero";
+    changeset.baseline = structuredClone(changeset.working);
+    await run(changeset, "update_section_props", { pageId: fixtureIds.about, sectionId: "home-hero", props: { heading: "About Harbour" } });
+    expect(sections(changeset.working, 1)[0].props.heading).toBe("About Harbour");
+    expect(sections(changeset.working, 0)[0].props.heading).toBe("Plumbing done properly");
+    expect(changeset.changes).toEqual([expect.objectContaining({ pageId: fixtureIds.about, sectionId: "home-hero" })]);
+    expect(changeset.working.pages.filter((page, index) => JSON.stringify(page) !== JSON.stringify(changeset.baseline.pages[index]))).toHaveLength(1);
+  });
+
+  it("reads only the sections asked for, and never cuts a long page off in the middle of a section", async () => {
+    const changeset = fixtureChangeset();
+    const read = async (input: Record<string, unknown>) => await run(changeset, "get_page", { pageId: fixtureIds.home, ...input }) as
+      { pageId: string; sections: { sectionId: string }[]; notShown?: { sectionId: string }[] };
+    const whole = await read({});
+    expect(whole).toMatchObject({ pageId: fixtureIds.home, title: "Home", status: "draft" });
+    expect(whole.sections.map((entry) => entry.sectionId)).toEqual(["home-hero", "home-services", "home-why-section"]);
+    const some = await read({ sectionIds: ["home-services", "home-why-1"] });
+    expect(some.sections.map((entry) => entry.sectionId)).toEqual(["home-services", "home-why-1"]);
+    expect(JSON.stringify(some).length).toBeLessThan(JSON.stringify(whole).length / 2);
+    await expect(read({ sectionIds: ["about-text"] })).rejects.toThrow("is not on pageId");
+
+    sections(changeset.working, 0)[1].props.heading = "x".repeat(30_000);
+    const long = await read({});
+    expect(long.sections.map((entry) => entry.sectionId)).toEqual(["home-hero"]);
+    expect(long.notShown?.map((entry) => entry.sectionId)).toEqual(["home-services", "home-why-section"]);
+    expect(() => JSON.parse(JSON.stringify(long))).not.toThrow();
   });
 
   it("drafts and edits blog posts as text blocks, keeping existing images and published posts untouched", async () => {

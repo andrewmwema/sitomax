@@ -64,12 +64,13 @@ function opened(row: Loaded) {
   return {
     theme: draft.theme, version: draft.version, header: root.__editorHeader,
     hero: (data.content as Block[]).find((block) => block.props.id === "home-hero")?.props,
+    footer: (data.content as Block[]).find((block) => block.type === "Footer")?.props,
     unpublished: hasUnpublishedPageChanges(row.draft_data, row.published_data),
   };
 }
 
 describe.skipIf(!requested)("AI agent apply and the editor's draft loader", () => {
-  it("shows applied theme, header and section changes in the editor, and the originals after undo", async () => {
+  it("shows applied theme, header, section and footer changes in the editor, and the originals after undo", async () => {
     const owner = "12000000-0000-4000-8000-000000000001";
     const thread = "62000000-0000-4000-8000-000000000001";
     const run = "72000000-0000-4000-8000-000000000001";
@@ -86,6 +87,8 @@ describe.skipIf(!requested)("AI agent apply and the editor's draft loader", () =
     await makeToolResult("update_header", { header: { desktop: { height: "80px", shadow: true } } }, changeset, context);
     await makeToolResult("update_section_props",
       { pageId: fixtureIds.home, sectionId: "home-hero", props: { heading: "Plumbing, done beautifully" } }, changeset, context);
+    // The footer is a section on every page, so this one change is written to all four.
+    await makeToolResult("update_footer", { props: { tagline: "Here whenever you need us." } }, changeset, context);
 
     const meta: ApplyMeta = {
       draftHeader: null, posts: {},
@@ -95,7 +98,8 @@ describe.skipIf(!requested)("AI agent apply and the editor's draft loader", () =
     const plan = planAgentApply(current, meta, createAgentReviewPayload(changeset)!.changes, new Set());
     plan.items = validateApplyItems(plan.items);
     expect(plan.dropped).toEqual([]);
-    expect(plan.items.map((item) => item.key).sort()).toEqual(["header", `page:${fixtureIds.home}`, "theme"]);
+    expect(plan.items.map((item) => item.key).sort()).toEqual(
+      ["header", ...current.pages.map((page) => `page:${page.id}`).sort(), "theme"]);
 
     const result = runSql(`
       begin;
@@ -120,12 +124,14 @@ describe.skipIf(!requested)("AI agent apply and the editor's draft loader", () =
       ${loadDraft("before", fixtureIds.home)}
       select public.apply_ai_agent_changes('${run}', 'Make the site feel more premium', ${json(plan.changes)}, ${json(plan.items)}) as apply_id \\gset
       ${loadDraft("applied", fixtureIds.home)}
+      ${loadDraft("appliedAbout", fixtureIds.about)}
       select 'history' || chr(9) || json_agg(history)::text from public.list_ai_agent_applies('${fixtureIds.site}') history;
       select 'undo' || chr(9) || public.undo_ai_agent_apply(:'apply_id')::text;
       ${loadDraft("undone", fixtureIds.home)}
+      ${loadDraft("undoneAbout", fixtureIds.about)}
       reset role;
       rollback;
-    `) as { before: Loaded; applied: Loaded; undone: Loaded; history: unknown; undo: unknown };
+    `) as { before: Loaded; applied: Loaded; appliedAbout: Loaded; undone: Loaded; undoneAbout: Loaded; history: unknown; undo: unknown };
 
     const before = opened(result.before);
     expect(before).toMatchObject({ theme: current.theme, version: versions[fixtureIds.home], unpublished: false,
@@ -136,16 +142,20 @@ describe.skipIf(!requested)("AI agent apply and the editor's draft loader", () =
     expect(applied.theme).toEqual({ ...current.theme, radius: 8, buttonStyle: "rounded" });
     expect(applied.header?.desktop).toMatchObject({ height: 80, shadow: true });
     expect(applied.hero).toMatchObject({ heading: "Plumbing, done beautifully" });
+    // The page that is open and a page that is not both got the footer change, each on its own footer.
+    expect(applied.footer).toMatchObject({ id: "footer-home", tagline: "Here whenever you need us." });
+    expect(opened(result.appliedAbout).footer).toMatchObject({ id: "footer-about", tagline: "Here whenever you need us." });
     expect(applied.version).not.toBe(before.version);
     expect(applied.unpublished).toBe(true);
-    expect(result.history).toMatchObject([{ summary: "Make the site feel more premium", change_count: 3, can_undo: true }]);
+    expect(result.history).toMatchObject([{ summary: "Make the site feel more premium", change_count: 4, can_undo: true }]);
     // Nothing live changed, so the theme and header count as unpublished too.
     expect(result.applied.site.theme).toEqual(current.theme);
     expect(result.applied.site.published_header).toBeNull();
     expect(result.applied.published_data).toEqual(result.before.published_data);
 
     // Undo: the same read returns the originals, again under a new draft version.
-    expect(result.undo).toMatchObject({ undone: 3, skipped: 0 });
+    expect(result.undo).toMatchObject({ undone: 4, skipped: 0 });
+    expect(opened(result.undoneAbout).footer).toMatchObject({ id: "footer-about", tagline: "Local plumbers you can rely on." });
     const undone = opened(result.undone);
     expect(result.undone.draft_data).toEqual(result.before.draft_data);
     expect(result.undone.site).toEqual(result.before.site);

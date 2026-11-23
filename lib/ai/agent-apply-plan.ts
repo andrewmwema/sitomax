@@ -1,6 +1,6 @@
 import { menuLabelSchema } from "@/lib/page-navigation";
 import { slugError } from "@/lib/page-slugs";
-import { applyReviewPatches, footerChanges, jsonEqual, type AgentReviewChange } from "./agent-review";
+import { applyReviewPatches, footerChanges, footerPatchGroups, jsonEqual, type AgentReviewChange } from "./agent-review";
 
 type Json = Record<string, unknown>;
 type PageState = {
@@ -39,6 +39,7 @@ const CONFLICT = "This content was edited after the AI prepared the change, or i
 const SETTINGS = "#settings";
 const LIVE_SETTINGS = "This only affects settings that are already live on a published page. Change them in Pages.";
 const NO_EFFECT = "This change no longer affects any draft.";
+const FOOTER_EDITED = "The footer was edited on every page after the AI prepared the change.";
 
 function isRecord(value: unknown): value is Json {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -113,23 +114,52 @@ export function planAgentApply(
   const pages = new Map(current.pages.map((page) => [page.id, page]));
   const kept: { change: AgentReviewChange; keys: Set<string> }[] = [];
   const dropped: ApplyPlan["dropped"] = [];
+  const notes: string[] = [];
+  // Runs staged before footer changes were written into each page only changed the shared copy.
+  let sharedFooterOnly = false;
   for (const change of changes) {
     if (undone.has(change.id)) continue;
     let next: ApplySiteState;
-    try {
-      next = applyReviewPatches(state, change.patches);
-    } catch {
-      dropped.push({ id: change.id, label: change.label, reason: CONFLICT });
-      continue;
+    let patches = change.patches;
+    const footers = footerPatchGroups(change);
+    if (footers) {
+      // The same change on each page's footer: a page whose footer was edited since keeps its own.
+      next = state;
+      patches = [];
+      let skipped = 0;
+      for (const group of footers) {
+        try {
+          next = applyReviewPatches(next, group.patches);
+          patches.push(...group.patches);
+        } catch {
+          // A page that is gone, or whose creation was undone, has no footer to report on.
+          if (group.pageId && next.pages.some((page) => page.id === group.pageId)) skipped++;
+        }
+      }
+      if (!patches.some((patch) => patch.path[0] === "pages")) {
+        dropped.push({ id: change.id, label: change.label, reason: FOOTER_EDITED });
+        continue;
+      }
+      if (skipped) {
+        notes.push(`"${change.label}" was left out of ${skipped === 1 ? "1 page whose footer was" : `${skipped} pages whose footers were`} edited after the AI prepared it.`);
+      }
+    } else {
+      try {
+        next = applyReviewPatches(state, change.patches);
+      } catch {
+        dropped.push({ id: change.id, label: change.label, reason: CONFLICT });
+        continue;
+      }
+      if (change.patches.some((patch) => patch.path[0] === "footer")) sharedFooterOnly = true;
     }
-    const keys = touchedKeys(change);
+    const keys = touchedKeys({ ...change, patches });
     const issue = settingsIssue(keys, next, pages, meta);
     if (issue) dropped.push({ id: change.id, label: change.label, reason: issue });
     else { state = next; kept.push({ change, keys }); }
   }
 
   // The footer is one shared block repeated on every page that shows it.
-  const footer = footerChanges(current.footer, state.footer);
+  const footer = sharedFooterOnly ? footerChanges(current.footer, state.footer) : {};
   const footerPages = new Set<string>();
   if (Object.keys(footer).length) {
     for (const page of state.pages) {
@@ -143,7 +173,6 @@ export function planAgentApply(
   }
 
   const items: ApplyItem[] = [];
-  const notes: string[] = [];
   if (!jsonEqual(current.theme, state.theme)) {
     items.push({ kind: "theme", key: "theme", label: "Site theme", expected: current.theme, after: state.theme });
   }
