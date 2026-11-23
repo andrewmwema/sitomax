@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { Field } from "@puckeditor/core";
 import { createPhotoLibrary } from "@/lib/photos";
-import { blockFields, blockSchemas, aiCatalog, defaultSection, isImageField } from "./site-schemas";
+import { agentFieldSchemas, aiCatalog, blockFields, defaultSection, describeAgentFields, isImageField } from "./site-schemas";
 import { SITE_GENERATION_MODEL } from "./models";
 import { anthropicRequestParams } from "./request-params";
 import {
@@ -19,8 +19,10 @@ import type { BlockDesign } from "@/lib/sections/design";
 import { sanitizePuckData } from "@/lib/richtext";
 import { blogContentSchema, sanitizeBlogContent } from "@/lib/blog";
 import { puckConfig } from "@/lib/puck/config";
-import { ELEMENT_TYPES, ROW_LAYOUTS } from "@/lib/layout/structure";
+import { DEFAULT_COLORS } from "@/lib/theme/presets";
+import { buildCustomSections, customSectionSchema } from "./custom-layout";
 import { designPatchSchema, editDesign } from "./edit-design";
+import { freshFooter } from "./site-footer";
 import { agentToolSchemas, agentTools } from "./agent-tools";
 import { createAgentReviewPayload, reviewPatches, type ReviewPatch } from "./agent-review";
 
@@ -57,69 +59,6 @@ const puckDataSchema = z.object({
   content: z.array(z.object({ type: z.string(), props: record })).default([]),
   zones: z.record(z.string(), z.array(z.unknown())).optional(),
 });
-const elementSchema = z.object({
-  type: z.enum(ELEMENT_TYPES),
-  props: record,
-});
-const columnSchema = z.object({
-  type: z.literal("Column"),
-  props: z.object({
-    id: z.string().min(1).max(200), verticalAlign: z.enum(["top", "center", "bottom"]),
-    surface: z.enum(["none", "card", "highlight"]), gap: z.number().int().min(0).max(128),
-    design: record.optional(), content: z.array(elementSchema).max(30),
-  }),
-});
-const rowSchema = z.object({
-  type: z.literal("Row"),
-  props: z.object({
-    id: z.string().min(1).max(200), layout: z.enum(["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]),
-    gap: z.number().int().min(0).max(128), reverseOnMobile: z.boolean(), design: record.optional(),
-    columns: z.array(columnSchema).min(1).max(4),
-  }),
-});
-const customSectionSchema = z.object({
-  type: z.literal("Section"),
-  props: z.object({
-    id: z.string().min(1).max(200), background: z.enum(["default", "soft", "dark", "primary"]),
-    width: z.enum(["narrow", "contained", "wide", "full"]), rowGap: z.number().int().min(0).max(128),
-    design: record.optional(), rows: z.array(rowSchema).min(1).max(10),
-  }),
-});
-function validatedCustomSection(raw: unknown, rekeyIds = false, allowImages = true) {
-  const section = customSectionSchema.parse(raw);
-  for (const row of section.props.rows) {
-    if (row.props.columns.length !== ROW_LAYOUTS[row.props.layout].fractions.length) {
-      throw new z.ZodError([{
-        code: "custom", path: ["props", "rows", row.props.id, "columns"],
-        message: "The number of columns must match the row layout.",
-      }]);
-    }
-    for (const column of row.props.columns) {
-      for (const element of column.props.content) {
-        if (!puckConfig.components[element.type as keyof typeof puckConfig.components]) {
-          throw new Error("This custom layout uses an unavailable element.");
-        }
-        const design = element.props.design;
-        const fields = blockFields(element.type);
-        const imageValues = collectImageValues(fields, element.props);
-        if (!allowImages && [...imageValues.values()].some((value) => typeof value === "string" && value !== "")) {
-          throw new Error("Insert custom layouts with empty image fields, then use set_image to choose photos.");
-        }
-        const validatedProps = validateStoredProps(element.type, element.props);
-        element.props = {
-          ...validatedProps,
-          ...(rekeyIds ? { id: `${element.type}-${crypto.randomUUID()}` }
-            : element.props.id === undefined ? {} : { id: element.props.id }),
-          ...(design === undefined ? {} : { design }),
-        };
-      }
-      if (rekeyIds) column.props.id = `Column-${crypto.randomUUID()}`;
-    }
-    if (rekeyIds) row.props.id = `Row-${crypto.randomUUID()}`;
-  }
-  if (rekeyIds) section.props.id = `Section-${crypto.randomUUID()}`;
-  return section;
-}
 const blogSettingsSchema = z.object({ draft_settings: z.unknown().nullable() });
 
 type Page = z.infer<typeof pageSchema>;
@@ -190,19 +129,46 @@ function pushChange(changeset: Changeset, kind: string, label: string, before: u
   changeset.changes.push(change);
   return change;
 }
+type Item = { type: string; props: Record<string, unknown> };
+function isItem(value: unknown): value is Item {
+  return isRecord(value) && typeof value.type === "string" && isRecord(value.props);
+}
+/** Visits items and everything nested in their slots. The items are the stored objects, not copies. */
+function walkItems(items: Item[], visit: (item: Item) => void) {
+  for (const item of items) {
+    visit(item);
+    const fields = puckConfig.components[item.type as keyof typeof puckConfig.components]?.fields as Record<string, Field> | undefined;
+    for (const [key, field] of Object.entries(fields ?? {})) {
+      const children = item.props[key];
+      if (field.type === "slot" && Array.isArray(children)) walkItems(children.filter(isItem), visit);
+    }
+  }
+}
+// Embed code belongs to the agency and may hold third-party keys, so the model never reads it.
 function textFrom(value: unknown): string {
   if (typeof value === "string") return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   if (Array.isArray(value)) return value.map(textFrom).filter(Boolean).join(" ");
+  if (isItem(value) && value.type === "Embed") return "";
   if (isRecord(value)) return Object.entries(value).filter(([key]) => key !== "id" && key !== "design").map(([, child]) => textFrom(child)).filter(Boolean).join(" ");
   return "";
+}
+function itemText(item: Item) {
+  return item.type === "Embed" ? "" : textFrom(item.props);
+}
+function readableSection(item: Item): Item {
+  const copy = clone(item);
+  walkItems([copy], (entry) => {
+    if (entry.type === "Embed") entry.props = { id: entry.props.id, note: "Embed code is managed by the agency. It cannot be read or changed here." };
+  });
+  return copy;
 }
 function sectionDesignId(item: { type: string; props: Record<string, unknown> }) {
   const match = agentDesigns.find((design) => design.blockType === item.type &&
     Object.entries(design.props).every(([key, value]) => JSON.stringify(item.props[key]) === JSON.stringify(value)));
   return match?.id ?? "custom";
 }
-function summarizeSection(item: { type: string; props: Record<string, unknown> }) {
-  return { blockType: item.type, designId: sectionDesignId(item), text: textFrom(item.props).slice(0, 180) };
+function summarizeSection(item: Item) {
+  return { id: item.props.id, blockType: item.type, designId: sectionDesignId(item), text: itemText(item).slice(0, 180) };
 }
 function safeTheme(raw: unknown) {
   const parsed = themeSchema.parse(raw);
@@ -231,12 +197,6 @@ function safeHeader(raw: unknown) {
     }
   }
   return headerSchema.parse(header);
-}
-function validatedSection(item: z.infer<typeof puckDataSchema>["content"][number]) {
-  if (item.type === "Section") return validatedCustomSection(item);
-  const schema = blockSchemas[item.type as keyof typeof blockSchemas];
-  if (!schema) return item;
-  return { ...item, props: validateStoredProps(item.type, item.props) };
 }
 function systemPrompt(changeset: Changeset) {
   const map = {
@@ -329,55 +289,26 @@ function findSection(changeset: Changeset, pageId: string, sectionId: string) {
   if (index < 0) throw new Error("That section is not on this page.");
   return { page, data, index, item: data.content[index] };
 }
+/** The stored section or layout element, so edits to it change the page. */
 function findNestedItem(data: z.infer<typeof puckDataSchema>, itemId: string) {
-  const search = (items: z.infer<typeof puckDataSchema>["content"]): (typeof items)[number] | undefined => {
-    for (const item of items) {
-      if (item.props.id === itemId) return item;
-      const component = puckConfig.components[item.type as keyof typeof puckConfig.components];
-      const fields = component?.fields as Record<string, Field> | undefined;
-      if (!fields) continue;
-      for (const [key, field] of Object.entries(fields)) {
-        if (field.type !== "slot" || !Array.isArray(item.props[key])) continue;
-        const children = z.array(z.object({ type: z.string(), props: record })).parse(item.props[key]);
-        const found = search(children);
-        if (found) return found;
-      }
-    }
-    return undefined;
-  };
-  const item = search(editableSections(data));
-  if (!item) throw new Error("That section or layout element is not on this page.");
-  return item;
-}
-function collectImageValues(fields: Record<string, Field>, value: unknown, prefix = ""): Map<string, unknown> {
-  const found = new Map<string, unknown>();
-  if (!isRecord(value)) return found;
-  for (const [key, field] of Object.entries(fields)) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    const child = value[key];
-    if (isImageField(field)) found.set(path, child);
-    else if (field.type === "array" && Array.isArray(child)) {
-      child.forEach((entry, index) => {
-        for (const [nestedPath, nestedValue] of collectImageValues(field.arrayFields as Record<string, Field>, entry, `${path}.${index}`)) {
-          found.set(nestedPath, nestedValue);
-        }
-      });
-    } else if (field.type === "object") {
-      for (const [nestedPath, nestedValue] of collectImageValues(field.objectFields as Record<string, Field>, child, path)) {
-        found.set(nestedPath, nestedValue);
-      }
-    }
-  }
+  let found: Item | undefined;
+  walkItems(editableSections(data), (item) => { if (!found && item.props.id === itemId) found = item; });
+  if (!found) throw new Error("That section or layout element is not on this page.");
   return found;
 }
-function clearImageValues(fields: Record<string, Field>, value: unknown) {
-  if (!isRecord(value)) return;
-  for (const [key, field] of Object.entries(fields)) {
-    if (isImageField(field)) value[key] = "";
-    else if (field.type === "array" && Array.isArray(value[key])) {
-      for (const child of value[key]) clearImageValues(field.arrayFields as Record<string, Field>, child);
-    } else if (field.type === "object") clearImageValues(field.objectFields as Record<string, Field>, value[key]);
-  }
+function isLinkField(field: Field) {
+  return field.type === "custom" && "aiKind" in field && field.aiKind === "link";
+}
+function collectFieldValues(fields: Record<string, Field>, value: unknown, match: (field: Field) => boolean): unknown[] {
+  if (!isRecord(value)) return [];
+  return Object.entries(fields).flatMap(([key, field]): unknown[] => {
+    const child = value[key];
+    if (match(field)) return [child];
+    if (field.type === "array" && Array.isArray(child)) {
+      return child.flatMap((entry) => collectFieldValues(field.arrayFields as Record<string, Field>, entry, match));
+    }
+    return field.type === "object" ? collectFieldValues(field.objectFields as Record<string, Field>, child, match) : [];
+  });
 }
 function setPathValue(value: unknown, path: string, replacement: unknown) {
   const parts = path.split(".");
@@ -398,55 +329,96 @@ function getPathValue(value: unknown, path: string): unknown {
     return isRecord(current) ? current[part] : undefined;
   }, value);
 }
-function imageFieldAtPath(fields: Record<string, Field>, path: string): Field | undefined {
-  const parts = path.split(".");
-  let current: Record<string, Field> = fields;
-  let parent: Field | undefined;
-  for (const [index, part] of parts.entries()) {
-    if (parent?.type === "array") {
+/** The field at a dotted prop path; list items are addressed by index, as in services.0.image. */
+function fieldAtPath(fields: Record<string, Field>, path: string): Field | undefined {
+  let current: Record<string, Field> | undefined = fields;
+  let field: Field | undefined;
+  for (const part of path.split(".")) {
+    if (field?.type === "array" && current === undefined) {
       if (!/^\d+$/.test(part)) return undefined;
-      current = parent.arrayFields as Record<string, Field>;
-      parent = undefined;
-    } else if (parent?.type === "object") {
-      current = parent.objectFields as Record<string, Field>;
-      parent = undefined;
-    } else if (parent) return undefined;
-    parent = current[part];
-    if (!parent || index === parts.length - 1) return parent;
+      current = field.arrayFields as Record<string, Field>;
+      continue;
+    }
+    if (!current) return undefined;
+    field = current[part];
+    if (!field) return undefined;
+    current = field.type === "object" ? field.objectFields as Record<string, Field> : undefined;
   }
-  return parent;
+  return field?.type === "array" && current ? undefined : field;
 }
-function validateStoredProps(type: string, before: Record<string, unknown>, patch: Record<string, unknown> = {}) {
-  const schema = blockSchemas[type as keyof typeof blockSchemas];
-  if (!schema) throw new Error("This section type does not support AI content editing.");
-  const fields = blockFields(type);
-  const unknownKey = Object.keys(patch).find((key) => !(key in fields) && key !== "id" && key !== "design");
-  if (unknownKey) throw new Error(`Unsupported section property: ${unknownKey}.`);
+const UNEDITABLE_TYPES = new Set(["Embed", "Navigation"]);
+// The footer shows these from Business information, which the agent may not change.
+const FOOTER_CONTACT_PROPS = ["phone", "email", "address", "hours"];
+
+/**
+ * Merges an agent edit into stored props. Only the edited properties are
+ * validated, so content the editor stored in a shape the AI schemas do not
+ * model stays editable and untouched.
+ */
+function validateStoredProps(type: string, before: Record<string, unknown>, patch: Record<string, unknown>, pages: Page[]) {
   const component = puckConfig.components[type as keyof typeof puckConfig.components];
-  const defaults = component?.defaultProps as Record<string, unknown> | undefined;
-  const baseline = { ...defaults, ...before };
-  const merged = { ...baseline, ...patch };
-  const oldImages = collectImageValues(fields, baseline);
-  const nextImages = collectImageValues(fields, merged);
-  if (JSON.stringify([...oldImages]) !== JSON.stringify([...nextImages])) {
+  if (!component?.fields || UNEDITABLE_TYPES.has(type)) throw new Error("This section type does not support AI content editing.");
+  const fields = blockFields(type);
+  const schemas = agentFieldSchemas(type);
+  const edits: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === "id") continue;
+    if (key === "design") throw new Error("Use update_section_design to change a section's design.");
+    const schema = schemas[key];
+    if (!schema) throw new Error(`Unsupported section property: ${key}.`);
+    const parsed = schema.safeParse(value);
+    if (!parsed.success) {
+      throw new z.ZodError(parsed.error.issues.map((issue) => ({ ...issue, path: [key, ...issue.path] })));
+    }
+    edits[key] = parsed.data;
+  }
+  const baseline = { ...component.defaultProps as Record<string, unknown> | undefined, ...before };
+  // Existing images may be kept, moved or removed; new ones only come from set_image.
+  const images = new Set(collectFieldValues(fields, baseline, isImageField));
+  if (collectFieldValues(fields, edits, isImageField).some((value) => typeof value === "string" && value !== "" && !images.has(value))) {
     throw new Error("Use set_image to change an image.");
   }
-  const validationInput = clone(merged);
-  delete validationInput.id;
-  delete validationInput.design;
-  clearImageValues(fields, validationInput);
-  const validated = record.parse(schema.parse(validationInput));
-  for (const [path, value] of nextImages) setPathValue(validated, path, value);
-  return {
-    ...before, ...validated,
-    ...(before.id === undefined ? {} : { id: before.id }),
-    ...(before.design === undefined ? {} : { design: before.design }),
-  };
+  for (const link of collectFieldValues(fields, edits, isLinkField)) {
+    if (isRecord(link) && link.type === "page" && !pages.some((page) => page.id === link.pageId)) {
+      throw new Error("That link points to a page that is not on this site. Link to a page by its path, such as /about.");
+    }
+  }
+  return { ...before, ...edits };
 }
-/** Runs one agent tool against the changeset sandbox. Exported so the tool guardrails can be tested directly. */
-export async function makeToolResult(name: string, input: unknown, changeset: Changeset, context: {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+/** Objects merge key by key; lists and values are replaced. */
+function mergePatch(base: unknown, patch: unknown): unknown {
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch;
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) merged[key] = mergePatch(base[key], value);
+  return merged;
+}
+const themePatchSchema = themeSchema.pick({
+  style: true, headingFont: true, bodyFont: true, radius: true, buttonStyle: true,
+}).extend({ colors: themeSchema.shape.colors.unwrap().strict().optional() }).strict();
+
+/** A custom layout from the agent's compact description. Images start empty and are chosen with set_image. */
+function customLayoutSection(raw: unknown, changeset: Changeset) {
+  const warnings = new Set<string>();
+  const theme = themeSchema.parse(changeset.working.theme);
+  const [item] = buildCustomSections([customSectionSchema.parse(raw)], { ...DEFAULT_COLORS, ...theme.colors }, warnings);
+  const images: { sectionId: string; field: string; query: string }[] = [];
+  walkItems([item], (entry) => {
+    if (entry.type !== "Image") return;
+    if (typeof entry.props.src === "string" && entry.props.src) images.push({ sectionId: String(entry.props.id), field: "src", query: entry.props.src });
+    entry.props.src = "";
+  });
+  return { item, notes: { ...(images.length ? { imagesToSet: images } : {}), ...(warnings.size ? { warnings: [...warnings] } : {}) } };
+}
+export type AgentToolContext = {
   supabase: Supabase; accountId: string; siteId: string;
-}): Promise<unknown> {
+  /** Replaces the stock photo library, for runs that must not fetch or store images. */
+  choosePhoto?: (query: string, alt?: string) => Promise<{ url: string; alt: string }>;
+};
+/** Runs one agent tool against the changeset sandbox. Exported so the tool guardrails can be tested directly. */
+export async function makeToolResult(name: string, input: unknown, changeset: Changeset, context: AgentToolContext): Promise<unknown> {
   const before = WRITE_TOOLS.has(name) ? clone(changeset.working) : null;
   const count = changeset.changes.length;
   const result = await executeTool(name, input, changeset, context);
@@ -460,9 +432,7 @@ export async function makeToolResult(name: string, input: unknown, changeset: Ch
   return result;
 }
 
-function executeTool(name: string, input: unknown, changeset: Changeset, context: {
-  supabase: Supabase; accountId: string; siteId: string;
-}): Promise<unknown> | unknown {
+function executeTool(name: string, input: unknown, changeset: Changeset, context: AgentToolContext): Promise<unknown> | unknown {
   if (!toolsByName.has(name)) throw new Error("This tool is unavailable.");
   const zod = toolSchemas.get(name);
   if (!zod) throw new Error("This tool has no input validator.");
@@ -492,14 +462,14 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
         id: page.id, site_id: page.site_id, slug: page.slug, title: page.title, nav_label: page.nav_label,
       hide_from_menu: page.hide_from_menu, seo: page.seo, sort_order: page.sort_order, published_at: page.published_at,
       };
-      return { ...metadata, sections: editableSections(data).map(validatedSection) };
+      return { ...metadata, sections: editableSections(data).map(readableSection) };
     }
     case "search_site": {
       const query = String(args.query).toLowerCase();
       const results: Record<string, unknown>[] = changeset.working.pages.flatMap((page) => {
         const data = puckDataSchema.parse(page.draft_data);
         return data.content.flatMap((item) => {
-          const text = textFrom(item.props);
+          const text = itemText(item);
           return text.toLowerCase().includes(query) ? [{ pageId: page.id, pageTitle: page.title, sectionId: item.props.id, blockType: item.type, excerpt: text.slice(0, 300) }] : [];
         });
       });
@@ -509,9 +479,11 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       }
       return results.slice(0, 40);
     }
-    case "list_section_designs":
-      return agentDesigns.filter((design) => !args.blockType || design.blockType === args.blockType)
+    case "list_section_designs": {
+      const designs = agentDesigns.filter((design) => !args.blockType || design.blockType === args.blockType)
         .map(({ id, blockType, category, name }) => ({ id, blockType, category, name }));
+      return args.blockType && designs.length ? { designs, props: describeAgentFields(String(args.blockType)) } : designs;
+    }
     case "get_blog_posts": {
       const query = String(args.query ?? "").toLowerCase();
       const status = String(args.status ?? "all");
@@ -528,19 +500,23 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     }
     case "update_theme": {
       const before = changeset.working.theme;
-      const after = safeTheme(themeSchema.parse({ ...before, ...record.parse(args.patch) }));
+      const after = safeTheme(mergePatch(before, themePatchSchema.parse(args.patch)));
       changeset.working.theme = after;
       return pushChange(changeset, "theme", "Update site theme", before, after);
     }
     case "update_header": {
       const before = changeset.working.header;
-      const after = safeHeader(record.parse(args.header));
+      const after = safeHeader(mergePatch(before, record.parse(args.header)));
       changeset.working.header = after;
       return pushChange(changeset, "header", "Update site header", before, after);
     }
     case "update_footer": {
       const before = changeset.working.footer;
-      const after = validateStoredProps("Footer", before, record.parse(args.props));
+      const patch = record.parse(args.props);
+      if (FOOTER_CONTACT_PROPS.some((key) => key in patch)) {
+        throw new Error("Contact details come from Business information, which you cannot change. Suggest the change to the user instead.");
+      }
+      const after = validateStoredProps("Footer", before, patch, changeset.working.pages);
       changeset.working.footer = after;
       return pushChange(changeset, "footer", "Update site footer", before, after);
     }
@@ -549,7 +525,7 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       const data = puckDataSchema.parse(page.draft_data);
       const item = findNestedItem(data, String(args.sectionId));
       const before = item.props;
-      const after = validateStoredProps(item.type, before, record.parse(args.props));
+      const after = validateStoredProps(item.type, before, record.parse(args.props), changeset.working.pages);
       item.props = after;
       page.draft_data = sanitizePuckData(data);
       return pushChange(changeset, "section_props", `Update ${item.type} section`, before, after, page.id);
@@ -572,15 +548,19 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       const { page, data, index, item } = findSection(changeset, String(args.pageId), String(args.sectionId));
       const design = agentDesigns.find((entry) => entry.id === args.designId);
       if (!design) throw new Error("That curated section design is unavailable.");
+      if (UNEDITABLE_TYPES.has(item.type)) throw new Error("This section type does not support AI content editing.");
       const replacement = defaultSection(design.id);
-      const propsSchema = blockSchemas[design.blockType as keyof typeof blockSchemas];
-      const oldProps = item.props;
-      const compatible = Object.fromEntries(Object.entries(oldProps).filter(([key]) => key in replacement.props));
-      replacement.props = {
-        ...replacement.props,
-        ...(propsSchema ? propsSchema.parse({ ...replacement.props, ...compatible }) : compatible),
-        id: item.props.id,
-      };
+      const fields = blockFields(design.blockType);
+      const schemas = agentFieldSchemas(design.blockType);
+      // Content moves to the new design; the layout options the design defines stay the design's.
+      for (const [key, value] of Object.entries(item.props)) {
+        const field = fields[key];
+        if (!field || !schemas[key]) continue;
+        if (["radio", "select", "number"].includes(field.type) && key in design.props) continue;
+        const parsed = schemas[key].safeParse(value);
+        if (parsed.success) replacement.props[key] = parsed.data;
+      }
+      replacement.props.id = item.props.id;
       data.content[index] = replacement;
       page.draft_data = sanitizePuckData(data);
       return pushChange(changeset, "switch_section_design", `Switch section to ${design.name}`, item, replacement, page.id);
@@ -589,32 +569,21 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     case "duplicate_section": {
       const page = getPage(changeset, String(args.pageId));
       const data = puckDataSchema.parse(page.draft_data);
-      let item: { type: string; props: Record<string, unknown> };
+      let item: Item;
+      let notes: Record<string, unknown> = {};
       if (name === "insert_section") {
-        if (args.customSection !== undefined) {
-          item = validatedCustomSection(args.customSection, true, false);
-        } else {
-          const design = agentDesigns.find((entry) => entry.id === args.designId);
-          if (!design) throw new Error("That curated section design is unavailable.");
-          item = defaultSection(design.id);
-          if (args.props) {
-            const schema = blockSchemas[item.type as keyof typeof blockSchemas];
-            if (!schema) throw new Error("This curated section is not available for editing.");
-            item.props = { ...item.props, ...schema.parse({ ...item.props, ...record.parse(args.props) }), id: item.props.id };
-          }
-        }
+        ({ item, notes } = newSection(args, changeset));
       } else {
         const { item: existing } = findSection(changeset, page.id, String(args.sectionId));
-        item = existing.type === "Section"
-          ? validatedCustomSection(clone(existing), true)
-          : clone(existing);
-        item.props.id = `${item.type}-${crypto.randomUUID()}`;
+        item = clone(existing);
+        walkItems([item], (entry) => { entry.props.id = `${entry.type}-${crypto.randomUUID()}`; });
       }
       const requestedPosition = Number(args.position ?? editableSections(data).length);
       const index = insertionIndex(data, requestedPosition);
       data.content.splice(index, 0, item);
       page.draft_data = sanitizePuckData(data);
-      return pushChange(changeset, name, `${name === "insert_section" ? "Insert" : "Duplicate"} ${item.type} section`, null, item, page.id);
+      const change = pushChange(changeset, name, `${name === "insert_section" ? "Insert" : "Duplicate"} ${item.type} section`, null, item, page.id);
+      return Object.keys(notes).length ? { change, ...notes } : change;
     }
     case "move_section": {
       const { page, data, item } = findSection(changeset, String(args.pageId), String(args.sectionId));
@@ -640,23 +609,19 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     case "create_page": {
       const slug = String(args.slug);
       if (changeset.working.pages.some((page) => page.slug === slug)) throw new Error("A page with that URL already exists.");
-      const content = (args.sections as { designId?: string; customSection?: unknown }[]).map(({ designId, customSection }) => {
-        if (customSection !== undefined) return validatedCustomSection(customSection, true, false);
-        const design = agentDesigns.find((entry) => entry.id === designId);
-        if (!design) throw new Error("That curated section design is unavailable.");
-        const item = defaultSection(design.id);
-        const schema = blockSchemas[item.type as keyof typeof blockSchemas];
-        if (schema) item.props = { ...item.props, ...schema.parse(item.props), id: item.props.id };
-        return item;
-      });
+      const sections = (args.sections as Record<string, unknown>[]).map((section) => newSection(section, changeset));
+      const imagesToSet = sections.flatMap(({ notes }) => Array.isArray(notes.imagesToSet) ? notes.imagesToSet : []);
       const id = crypto.randomUUID();
+      // Every page carries its own copy of the shared footer.
+      const content = [...sections.map(({ item }) => item), freshFooter({ type: "Footer", props: changeset.working.footer })];
       const page: Page = {
         id, site_id: changeset.siteId, slug, title: String(args.title), nav_label: String(args.navLabel),
-        hide_from_menu: false, draft_data: { root: { props: { title: String(args.title) } }, content },
+        hide_from_menu: false, draft_data: sanitizePuckData({ root: { props: { title: String(args.title) } }, content }),
         seo: {}, sort_order: changeset.working.pages.length,
       };
       changeset.working.pages.push(page);
-      return pushChange(changeset, "create_page", `Create ${page.title} page`, null, page, id);
+      const change = pushChange(changeset, "create_page", `Create ${page.title} page`, null, page, id);
+      return imagesToSet.length ? { change, imagesToSet } : change;
     }
     case "update_page_settings": {
       const page = getPage(changeset, String(args.pageId));
@@ -687,25 +652,20 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
         const item = findNestedItem(data, String(args.sectionId));
         const fields = blockFields(item.type);
         const path = String(args.field);
-        const field = imageFieldAtPath(fields, path);
+        const field = fieldAtPath(fields, path);
         if (!field || !isImageField(field)) {
           throw new Error("Choose a supported image field on this section.");
         }
-        const photos = createPhotoLibrary(context.supabase, context.accountId);
-        const search = await photos.searchPage({ query: String(args.query), orientation: "horizontal", page: 1 });
-        const firstPhoto = search.photos[0];
-        if (!firstPhoto) throw new Error("No suitable Pixabay image was found.");
-        const photo = await photos.select({
-          query: String(args.query), orientation: "horizontal", page: 1,
-          photoId: firstPhoto.id, siteId: context.siteId,
-          ...(args.alt ? { alt: String(args.alt) } : {}),
-        });
+        const photo = await (context.choosePhoto ?? stockPhoto(context))(String(args.query), args.alt ? String(args.alt) : undefined);
         const before = getPathValue(item.props, path);
         setPathValue(item.props, path, photo.url);
         const parts = path.split(".");
         const leaf = parts.pop()!;
-        const altPath = [...parts, leaf === "url" ? "alt" : `${leaf}Alt`].join(".");
-        if (args.alt && imageFieldAtPath(fields, altPath)) setPathValue(item.props, altPath, args.alt);
+        const altPath = [...parts, leaf === "url" || leaf === "src" ? "alt" : `${leaf}Alt`].join(".");
+        const altField = fieldAtPath(fields, altPath);
+        // Describe the new photo: the requested alt text, or the photo's own when none was written yet.
+        const alt = args.alt ? String(args.alt) : getPathValue(item.props, altPath) ? "" : photo.alt;
+        if (alt && altField?.type === "text") setPathValue(item.props, altPath, alt);
         page.draft_data = sanitizePuckData(data);
         return pushChange(changeset, "set_image", `Set ${item.type} image`, before, photo, page.id);
       })();
@@ -744,6 +704,25 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     default:
       throw new Error("This tool is unavailable.");
   }
+}
+
+/** A new section from a curated design (optionally with content) or a custom layout. */
+function newSection(args: Record<string, unknown>, changeset: Changeset): { item: Item; notes: Record<string, unknown> } {
+  if (args.customSection !== undefined) return customLayoutSection(args.customSection, changeset);
+  const design = agentDesigns.find((entry) => entry.id === args.designId);
+  if (!design) throw new Error("That curated section design is unavailable.");
+  const item = defaultSection(design.id);
+  if (args.props !== undefined) item.props = validateStoredProps(item.type, item.props, record.parse(args.props), changeset.working.pages);
+  return { item, notes: {} };
+}
+function stockPhoto(context: AgentToolContext) {
+  return async (query: string, alt?: string) => {
+    const photos = createPhotoLibrary(context.supabase, context.accountId);
+    const search = await photos.searchPage({ query, orientation: "horizontal", page: 1 });
+    const firstPhoto = search.photos[0];
+    if (!firstPhoto) throw new Error("No suitable Pixabay image was found.");
+    return photos.select({ query, orientation: "horizontal", page: 1, photoId: firstPhoto.id, siteId: context.siteId, ...(alt ? { alt } : {}) });
+  };
 }
 
 const toolSchemas = agentToolSchemas;

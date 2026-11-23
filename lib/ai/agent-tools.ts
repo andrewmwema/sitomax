@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { ELEMENT_TYPES } from "@/lib/layout/structure";
 import { RESERVED_PAGE_SLUGS } from "@/lib/page-slugs";
+import { customSectionSchema } from "./custom-layout";
 
 const jsonScalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const jsonValues: z.ZodType[] = [jsonScalar];
@@ -20,54 +20,18 @@ const navLabel = z.string().trim().min(1).max(40).regex(/^\S+( \S+){0,2}$/, "Use
 const pageSlug = z.string().trim().min(1).max(60).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   .refine((slug) => !RESERVED_PAGE_SLUGS.has(slug), "That page address is reserved. Choose another.");
 
-const elementSchema = z.object({
-  type: z.enum(ELEMENT_TYPES),
-  props: jsonObject,
-});
-const columnSchema = z.object({
-  type: z.literal("Column"),
-  props: z.object({
-    id: z.string().min(1).max(200),
-    verticalAlign: z.enum(["top", "center", "bottom"]),
-    surface: z.enum(["none", "card", "highlight"]),
-    gap: z.number().int().min(0).max(128),
-    design: jsonObject.optional(),
-    content: z.array(elementSchema).max(30),
-  }),
-});
-const rowSchema = z.object({
-  type: z.literal("Row"),
-  props: z.object({
-    id: z.string().min(1).max(200),
-    layout: z.enum(["1", "1-1", "1-2", "2-1", "1-1-1", "1-1-1-1"]),
-    gap: z.number().int().min(0).max(128),
-    reverseOnMobile: z.boolean(),
-    design: jsonObject.optional(),
-    columns: z.array(columnSchema).min(1).max(4),
-  }),
-});
-const customSectionSchema = z.object({
-  type: z.literal("Section"),
-  props: z.object({
-    id: z.string().min(1).max(200),
-    background: z.enum(["default", "soft", "dark", "primary"]),
-    width: z.enum(["narrow", "contained", "wide", "full"]),
-    rowGap: z.number().int().min(0).max(128),
-    design: jsonObject.optional(),
-    rows: z.array(rowSchema).min(1).max(10),
-  }),
-});
-
 const pageSections = z.array(z.object({
   designId: z.string().min(1).max(100).optional(),
   customSection: customSectionSchema.optional(),
+  props: jsonObject.optional(),
 }));
+const CUSTOM_LAYOUT = "A custom layout is rows of columns of elements. Text elements take plain text with blank lines between paragraphs and optional **bold** or *emphasis*. An Image element's query is only a search hint: the image is inserted empty, then chosen with set_image.";
 
 const specs = [
   { name: "get_site_overview", description: "Read a compact map of pages, theme, header, footer, business, blog, and SEO.", schema: z.object({}) },
   { name: "get_page", description: "Read one page's complete validated sections.", schema: z.object({ pageId: z.uuid() }) },
   { name: "search_site", description: "Search text across pages and blog posts.", schema: z.object({ query: z.string().trim().min(1).max(200) }) },
-  { name: "list_section_designs", description: "List curated section designs, optionally filtered by block type.", schema: z.object({ blockType: z.string().max(80).optional() }) },
+  { name: "list_section_designs", description: "List curated section designs. With a blockType, also returns that block's editable props.", schema: z.object({ blockType: z.string().max(80).optional() }) },
   { name: "get_blog_posts", description: "List blog draft and published post summaries.", schema: z.object({
     query: z.string().max(200).optional(), status: z.enum(["draft", "scheduled", "published", "all"]).default("all"),
     limit: z.number().int().min(1).max(30).default(10),
@@ -79,15 +43,15 @@ const specs = [
   { name: "ask_user", description: "Ask one genuinely ambiguous question and optionally provide choices.", schema: z.object({
     question: z.string().trim().min(1).max(1000), options: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
   }) },
-  { name: "update_theme", description: "Stage validated site theme changes with contrast-safe text.", schema: z.object({ patch: jsonObject }) },
-  { name: "update_header", description: "Stage validated global header settings.", schema: z.object({ header: jsonObject }) },
-  { name: "update_footer", description: "Stage global footer props.", schema: z.object({ props: jsonObject }) },
-  { name: "update_section_props", description: "Stage validated section property changes.", schema: sectionRef.extend({ props: jsonObject }) },
-  { name: "update_section_design", description: "Stage validated SectionShell design changes.", schema: sectionRef.extend({ design: jsonObject }) },
+  { name: "update_theme", description: "Stage site theme changes. Send only what changes: style, headingFont, bodyFont, radius, buttonStyle, colors (primary, secondary, accent, background, text as hex). Text is kept contrast-safe.", schema: z.object({ patch: jsonObject }) },
+  { name: "update_header", description: "Stage global header settings. Send only the settings to change; they are merged into the current header.", schema: z.object({ header: jsonObject }) },
+  { name: "update_footer", description: "Stage shared footer props. Send only the props to change. Phone, email, address and hours come from Business information and cannot be changed.", schema: z.object({ props: jsonObject }) },
+  { name: "update_section_props", description: "Stage content changes to a section or a nested layout element (use its id as sectionId). Send only the props to change; a list prop is replaced whole. Images are changed with set_image, design with update_section_design.", schema: sectionRef.extend({ props: jsonObject }) },
+  { name: "update_section_design", description: "Stage design changes (background, spacing, appearance, border, shadow, animation) to a section or a nested layout element.", schema: sectionRef.extend({ design: jsonObject }) },
   { name: "switch_section_design", description: "Switch a section to a curated design while preserving compatible content.", schema: sectionRef.extend({
     designId: z.string().min(1).max(100),
   }) },
-  { name: "insert_section", description: "Insert a curated design or validated custom layout section into a page.", schema: z.object({
+  { name: "insert_section", description: `Insert a section into a page: either a curated designId (optionally with props for its content) or a customSection. ${CUSTOM_LAYOUT}`, schema: z.object({
     pageId: z.uuid(), designId: z.string().min(1).max(100).optional(), customSection: customSectionSchema.optional(),
     position: z.number().int().min(0).optional(), props: jsonObject.optional(),
   }) },
@@ -98,7 +62,7 @@ const specs = [
     position: z.number().int().min(0).optional(),
   }) },
   { name: "delete_section", description: "Remove a section from a page.", schema: sectionRef },
-  { name: "create_page", description: "Stage a page with curated designs or validated custom layout sections.", schema: z.object({
+  { name: "create_page", description: "Stage a new page. Each section is a curated designId (optionally with props for its content) or a customSection as in insert_section. The shared footer is added automatically.", schema: z.object({
     title: z.string().trim().min(1).max(200),
     slug: pageSlug,
     navLabel,
@@ -108,7 +72,7 @@ const specs = [
     pageId: z.uuid(), title: z.string().trim().min(1).max(200).optional(), navLabel: navLabel.optional(),
     seoTitle: z.string().max(200).optional(), seoDescription: z.string().max(500).optional(), hidden: z.boolean().optional(),
   }) },
-  { name: "set_image", description: "Search Pixabay, save a selected image to site assets, and stage it into a section image field.", schema: sectionRef.extend({
+  { name: "set_image", description: "Search stock photos, save one to site assets, and stage it into an image field of a section or nested element. field is the image prop path, such as backgroundImage, services.0.image, or src for an Image element.", schema: sectionRef.extend({
     query: z.string().trim().min(1).max(100), field: z.string().min(1).max(120), alt: z.string().max(500).optional(),
   }) },
   { name: "create_blog_post_draft", description: "Stage a new unpublished blog post draft.", schema: z.object({

@@ -8,6 +8,7 @@ import { puckConfig } from "@/lib/puck/config";
 import { sectionCatalog } from "@/lib/sections/catalog";
 import { buildDesignItem } from "@/lib/sections/library";
 import { iconNameSchema } from "@/lib/icons";
+import { siteLinkSchema } from "@/lib/links";
 
 type Fields = Record<string, Field>;
 export const aiCatalog = sectionCatalog.filter((design) => design.category !== "Blank");
@@ -33,7 +34,12 @@ const link = z.string().max(500).refine(
   "Use a page path, anchor, or a safe HTTP, email or telephone link.",
 );
 
-function fieldSchema(field: Field, key: string): z.ZodType {
+/**
+ * `agent` builds the schema for edits to stored content: links may be the typed
+ * links the link picker stores, images are the stored URLs (changed only through
+ * set_image) and lists may be as long as the editor allows.
+ */
+function fieldSchema(field: Field, key: string, agent = false): z.ZodType {
   switch (field.type) {
     case "text":
     case "textarea":
@@ -52,22 +58,62 @@ function fieldSchema(field: Field, key: string): z.ZodType {
       return z.literal(values);
     }
     case "array":
-      return z.array(fieldsSchema(field.arrayFields as Fields)).max(12);
+      return z.array(fieldsSchema(field.arrayFields as Fields, agent)).max(agent ? 40 : 12);
     case "object":
-      return fieldsSchema(field.objectFields as Fields);
+      return fieldsSchema(field.objectFields as Fields, agent);
     case "custom":
-      if (isImageField(field)) return z.string().max(160).describe("Photo search query, NOT a URL; empty for no photo.");
+      if (isImageField(field)) return agent ? z.string().max(2000)
+        : z.string().max(160).describe("Photo search query, NOT a URL; empty for no photo.");
       if ("aiKind" in field && field.aiKind === "icon") return iconNameSchema;
-      if ("aiKind" in field && field.aiKind === "link") return link;
+      if ("aiKind" in field && field.aiKind === "link") return agent ? z.union([link, siteLinkSchema]) : link;
       throw new Error(`Unsupported custom AI field: ${key}.`);
     default: throw new Error(`Unsupported AI field: ${key} (${field.type}).`);
   }
 }
 
-function fieldsSchema(fields: Fields) {
+function fieldsSchema(fields: Fields, agent = false) {
   return z.strictObject(Object.fromEntries(
-    Object.entries(fields).filter(([key]) => key !== "design").map(([key, field]) => [key, fieldSchema(field, key)]),
+    Object.entries(fields).filter(([key]) => key !== "design").map(([key, field]) => [key, fieldSchema(field, key, agent)]),
   ));
+}
+
+const agentSchemas = new Map<string, Record<string, z.ZodType>>();
+/**
+ * One schema per property the agent may edit on a stored block or layout
+ * element. Properties the AI schemas cannot express (slots, pickers without an
+ * AI kind) are left out, so the agent cannot change them.
+ */
+export function agentFieldSchemas(type: string): Record<string, z.ZodType> {
+  let schemas = agentSchemas.get(type);
+  if (!schemas) {
+    schemas = {};
+    for (const [key, field] of Object.entries(blockFields(type))) {
+      if (key === "design" || key === "id") continue;
+      try { schemas[key] = fieldSchema(field, key, true); } catch { /* not editable by the agent */ }
+    }
+    agentSchemas.set(type, schemas);
+  }
+  return schemas;
+}
+
+/** A compact description of the editable properties, for the agent to read. */
+export function describeAgentFields(type: string): Record<string, unknown> {
+  const describe = (fields: Fields, top: boolean): Record<string, unknown> => Object.fromEntries(
+    Object.entries(fields).flatMap(([key, field]): [string, unknown][] => {
+      if (key === "design" || key === "id" || (top && !(key in agentFieldSchemas(type)))) return [];
+      switch (field.type) {
+        case "text": case "textarea": return [[key, /(?:href|link)$/i.test(key) ? "link" : "text"]];
+        case "richtext": return [[key, "rich text (HTML)"]];
+        case "number": return [[key, "number"]];
+        case "radio": case "select": return [[key, field.options.map(({ value }) => value)]];
+        case "array": return [[key, [describe(field.arrayFields as Fields, false)]]];
+        case "object": return [[key, describe(field.objectFields as Fields, false)]];
+        default:
+          if (isImageField(field)) return [[key, "image (choose with set_image)"]];
+          return "aiKind" in field ? [[key, field.aiKind === "icon" ? "icon name" : "link"]] : [];
+      }
+    }));
+  return describe(blockFields(type), true);
 }
 
 export const blockSchemas = Object.fromEntries(blockTypes.map((type) => [type, fieldsSchema(blockFields(type))]));
