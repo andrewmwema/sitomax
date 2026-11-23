@@ -1,0 +1,63 @@
+import { describe, expect, it } from "vitest";
+import { fixtureIds } from "@/test/fixtures/agent-site";
+import { DRY_RUN_SCRIPT, EVAL_CASES, runEval, scriptedModel, type EvalCase } from "./agent-evals";
+
+const anything: EvalCase = { id: "harness", request: "Anything", verify: () => null };
+const hero = (props: Record<string, unknown>): [string, unknown] =>
+  ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props }];
+
+describe("AI agent evals harness", () => {
+  it("has ten requests, and passes a run that keeps the rules", async () => {
+    expect(EVAL_CASES).toHaveLength(10);
+    expect(new Set(EVAL_CASES.map((entry) => entry.id)).size).toBe(10);
+    const result = await runEval(anything, scriptedModel(DRY_RUN_SCRIPT));
+    expect(result).toMatchObject({ passed: true, failures: [], terminal: "completed", steps: 2, toolErrors: 0, changes: 1 });
+    expect(result.notes).toEqual(["Home: 1 placeholder to fill in before publishing: [service area]."]);
+    // The same run does not satisfy a request it did not carry out.
+    expect((await runEval(EVAL_CASES[0], scriptedModel(DRY_RUN_SCRIPT))).failures).toEqual(["Expected several coordinated changes."]);
+  });
+
+  it("answers plans and questions like a cooperative user", async () => {
+    const result = await runEval(anything, scriptedModel([
+      ["plan", { steps: ["Rewrite the hero"] }],
+      ["ask_user", { question: "Which tone?", options: ["Friendly", "Formal"] }],
+      hero({ heading: "Friendly local plumbers" }),
+      "Done.",
+    ]));
+    expect(result).toMatchObject({ passed: true, terminal: "completed", changes: 1 });
+  });
+
+  it("fails runs that invent facts, break links or stage nothing", async () => {
+    const invented = await runEval(anything, scriptedModel([
+      hero({ heading: "Trusted by 2,500 customers since 1998", subheading: "Boiler servicing from $89. Call 555-014-9999 or hello@harbourplumbing.example." }),
+      ["insert_section", { pageId: fixtureIds.home, designId: "nope" }],
+      "Done.",
+    ]));
+    expect(invented.passed).toBe(false);
+    expect(invented.toolErrors).toBe(1);
+    expect(invented.failures.map((failure) => failure.split(":")[0])).toEqual([
+      "Invented statistic", "Invented founding year", "Invented phone number", "Invented price",
+    ]);
+
+    const supplied = await runEval(anything, scriptedModel([
+      hero({ subheading: "Boiler servicing from [price]. Call +15550100 or hello@harbourplumbing.example. Rated [rating] by [number] customers." }),
+      "Done.",
+    ]));
+    expect(supplied.failures).toEqual([]);
+
+    expect((await runEval(anything, scriptedModel(["I could not find anything to change."]))).failures).toEqual(["The run staged no changes."]);
+    expect((await runEval(anything, scriptedModel([["get_site_overview", {}]]))).failures[0]).toBe("The run ended paused instead of completing.");
+  });
+
+  it("stops a run that reaches its cost limit", async () => {
+    let calls = 0;
+    const looping = scriptedModel([["get_site_overview", {}]]);
+    const result = await runEval(anything, async (params, call) => {
+      calls++;
+      return { ...await looping(params, call), usage: { input_tokens: 50_000, output_tokens: 0 } } as Awaited<ReturnType<typeof looping>>;
+    }, { maxCostUsd: 0.25 });
+    // 50,000 input tokens cost $0.10, so the third call reaches the limit and the fourth is never made.
+    expect(calls).toBe(3);
+    expect(result.failures[0]).toBe("The run was stopped at its cost limit of $0.25.");
+  });
+});

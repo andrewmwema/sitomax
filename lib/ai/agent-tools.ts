@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { blogBlockSchema } from "@/lib/blog";
 import { RESERVED_PAGE_SLUGS } from "@/lib/page-slugs";
 import { customSectionSchema } from "./custom-layout";
 
@@ -25,7 +26,9 @@ const pageSections = z.array(z.object({
   customSection: customSectionSchema.optional(),
   props: jsonObject.optional(),
 }));
-const CUSTOM_LAYOUT = "A custom layout is rows of columns of elements. Text elements take plain text with blank lines between paragraphs and optional **bold** or *emphasis*. An Image element's query is only a search hint: the image is inserted empty, then chosen with set_image.";
+const BLOG_BLOCKS = "Write the post as blocks: paragraph (html with p, strong, em and a tags), heading (level 2 to 4), list, quote, callout, divider or table. Images and videos cannot be added.";
+const blogBlocks = z.array(blogBlockSchema).min(1).max(200);
+const CUSTOM_LAYOUT = "A custom layout is rows of columns of elements. Text elements take plain text with blank lines between paragraphs and optional **bold** or *emphasis*. An Image element's query is only a search hint: the image is inserted empty, then chosen with set_image. Gaps and spacing are numbers from this scale: 0, 4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 128.";
 
 const specs = [
   { name: "get_site_overview", description: "Read a compact map of pages, theme, header, footer, business, blog, and SEO.", schema: z.object({}) },
@@ -75,13 +78,16 @@ const specs = [
   { name: "set_image", description: "Search stock photos, save one to site assets, and stage it into an image field of a section or nested element. field is the image prop path, such as backgroundImage, services.0.image, or src for an Image element.", schema: sectionRef.extend({
     query: z.string().trim().min(1).max(100), field: z.string().min(1).max(120), alt: z.string().max(500).optional(),
   }) },
-  { name: "create_blog_post_draft", description: "Stage a new unpublished blog post draft.", schema: z.object({
+  { name: "create_blog_post_draft", description: `Stage a new unpublished blog post draft. ${BLOG_BLOCKS}`, schema: z.object({
     title: z.string().trim().min(1).max(200), subtitle: z.string().max(300).default(""),
     excerpt: z.string().max(500).default(""), slug: z.string().trim().min(1).max(1000),
-    content: jsonObject, seoTitle: z.string().max(200).default(""), seoDescription: z.string().max(500).default(""),
+    blocks: blogBlocks, seoTitle: z.string().max(200).default(""), seoDescription: z.string().max(500).default(""),
   }) },
-  { name: "update_blog_post_draft", description: "Stage changes to an existing unpublished blog post draft.", schema: z.object({
-    postId: z.uuid(), patch: jsonObject,
+  { name: "update_blog_post_draft", description: "Stage changes to an existing unpublished blog post draft. Send only the fields to change; blocks replaces the whole post body, so keep the blocks you do not change, including images, exactly as get_post returned them.", schema: z.strictObject({
+    postId: z.uuid(), title: z.string().trim().min(1).max(200).optional(), subtitle: z.string().max(300).optional(),
+    excerpt: z.string().max(500).optional(), slug: z.string().trim().min(1).max(1000).optional(),
+    blocks: blogBlocks.optional(), seoTitle: z.string().max(200).optional(), seoDescription: z.string().max(500).optional(),
+    coverAlt: z.string().max(500).optional(),
   }) },
 ] as const;
 

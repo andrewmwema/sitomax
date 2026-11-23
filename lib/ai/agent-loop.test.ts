@@ -64,6 +64,13 @@ describe("AI agent run loop", () => {
     expect(state.messages.at(-1)).toMatchObject({ role: "user", content: [{ is_error: true, content: expect.stringContaining("Run limit reached") }] });
     expect(heading(changeset)).toBe("Reliable plumbers");
     expectAnswered(state.messages);
+    // The rules stay cached across a change; only the site map after them is rewritten.
+    const [rulesBefore, mapBefore] = model.calls[2].system as Anthropic.TextBlockParam[];
+    const [rulesAfter, mapAfter] = model.calls[3].system as Anthropic.TextBlockParam[];
+    expect(rulesAfter).toEqual(rulesBefore);
+    expect(rulesBefore.cache_control).toEqual({ type: "ephemeral", ttl: "5m" });
+    expect(mapBefore.text).not.toContain("Reliable plumbers");
+    expect(mapAfter).toMatchObject({ text: expect.stringContaining("Reliable plumbers"), cache_control: { type: "ephemeral", ttl: "5m" } });
 
     startAgentSegment(state);
     expect(await run()).toBe("completed");
@@ -122,6 +129,19 @@ describe("AI agent run loop", () => {
     expect(errors[1]).toContain("still invalid after one repair attempt");
     expect(repair.changeset.changes).toHaveLength(0);
     expect(repair.changeset.working).toEqual(repair.changeset.baseline);
+  });
+
+  it("does not send the model's signed reasoning back after the site map has changed", async () => {
+    const base = scripted((_params, call) => call === 1 ? edit("Reliable plumbers") : { text: "Done." });
+    const model: AgentModel = async (params, options) => {
+      const response = await base(params, options);
+      return { ...response, content: [{ type: "thinking", thinking: "Consider the hero", signature: "bound-to-this-prompt" }, ...response.content] } as Anthropic.Message;
+    };
+    const { state, run } = start(model);
+    expect(await run()).toBe("completed");
+    expect(JSON.stringify(base.calls[1].messages)).not.toContain("bound-to-this-prompt");
+    expect(JSON.stringify(state.messages)).not.toContain("bound-to-this-prompt");
+    expectAnswered(state.messages);
   });
 
   it("stops without calling the model once the user has pressed Stop", async () => {

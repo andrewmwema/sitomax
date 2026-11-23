@@ -1,5 +1,6 @@
 import { defaultHeader } from "@/lib/header";
 import { puckConfig } from "@/lib/puck/config";
+import { sanitizePuckData } from "@/lib/richtext";
 import type { AgentChangeset } from "@/lib/ai/agent";
 import { aiCatalog, defaultSection } from "@/lib/ai/site-schemas";
 
@@ -41,7 +42,8 @@ const footer = (id: string): Item => ({ type: "Footer", props: { ...defaults("Fo
 export function fixtureChangeset(): AgentChangeset {
   const page = (id: string, slug: string, title: string, content: Item[]) => ({
     id, site_id: fixtureIds.site, slug, title, nav_label: title, hide_from_menu: false,
-    draft_data: { root: { props: { title } }, content: [...content, footer(`footer-${slug || "home"}`)] },
+    // Stored content is sanitized when the agent loads a site.
+    draft_data: sanitizePuckData({ root: { props: { title } }, content: [...content, footer(`footer-${slug || "home"}`)] }),
     seo: {}, sort_order: 0, published_at: null,
   });
   const snapshot: AgentChangeset["working"] = {
@@ -68,7 +70,7 @@ export function fixtureChangeset(): AgentChangeset {
     ].map((entry, index) => ({ ...entry, sort_order: index })),
     posts: [{
       id: fixtureIds.post, site_id: fixtureIds.site, title: "How to stop a dripping tap", subtitle: "", excerpt: "A quick guide.",
-      slug: "stop-a-dripping-tap", draft_content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Turn off the water first." }] }] },
+      slug: "stop-a-dripping-tap", draft_content: { version: 1, blocks: [{ type: "paragraph", html: "<p>Turn off the water first.</p>" }] },
       cover_image: "", cover_alt: "", seo_title: "", seo_description: "", status: "draft", updated_at: "2026-01-01T00:00:00.000Z",
     }],
     blogSettings: {},

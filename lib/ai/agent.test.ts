@@ -296,4 +296,44 @@ describe("AI agent tool guardrails", () => {
     await expect(run(changeset, "update_footer", { props: { phone: "555 0100" } })).rejects.toThrow("Business information");
     expectReplays(changeset);
   });
+
+  it("drafts and edits blog posts as text blocks, keeping existing images and published posts untouched", async () => {
+    const changeset = staged();
+    const image = { type: "image", url: "https://assets.example/site/pipes.jpg", alt: "Frozen pipes", caption: "" };
+    const post = (id: string, status: "draft" | "published") => ({
+      id, site_id: siteId, title: "Winter tips", subtitle: "", excerpt: "", slug: `winter-${status}`,
+      draft_content: { version: 1, blocks: [{ type: "paragraph", html: "<p>Old</p>" }, image] },
+      cover_image: "", cover_alt: "", seo_title: "", seo_description: "", status, updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    const draftId = "00000000-0000-4000-8000-000000000021";
+    const liveId = "00000000-0000-4000-8000-000000000022";
+    changeset.working.posts = [post(draftId, "draft"), post(liveId, "published")];
+    changeset.baseline = structuredClone(changeset.working);
+
+    await run(changeset, "create_blog_post_draft", { title: "Preventing frozen pipes", slug: "preventing-frozen-pipes", blocks: [
+      { type: "heading", level: 2, text: "Before the cold arrives" },
+      { type: "paragraph", html: "<p>Insulate pipes in <strong>unheated</strong> rooms.<script>alert(1)</script></p>" },
+      { type: "list", ordered: false, items: ["Lag the pipes", "Know where your stopcock is"] },
+    ] });
+    expect(changeset.working.posts[0]).toMatchObject({ title: "Preventing frozen pipes", status: "draft", draft_content: { version: 1 } });
+    expect(JSON.stringify(changeset.working.posts[0].draft_content)).not.toContain("script");
+
+    await run(changeset, "update_blog_post_draft", { postId: draftId, excerpt: "Keep the heating on low.", blocks: [
+      { type: "paragraph", html: "<p>New intro</p>" }, image,
+    ] });
+    expect(changeset.working.posts.find((entry) => entry.id === draftId)).toMatchObject({
+      title: "Winter tips", excerpt: "Keep the heating on low.", draft_content: { blocks: [{ html: "<p>New intro</p>" }, image] },
+    });
+
+    for (const [name, input, message] of [
+      ["create_blog_post_draft", { title: "Tiptap", slug: "tiptap", blocks: [{ type: "doc", content: [] }] }, "Invalid"],
+      ["create_blog_post_draft", { title: "Again", slug: "preventing-frozen-pipes", blocks: [{ type: "divider" }] }, "already uses that URL"],
+      ["create_blog_post_draft", { title: "Photo", slug: "photo", blocks: [{ ...image, url: "https://example.com/new.jpg" }] }, "cannot be added"],
+      ["update_blog_post_draft", { postId: draftId, blocks: [{ ...image, url: "https://example.com/new.jpg" }] }, "cannot be added"],
+      ["update_blog_post_draft", { postId: draftId, patch: { title: "Old shape" } }, "Unrecognized"],
+      ["update_blog_post_draft", { postId: draftId }, "at least one field"],
+      ["update_blog_post_draft", { postId: liveId, title: "Changed live" }, "Only an unpublished draft"],
+    ] as const) await expect(run(changeset, name, input), JSON.stringify(input)).rejects.toThrow(message);
+    expect(changeset.changes).toHaveLength(2);
+  });
 });

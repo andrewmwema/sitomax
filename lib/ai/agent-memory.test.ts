@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
-import { closeOpenToolCalls, MEMORY_LIMITS, summarizeHistory, trimToolResults } from "./agent-memory";
+import { closeOpenToolCalls, dropThinking, MEMORY_LIMITS, summarizeHistory, trimToolResults } from "./agent-memory";
 
 type Message = Anthropic.MessageParam;
 const call = (id: string, name: string, input: unknown = {}): Message =>
@@ -21,6 +21,21 @@ describe("AI agent thread memory", () => {
     expect(repaired.map((message) => message.role)).toEqual(["user", "assistant", "user", "assistant", "user", "user"]);
     expect(resultsOf(repaired).map((block) => [block.tool_use_id, block.is_error ?? false])).toEqual([["a", false], ["b", true]]);
     expect(repaired.at(-1)).toEqual({ role: "user", content: "Try again" });
+  });
+
+  it("never returns the model's signed reasoning, which is bound to a conversation that keeps changing", () => {
+    const thinking = { type: "thinking" as const, thinking: "Plan the edit", signature: "signed" };
+    const use = { type: "tool_use" as const, id: "a", name: "get_page", input: {} };
+    const messages: Message[] = [
+      { role: "user", content: "Improve the home page" },
+      { role: "assistant", content: [thinking, use] }, result("a", "page"),
+      { role: "assistant", content: [{ type: "redacted_thinking", data: "opaque" }] },
+      { role: "assistant", content: [{ type: "text", text: "Done." }] },
+    ];
+    const cleaned = dropThinking(messages);
+    expect(cleaned).toEqual([messages[0], { role: "assistant", content: [use] }, messages[2], messages[4]]);
+    expect(cleaned[4 - 1]).toBe(messages[4]);
+    expect(messages[1].content).toHaveLength(2);
   });
 
   it("keeps only the latest tool results in full while a run is working", () => {

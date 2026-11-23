@@ -55,6 +55,21 @@ export function closeOpenToolCalls(messages: Message[]): Message[] {
 }
 
 /**
+ * The model's private reasoning is signed against the exact conversation it was
+ * written in, including the site map in the system prompt. That map changes
+ * with every staged change and old tool results are trimmed, so a returned
+ * reasoning block would be rejected. Reasoning is therefore never sent back.
+ */
+export function dropThinking(messages: Message[]): Message[] {
+  return messages.flatMap((message) => {
+    if (message.role !== "assistant" || typeof message.content === "string") return [message];
+    const content = message.content.filter((block) => block.type !== "thinking" && block.type !== "redacted_thinking");
+    if (content.length === message.content.length) return [message];
+    return content.length ? [{ ...message, content }] : [];
+  });
+}
+
+/**
  * Old tool results are most of a long run's context, and the site map already
  * shows their effect. All but the most recent are replaced by a short note.
  */
