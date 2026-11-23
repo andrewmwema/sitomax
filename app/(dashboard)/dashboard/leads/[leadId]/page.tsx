@@ -33,7 +33,7 @@ async function Conversation({ params }: { params: Promise<{ leadId: string }> })
     supabase.from("lead_events").select("id, type, data, created_at").eq("lead_id", lead.id)
       .order("created_at", { ascending: false }).order("id").returns<LeadEvent[]>(),
     supabase.from("sites").select("name, subdomain").eq("id", lead.site_id).maybeSingle(),
-    // Trash is limited to account owners and the agency; RLS enforces it, this only hides the action.
+    // Trash and export are limited to account owners and the agency.
     supabase.rpc("can_manage_site_leads", { p_site: lead.site_id }),
   ]);
   return <LeadConversationView key={lead.id} lead={lead} userId={user.id} conversation={conversation}

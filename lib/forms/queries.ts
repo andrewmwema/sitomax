@@ -14,10 +14,12 @@ export class SubmissionQueryError extends Error {
   }
 }
 
-export async function allowedLeadSites(supabase: Client, userId: string): Promise<SubmissionSite[]> {
+export async function allowedLeadSites(supabase: Client, userId: string, { ownersOnly = false }: { ownersOnly?: boolean } = {}): Promise<SubmissionSite[]> {
+  let membershipQuery = supabase.from("account_members").select("account_id").eq("user_id", userId);
+  if (ownersOnly) membershipQuery = membershipQuery.eq("role", "owner");
   const [sites, memberships, admin] = await Promise.all([
     supabase.from("sites").select("id, account_id, name, subdomain"),
-    supabase.from("account_members").select("account_id").eq("user_id", userId),
+    membershipQuery,
     supabase.rpc("is_super_admin"),
   ]);
   if (sites.error || memberships.error || admin.error) throw new SubmissionQueryError(sites.error ?? memberships.error ?? admin.error);

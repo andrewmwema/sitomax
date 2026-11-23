@@ -1,12 +1,12 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { AlarmClock, Bell, Copy, FileText, Mail, Pencil, Reply, StickyNote, Tag, Trash2, X } from "lucide-react";
 import { saveLeadNote } from "@/app/(dashboard)/dashboard/forms/actions";
 import { leadStatuses, leadStatusLabels, submissionContact, submissionFields, type Lead, type LeadEvent } from "@/lib/forms/submissions";
 import { LocalTime } from "@/components/dashboard/local-time";
 import type { ThreadNote } from "./thread";
-import { IconButton, StatusPill, leadToast, useNow } from "./ui";
+import { IconButton, StatusPill, copyLeadValue, leadToast, useLeadMedia, useNow } from "./ui";
 
 type Tab = "contact" | "notes" | "timeline";
 const tabs: { value: Tab; label: string }[] = [
@@ -18,16 +18,7 @@ const fieldLabel = (field: string) => {
 };
 const isUuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
 
-async function copy(value: string, label: string) {
-  try {
-    await navigator.clipboard.writeText(value);
-    leadToast(`${label} copied.`);
-  } catch {
-    leadToast(`Could not copy the ${label.toLowerCase()}.`, "error");
-  }
-}
-
-export function LeadDetailsDrawer({ id, lead, siteName, notes, events, showNotes, onToggleNotes, onFocus, onClose }: {
+export function LeadDetailsDrawer({ id, lead, siteName, notes, events, showNotes, onToggleNotes, onFocus, onClose, onOpenNotes, mode = "drawer" }: {
   id: string; lead: Lead; siteName: string;
   /** Null when notes or the timeline could not be loaded. */
   notes: ThreadNote[] | null; events: LeadEvent[] | null;
@@ -35,38 +26,56 @@ export function LeadDetailsDrawer({ id, lead, siteName, notes, events, showNotes
   /** Scrolls the conversation to a message ("form", a message id, or "note-…"). */
   onFocus: (target: string) => void;
   onClose: () => void;
+  onOpenNotes?: () => void;
+  mode?: "drawer" | "details" | "notes";
 }) {
   const [tab, setTab] = useState<Tab>("contact");
+  const overlay = useLeadMedia("(min-width: 768px) and (max-width: 1199px)") && mode === "drawer";
+  const dialog = useRef<HTMLDialogElement>(null);
   const base = useId();
+  const availableTabs = mode === "details" ? tabs.filter((item) => item.value !== "notes") : tabs;
+  const activeTab = mode === "notes" ? "notes" : tab;
+  useEffect(() => {
+    const element = dialog.current;
+    if (!overlay || !element) return;
+    element.showModal();
+    return () => element.close();
+  }, [overlay]);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-    const index = tabs.findIndex((item) => item.value === tab);
-    const next = tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length].value;
+    const index = availableTabs.findIndex((item) => item.value === tab);
+    const next = availableTabs[(index + (event.key === "ArrowRight" ? 1 : -1) + availableTabs.length) % availableTabs.length].value;
     setTab(next);
     document.getElementById(`${base}-${next}-tab`)?.focus();
   };
 
-  return <aside id={id} aria-label="Lead details" className="leads-details">
+  const content = <aside id={id} aria-label={mode === "notes" ? "Lead notes" : "Lead details"} className="leads-details" data-mode={mode}>
+    {mode === "notes" ? <h2 className="border-b border-[var(--lead-line)] px-4 py-3 text-sm font-semibold">Internal notes</h2> :
     <div className="flex h-12 shrink-0 items-end border-b border-[var(--lead-line)] pl-4 pr-2">
       <div role="tablist" aria-label="Lead details" className="flex flex-1 gap-4" onKeyDown={onKeyDown}>
-        {tabs.map((item) => <button key={item.value} type="button" role="tab" id={`${base}-${item.value}-tab`} aria-controls={`${base}-${item.value}`}
+        {availableTabs.map((item) => <button key={item.value} type="button" role="tab" id={`${base}-${item.value}-tab`} aria-controls={`${base}-${item.value}`}
           aria-selected={tab === item.value} tabIndex={tab === item.value ? 0 : -1} onClick={() => setTab(item.value)}
           className={`-mb-px border-b-2 pb-3 pt-2 text-[13px] ${tab === item.value ? "border-[var(--lead-blue)] font-semibold text-[var(--lead-navy)]"
             : "border-transparent font-medium text-[var(--lead-muted)] hover:text-[var(--lead-navy)]"}`}>
           {item.label}{item.value === "notes" && notes?.length ? <span className="ml-1 text-xs font-normal text-[var(--lead-muted)]">{notes.length}</span> : null}
         </button>)}
       </div>
-      <IconButton label="Close details" tipAlign="end" className="mb-2" onClick={onClose}><X size={16} /></IconButton>
-    </div>
-    <div role="tabpanel" id={`${base}-${tab}`} aria-labelledby={`${base}-${tab}-tab`} className="leads-scroll flex-1 p-4">
-      {tab === "contact" ? <ContactTab lead={lead} siteName={siteName} />
-        : tab === "notes" ? <NotesTab lead={lead} notes={notes} showNotes={showNotes} onToggleNotes={onToggleNotes} />
+      {mode === "drawer" ? <IconButton label="Close details" tipAlign="end" className="mb-2" onClick={onClose}><X size={16} /></IconButton> : null}
+    </div>}
+    <div role={mode === "notes" ? undefined : "tabpanel"} id={`${base}-${activeTab}`}
+      aria-labelledby={mode === "notes" ? undefined : `${base}-${activeTab}-tab`} className="leads-scroll flex-1 p-4">
+      {activeTab === "contact" ? <ContactTab lead={lead} siteName={siteName} />
+        : activeTab === "notes" ? <NotesTab lead={lead} notes={notes} showNotes={showNotes} onToggleNotes={onToggleNotes} />
         : <TimelineTab lead={lead} events={events} notes={notes} onFocus={onFocus} onNotes={(note) => {
           if (showNotes) onFocus(`note-${note}`);
+          else if (onOpenNotes) onOpenNotes();
           else setTab("notes");
         }} />}
     </div>
   </aside>;
+  return overlay ? <dialog ref={dialog} aria-label="Lead details" className="leads-ui leads-details-overlay"
+    onCancel={(event) => { event.preventDefault(); onClose(); }}
+    onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>{content}</dialog> : content;
 }
 
 function Row({ label, children, copyValue }: { label: string; children: ReactNode; copyValue?: string }) {
@@ -75,7 +84,7 @@ function Row({ label, children, copyValue }: { label: string; children: ReactNod
     <dd className="mt-0.5 flex items-start gap-2 text-sm text-[var(--lead-navy)]">
       <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{children}</span>
       {copyValue ? <IconButton label={`Copy ${label.toLowerCase()}`} tipAlign="end" className="-my-1 size-7 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-        onClick={() => void copy(copyValue, label)}><Copy size={13} /></IconButton> : null}
+        onClick={() => void copyLeadValue(copyValue, label)}><Copy size={13} /></IconButton> : null}
     </dd>
   </div>;
 }

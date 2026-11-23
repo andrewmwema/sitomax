@@ -66,11 +66,13 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
       supabase={supabase} userId={user.id} notificationWarning={Boolean(notificationFailures?.data?.length || forwardFailures?.data?.length)}
       warningsUnavailable={warningUnavailable} selectedMessage={filters.message} />;
   }
-  const [results, statsResult, admin] = await Promise.all([
+  const [results, statsResult, admin, exportSites] = await Promise.all([
     getSubmissionPage(supabase, allowed, filters, new Date()),
     supabase.rpc("lead_inbox_stats", { p_site_id: filters.site || null }),
     supabase.rpc("is_super_admin"),
+    allowedLeadSites(supabase, user.id, { ownersOnly: true }),
   ]);
+  const canExport = filters.site ? exportSites.some((site) => site.id === filters.site) : exportSites.length > 0;
   if (admin.error) throw new Error("Could not check lead notification warning access.");
   const leadIds = results.rows.map((row) => row.id);
   const [notificationFailures, forwardFailures] = admin.data && leadIds.length ? await Promise.all([
@@ -120,9 +122,9 @@ async function FormsContent({ searchParams }: { searchParams: PageProps<"/dashbo
           <select name="archived" defaultValue={filters.archived} className="border px-3 text-sm"><option value="0">Active</option><option value="1">Archived</option></select></label>
         <button className="platform-button platform-button-primary">Apply filters</button>
         <Link href={route} className="platform-button">Reset</Link>
-        <a href={`${route}/export${submissionQueryString(filters)}`} className="platform-button"><Download size={14} />Export CSV</a>
+        {canExport ? <a href={`${route}/export${submissionQueryString(filters)}`} className="platform-button"><Download size={14} />Export CSV</a> : null}
       </form>
-      <p className="px-4 pt-3 text-xs text-[var(--platform-muted)]">{results.count.toLocaleString("en")} matching {results.count === 1 ? "lead" : "leads"} · Export CSV includes every match</p>
+      <p className="px-4 pt-3 text-xs text-[var(--platform-muted)]">{results.count.toLocaleString("en")} matching {results.count === 1 ? "lead" : "leads"}{canExport ? " · Export CSV includes matches from accounts you own or manage as a super admin" : ""}</p>
       {results.rows.length ? <>
         <LeadBulkForm archived={archived} />
         <TableScrollArea label="Leads"><table className="w-full min-w-[790px] text-left text-sm">

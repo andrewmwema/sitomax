@@ -11,7 +11,7 @@ import { leadStatuses, leadStatusLabels, submissionContact, type Lead } from "@/
 import { leadDisplayName, leadIsUnread, untilLabel } from "./format";
 import { useLeadInbox } from "./inbox";
 import { leadActionPatch, runLeadAction, setLeadStatus, type LeadInboxActionName } from "./lead-actions";
-import { Avatar, IconButton, MenuItem, Popover, StatusPill, leadToast, useNow } from "./ui";
+import { Avatar, IconButton, MenuItem, Popover, StatusPill, copyLeadValue, leadToast, useLeadMedia, useNow } from "./ui";
 
 const fullDate = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" });
 const inDays = (days: number) => {
@@ -20,23 +20,15 @@ const inDays = (days: number) => {
   return date.toISOString();
 };
 
-async function copy(value: string, label: string) {
-  try {
-    await navigator.clipboard.writeText(value);
-    leadToast(`${label} copied.`);
-  } catch {
-    leadToast(`Could not copy the ${label.toLowerCase()}.`, "error");
-  }
-}
-
-export function ConversationHeader({ lead: saved, siteName, canTrash, detailsOpen, detailsId, onToggleDetails, showNotes, onToggleNotes }: {
-  lead: Lead; siteName: string; canTrash: boolean;
+export function ConversationHeader({ lead: saved, siteName, canTrash, canExport, detailsOpen, detailsId, onToggleDetails, showNotes, onToggleNotes }: {
+  lead: Lead; siteName: string; canTrash: boolean; canExport: boolean;
   detailsOpen: boolean; detailsId: string; onToggleDetails: () => void;
   showNotes: boolean; onToggleNotes: () => void;
 }) {
   const inbox = useLeadInbox();
   const router = useRouter();
   const now = useNow();
+  const mobile = useLeadMedia("(max-width: 767px)");
   // Shown immediately; dropped as soon as the server sends the lead again.
   const [pending, setPending] = useState<{ base: Lead; changes: Partial<Lead> } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,16 +81,16 @@ export function ConversationHeader({ lead: saved, siteName, canTrash, detailsOpe
     <div className="leads-header-grid">
       <div className="leads-header-avatar flex items-center gap-1">
         <Link href={listHref} aria-label="Back to leads" className="leads-icon-button -ml-2 md:hidden"><ArrowLeft size={18} /></Link>
-        <Avatar name={name} size={40} />
+        <Avatar name={name} size={mobile ? 28 : 40} />
       </div>
       <h2 className="leads-header-name leads-truncate text-base font-semibold leading-tight">{name}</h2>
       {/* Separators belong to the item after them and are clipped at the start of a line. */}
       <div className="leads-header-meta leads-meta text-[13px] text-[var(--lead-muted)]"><div>
-            <span className="leads-meta-item">{email ? <button type="button" title="Copy email" onClick={() => void copy(email, "Email")}
+            <span className="leads-meta-item">{email ? <button type="button" title="Copy email" onClick={() => void copyLeadValue(email, "Email")}
               className="leads-truncate block max-w-full rounded hover:text-[var(--lead-navy)]">{email}</button> : "No email"}</span>
             {phone ? <span className="leads-meta-item flex items-center gap-1">
               {tel ? <a href={tel} className="hover:text-[var(--lead-navy)] hover:underline">{phone}</a> : phone}
-              <button type="button" aria-label="Copy phone number" title="Copy phone number" onClick={() => void copy(phone, "Phone number")}
+              <button type="button" aria-label="Copy phone number" title="Copy phone number" onClick={() => void copyLeadValue(phone, "Phone number")}
                 className="rounded p-0.5 hover:text-[var(--lead-navy)]"><Copy size={12} aria-hidden /></button>
             </span> : null}
             <span className="leads-meta-item leads-truncate">{siteName}</span>
@@ -113,7 +105,7 @@ export function ConversationHeader({ lead: saved, siteName, canTrash, detailsOpe
           {(close) => leadStatuses.map((status) => <MenuItem key={status} checked={lead.status === status} onClick={() => { close(); void changeStatus(status); }}>
             <StatusPill status={status} /></MenuItem>)}
         </Popover>
-        {trashed ? null : <>
+        {trashed || mobile ? null : <>
           <IconButton label={lead.starred ? "Remove star" : "Star"} data-lead-star aria-pressed={Boolean(lead.starred)} className="is-plain" disabled={busy}
             onClick={() => void act(lead.starred ? "unstar" : "star")}>
             <Star size={17} fill={lead.starred ? "#f5b301" : "none"} color={lead.starred ? "#c98f00" : "currentColor"} /></IconButton>
@@ -129,16 +121,31 @@ export function ConversationHeader({ lead: saved, siteName, canTrash, detailsOpe
         </>}
         <Popover label="More actions" align="end" trigger={(props) => <IconButton label="More actions" {...props}><Ellipsis size={17} /></IconButton>}>
           {(close) => <>
+            {mobile && !trashed ? <>
+              <MenuItem disabled={busy} onClick={() => { close(); void act(lead.starred ? "unstar" : "star"); }}>
+                <Star size={15} aria-hidden />{lead.starred ? "Remove star" : "Star"}</MenuItem>
+              <MenuItem disabled={busy} onClick={() => { close(); void act(lead.archived ? "unarchive" : "archive"); }}>
+                <Archive size={15} aria-hidden />{lead.archived ? "Unarchive" : "Archive"}</MenuItem>
+              <SchedulePopover menu label="Snooze" title="Hide until" set="Snooze" active={snoozed} disabled={busy} icon={<AlarmClock size={15} />}
+                onPick={(at) => { close(); void act("snooze", at, "Lead snoozed."); }}
+                onClear={snoozed ? () => { close(); void act("unsnooze"); } : undefined} clearLabel="Unsnooze" />
+              <SchedulePopover menu label="Reminder" title="Remind me" set="Set reminder" active={Boolean(lead.remind_at)} disabled={busy} icon={<Bell size={15} />}
+                onPick={(at) => { close(); void act("remind", at, "Reminder set."); }}
+                onClear={lead.remind_at ? () => { close(); void act("clear_reminder"); } : undefined} clearLabel="Clear reminder" />
+              <MenuItem disabled={busy} onClick={() => { close(); void act(unread ? "read" : "unread"); }}>
+                <Mail size={15} aria-hidden />{unread ? "Mark read" : "Mark unread"}</MenuItem>
+            </> : null}
+            {mobile ? <MenuItem onClick={() => { close(); onToggleDetails(); }}><Info size={15} aria-hidden />Details</MenuItem> : null}
             <MenuItem role="menuitemcheckbox" aria-checked={showNotes} onClick={() => { close(); onToggleNotes(); }}>
               <StickyNote size={15} aria-hidden />{showNotes ? "Hide notes in thread" : "Show notes in thread"}</MenuItem>
-            <a role="menuitem" href={`/dashboard/forms/export?id=${saved.id}`} download className="leads-menu-item" onClick={() => close(false)}>
-              <Download size={15} aria-hidden />Export</a>
+            {canExport ? <a role="menuitem" href={`/dashboard/forms/export?id=${saved.id}`} download className="leads-menu-item" onClick={() => close(false)}>
+              <Download size={15} aria-hidden />Export</a> : null}
             {canTrash && !trashed ? <><div className="leads-menu-rule" />
               <MenuItem tone="danger" onClick={() => { close(); void leave("trash", "Lead moved to Trash."); }}><Trash2 size={15} aria-hidden />Move to trash</MenuItem></> : null}
           </>}
         </Popover>
-        <IconButton label={detailsOpen ? "Hide details" : "Show details"} tipAlign="end" aria-pressed={detailsOpen} aria-controls={detailsId} onClick={onToggleDetails}>
-          <Info size={17} /></IconButton>
+        {!mobile ? <IconButton label={detailsOpen ? "Hide details" : "Show details"} tipAlign="end" aria-pressed={detailsOpen} aria-controls={detailsId} onClick={onToggleDetails}>
+          <Info size={17} /></IconButton> : null}
       </div>
     </div>
 
@@ -171,13 +178,16 @@ function Chip({ icon, title, clear, disabled, onClear, children }: {
   </span>;
 }
 
-function SchedulePopover({ label, title, set, active, disabled, icon, onPick, onClear, clearLabel }: {
+function SchedulePopover({ label, title, set, active, disabled, icon, onPick, onClear, clearLabel, menu = false }: {
   label: string; title: string; set: string; active: boolean; disabled: boolean; icon: ReactNode;
   onPick: (at: string) => void; onClear?: () => void; clearLabel: string;
+  menu?: boolean;
 }) {
   const [custom, setCustom] = useState("");
   return <Popover label={label} role="dialog" align="end" className="w-60"
-    trigger={(props) => <IconButton label={label} active={active} disabled={disabled} {...props}>{icon}</IconButton>}>
+    trigger={(props) => menu ? <button type="button" role="menuitem" className="leads-menu-item" disabled={disabled} {...props}>
+      {icon}{label}{active ? <Check size={14} className="ml-auto" aria-hidden /> : null}
+    </button> : <IconButton label={label} active={active} disabled={disabled} {...props}>{icon}</IconButton>}>
     {(close) => <>
       <p className="leads-menu-label">{title}</p>
       {([[1, "Tomorrow"], [3, "In 3 days"], [7, "In a week"]] as const).map(([days, text]) =>

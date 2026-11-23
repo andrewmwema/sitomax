@@ -31,6 +31,7 @@ type SidebarProps = {
 
 export function Sidebar(props: SidebarProps) {
   const pathname = usePathname();
+  const leads = pathname === "/dashboard/leads" || pathname.startsWith("/dashboard/leads/");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -58,11 +59,11 @@ export function Sidebar(props: SidebarProps) {
   }, [searchOpen]);
   useEffect(() => {
     const closeOnDesktop = () => {
-      if (window.innerWidth >= 768 && mobileDialog.current?.open) mobileDialog.current.close();
+      if (window.innerWidth >= (leads ? 1200 : 768) && mobileDialog.current?.open) mobileDialog.current.close();
     };
     window.addEventListener("resize", closeOnDesktop);
     return () => window.removeEventListener("resize", closeOnDesktop);
-  }, []);
+  }, [leads]);
 
   const openSearch = () => {
     if (mobileDialog.current?.open) mobileDialog.current.close();
@@ -117,11 +118,14 @@ export function Sidebar(props: SidebarProps) {
   </div>;
 
   return <>
-    <aside className="sticky top-0 hidden h-dvh shrink-0 border-r border-[var(--platform-line)] md:block">
+    <aside className="platform-desktop-sidebar sticky top-0 hidden h-dvh shrink-0 border-r border-[var(--platform-line)] md:block">
       {navigation(collapsed, false)}
     </aside>
     <button type="button" onClick={() => { mobileDialog.current?.showModal(); setMobileOpen(true); }} aria-label="Open navigation" aria-haspopup="dialog" aria-controls={mobileId} aria-expanded={mobileOpen}
-      className="platform-icon-button absolute left-4 top-3 z-10 md:hidden"><Menu size={19} /></button>
+      className="platform-mobile-toggle platform-icon-button absolute left-4 top-3 z-10 md:hidden"><Menu size={19} />
+      {props.unreadCount !== 0 ? <span aria-label={props.unreadCount === null ? "Unread count unavailable" : `${props.unreadCount} unread ${props.unreadCount === 1 ? "lead" : "leads"}`}
+        className="platform-nav-count absolute -right-1 -top-1">{props.unreadCount === null ? "!" : props.unreadCount}</span> : null}
+    </button>
     <dialog ref={mobileDialog} id={mobileId} onClose={() => setMobileOpen(false)} aria-label="Workspace navigation" className="platform-mobile-nav md:hidden">
       {navigation(false, true)}
     </dialog>

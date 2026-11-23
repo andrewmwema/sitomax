@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   const lines = [["Received (UTC)", "Site", "Form", "Page", "Read", "Details", "Status", "Last activity (UTC)"].map(csvCell).join(",")];
   try {
-    const allowed = await allowedLeadSites(supabase, user.id);
+    const allowed = await allowedLeadSites(supabase, user.id, { ownersOnly: true });
     if (!allowed.length || (filters.site && !allowed.some((site) => site.id === filters.site))) return new Response("Access denied.", { status: 403 });
     for await (const rows of submissionBatches(supabase, allowed, filters, new Date(), true, selected?.data)) {
       for (const row of rows) {

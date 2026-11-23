@@ -1,12 +1,21 @@
 "use client";
 
 import {
-  useEffect, useId, useRef, useState, useSyncExternalStore,
+  useCallback, useEffect, useId, useRef, useState, useSyncExternalStore,
   type ButtonHTMLAttributes, type KeyboardEvent, type ReactNode, type Ref,
 } from "react";
 import { Check } from "lucide-react";
 import { leadStatusLabels, type Lead } from "@/lib/forms/submissions";
 import { avatarTone, leadInitials } from "./format";
+
+export async function copyLeadValue(value: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    leadToast(`${label} copied.`);
+  } catch {
+    leadToast(`Could not copy the ${label.toLowerCase()}.`, "error");
+  }
+}
 
 export function IconButton({ label, tip, tipSide, tipAlign, active, className = "", children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
   label: string; tip?: string; tipSide?: "top"; tipAlign?: "start" | "end"; active?: boolean; ref?: Ref<HTMLButtonElement>;
@@ -110,6 +119,15 @@ export function useHydrated() {
   return useSyncExternalStore(noSubscription, () => true, () => false);
 }
 
+export function useLeadMedia(query: string) {
+  const subscribe = useCallback((notify: () => void) => {
+    const media = window.matchMedia?.(query);
+    media?.addEventListener("change", notify);
+    return () => media?.removeEventListener("change", notify);
+  }, [query]);
+  return useSyncExternalStore(subscribe, () => window.matchMedia?.(query).matches ?? false, () => false);
+}
+
 let clock = 0;
 let ticker: ReturnType<typeof setInterval> | undefined;
 const clockListeners = new Set<() => void>();
@@ -162,20 +180,20 @@ export function useStored(key: string) {
   return useSyncExternalStore(subscribeStore, () => readStored(key), () => null);
 }
 
-type Toast = { id: number; message: string; tone: "info" | "error" };
+type Toast = { id: number; message: string; tone: "info" | "error"; action?: { label: string; run: () => void } };
 let toasts: Toast[] = [];
 let toastId = 0;
 const toastListeners = new Set<() => void>();
 const noToasts: Toast[] = [];
 
-export function leadToast(message: string, tone: Toast["tone"] = "info") {
+export function leadToast(message: string, tone: Toast["tone"] = "info", action?: Toast["action"]) {
   const id = ++toastId;
   const update = (next: Toast[]) => {
     toasts = next;
     toastListeners.forEach((notify) => notify());
   };
-  update([...toasts.slice(-2), { id, message, tone }]);
-  setTimeout(() => update(toasts.filter((toast) => toast.id !== id)), tone === "error" ? 7000 : 4000);
+  update([...toasts.slice(-2), { id, message, tone, action }]);
+  setTimeout(() => update(toasts.filter((toast) => toast.id !== id)), action ? 8000 : tone === "error" ? 7000 : 4000);
 }
 
 export function LeadToaster() {
@@ -183,7 +201,14 @@ export function LeadToaster() {
     toastListeners.add(listener);
     return () => { toastListeners.delete(listener); };
   }, () => toasts, () => noToasts);
-  return <div aria-live="polite" role="status" className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex flex-col items-center gap-2 px-4">
-    {items.map((toast) => <div key={toast.id} className="leads-toast" data-tone={toast.tone}>{toast.message}</div>)}
+  return <div aria-live="polite" role="status" className="leads-toaster pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex flex-col items-center gap-2 px-4">
+    {items.map((toast) => <div key={toast.id} className="leads-toast pointer-events-auto" data-tone={toast.tone}>
+      <span>{toast.message}</span>
+      {toast.action ? <button type="button" className="shrink-0 rounded px-2 font-semibold underline underline-offset-4" onClick={() => {
+        toasts = toasts.filter((item) => item.id !== toast.id);
+        toastListeners.forEach((notify) => notify());
+        toast.action?.run();
+      }}>{toast.action.label}</button> : null}
+    </div>)}
   </div>;
 }

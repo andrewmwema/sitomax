@@ -43,6 +43,17 @@ async function render(params: Record<string, string>) {
 }
 
 describe("lead detail navigation", () => {
+  it("shows CSV export for owners and hides it for editors without hiding their leads", async () => {
+    const owner = await render({});
+    expect(owner).toContain('href="/dashboard/forms/export"');
+    mocks.allowed.mockImplementation(async (_client, _userId, options?: { ownersOnly?: boolean }) =>
+      options?.ownersOnly ? [] : [{ id: site, name: "Example", subdomain: "example" }]);
+    const editor = await render({});
+    expect(editor).not.toContain('href="/dashboard/forms/export');
+    expect(editor).not.toContain("Export CSV");
+    expect(editor).toContain(`href="/dashboard/leads/${id}"`);
+  });
+
   it("opens existing lead links in a full view and preserves list filters for the back link", async () => {
     const html = await render({ lead: id, site, status: "new", q: "roof", page: "2" });
     expect(html).toContain(`href="/dashboard/forms?site=${site}&amp;status=new&amp;q=roof&amp;page=2"`);

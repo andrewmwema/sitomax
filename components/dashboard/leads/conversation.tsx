@@ -8,7 +8,7 @@ import { LeadComposer } from "./composer";
 import { ConversationHeader } from "./conversation-header";
 import { LeadDetailsDrawer } from "./details-drawer";
 import { LeadThread, type ThreadFocus, type ThreadNote } from "./thread";
-import { useStored, writeStored } from "./ui";
+import { useLeadMedia, useStored, writeStored } from "./ui";
 
 export function LeadConversationView({ lead, siteName, canTrash, userId, conversation, notes, events }: {
   lead: Lead; siteName: string; canTrash: boolean; userId: string;
@@ -22,23 +22,53 @@ export function LeadConversationView({ lead, siteName, canTrash, userId, convers
   const showNotes = useStored(notesKey) === "1";
   const [focus, setFocus] = useState<ThreadFocus | null>(null);
   const detailsId = useId();
+  const mobile = useLeadMedia("(max-width: 767px)");
+  const [mobileTab, setMobileTab] = useState<"conversation" | "details" | "notes">("conversation");
   const toggleNotes = () => writeStored(notesKey, showNotes ? "0" : "1");
+  const toggleDetails = () => mobile ? setMobileTab(mobileTab === "details" ? "conversation" : "details") : writeStored(detailsKey, detailsOpen ? "0" : "1");
 
-  return <div className="flex min-w-0 flex-1">
+  return <div className="leads-conversation flex min-w-0 flex-1">
     <div className="flex min-w-0 flex-1 flex-col">
-      <ConversationHeader lead={lead} siteName={siteName} canTrash={canTrash} detailsOpen={detailsOpen} detailsId={detailsId}
-        onToggleDetails={() => writeStored(detailsKey, detailsOpen ? "0" : "1")} showNotes={showNotes} onToggleNotes={toggleNotes} />
-      <div data-thread-pane className="leads-scroll flex-1 px-5 py-6 sm:px-8">
+      <ConversationHeader lead={lead} siteName={siteName} canTrash={canTrash} canExport={canTrash}
+        detailsOpen={mobile ? mobileTab === "details" : detailsOpen} detailsId={detailsId}
+        onToggleDetails={toggleDetails} showNotes={showNotes} onToggleNotes={toggleNotes} />
+      {mobile ? <div role="tablist" aria-label="Conversation sections" className="leads-conversation-tabs" onKeyDown={(event) => {
+        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+        const tabs = ["conversation", "details", "notes"] as const;
+        const index = tabs.indexOf(mobileTab);
+        const next = tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+        setMobileTab(next);
+        document.getElementById(`${detailsId}-${next}-tab`)?.focus();
+      }}>
+        {(["conversation", "details", "notes"] as const).map((tab) => <button key={tab} type="button" role="tab"
+          id={`${detailsId}-${tab}-tab`} aria-controls={`${detailsId}-${tab}-panel`} aria-selected={mobileTab === tab}
+          tabIndex={mobileTab === tab ? 0 : -1} onClick={() => setMobileTab(tab)}>
+          {tab === "conversation" ? "Conversation" : tab === "details" ? "Details" : "Notes"}
+          {tab === "notes" && notes?.length ? <span className="ml-1 text-xs">{notes.length}</span> : null}
+        </button>)}
+      </div> : null}
+      <div id={mobile ? `${detailsId}-conversation-panel` : undefined} role={mobile ? "tabpanel" : undefined}
+        aria-labelledby={mobile ? `${detailsId}-conversation-tab` : undefined} hidden={mobile && mobileTab !== "conversation"}
+        className="leads-thread-section flex min-h-0 flex-1 flex-col">
+      <div data-thread-pane className="leads-thread-scroll leads-scroll flex-1 px-5 py-6 sm:px-8">
         {conversation ? <LeadThread lead={lead} siteName={siteName} conversation={conversation} notes={showNotes ? notes ?? [] : []} focus={focus} />
           : <p role="alert" className="mx-auto max-w-[760px] text-sm text-[#96281f]">The reply conversation is unavailable. Refresh the page to try again.</p>}
       </div>
-      {conversation ? <div className="relative z-20 shrink-0 px-5 pb-5 sm:px-8">
+      {conversation ? <div className="leads-reply-bar relative z-20 shrink-0 px-5 pb-5 sm:px-8">
         <div className="mx-auto w-full max-w-[760px]">
           {conversation.composer ? <LeadComposer key={lead.id} config={conversation.composer} /> : <ReplyBlocked blocked={conversation.blocked} />}
         </div>
       </div> : null}
+      </div>
+      {mobile && mobileTab !== "conversation" ? <div id={`${detailsId}-${mobileTab}-panel`} role="tabpanel"
+        aria-labelledby={`${detailsId}-${mobileTab}-tab`} className="flex min-h-0 flex-1">
+        <LeadDetailsDrawer key={mobileTab} id={detailsId} lead={lead} siteName={siteName} notes={notes} events={events} showNotes={showNotes}
+          mode={mobileTab} onToggleNotes={toggleNotes} onClose={() => setMobileTab("conversation")}
+          onOpenNotes={() => setMobileTab("notes")}
+          onFocus={(id) => { setMobileTab("conversation"); setFocus((previous) => ({ id, request: (previous?.request ?? 0) + 1 })); }} />
+      </div> : null}
     </div>
-    {detailsOpen ? <LeadDetailsDrawer id={detailsId} lead={lead} siteName={siteName} notes={notes} events={events} showNotes={showNotes}
+    {!mobile && detailsOpen ? <LeadDetailsDrawer id={detailsId} lead={lead} siteName={siteName} notes={notes} events={events} showNotes={showNotes}
       onToggleNotes={toggleNotes} onClose={() => writeStored(detailsKey, "0")}
       onFocus={(id) => setFocus((previous) => ({ id, request: (previous?.request ?? 0) + 1 }))} /> : null}
   </div>;

@@ -27,7 +27,7 @@ import type { LeadComposerConfig, LeadReplyTemplate } from "@/lib/leads/conversa
 import {
   applyLeadTemplate, cleanPastedReplyHtml, LEAD_SIGNATURE_MAX, leadPlaceholders, replyTextHtml,
 } from "@/lib/leads/reply-content";
-import { IconButton, MenuItem, Popover, leadToast, useStored, writeStored } from "./ui";
+import { IconButton, MenuItem, Popover, leadToast, useHydrated, useLeadMedia, useStored, writeStored } from "./ui";
 
 type After = "none" | "won" | "archive";
 type Tone = "friendly" | "professional" | "brief" | "improve";
@@ -94,11 +94,13 @@ const noSubscription = () => () => {};
 export function LeadComposer({ config }: { config: LeadComposerConfig }) {
   const key = leadDraftKey(config.userId, config.leadId);
   const raw = useStored(key);
+  const mobile = useLeadMedia("(max-width: 767px)");
+  const hydrated = useHydrated();
   // Links in notification emails end in #reply and open the composer straight away.
   const requested = useSyncExternalStore(noSubscription, () => window.location.hash === "#reply", () => false);
   const [open, setOpen] = useState<boolean | null>(null);
   // A saved draft reopens the composer, once: clearing the text later must not collapse it.
-  if (open === null && (raw !== null || requested)) setOpen(true);
+  if (open === null && (requested || (raw !== null && hydrated && !mobile))) setOpen(true);
   const recipient = config.firstName || config.to.name || config.to.email;
 
   if (!open) {
@@ -115,6 +117,7 @@ export function LeadComposer({ config }: { config: LeadComposerConfig }) {
 function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
   config: LeadComposerConfig; storageKey: string; initial: Draft | null; focus: boolean; onClose: () => void;
 }) {
+  const mobile = useLeadMedia("(max-width: 767px)");
   const [subject, setSubject] = useState(initial?.subject ?? config.subject);
   const [signature, setSignature] = useState(initial?.signature ?? config.signature);
   const [bcc, setBcc] = useState(Boolean(initial?.bcc && config.bcc));
@@ -124,7 +127,7 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
   const [content, setContent] = useState({ html: initial?.html ?? "", text: "", ready: false });
   const [formatting, setFormatting] = useState(false);
   const [linking, setLinking] = useState(false);
-  const [details, setDetails] = useState(config.admin);
+  const [details, setDetails] = useState(config.admin && !mobile);
   const [modal, setModal] = useState(false);
   const [working, setWorking] = useState<"send" | "ai" | "template" | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -134,6 +137,45 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
   const dialog = useRef<HTMLDialogElement>(null);
   const latest = useRef<Draft | null>(null);
   const busy = working !== null;
+
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    element.close();
+    if (mobile || modal) element.showModal();
+    else element.show();
+    return () => element.close();
+  }, [mobile, modal]);
+
+  useEffect(() => {
+    const element = dialog.current;
+    const viewport = window.visualViewport;
+    if (!mobile || !element || !viewport) return;
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        element.style.setProperty("--leads-viewport-height", `${viewport.height}px`);
+        element.style.setProperty("--leads-viewport-top", `${viewport.offsetTop}px`);
+        const active = document.activeElement;
+        if (!(active instanceof HTMLElement) || !element.contains(active)) return;
+        const caret = active.isContentEditable ? window.getSelection()?.anchorNode?.parentElement : active;
+        caret?.scrollIntoView?.({ block: "nearest" });
+      });
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    element.addEventListener("focusin", update);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      element.removeEventListener("focusin", update);
+      element.style.removeProperty("--leads-viewport-height");
+      element.style.removeProperty("--leads-viewport-top");
+    };
+  }, [mobile]);
 
   const editor = useEditor({
     extensions, content: initial?.html ?? "", immediatelyRender: false,
@@ -237,23 +279,15 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
   };
 
   const popOut = () => {
-    const element = dialog.current;
-    if (!element?.showModal) return;
-    element.close();
-    element.showModal();
     setModal(true);
     editor?.commands.focus();
   };
   const dock = () => {
-    const element = dialog.current;
-    if (!element) return;
-    element.close();
-    element.show();
     setModal(false);
     editor?.commands.focus();
   };
   const collapse = () => {
-    if (modal) dialog.current?.close();
+    if (working === "send") return;
     onClose();
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
@@ -265,7 +299,7 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
       event.preventDefault();
       setFormatting(true);
       setLinking(true);
-    } else if (event.key === "Escape" && !modal && !event.defaultPrevented) {
+    } else if (event.key === "Escape" && !modal && !mobile && !event.defaultPrevented) {
       collapse();
     }
   };
@@ -273,18 +307,44 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
   const recipient = config.to.name ? `${config.to.name} <${config.to.email}>` : config.to.email;
   const row = "flex min-h-10 items-center gap-2 border-b border-[var(--lead-line)] px-4 text-sm";
   const label = "shrink-0 text-[13px] text-[var(--lead-muted)]";
+  const discard = () => {
+    if (untouched || window.confirm("Discard this draft? This cannot be undone.")) finish();
+  };
+  const sendControls = <div className="leads-send-controls mr-1 inline-flex">
+    <button type="button" className="leads-button rounded-r-none px-4" data-variant="primary" disabled={busy || empty || placeholders.length > 0}
+      onClick={() => void send("none")} data-tip="Send (Ctrl+Enter)" data-tip-side="top" data-tip-align="start">
+      {working === "send" ? <><LoaderCircle size={14} className="animate-spin" aria-hidden />Sending…</> : "Send"}
+    </button>
+    <Popover label="Send options" align={mobile ? "end" : "start"} side={mobile ? "bottom" : "top"} trigger={(props) =>
+      <button type="button" aria-label="More send options" {...props}
+        disabled={busy || empty || placeholders.length > 0} className="leads-button rounded-l-none border-l-white/30 px-1.5" data-variant="primary"><ChevronDown size={15} aria-hidden /></button>}>
+      {(close) => <>
+        <MenuItem onClick={() => { close(); void send("none"); }}>Send</MenuItem>
+        <MenuItem onClick={() => { close(); void send("won"); }}>Send &amp; mark Won</MenuItem>
+        <MenuItem onClick={() => { close(); void send("archive"); }}>Send &amp; archive</MenuItem>
+      </>}
+    </Popover>
+  </div>;
 
   return <dialog ref={dialog} open id="reply" aria-label={`Reply to ${config.to.name || config.to.email}`} className="leads-ui leads-composer"
-    onKeyDown={onKeyDown} onCancel={(event) => { event.preventDefault(); dock(); }}
+    data-mobile={mobile} onKeyDown={onKeyDown} onCancel={(event) => { event.preventDefault(); if (mobile) collapse(); else dock(); }}
     // A browser may close a modal dialog on a repeated Escape; bring the reply back docked instead of losing it.
     onClose={(event) => {
       if (event.currentTarget.open) return;
+      if (mobile) { collapse(); return; }
       event.currentTarget.show();
       setModal(false);
     }}>
+    {mobile ? <div className="leads-sheet-header">
+      <button type="button" className="leads-button border-0" disabled={working === "send"} onClick={collapse}>Cancel</button>
+      <span className="min-w-0 flex-1 text-center text-sm font-semibold">Reply</span>
+      {sendControls}
+    </div> : null}
     <div className={row}>
       <span className={label}>To</span>
-      <span className="min-w-0 truncate rounded-full bg-[#eef0f5] px-2.5 py-0.5 text-[13px] text-[var(--lead-navy)]">{recipient}</span>
+      <span title={recipient} className="leads-recipient min-w-0 truncate rounded-full bg-[#eef0f5] px-2.5 py-0.5 text-[13px] text-[var(--lead-navy)]">
+        {mobile && config.to.name ? <>{config.to.name}<span className="block">&lt;{config.to.email}&gt;</span></> : recipient}
+      </span>
       <span className="ml-auto flex shrink-0 items-center gap-1">
         {config.bcc ? <button type="button" role="switch" aria-checked={bcc} onClick={() => setBcc(!bcc)}
           data-tip={`Send a copy to ${config.bcc.email}`} data-tip-align="end"
@@ -293,12 +353,13 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
             <span className={`size-2.5 rounded-full bg-white transition-transform ${bcc ? "translate-x-2.5" : ""}`} />
           </span>{config.bcc.mine ? "Bcc me" : "Bcc owner"}
         </button> : null}
-        {modal ? <IconButton label="Dock reply" tipAlign="end" onClick={dock}><Minimize2 size={15} /></IconButton>
-          : <IconButton label="Open in a larger window" tipAlign="end" onClick={popOut}><ArrowUpRight size={16} /></IconButton>}
-        <IconButton label="Close reply (draft is kept)" tipAlign="end" onClick={collapse}><X size={16} /></IconButton>
+        {!mobile ? modal ? <IconButton label="Dock reply" tipAlign="end" onClick={dock}><Minimize2 size={15} /></IconButton>
+          : <IconButton label="Open in a larger window" tipAlign="end" onClick={popOut}><ArrowUpRight size={16} /></IconButton>
+        : null}
+        {!mobile ? <IconButton label="Close reply (draft is kept)" tipAlign="end" disabled={working === "send"} onClick={collapse}><X size={16} /></IconButton> : null}
       </span>
     </div>
-    {details ? <div className="space-y-1 border-b border-[var(--lead-line)] bg-[#fafbfd] px-4 py-2.5 text-[13px]">
+    {details ? <div className="leads-composer-details space-y-1 border-b border-[var(--lead-line)] bg-[#fafbfd] px-4 py-2.5 text-[13px]">
       <p className="break-all"><span className={label}>From </span>{config.details.from ?? "Not configured"}</p>
       <p className="break-all"><span className={label}>Reply-to </span>{config.details.replyTo || "Unavailable"}</p>
       <p className="text-xs text-[var(--lead-muted)]">{config.details.note} Addresses reflect current settings and may change before sending.</p>
@@ -330,14 +391,14 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
       </div>
     </div>
 
-    {placeholders.length ? <p role="status" className="border-t border-[#f0e2a6] bg-[#fffbea] px-4 py-2 text-[13px] text-[#6b5200]">
+    {placeholders.length ? <p role="status" className="leads-composer-notice border-t border-[#f0e2a6] bg-[#fffbea] px-4 py-2 text-[13px] text-[#6b5200]">
       Replace before sending: {placeholders.map((value) => <mark key={value} className="leads-placeholder mr-1">{value}</mark>)}
     </p> : null}
-    {problem ? <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#f0cfcb] bg-[#fdf3f2] px-4 py-2 text-[13px] text-[#96281f]">
+    {problem ? <div role="alert" className="leads-composer-notice flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#f0cfcb] bg-[#fdf3f2] px-4 py-2 text-[13px] text-[#96281f]">
       <p className="min-w-0 flex-1">{problem.message}{problem.detail ? <span className="mt-0.5 block font-mono text-xs opacity-80">{problem.detail}</span> : null}</p>
       {working === null && !empty ? <button type="button" className="leads-button" data-variant="danger" onClick={() => void send(problem.after)}>Retry</button> : null}
     </div> : null}
-    {linking && editor ? <div className="border-t border-[var(--lead-line)] p-3"><EmailLinkPicker pages={config.pages} autoFocus
+    {linking && editor ? <div className="leads-composer-link border-t border-[var(--lead-line)] p-3"><EmailLinkPicker pages={config.pages} autoFocus
       value={(editor.getAttributes("link").href as string | undefined) ?? ""} onCancel={() => { setLinking(false); editor.commands.focus(); }}
       onRemove={() => { editor.chain().focus().extendMarkRange("link").unsetLink().run(); setLinking(false); }}
       onApply={(link) => {
@@ -372,22 +433,15 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
       <Format label="Clear formatting" disabled={busy} run={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}><RemoveFormatting size={16} /></Format>
     </div> : null}
 
-    <div className="flex items-center gap-1 border-t border-[var(--lead-line)] px-3 py-2.5">
-      <div className="mr-1 inline-flex">
-        <button type="button" className="leads-button rounded-r-none px-4" data-variant="primary" disabled={busy || empty || placeholders.length > 0}
-          onClick={() => void send("none")} data-tip="Send (Ctrl+Enter)" data-tip-side="top" data-tip-align="start">
-          {working === "send" ? <><LoaderCircle size={14} className="animate-spin" aria-hidden />Sending…</> : "Send"}
-        </button>
-        <Popover label="Send options" side="top" trigger={(props) => <button type="button" aria-label="More send options" {...props}
-          disabled={busy || empty || placeholders.length > 0} className="leads-button rounded-l-none border-l-white/30 px-1.5" data-variant="primary"><ChevronDown size={15} aria-hidden /></button>}>
-          {(close) => <>
-            <MenuItem onClick={() => { close(); void send("none"); }}>Send</MenuItem>
-            <MenuItem onClick={() => { close(); void send("won"); }}>Send &amp; mark Won</MenuItem>
-            <MenuItem onClick={() => { close(); void send("archive"); }}>Send &amp; archive</MenuItem>
-          </>}
-        </Popover>
-      </div>
-      <IconButton label="Formatting options" tipSide="top" aria-pressed={formatting} onClick={() => { setFormatting(!formatting); setLinking(false); }}><Type size={16} /></IconButton>
+    <div className="leads-composer-toolbar flex items-center gap-1 border-t border-[var(--lead-line)] px-3 py-2.5">
+      {!mobile ? <>{sendControls}
+        <IconButton label="Formatting options" tipSide="top" aria-pressed={formatting} onClick={() => { setFormatting(!formatting); setLinking(false); }}><Type size={16} /></IconButton>
+      </> : <>
+        <Format label="Bold (Ctrl+B)" on={active?.bold} disabled={busy} run={() => editor?.chain().focus().toggleBold().run()}><BoldIcon size={16} /></Format>
+        <Format label="Italic (Ctrl+I)" on={active?.italic} disabled={busy} run={() => editor?.chain().focus().toggleItalic().run()}><ItalicIcon size={16} /></Format>
+        <Format label="Bulleted list" on={active?.bullets} disabled={busy} run={() => editor?.chain().focus().toggleBulletList().run()}><List size={16} /></Format>
+        <Format label="Link (Ctrl+K)" on={active?.link || linking} disabled={busy} run={() => setLinking(!linking)}><Link2 size={16} /></Format>
+      </>}
       <Popover label="Draft with AI" side="top" className="w-64" trigger={(props) => <IconButton label="Draft with AI" tipSide="top" disabled={busy} {...props}>
         {working === "ai" ? <LoaderCircle size={16} className="animate-spin" /> : <Sparkles size={16} />}</IconButton>}>
         {(close) => <>
@@ -400,24 +454,25 @@ function ComposerPanel({ config, storageKey, initial, focus, onClose }: {
           <p className="px-2.5 pb-1 pt-2 text-xs text-[var(--lead-muted)]">Uses the inquiry text. Write confidential replies yourself, and check every fact before sending.</p>
         </>}
       </Popover>
-      <Popover label="Templates" role="dialog" side="top" className="w-80 p-0" trigger={(props) => <IconButton label="Templates" tipSide="top" disabled={busy} {...props}><FileText size={16} /></IconButton>}>
+      <Popover label="Templates" role="dialog" side="top" align={mobile ? "end" : "start"} className="w-80 p-0" trigger={(props) => <IconButton label="Templates" tipSide="top" disabled={busy} {...props}><FileText size={16} /></IconButton>}>
         {(close) => <TemplatePanel templates={templates} siteId={config.siteId} currentText={editor?.getText({ blockSeparator: "\n" }).trim() ?? ""}
           onSaved={setTemplates} onInsert={(template) => {
             setBody(replyTextHtml(applyLeadTemplate(template.body_text, { first_name: config.firstName || "[first name]", business_name: config.business })));
             close(false);
           }} />}
       </Popover>
-      <Popover label="More options" side="top" trigger={(props) => <IconButton label="More options" tipSide="top" {...props}><Ellipsis size={16} /></IconButton>}>
+      <Popover label="More options" side="top" align="end" trigger={(props) => <IconButton label="More options" tipSide="top" {...props}><Ellipsis size={16} /></IconButton>}>
         {(close) => <>
+          {mobile ? <MenuItem onClick={() => { close(); setFormatting(!formatting); setLinking(false); }}>
+            {formatting ? "Hide formatting options" : "Formatting options"}</MenuItem> : null}
           <MenuItem role="menuitemcheckbox" aria-checked={details} onClick={() => { close(); setDetails(!details); }}>{details ? "Hide email details" : "Email details"}</MenuItem>
           {config.quote ? <MenuItem role="menuitemcheckbox" aria-checked={quoteOn} onClick={() => { close(); setQuoteOn(!quoteOn); }}>
             {quoteOn ? "Remove quoted message" : "Include quoted message"}</MenuItem> : null}
+          {mobile ? <MenuItem disabled={busy} tone="danger" onClick={() => { close(); discard(); }}><Trash2 size={16} aria-hidden />Discard draft</MenuItem> : null}
         </>}
       </Popover>
-      <span className="ml-auto mr-1 text-xs text-[var(--lead-muted)]" aria-live="polite">{saved && !untouched ? "Draft saved" : ""}</span>
-      <IconButton label="Discard draft" tipSide="top" tipAlign="end" disabled={busy} onClick={() => {
-        if (untouched || window.confirm("Discard this draft? This cannot be undone.")) finish();
-      }}><Trash2 size={16} /></IconButton>
+      {!mobile ? <span className="ml-auto mr-1 text-xs text-[var(--lead-muted)]" aria-live="polite">{saved && !untouched ? "Draft saved" : ""}</span> : null}
+      {!mobile ? <IconButton label="Discard draft" tipSide="top" tipAlign="end" disabled={busy} onClick={discard}><Trash2 size={16} /></IconButton> : null}
     </div>
   </dialog>;
 }

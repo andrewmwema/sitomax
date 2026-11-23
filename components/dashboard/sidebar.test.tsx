@@ -67,6 +67,7 @@ describe("dashboard navigation", () => {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!.click());
     expect(drawer.open).toBe(true);
     const opener = container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!;
+    expect(opener.querySelector('[aria-label="2 unread leads"]')).not.toBeNull();
     expect(opener.getAttribute("aria-controls")).toBe(drawer.id);
     expect(opener.getAttribute("aria-expanded")).toBe("true");
     const forms = drawer.querySelector<HTMLAnchorElement>('a[href="/dashboard/leads"]')!;
@@ -75,6 +76,9 @@ describe("dashboard navigation", () => {
     expect(drawer.open).toBe(false);
     expect(opener.getAttribute("aria-expanded")).toBe("false");
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')!.click());
+    await act(async () => window.dispatchEvent(new Event("resize")));
+    expect(drawer.open).toBe(true);
+    vi.stubGlobal("innerWidth", 1280);
     await act(async () => window.dispatchEvent(new Event("resize")));
     expect(drawer.open).toBe(false);
     await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true })));

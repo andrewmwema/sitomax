@@ -47,8 +47,10 @@ request remains separate from verifying its DNS.
 
 Forms supports website, rolling date-range, read-status and text filters.
 Search checks all submitted JSON fields, including custom forms; CSV exports use
-the same filters and include all matches. Normal browsing uses database
-pagination. Arbitrary-field searches scan authorized, filtered records in batches
+the same filters and include all matches from accounts the user owns (or all
+accessible accounts for super admins). Editors cannot export leads; the export
+route enforces this server-side and export actions are hidden. Normal browsing
+uses database pagination. Arbitrary-field searches scan authorized, filtered records in batches
 on the server because PostgREST cannot filter a JSON-to-text cast; only the
 requested result page is sent to the browser. At larger submission volumes,
 indexed full-text search would require a separate migration.
@@ -678,6 +680,22 @@ list (320–440px) and the open conversation, with an optional Details drawer
 time and stays in place while conversations open; the view, search and site
 filter live in the address. List width, the Details drawer, "Show notes in
 thread" and unsent reply drafts are remembered per user in that browser.
+
+On tablets (768–1199px), the list stays 320px wide, workspace navigation
+moves into the hamburger drawer, and Details opens as a modal right-hand
+overlay. The reply composer stays docked; its pop-out nearly fills the screen.
+Touch controls are at least 44px, with a **Select leads** button for bulk mode.
+
+On phones, Leads opens as a full-width list with expandable search, an agency
+site filter, and horizontally scrollable view chips. Swipe left to archive
+(unarchive in Archived), or right to toggle read/unread; **Undo** is available
+for eight seconds after success. Pull down at the top to refresh, or use the
+refresh button. Conversations have a back button, a compact actions menu and
+**Conversation / Details / Notes** tabs. Reply opens a full-height sheet with
+Send at the top and formatting, AI and templates above the keyboard. Its height
+follows `visualViewport` and respects safe-area insets. Cancel or Escape keeps
+the draft; saved phone drafts stay collapsed until Reply is tapped again.
+Owners and super admins can export; editors cannot.
 
 Replies are written in a composer docked under the thread (↗ opens it larger).
 The signature is part of the reply and can be edited per message; each user

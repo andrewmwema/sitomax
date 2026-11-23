@@ -13,7 +13,21 @@ vi.mock("@/lib/supabase/server", () => ({
     rpc: async () => ({ data: mocks.admin, error: null }),
     from: (table: string) => {
       if (table === "sites") return { select: async () => ({ data: [{ id: "00000000-0000-4000-8000-000000000001", account_id: "account", name: "=Unsafe", subdomain: "client" }], error: null }) };
-      if (table === "account_members") return { select: () => ({ eq: () => ({ eq: async () => ({ data: mocks.owner ? [{ account_id: "account" }] : [], error: null }) }) }) };
+      if (table === "account_members") {
+        let ownersOnly = false;
+        const query = {
+          select: () => query,
+          eq: (column: string, value: unknown) => {
+            mocks.filters.push(["membership", column, value]);
+            if (column === "role" && value === "owner") ownersOnly = true;
+            return query;
+          },
+          then: (resolve: (value: object) => unknown) => Promise.resolve({
+            data: !ownersOnly || mocks.owner ? [{ account_id: "account" }] : [], error: null,
+          }).then(resolve),
+        };
+        return query;
+      }
       let start = 0;
       const query = {
         select: () => query, order: () => query,
@@ -36,7 +50,7 @@ import { GET } from "./route";
 
 beforeEach(() => { mocks.admin = false; mocks.owner = true; mocks.offsets = []; mocks.filters = []; mocks.fullBatch = false; });
 describe("submission CSV export", () => {
-  it("exports all pages and neutralizes spreadsheet formulas", async () => {
+  it("allows an owner to export all pages and neutralizes spreadsheet formulas", async () => {
     mocks.fullBatch = true;
     const response = await GET(new Request("https://agency.test/dashboard/forms/export"));
     expect(response.status).toBe(200);
@@ -45,10 +59,21 @@ describe("submission CSV export", () => {
     expect(csv).toContain('"{""Name"":""Alex""}"');
     expect(mocks.offsets).toEqual([0, 500]);
   });
-  it("denies editors and inaccessible site filters", async () => {
+  it("denies an editor even when they are an account member", async () => {
     mocks.owner = false;
     expect((await GET(new Request("https://agency.test/dashboard/forms/export"))).status).toBe(403);
-    mocks.owner = true;
+    expect(mocks.offsets).toEqual([]);
+    expect(mocks.filters).toContainEqual(["membership", "role", "owner"]);
+    expect((await GET(new Request("https://agency.test/dashboard/forms/export?id=00000000-0000-4000-8000-000000000003"))).status).toBe(403);
+  });
+  it("allows a super admin to export without an owner membership", async () => {
+    mocks.admin = true;
+    mocks.owner = false;
+    const response = await GET(new Request("https://agency.test/dashboard/forms/export"));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('"{""Name"":""Alex""}"');
+  });
+  it("denies inaccessible site filters", async () => {
     expect((await GET(new Request("https://agency.test/dashboard/forms/export?site=00000000-0000-4000-8000-000000000002"))).status).toBe(403);
   });
   it("exports an authorized selected site", async () => {

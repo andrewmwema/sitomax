@@ -49,6 +49,58 @@ afterEach(async () => {
 });
 
 describe("lead reply composer", () => {
+  it("keeps a phone draft collapsed, restores it in a sheet, and preserves it when cancelled", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    window.localStorage.setItem(key, JSON.stringify(draft));
+    const showModal = vi.spyOn(HTMLDialogElement.prototype, "showModal");
+    await mount();
+    expect(container.querySelector("dialog")).toBeNull();
+    await act(async () => button("Reply to Alex…Draft").click());
+    await settle();
+    expect(showModal).toHaveBeenCalled();
+    expect(container.querySelector('[aria-label="Reply body"]')?.textContent).toBe("Tuesday works for us.");
+    expect(container.querySelector(".leads-sheet-header")?.textContent).toContain("Send");
+    expect(container.querySelector(".leads-composer-toolbar [aria-label='Bold (Ctrl+B)']")).not.toBeNull();
+    await act(async () => button("Cancel").click());
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(key)!)).toMatchObject(draft);
+    showModal.mockRestore();
+  });
+
+  it("fits the phone sheet to visualViewport when the keyboard opens", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    const viewport = Object.assign(new EventTarget(), { height: 812, offsetTop: 0 });
+    vi.stubGlobal("visualViewport", viewport);
+    await mount();
+    await act(async () => button("Reply to Alex…").click());
+    await settle();
+    const dialog = container.querySelector("dialog")!;
+    await act(async () => {
+      viewport.height = 390;
+      viewport.offsetTop = 34;
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    await settle();
+    expect(dialog.style.getPropertyValue("--leads-viewport-height")).toBe("390px");
+    expect(dialog.style.getPropertyValue("--leads-viewport-top")).toBe("34px");
+  });
+
+  it("keeps a failed mobile send open and closes the sheet only after a successful retry", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    window.localStorage.setItem(key, JSON.stringify(draft));
+    mocks.send.mockResolvedValueOnce({ error: "The email service is unavailable." }).mockResolvedValueOnce({ success: "Reply sent." });
+    await mount();
+    await act(async () => button("Reply to Alex…Draft").click());
+    await settle();
+    await act(async () => button("Send").click());
+    expect(container.querySelector("dialog")).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("The email service is unavailable.");
+    expect(window.localStorage.getItem(key)).not.toBeNull();
+    await act(async () => button("Retry").click());
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(window.localStorage.getItem(key)).toBeNull();
+  });
+
   it("opens from one line and shows the recipient without technical addresses", async () => {
     await mount();
     expect(container.querySelector("dialog")).toBeNull();

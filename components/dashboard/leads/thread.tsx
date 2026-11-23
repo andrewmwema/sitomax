@@ -2,11 +2,11 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { Check, CheckCheck, CircleAlert, Clock, Ellipsis, FileText, StickyNote, TriangleAlert } from "lucide-react";
-import { submissionFields, type Lead } from "@/lib/forms/submissions";
+import { submissionContact, submissionFields, type Lead } from "@/lib/forms/submissions";
 import type { LeadConversation, LeadThreadMessage } from "@/lib/leads/conversation";
 import { MarkLeadViewed } from "@/components/dashboard/mark-lead-viewed";
 import { dayKey, dayLabel, leadDisplayName, leadIsUnread } from "./format";
-import { Avatar, useHydrated, useNow } from "./ui";
+import { Avatar, copyLeadValue, useHydrated, useNow } from "./ui";
 
 export type ThreadNote = { id: string; body: string; created_at: string; mine: boolean };
 export type ThreadFocus = { id: string; request: number };
@@ -100,6 +100,9 @@ function MessageTime({ value }: { value: string }) {
 
 function FormCard({ lead, name, siteName, flash }: { lead: Lead; name: string; siteName: string; flash: boolean }) {
   const fields = submissionFields(lead.data);
+  const contact = submissionContact(lead.data);
+  const dial = contact.phone?.replace(/[\s().-]/g, "");
+  const tel = dial && /^\+?[0-9]{3,20}$/.test(dial) ? `tel:${dial}` : null;
   return <article id="thread-form" className="leads-card scroll-mt-4 p-5" data-flash={flash} aria-label="Form submission">
     <header className="flex items-center gap-3">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--lead-blue-soft)] text-[var(--lead-blue)]"><FileText size={15} aria-hidden /></span>
@@ -112,7 +115,12 @@ function FormCard({ lead, name, siteName, flash }: { lead: Lead; name: string; s
     {fields.length ? <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-[minmax(96px,160px)_minmax(0,1fr)]">
       {fields.map(([field, value]) => <div key={field} className="contents">
         <dt className="break-words text-[13px] text-[var(--lead-muted)]">{fieldLabel(field)}</dt>
-        <dd className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[var(--lead-body)]">{typeof value === "string" ? value : JSON.stringify(value)}</dd>
+        <dd className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[var(--lead-body)]">
+          {typeof value === "string" && value === contact.email ? <button type="button" title="Copy email" className="leads-contact-value text-left text-[var(--lead-blue)] underline"
+            onClick={() => void copyLeadValue(value, "Email")}>{value}</button>
+            : typeof value === "string" && value === contact.phone && tel ? <a href={tel} className="leads-contact-value text-[var(--lead-blue)] underline">{value}</a>
+            : typeof value === "string" ? value : JSON.stringify(value)}
+        </dd>
       </div>)}
     </dl> : <p className="mt-4 text-sm text-[var(--lead-muted)]">No details were submitted.</p>}
   </article>;

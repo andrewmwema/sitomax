@@ -26,7 +26,7 @@ export type LeadInbox = {
   query: LeadQuery; queryString: string; setQuery: (patch: Partial<LeadQuery>) => void;
   /** Null while the first page of a view is loading. */
   rows: Lead[] | null;
-  error: string | null; hasMore: boolean; loadingMore: boolean; counts: LeadInboxCounts | null;
+  error: string | null; hasMore: boolean; loadingMore: boolean; refreshing: boolean; counts: LeadInboxCounts | null;
   selectedLeadId: string | null;
   loadMore: () => void; reload: () => void;
   /** Applies a change locally right away; the next refresh confirms or reverts it. */
@@ -58,6 +58,7 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
 
   const [state, setState] = useState<InboxState | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [nonce, setNonce] = useState(0);
   const loaded = useRef({ key: "", count: 0 });
   const generation = useRef(0);
@@ -86,9 +87,11 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
       }
       if (error && loaded.current.key === key && loaded.current.count) {
         leadToast(error, "error");
+        setRefreshing(false);
         return;
       }
       setState({ key, rows, hasMore: error ? false : hasMore, counts, error });
+      setRefreshing(false);
     })();
     return () => { active = false; };
   }, [key, view, q, site, refreshKey, nonce]);
@@ -125,16 +128,16 @@ export function LeadsInbox({ userId, sites, agency, refreshKey, children }: {
       ...previous, rows: previous.rows.map((row) => ids.includes(row.id) ? { ...row, ...changes } : row),
     });
   }, []);
-  const reload = useCallback(() => setNonce((value) => value + 1), []);
+  const reload = useCallback(() => { setRefreshing(true); setNonce((value) => value + 1); }, []);
 
   const inbox = useMemo<LeadInbox>(() => ({
     userId, sites, showSites: agency || sites.length > 1,
     query: { view, q, site }, queryString: leadQueryString({ view, q, site }), setQuery,
-    rows: current?.rows ?? null, error: current?.error ?? null, hasMore: current?.hasMore ?? false, loadingMore,
+    rows: current?.rows ?? null, error: current?.error ?? null, hasMore: current?.hasMore ?? false, loadingMore, refreshing,
     // Counts describe the whole inbox, so they stay visible while another view loads.
     counts: current?.counts ?? state?.counts ?? null,
     selectedLeadId: leadId ?? null, loadMore, reload, patch,
-  }), [agency, current, leadId, loadMore, loadingMore, patch, q, reload, setQuery, site, sites, state?.counts, userId, view]);
+  }), [agency, current, leadId, loadMore, loadingMore, patch, q, refreshing, reload, setQuery, site, sites, state?.counts, userId, view]);
 
   const widthKey = `sitomax:leads:list-width:${userId}`;
   const storedWidth = Number(useStored(widthKey));
