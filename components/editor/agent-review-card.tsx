@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Render, type Data } from "@puckeditor/core";
 import { Check, Eye, RotateCcw, Sparkles } from "lucide-react";
+import { z } from "zod";
 import {
   previewAgentReview,
   type AgentReviewDecision,
   type AgentReviewPayload,
 } from "@/lib/ai/agent-review";
-import { editorHeader } from "@/lib/header";
+import { editorHeader, headerSchema } from "@/lib/header";
 import { puckConfig } from "@/lib/puck/config";
 
 export type AgentReviewState = AgentReviewPayload & {
@@ -56,28 +57,41 @@ function isBlogChange(kind: string) {
   return kind === "create_blog_post" || kind === "update_blog_post";
 }
 
+const previewSectionSchema = z.looseObject({
+  type: z.string(),
+  props: z.looseObject({ id: z.string().min(1) }),
+});
+const previewDataSchema = z.looseObject({
+  content: z.array(previewSectionSchema).default([]),
+  root: z.looseObject({
+    props: z.looseObject({ title: z.string().optional() }).optional(),
+  }).default({}),
+  zones: z.record(z.string(), z.array(previewSectionSchema)).optional(),
+});
+
 function reviewData(snapshot: AgentReviewPayload["working"], pageId: string): Data | null {
   const page = pageFor(snapshot, pageId);
   if (!isRecord(page) || !isRecord(page.draft_data)) return null;
-  const raw = page.draft_data;
-  const rawContent = Array.isArray(raw.content) ? raw.content : [];
-  const content = rawContent.filter((item): item is Record<string, unknown> =>
-    isRecord(item) && item.type !== "Navigation");
+  const parsed = previewDataSchema.safeParse(page.draft_data);
+  const header = headerSchema.safeParse(snapshot.header);
+  if (!parsed.success || !header.success) return null;
+  const raw = parsed.data;
+  const content: Data["content"] = raw.content.filter((item) => item.type !== "Navigation");
   const footer = isRecord(snapshot.footer) ? snapshot.footer : null;
   if (footer) {
     const index = content.findIndex((item) => item.type === "Footer");
-    const currentFooter = index >= 0 && isRecord(content[index].props) ? content[index].props : {};
-    const props = { ...footer, ...currentFooter, id: currentFooter.id ?? footer.id };
+    const currentFooter = index >= 0 ? content[index].props : undefined;
+    const id = currentFooter?.id ?? (typeof footer.id === "string" && footer.id ? footer.id : `agent-review-footer-${pageId}`);
+    const props = { ...footer, ...currentFooter, id };
     if (index >= 0) content[index] = { ...content[index], props };
     else content.push({ type: "Footer", props });
   }
-  const root = isRecord(raw.root) ? raw.root : {};
-  const rootProps = isRecord(root.props) ? root.props : {};
+  const rootProps = { ...raw.root.props, __editorHeader: header.data };
   return {
     ...raw,
     content,
-    root: { ...root, props: { ...rootProps, __editorHeader: snapshot.header } },
-  } as Data;
+    root: { ...raw.root, props: rootProps },
+  };
 }
 
 function sectionIds(data: Data | null) {
@@ -261,6 +275,8 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
     {selected.error ? <p role="status" className="agent-review-canvas-error">{selected.error}</p>
       : preview ? <Render config={puckConfig} data={preview}
         metadata={{ ...metadata, theme: selected.snapshot?.theme, siteHeader: editorHeader(preview) }} />
-        : <p className="agent-review-canvas-error">This page does not exist in this comparison.</p>}
+        : <p className="agent-review-canvas-error">{selectedPage
+          ? "This page contains invalid preview data and cannot be displayed."
+          : "This page does not exist in this comparison."}</p>}
   </div>;
 }

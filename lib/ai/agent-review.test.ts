@@ -5,7 +5,7 @@ import {
 
 describe("agent review patches", () => {
   const baseline = {
-    pages: [{ id: "home", draft: { content: [
+    pages: [{ id: "home", site_id: "site", slug: "", title: "Home", seo: {}, sort_order: 0, draft_data: { content: [
       { type: "Hero", props: { id: "hero", title: "Original", description: "Original" } },
       { type: "Text", props: { id: "text", title: "About" } },
     ] } }],
@@ -14,23 +14,23 @@ describe("agent review patches", () => {
 
   it("replays independent changes to the same section without applying rejected changes", () => {
     const first = structuredClone(baseline);
-    first.pages[0].draft.content[0].props.title = "Warmer";
+    first.pages[0].draft_data.content[0].props.title = "Warmer";
     const second = structuredClone(first);
-    second.pages[0].draft.content[0].props.description = "Friendly";
+    second.pages[0].draft_data.content[0].props.description = "Friendly";
     const result = applyReviewPatches(baseline, reviewPatches(first, second));
-    expect(result.pages[0].draft.content[0].props).toMatchObject({ title: "Original", description: "Friendly" });
-    expect(baseline.pages[0].draft.content[0].props.description).toBe("Original");
+    expect(result.pages[0].draft_data.content[0].props).toMatchObject({ title: "Original", description: "Friendly" });
+    expect(baseline.pages[0].draft_data.content[0].props.description).toBe("Original");
   });
 
   it("replays moves and refuses to overwrite a manually edited collection", () => {
     const moved = structuredClone(baseline);
-    moved.pages[0].draft.content.reverse();
+    moved.pages[0].draft_data.content.reverse();
     const patches = reviewPatches(baseline, moved);
     expect(applyReviewPatches(baseline, patches)).toEqual(moved);
     const edited = structuredClone(baseline);
-    edited.pages[0].draft.content[0].props.title = "Manual edit";
+    edited.pages[0].draft_data.content[0].props.title = "Manual edit";
     expect(() => applyReviewPatches(edited, patches)).toThrow("draft changed");
-    expect(edited.pages[0].draft.content[0].props.title).toBe("Manual edit");
+    expect(edited.pages[0].draft_data.content[0].props.title).toBe("Manual edit");
   });
 
   it("round-trips an image and alt-text change through persisted patches and undo", () => {
@@ -83,12 +83,12 @@ describe("agent review patches", () => {
     });
 
     expect(payload).not.toBeNull();
-    expect(previewAgentReview(payload!, { first: "undone", second: "kept" }).snapshot?.theme.primary).toBe("blue");
+    expect(previewAgentReview(payload!, { first: "undone", second: "kept" }).snapshot?.theme).toEqual({ primary: "blue" });
   });
 
   it("reports when a kept change depends on an undone structural change", () => {
     const withPage = structuredClone(baseline);
-    withPage.pages.push({ id: "about", title: "About", draft: { content: [] } });
+    withPage.pages.push({ id: "about", site_id: "site", slug: "about", title: "About", seo: {}, sort_order: 1, draft_data: { content: [] } });
     const renamed = structuredClone(withPage);
     renamed.pages[1].title = "Our story";
     const payload = createAgentReviewPayload({
