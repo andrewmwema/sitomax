@@ -183,6 +183,20 @@ export async function createAiAgentThread(supabase: AgentSupabase, userId: strin
   return data.id;
 }
 
+export async function renameAiAgentThread(supabase: AgentSupabase, threadId: string, title: string) {
+  await assertAgentThreadAccess(supabase, threadId);
+  const { data, error } = await createAdminClient().from("ai_agent_threads").update({ title })
+    .eq("id", threadId).select("id, title, updated_at").single();
+  if (error || !data) throw new Error("Could not rename this AI conversation.", { cause: error });
+  return data;
+}
+
+export async function deleteAiAgentThread(supabase: AgentSupabase, threadId: string) {
+  await assertAgentThreadAccess(supabase, threadId);
+  const { error } = await createAdminClient().from("ai_agent_threads").delete().eq("id", threadId);
+  if (error) throw new Error("Could not delete this AI conversation.", { cause: error });
+}
+
 export async function createAiAgentRun(supabase: AgentSupabase, threadId: string, values: {
   request_id: string; changeset: unknown; run_state: unknown;
 }) {

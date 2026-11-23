@@ -154,9 +154,19 @@ type AgentState = {
   largeCreditConfirmed: boolean;
 };
 
+const changesetSchema = z.object({
+  version: z.literal(1), siteId: z.uuid(), baseline: z.unknown(), working: z.unknown(), changes: z.array(z.unknown()),
+});
+const agentStateSchema = z.object({
+  messages: z.array(z.unknown()), toolCalls: z.number().int().nonnegative(),
+  changesThisRun: z.number().int().nonnegative(), toolRepairs: z.record(z.string(), z.number().int().nonnegative()),
+  tokenUsage: tokenUsageSchema, segmentUsage: tokenUsageSchema,
+  awaiting: z.object({ kind: z.enum(["plan", "question", "credit"]), toolUseId: z.string(), toolName: z.string(), payload: z.record(z.string(), z.unknown()) }).optional(),
+  reservationId: z.uuid(), largeCreditConfirmed: z.boolean(),
+});
 const requestSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), siteId: z.uuid(), message: z.string().trim().min(1).max(4000), largeRunConfirmed: z.boolean().optional() }),
-  z.object({ action: z.enum(["continue", "approve_plan", "reject_plan", "approve_large_run", "reject_large_run", "answer"]), threadId: z.uuid(), runId: z.uuid(), answer: z.string().max(2000).optional() }),
+  z.object({ action: z.literal("start"), siteId: z.uuid(), threadId: z.uuid().optional(), message: z.string().trim().min(1).max(4000), largeRunConfirmed: z.boolean().optional() }),
+  z.object({ action: z.enum(["continue", "approve_plan", "reject_plan", "change_plan", "approve_large_run", "reject_large_run", "answer"]), threadId: z.uuid(), runId: z.uuid(), answer: z.string().max(2000).optional() }),
 ]);
 export type AgentEvent = Record<string, unknown> & { type: string };
 type Supabase = Awaited<ReturnType<typeof import("@/lib/supabase/server").createClient>>;
@@ -733,9 +743,6 @@ async function insertMessage(supabase: Supabase, threadId: string, runId: string
     role, content: content.slice(0, 20_000), tool_calls: toolCalls,
   });
 }
-function outputText(message: Anthropic.Message) {
-  return message.content.filter((part) => part.type === "text").map((part) => part.text).join("\n").trim();
-}
 function sumUsage(current: TokenUsage, message: Anthropic.Message): TokenUsage {
   const usage = message.usage;
   return tokenUsageSchema.parse({
@@ -795,16 +802,40 @@ export async function executeAgentRequest(
     if (!process.env.ANTHROPIC_API_KEY) throw new Error("AI is not configured. Ask your agency to enable it.");
     const snapshot = await loadSnapshot(supabase, input.siteId);
     accountId = snapshot.site.account_id;
-    changeset = { version: 1, siteId: input.siteId, baseline: clone(snapshot), working: clone(snapshot), changes: [] };
+    let messages: Anthropic.MessageParam[] = [{ role: "user", content: input.message }];
+    if (input.threadId) {
+      const { data: thread, error: threadError } = await supabase.from("ai_agent_threads")
+        .select("id, site_id").eq("id", input.threadId).maybeSingle();
+      if (threadError || !thread || thread.site_id !== input.siteId) throw new Error("This AI conversation is unavailable.");
+      const { data: previousRun, error: previousRunError } = await supabase.from("ai_agent_runs")
+        .select("status, changeset, run_state").eq("thread_id", input.threadId)
+        .order("started_at", { ascending: false }).limit(1).maybeSingle();
+      if (previousRunError) throw new Error("Could not load the AI conversation.", { cause: previousRunError });
+      if (previousRun) {
+        if (!["completed", "stopped", "failed"].includes(previousRun.status)) {
+          throw new Error("Continue or answer the current AI run before sending another message.");
+        }
+        changeset = changesetSchema.parse(previousRun.changeset) as Changeset;
+        const previousState = agentStateSchema.parse(previousRun.run_state);
+        messages = [...previousState.messages as Anthropic.MessageParam[], { role: "user", content: input.message }];
+      } else {
+        changeset = { version: 1, siteId: input.siteId, baseline: clone(snapshot), working: clone(snapshot), changes: [] };
+      }
+      if (changeset.siteId !== input.siteId || changeset.working.site.account_id !== accountId) {
+        throw new Error("This AI conversation is unavailable.");
+      }
+    } else {
+      changeset = { version: 1, siteId: input.siteId, baseline: clone(snapshot), working: clone(snapshot), changes: [] };
+    }
     const reservation = await reserveAgentRequest(snapshot.site, input.largeRunConfirmed === true);
     try {
-      threadId = await createAiAgentThread(supabase, userId, input.siteId, input.message.slice(0, 120));
+      threadId = input.threadId ?? await createAiAgentThread(supabase, userId, input.siteId, input.message.slice(0, 120));
     } catch (cause) {
       await releaseFailedRequest(reservation);
       throw cause;
     }
     state = {
-      messages: [{ role: "user", content: input.message }],
+      messages,
       toolCalls: 0, changesThisRun: 0,
       toolRepairs: {},
       tokenUsage: tokenUsageSchema.parse({ inputTokens: 0, outputTokens: 0 }),
@@ -825,25 +856,19 @@ export async function executeAgentRequest(
     runId = input.runId;
     const run = await getRunContext(supabase, threadId, runId);
     if (!["paused", "awaiting_approval", "awaiting_input"].includes(run.status)) throw new Error("This AI run cannot be continued.");
-    changeset = z.object({ version: z.literal(1), siteId: z.uuid(), baseline: z.unknown(), working: z.unknown(), changes: z.array(z.unknown()) }).parse(run.changeset) as Changeset;
-    state = z.object({
-      messages: z.array(z.unknown()), toolCalls: z.number().int().nonnegative(),
-      changesThisRun: z.number().int().nonnegative(), toolRepairs: z.record(z.string(), z.number().int().nonnegative()),
-      tokenUsage: tokenUsageSchema, segmentUsage: tokenUsageSchema,
-      awaiting: z.object({ kind: z.enum(["plan", "question", "credit"]), toolUseId: z.string(), toolName: z.string(), payload: z.record(z.string(), z.unknown()) }).optional(),
-      reservationId: z.uuid(), largeCreditConfirmed: z.boolean(),
-    }).parse(run.run_state) as AgentState;
+    changeset = changesetSchema.parse(run.changeset) as Changeset;
+    state = agentStateSchema.parse(run.run_state) as AgentState;
     state.reservationId = z.uuid().parse(run.request_id);
     accountId = changeset.working.site.account_id;
     if (run.status === "awaiting_approval" || run.status === "awaiting_input") {
       if (!state.awaiting) throw new Error("The agent is waiting for input but its request is missing.");
       if (input.action === "answer" && state.awaiting.kind !== "question") throw new Error("The agent is waiting for approval.");
-      if ((input.action === "approve_plan" || input.action === "reject_plan") && state.awaiting.kind !== "plan") throw new Error("The agent is waiting for another response.");
+      if (["approve_plan", "reject_plan", "change_plan"].includes(input.action) && state.awaiting.kind !== "plan") throw new Error("The agent is waiting for another response.");
       if ((input.action === "approve_large_run" || input.action === "reject_large_run") && state.awaiting.kind !== "credit") throw new Error("The agent is not waiting for large-run credit approval.");
-      if (state.awaiting.kind === "plan" && !["approve_plan", "reject_plan"].includes(input.action)) throw new Error("Approve or reject the pending plan to continue.");
+      if (state.awaiting.kind === "plan" && !["approve_plan", "reject_plan", "change_plan"].includes(input.action)) throw new Error("Approve, change, or reject the pending plan to continue.");
       if (state.awaiting.kind === "question" && input.action !== "answer") throw new Error("Answer the pending question to continue.");
       if (state.awaiting.kind === "credit" && !["approve_large_run", "reject_large_run"].includes(input.action)) throw new Error("Approve or reject the 3-credit run to continue.");
-      if (input.action === "answer" && !input.answer?.trim()) throw new Error("Provide an answer to continue.");
+      if (["answer", "change_plan"].includes(input.action) && !input.answer?.trim()) throw new Error("Provide an answer to continue.");
     } else if (input.action !== "continue") throw new Error("This AI run cannot be continued.");
     if (!await claimAiAgentRun(supabase, threadId, runId, run.status)) {
       throw new Error("This AI run is already being continued.");
@@ -874,7 +899,7 @@ export async function executeAgentRequest(
               type: "tool_result", tool_use_id: awaiting.toolUseId, content: JSON.stringify(result).slice(0, 20_000),
             }] });
             await insertMessage(supabase, threadId, runId, "tool", "Agent tool call", [{ name: awaiting.toolName, result }]);
-            emit({ type: "tool", name: awaiting.toolName, result, changes: changeset.changes.length });
+            emit({ type: "tool", callId: awaiting.toolUseId, name: awaiting.toolName, input: pendingInput, result, changes: changeset.changes.length });
           } catch (cause) {
             changeset = previousChangeset;
             const message = cause instanceof z.ZodError
@@ -883,7 +908,7 @@ export async function executeAgentRequest(
             state.messages.push({ role: "user", content: [{
               type: "tool_result", tool_use_id: awaiting.toolUseId, is_error: true, content: message,
             }] });
-            emit({ type: "tool_error", name: awaiting.toolName, message });
+            emit({ type: "tool_error", callId: awaiting.toolUseId, name: awaiting.toolName, input: pendingInput, message });
           }
         } else {
           state.messages.push({ role: "user", content: [{
@@ -896,11 +921,12 @@ export async function executeAgentRequest(
         const awaiting = state.awaiting;
         if (!awaiting) throw new Error("The agent is waiting for input but its request is missing.");
         const approved = input.action !== "reject_plan";
-        const result = input.action === "answer" ? `User answered: ${input.answer}` : approved
-          ? "The user approved the plan. Proceed."
-          : "The user rejected the plan. Do not make the planned changes; ask what they would prefer.";
+        const result = input.action === "answer" ? `User answered: ${input.answer}`
+          : input.action === "change_plan" ? `The user wants to change the plan: ${input.answer}. Revise the plan to address this feedback and ask for approval again before making changes.`
+          : approved ? "The user approved the plan. Proceed."
+            : "The user rejected the plan. Do not make the planned changes; ask what they would prefer.";
         state.messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: awaiting.toolUseId, content: result }] });
-        if (input.action === "answer") await insertMessage(supabase, threadId, runId, "user", input.answer!);
+        if (input.action === "answer" || input.action === "change_plan") await insertMessage(supabase, threadId, runId, "user", input.answer!);
         state.awaiting = undefined;
         if (input.action === "reject_plan") {
           await saveRun(supabase, threadId, runId, "completed", changeset, state, true);
@@ -934,12 +960,12 @@ export async function executeAgentRequest(
         tools: agentTools,
       });
       params.tool_choice = { type: "auto", disable_parallel_tool_use: true };
-      const response = await sdk.messages.create(params, { signal });
+      const messageStream = sdk.messages.stream(params, { signal });
+      messageStream.on("text", (text) => emit({ type: "text", text }));
+      const response = await messageStream.finalMessage();
       state.tokenUsage = sumUsage(state.tokenUsage, response);
       state.segmentUsage = sumUsage(state.segmentUsage, response);
       state.messages.push({ role: "assistant", content: response.content });
-      const text = outputText(response);
-      if (text) emit({ type: "text", text });
       const calls = response.content.filter((part) => part.type === "tool_use");
       if (!calls.length || response.stop_reason !== "tool_use") break;
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -952,6 +978,7 @@ export async function executeAgentRequest(
           continue;
         }
         state.toolCalls++;
+        emit({ type: "step", callId: call.id, name: call.name, input: call.input, status: "running" });
         if (call.name === "plan" || call.name === "ask_user") {
           let parsed: Record<string, unknown>;
           try {
@@ -966,7 +993,7 @@ export async function executeAgentRequest(
             if (attempt > 0) terminal = "paused";
             toolResults.push({ type: "tool_result", tool_use_id: call.id, is_error: true, content: message });
             callSummaries.push({ name: call.name, error: message });
-            emit({ type: "tool_error", name: call.name, message });
+            emit({ type: "tool_error", callId: call.id, name: call.name, input: call.input, message });
             continue;
           }
           state.awaiting = {
@@ -976,7 +1003,9 @@ export async function executeAgentRequest(
             payload: parsed,
           };
           terminal = call.name === "plan" ? "awaiting_approval" : "awaiting_input";
-          emit(call.name === "plan" ? { type: "plan", threadId, runId, ...parsed } : { type: "question", threadId, runId, ...parsed });
+          emit(call.name === "plan"
+            ? { type: "plan", callId: call.id, threadId, runId, ...parsed }
+            : { type: "question", callId: call.id, threadId, runId, ...parsed });
           callSummaries.push({ name: call.name, input: parsed });
           continue;
         }
@@ -988,7 +1017,10 @@ export async function executeAgentRequest(
             payload: { input: call.input as Record<string, unknown> },
           };
           terminal = "awaiting_approval";
-          emit({ type: "credit_confirmation", threadId, runId, credits: 3, message: "This run has reached 10 changes. Approving the next change will cost 3 credits total." });
+          emit({
+            type: "credit_confirmation", callId: call.id, threadId, runId, credits: 3,
+            message: "This run has reached 10 changes. Approving the next change will cost 3 credits total.",
+          });
           callSummaries.push({ name: call.name, awaitingCreditApproval: true });
           continue;
         }
@@ -1007,7 +1039,7 @@ export async function executeAgentRequest(
           const json = JSON.stringify(result);
           toolResults.push({ type: "tool_result", tool_use_id: call.id, content: json.slice(0, 20_000) });
           callSummaries.push({ name: call.name, input: call.input, result: json.slice(0, 4000) });
-          emit({ type: "tool", name: call.name, result, changes: changeset.changes.length });
+          emit({ type: "tool", callId: call.id, name: call.name, input: call.input, result, changes: changeset.changes.length });
         } catch (error) {
           if (signal?.aborted) { terminal = "stopped"; break; }
           if (previousChangeset) changeset = previousChangeset;
@@ -1023,7 +1055,7 @@ export async function executeAgentRequest(
           }
           toolResults.push({ type: "tool_result", tool_use_id: call.id, is_error: true, content: message ?? "Tool input was invalid." });
           callSummaries.push({ name: call.name, error: message });
-          emit({ type: "tool_error", name: call.name, message });
+          emit({ type: "tool_error", callId: call.id, name: call.name, input: call.input, message });
         }
       }
       if (callSummaries.length) await insertMessage(supabase, threadId, runId, "tool", "Agent tool calls", callSummaries);

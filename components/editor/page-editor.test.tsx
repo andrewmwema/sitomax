@@ -32,6 +32,19 @@ function puckState() {
   };
 }
 
+function sseResponse(events: object[]) {
+  const encoder = new TextEncoder();
+  return {
+    ok: true,
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const event of events) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        controller.close();
+      },
+    }),
+  };
+}
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams(mocks.panel ? { panel: mocks.panel } : {}),
@@ -193,6 +206,68 @@ describe("SEO page navigation", () => {
 });
 
 describe("editor navigation", () => {
+    it("opens and closes the AI chat from the top bar and Ctrl+J", async () => {
+      mocks.header = true;
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ threads: [], messages: [], latestRun: null }),
+      }));
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      const toggle = container.querySelector<HTMLButtonElement>(".editor-agent-toggle")!;
+      await act(async () => toggle.click());
+      expect(container.querySelector('[aria-label="AI site agent"]')).not.toBeNull();
+      await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "j", ctrlKey: true })));
+      expect(container.querySelector('[aria-label="AI site agent"]')).toBeNull();
+      await act(async () => root.unmount());
+    });
+
+    it("streams agent steps, plan approval, and clickable ask-user options", async () => {
+      mocks.header = true;
+      const thread = { id: "thread-1", title: "Improve the site", updated_at: "2026-01-01T00:00:00Z" };
+      const fetchMock = vi.fn(async (_input: string, init?: RequestInit) => {
+        if (init?.method !== "POST") return {
+          ok: true, json: async () => ({ threads: [thread], messages: [], latestRun: null }),
+        };
+        const body = JSON.parse(String(init.body)) as { action: string };
+        if (body.action === "start") return sseResponse([
+          { type: "run", threadId: thread.id, runId: "run-1" },
+          { type: "text", text: "I'll review the site first." },
+          { type: "step", callId: "step-1", name: "get_site_overview", input: {}, status: "running" },
+          { type: "tool", callId: "step-1", name: "get_site_overview", input: {}, changes: 0 },
+          { type: "plan", callId: "plan-1", steps: ["Update the theme", "Add an FAQ"], rationale: "Improve clarity." },
+          { type: "awaiting_approval" },
+        ]);
+        if (body.action === "approve_plan") return sseResponse([
+          { type: "run", threadId: thread.id, runId: "run-1" },
+          { type: "question", callId: "question-1", question: "Which accent should I use?", options: ["Blue", "Green"] },
+          { type: "awaiting_input" },
+        ]);
+        return sseResponse([
+          { type: "run", threadId: thread.id, runId: "run-1" },
+          { type: "text", text: "I'll use green." },
+          { type: "done", threadId: thread.id, runId: "run-1", status: "completed", summary: "I'll use green." },
+        ]);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      await act(async () => container.querySelector<HTMLButtonElement>(".editor-agent-toggle")!.click());
+      const suggestion = Array.from(container.querySelectorAll("button")).find((button) =>
+        button.textContent?.trim() === "Make the site feel more premium");
+      await act(async () => suggestion!.click());
+      await vi.waitFor(() => expect(container.textContent).toContain("Proposed plan"));
+      expect(container.textContent).toContain("Reading the site overview");
+      await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Approve")!.click());
+      await vi.waitFor(() => expect(container.textContent).toContain("Which accent should I use?"));
+      await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Green")!.click());
+      await vi.waitFor(() => expect(container.textContent).toContain("I'll use green."));
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(3);
+      await act(async () => root.unmount());
+    });
+
     it("opens domain settings from the header after saving and stays put if saving fails", async () => {
       mocks.header = true;
       mocks.dirty = true;

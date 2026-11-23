@@ -65,6 +65,7 @@ import { useDraftPersistence } from "./use-draft-persistence";
 import { EditorCommands, VersionHistory } from "./editor-commands";
 import { EditorAiProvider } from "./editor-ai";
 import { useEditorAi } from "./editor-ai-context";
+import { AiAgentPanelProvider, useAiAgentPanel } from "./ai-agent-panel";
 import { SeoPanel } from "@/components/editor/seo-panel";
 import type { SeoPageSummary } from "@/components/editor/seo-panel";
 import type { SiteSeo } from "@/lib/seo";
@@ -127,7 +128,7 @@ function usePersistence() {
 }
 
 function EditorRuntime({ children }: { children: React.ReactNode }) {
-  const { pageId, draftVersion, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
+  const { pageId, siteId, draftVersion, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
   const { pages, updatePagePublishState } = useInteractions();
   const markDraftSaved = useCallback((draft: Data, kind: "save" | "publish") => {
     if (kind === "publish") updatePagePublishState(pageId, false, false, true);
@@ -135,13 +136,14 @@ function EditorRuntime({ children }: { children: React.ReactNode }) {
       hasUnpublishedFooterChanges(draft, publishedData));
   }, [pageId, publishedData, updatePagePublishState]);
   const persistence = useDraftPersistence(pageId, theme, initialHeader, markDraftSaved, draftVersion);
-  return <PersistenceContext.Provider value={persistence}><AskAiProvider pageId={pageId} theme={theme} persistence={persistence}
+  return <PersistenceContext.Provider value={persistence}><AiAgentPanelProvider siteId={siteId} pageId={pageId}>
+    <AskAiProvider pageId={pageId} theme={theme} persistence={persistence}
     metadata={{ siteMenu: { links: pageMenuLinks(pages.filter(page => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) },
       siteLinks: linkContext(pages), pagePath: `/${pages.find(page => page.id === pageId)?.slug ?? ""}`, headersReady }}>
     <EditorPanelLayout />
     {children}
     <EditorThemePanel />
-  </AskAiProvider></PersistenceContext.Provider>;
+  </AskAiProvider></AiAgentPanelProvider></PersistenceContext.Provider>;
 }
 
 function EditorPanelLayout() {
@@ -178,6 +180,7 @@ function EditorPanelLayout() {
 function EditorHeader({ actions }: { actions: React.ReactNode }) {
   const { pageId, siteName, canManageDomains } = useEditorUi();
   const { pages } = useInteractions();
+  const aiPanel = useAiAgentPanel();
   const persistence = usePersistence();
   const router = useRouter();
   const getPuck = useGetPuck();
@@ -228,6 +231,9 @@ function EditorHeader({ actions }: { actions: React.ReactNode }) {
         aria-pressed={ui.leftSideBarVisible} onClick={() => togglePanel("left")}><PanelLeft size={17} /></button>
       <button type="button" className="editor-icon-button" aria-label="Toggle inspector" title="Toggle inspector"
         aria-pressed={ui.rightSideBarVisible} onClick={() => togglePanel("right")}><PanelRight size={17} /></button>
+      <button type="button" className="editor-icon-button editor-agent-toggle" aria-label="Toggle AI chat"
+        title="AI chat (Ctrl/Cmd+J)" aria-pressed={aiPanel.open} aria-keyshortcuts="Control+J Meta+J"
+        onClick={aiPanel.toggle}><Sparkles size={17} /></button>
       <span className="editor-toolbar-separator" />
       <button type="button" className="editor-icon-button" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled={!history.hasPast || persistence.busy !== null}
         onClick={() => history.back()}><Undo2 size={17} /></button>

@@ -1519,6 +1519,30 @@
   flex-shrink: 0;
 }
 
+.editor-agent-panel {
+  top: calc(var(--editor-header-height, 68px) + 1px);
+  bottom: 36px;
+  overflow: visible;
+  overscroll-behavior: contain;
+}
+
+.editor-agent-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: 1;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.editor-agent-resize:hover,
+.editor-agent-resize:focus-visible {
+  background: color-mix(in srgb, var(--platform-accent) 20%, transparent);
+  outline: none;
+}
+
 .editor-icon-button,
 .editor-rail-button {
   display: inline-flex;
