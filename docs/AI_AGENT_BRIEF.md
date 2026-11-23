@@ -46,6 +46,40 @@ Undo of AI changes (final, agreed during phase B3):
 - Audit: every apply and every undo is recorded in version history
   with who did it and when.
 
+Quality, cost and limits (agreed during phase C):
+- Quality check: runs when a run finishes and compares the site
+  before and after. It repairs what is safe to repair (unreadable
+  text colours, empty text blocks and buttons, unusable menu labels)
+  as "Quality fix" changes the user reviews like any other, and
+  reports the rest (links that lead nowhere, placeholders, menu
+  clashes). Problems already on the site are not touched.
+- Cost display: clients see credits; the agency also sees tokens
+  and the provider cost. This is enforced in the database, not only
+  in the panel.
+- Rate limit: 30 agent requests an hour and 150 a day per client
+  account, counting every message, answer, plan approval and
+  Continue. Agency staff are exempt. Adjustable per account in
+  `ai_limits`.
+- A large run (3 credits) is decided by the changes of that run,
+  not by everything staged in the thread. Quality fixes do not
+  count.
+- Provider errors: a busy or unreachable service pauses the run so
+  Continue retries it at no extra charge; a rejected request ends
+  the run with its staged changes kept for review. The agency sees
+  the Anthropic error type.
+- Thread memory is a summary built without a model call: the user's
+  requests and answers stay word for word, tool payloads are
+  dropped. The model's reasoning blocks are never sent back, because
+  they are bound to a system prompt that changes with every change.
+- Tool input: only the properties the agent edits are validated, so
+  stored content in shapes the AI schemas do not model stays
+  editable. Images come only from set_image; embed code is never
+  shown to the model; footer contact details and business
+  information cannot be changed.
+- Evals run in the sandbox against a fixture site, with a spending
+  cap. "No invented facts" is checked by heuristics that know the
+  fixture's facts.
+
 =====================================================================
 ## PHASE A — Agent engine (server)
 

@@ -30,7 +30,9 @@ bash scripts/test-db.sh stop
 `start` starts the cluster without resetting it. The script accepts only the
 exact local test URL above and never reads `.env.local` or production keys.
 `supabase/tests/ai_agent_apply.sql` covers the AI agent's transactional apply
-and site-wide undo, including access control. Every other file in
+and site-wide undo, including access control. `supabase/tests/ai_agent_limits.sql`
+covers the per-account agent limit, credit charging and who can read
+conversations and their cost. Every other file in
 `supabase/tests/` is a test that passes against the latest schema, except
 `local_shims.sql`, which `reset` applies itself to stand in for Supabase's
 built-in schemas.
@@ -289,8 +291,9 @@ concurrent draft change cancels the save. Each AI attempt is metered.
 
 ### AI site agent
 
-Apply [0046_ai_agent.sql](./supabase/migrations/0046_ai_agent.sql) and
-[0047_ai_agent_apply.sql](./supabase/migrations/0047_ai_agent_apply.sql) after
+Apply [0046_ai_agent.sql](./supabase/migrations/0046_ai_agent.sql),
+[0047_ai_agent_apply.sql](./supabase/migrations/0047_ai_agent_apply.sql) and
+[0048_ai_agent_limits.sql](./supabase/migrations/0048_ai_agent_limits.sql) after
 the preceding migrations. Open the AI chat from the editor's top bar
 (Ctrl/Cmd+J, or Ctrl/Cmd+K outside a text field), a section's toolbar or menu,
 the header toolbar, or **Ask AI** in the section library, which passes the
@@ -314,6 +317,41 @@ version from History. History shows who applied and undid each set of changes.
 
 The former Ask AI panel and floating "Add a section with AI" prompt were
 removed. **Rewrite with AI** for selected text is unchanged.
+
+**Quality check.** When a run finishes, the site before and after its changes
+is compared. Problems the changes introduced are repaired where that is safe:
+text colours that became hard to read, empty text blocks and buttons, and menu
+labels that cannot be used. Each repair is staged as a **Quality fix** change,
+reviewed and applied like any other. Links that lead nowhere, placeholders left
+to fill in, pages sharing a menu label and a crowded menu are listed on the
+review card under **Check before publishing**. Problems that were already on
+the site are left alone.
+
+**Cost and limits.** A run costs one included edit, or 1 credit beyond the
+monthly allowance, and 3 credits once it makes more than 10 changes (the app
+asks first). After a run the panel shows clients what it cost in credits; the
+agency also sees token counts and the provider cost. Provider cost, token
+counts and the saved model conversation cannot be read with a client session.
+Each client account may send 30 agent requests an hour and 150 a day, counting
+every message, answer, plan approval and Continue; agency staff are exempt.
+Change the numbers per account in `ai_limits.agent_requests_per_hour` and
+`agent_requests_per_day` (0 turns the agent off for that account). When the AI
+service is busy or does not respond, the run is paused with its progress saved
+and **Continue** retries it without a new charge; the agency also sees the
+Anthropic error type.
+
+**Memory.** A long conversation is carried into the next request as a summary
+of what was asked, answered and done. While a run works, only its most recent
+tool results are kept in full. The model's reasoning is never sent back to it.
+
+**Evals.** `node scripts/agent-evals.mjs --dry-run` checks the eval harness
+with a scripted model and sends nothing to the provider.
+`node scripts/agent-evals.mjs` runs ten sample requests against a fixture site
+with the configured API key (about $1 of provider credits; `--budget` caps the
+spend, 3 USD by default) and checks that each staged changeset validates,
+invents no facts and keeps AA contrast. `--only faq,blog` runs selected
+requests and `--verbose` prints each step. Evals run in the agent's sandbox:
+they read and write no database and fetch no images.
 
 ### Stock photos
 

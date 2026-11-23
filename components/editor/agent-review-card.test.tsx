@@ -8,7 +8,7 @@ vi.mock("@puckeditor/core", () => ({
 }));
 vi.mock("@/lib/puck/config", () => ({ puckConfig: { components: {} } }));
 
-import { AgentReviewCanvas, newAgentReview } from "./agent-review-card";
+import { AgentReviewCanvas, AgentReviewCard, newAgentReview } from "./agent-review-card";
 
 function review(draftData: unknown, footerVariant?: { before: string; after: string }) {
   const snapshot = {
@@ -61,5 +61,22 @@ describe("agent review canvas data", () => {
 
     expect(markup).toContain("invalid preview data");
     expect(mocks.render).not.toHaveBeenCalled();
+  });
+});
+
+describe("agent review card quality check", () => {
+  const card = (quality?: { fixed: string[]; notes: string[] }) => renderToStaticMarkup(<AgentReviewCard
+    review={{ ...review({ root: {}, content: [] }, { before: "columns", after: "compact" }), ...(quality ? { quality } : {}) }}
+    onChange={() => {}} currentPageId="home" onApply={() => {}} applying={false} disabled={false} />);
+
+  it("lists what was repaired and what is left to check, and says so when nothing was found", () => {
+    const markup = card({ fixed: ["Home: removed 1 empty text block or button."], notes: ["Home: 1 placeholder to fill in before publishing: [price]."] });
+    expect(markup).toContain("Fixed automatically");
+    expect(markup).toContain("Home: removed 1 empty text block or button.");
+    expect(markup).toContain("Check before publishing");
+    expect(markup).toContain("[price]");
+    expect(card({ fixed: [], notes: [] })).toContain("No new contrast, link, menu or placeholder problems found.");
+    // Runs staged before the check existed have no report to show.
+    expect(card()).not.toContain("Quality check");
   });
 });

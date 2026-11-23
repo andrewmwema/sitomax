@@ -1007,6 +1007,7 @@ export async function executeAgentRequest(
   raw: unknown,
   emit: (event: AgentEvent) => void,
   signal?: AbortSignal,
+  model: AgentModel = anthropicModel(),
 ) {
   const input = requestSchema.parse(raw);
   let threadId: string;
@@ -1160,7 +1161,7 @@ export async function executeAgentRequest(
   let providerUncertain = false;
   try {
     terminal = await runAgentLoop({
-      model: anthropicModel(), changeset, state, signal, emit, threadId, runId,
+      model, changeset, state, signal, emit, threadId, runId,
       context: { supabase, accountId, siteId: changeset.siteId },
       onToolCalls: (summaries) => insertMessage(supabase, threadId, runId, "tool", "Agent tool calls", summaries),
     });
