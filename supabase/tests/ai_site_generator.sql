@@ -1,4 +1,4 @@
--- Run only against an isolated test database with migrations through 0023 applied.
+-- Run only against an isolated test database with every migration applied.
 -- Tests run as the database owner and roll back every fixture.
 begin;
 do $$
@@ -57,15 +57,22 @@ begin
   execute 'set local role service_role';
   generation := public.begin_ai_site_generation(owner_id, account_id, 'claude-sonnet-5-5', site_id);
   assert (select extra_credits from public.ai_limits where public.ai_limits.account_id = account_id) = 10, 'A complete generation reserves exactly ten credits';
-  for n in 1..10 loop
+  -- Since 0024/0026 a generation's own calls are capped by its call budget, not the rolling limit.
+  for n in 1..42 loop
     child := public.reserve_ai_generation_call(generation, owner_id, account_id, 'generate_site', 'claude-sonnet-5-5', site_id);
     perform public.finish_ai_request(child, true);
   end loop;
   begin
     perform public.reserve_ai_generation_call(generation, owner_id, account_id, 'generate_site', 'claude-sonnet-5-5', site_id);
+    raise exception 'Expected budget denial';
+  exception when raise_exception then
+    assert sqlerrm like '%maximum number of AI calls%', 'A curated generation allows exactly 42 calls, including failures';
+  end;
+  begin
+    perform public.reserve_ai_request(owner_id, account_id, 'edit_section', 'claude-haiku-4-5', site_id);
     raise exception 'Expected rate denial';
   exception when raise_exception then
-    assert sqlerrm like '%rate limit%', 'Exactly ten real requests, including failures, are allowed per minute';
+    assert sqlerrm like '%rate limit%', 'Generation calls still count toward the rolling limit for other requests';
   end;
   perform public.finish_ai_site_generation(generation, false);
   perform public.finish_ai_site_generation(generation, false);
@@ -183,10 +190,15 @@ begin
     'New custom-layout sites may create only the selected pages';
   assert (select slug from public.pages where id = home_id) = '';
   update public.pages set published_data = draft_data, published_at = now() where id = home_id;
+  assert (select draft_theme->>'style' from public.sites where id = created_site) = 'modern',
+    'Since 0039, publishing a page alone leaves the pending theme staged';
+  execute 'reset role';
+  execute 'set local role authenticated';
+  perform public.publish_site_changes(created_site, '{}'::uuid[], false, null, true, '{"style":"modern"}', false, null);
+  execute 'reset role';
   assert (select theme->>'style' from public.sites where id = created_site) = 'modern', 'Only explicit publishing applies the pending theme';
   assert (select draft_theme from public.sites where id = created_site) is null;
-  execute 'reset role';
-  raise notice 'PASS: generation credits, per-call ledger/rate limits, draft-only writes, reversible backups, RLS, embeds and explicit publishing';
+  raise notice 'PASS: generation credits, call budgets and rate limits, draft-only writes, reversible backups, RLS, embeds and explicit publishing';
 end;
 $$;
 rollback;
