@@ -6,7 +6,7 @@ import { AI_ACTIONS, modelForAction, SITE_GENERATION_MODEL } from "./models";
 import { assertPricedModel, type TokenUsage } from "./pricing";
 import { checkLimit, recordUsage, releaseFailedRequest } from "./usage";
 import { anthropicRequestParams } from "./request-params";
-import { AiProviderError, providerFailure } from "./provider-error";
+import { AiProviderError, isDefinitiveProviderFailure, providerFailure } from "./provider-error";
 
 let client: Anthropic | undefined;
 function getClient(): Anthropic {
@@ -72,7 +72,7 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message & { _
     if (details) console.error("Anthropic request failed", {
       ...details, requestId: reservation.id, correlationId: input.correlationId, generationId: input.generationId, model: reservation.model, action: input.action,
     });
-    if (status === undefined || ![400, 401, 403, 404, 412, 413, 422, 429, 431].includes(status)) {
+    if (!isDefinitiveProviderFailure(status)) {
       // A timeout or server error may have occurred after billable generation.
       console.error("AI request outcome needs reconciliation", { requestId: reservation.id, status });
       throw requestError(`The AI request outcome is uncertain. Contact your agency with request ${reservation.id} before retrying.`);

@@ -177,6 +177,19 @@ export function AgentReviewCard({ review, onChange, currentPageId, onApply, appl
           onClick={() => decide("undone")}><RotateCcw size={12} className="mr-1 inline" />Undo all</button>
       </div>
     </header>
+    {review.quality ? <section className="border-b border-violet-100 px-3 py-2 text-[11px] leading-relaxed" aria-label="Quality check">
+      <h4 className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Quality check</h4>
+      {!review.quality.fixed.length && !review.quality.notes.length
+        ? <p className="mt-1 text-green-800">No new contrast, link, menu or placeholder problems found.</p> : null}
+      {review.quality.fixed.length ? <>
+        <p className="mt-1 font-medium text-green-800">Fixed automatically</p>
+        <ul className="list-disc pl-4 text-zinc-700">{review.quality.fixed.map((item) => <li key={item}>{item}</li>)}</ul>
+      </> : null}
+      {review.quality.notes.length ? <>
+        <p className="mt-1 font-medium text-amber-800">Check before publishing</p>
+        <ul className="list-disc pl-4 text-zinc-700">{review.quality.notes.map((item) => <li key={item}>{item}</li>)}</ul>
+      </> : null}
+    </section> : null}
     <div className="max-h-80 space-y-3 overflow-y-auto p-3">
       {groups.map((group) => <section key={group.label}>
         <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{group.label}</h4>

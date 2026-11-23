@@ -52,6 +52,8 @@ export const agentReviewPayloadSchema = z.strictObject({
   changes: z.array(changeSchema),
   baseline: snapshotSchema,
   working: snapshotSchema,
+  /** What the quality check repaired, and what is left for the user to look at. */
+  quality: z.strictObject({ fixed: z.array(z.string()), notes: z.array(z.string()) }).optional(),
 });
 export type AgentReviewPayload = z.infer<typeof agentReviewPayloadSchema>;
 export type AgentReviewChange = AgentReviewPayload["changes"][number];
@@ -115,10 +117,12 @@ export function createAgentReviewPayload(value: unknown): AgentReviewPayload | n
 
   const changes = value.changes.map((change) => changeSchema.safeParse(change));
   if (changes.some((change) => !change.success)) return null;
+  const quality = isObject(value.quality) ? { quality: value.quality } : {};
   const parsed = agentReviewPayloadSchema.safeParse({
     baseline,
     working,
     changes: changes.map((change) => change.success ? change.data : null),
+    ...quality,
   });
   return parsed.success ? parsed.data : null;
 }

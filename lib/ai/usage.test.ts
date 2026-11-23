@@ -4,7 +4,12 @@ import { SITE_GENERATION_MODEL } from "./models";
 const mocks = vi.hoisted(() => ({ authorize: vi.fn(), account: vi.fn(), rpc: vi.fn(), admin: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireUser: mocks.authorize }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
-import { beginSiteGeneration, checkpointDraft, checkLimit, completeDraftCheckpoints, finishSiteGeneration, recordUsage, startDraftCheckpoints } from "./usage";
+import {
+  beginSiteGeneration, checkpointDraft, checkLimit, completeDraftCheckpoints, finishSiteGeneration, getAiAgentRunUsage,
+  recordUsage, reserveAiAgentSlot, startDraftCheckpoints,
+} from "./usage";
+import { describeAgentUsage } from "./agent-usage";
+import { AiUserError } from "./errors";
 
 const id = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => {
@@ -78,5 +83,53 @@ describe("AI server-side accounting", () => {
     await expect(startDraftCheckpoints(id, id, id, { name: "", theme: {}, pages: [], business: {}, expectedBusiness: {} })).rejects.toThrow("Business information changed");
     await expect(checkpointDraft(id, id, id, {})).rejects.toThrow("Could not save");
     await expect(completeDraftCheckpoints(id, id)).rejects.toThrow("Could not finalize");
+  });
+  it("counts agent requests against the account, showing the limit to the user and tolerating a missing migration", async () => {
+    await reserveAiAgentSlot(id);
+    expect(mocks.rpc).toHaveBeenCalledWith("reserve_ai_agent_slot", { p_user_id: "authenticated-user", p_account_id: id });
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "P0001", message: "Your account has reached its hourly AI agent limit." } });
+    await expect(reserveAiAgentSlot(id)).rejects.toThrow(AiUserError);
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "PGRST202" } });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(reserveAiAgentSlot(id)).resolves.toBeUndefined();
+    log.mockRestore();
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "DATABASE_ERROR" } });
+    await expect(reserveAiAgentSlot(id)).rejects.toThrow("Could not check");
+    mocks.account.mockResolvedValue({ data: null, error: null });
+    mocks.admin.mockClear();
+    await expect(reserveAiAgentSlot(id)).rejects.toThrow("access");
+    expect(mocks.admin).not.toHaveBeenCalled();
+  });
+  it("shows clients the credits a run cost, and tokens and provider cost to the agency only", async () => {
+    const tokens = { inputTokens: 12000, outputTokens: 3400, cacheReadTokens: 50000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0 };
+    const run = vi.fn();
+    const isAgency = vi.fn();
+    const access = vi.fn().mockResolvedValue({ data: { id }, error: null });
+    const chain = (result: typeof run) => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: result }) }) }) });
+    const supabase = { from: () => chain(access), rpc: isAgency } as unknown as Parameters<typeof getAiAgentRunUsage>[0];
+    mocks.admin.mockReturnValue({ from: () => chain(run) });
+    const stored = (request: unknown) => ({ data: { usage: tokens, cost_usd: "0.063000000000", request }, error: null });
+
+    isAgency.mockResolvedValue({ data: false, error: null });
+    run.mockResolvedValueOnce(stored({ credits_used: 3, is_unlimited: false, status: "completed" }));
+    const large = await getAiAgentRunUsage(supabase, id, id);
+    expect(large).toEqual({ charge: "credits", credits: 3 });
+    expect(describeAgentUsage(large!)).toBe("3 credits");
+    run.mockResolvedValueOnce(stored({ credits_used: 0, is_unlimited: false, status: "completed" }));
+    expect(describeAgentUsage((await getAiAgentRunUsage(supabase, id, id))!)).toBe("Included in your monthly AI allowance");
+    run.mockResolvedValueOnce(stored({ credits_used: 1, is_unlimited: false, status: "failed" }));
+    expect(await getAiAgentRunUsage(supabase, id, id)).toEqual({ charge: "none", credits: 0 });
+
+    isAgency.mockResolvedValue({ data: true, error: null });
+    run.mockResolvedValueOnce(stored({ credits_used: 0, is_unlimited: true, status: "completed" }));
+    const agency = await getAiAgentRunUsage(supabase, id, id);
+    expect(agency).toEqual({ charge: "unlimited", credits: 0, tokens, costUsd: 0.063 });
+    expect(describeAgentUsage(agency!)).toBe("No credits charged (agency) · 12,000 input, 3,400 output, 50,000 cached tokens · $0.06");
+
+    // Without access to the run, the server-side read never happens.
+    access.mockResolvedValue({ data: null, error: null });
+    run.mockClear();
+    await expect(getAiAgentRunUsage(supabase, id, id)).rejects.toThrow("unavailable");
+    expect(run).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ createClient: vi.fn(), execute: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
 vi.mock("@/lib/ai/agent", () => ({ executeAgentRequest: mocks.execute }));
+import { AiUserError } from "@/lib/ai/errors";
 import { maxDuration, POST } from "./route";
 
 beforeEach(() => {
@@ -55,6 +56,16 @@ describe("AI agent transport", () => {
       expect.any(Function),
       expect.any(AbortSignal),
     );
+  });
+
+  it("shows limit messages written for the user and hides every other failure", async () => {
+    const event = async () => JSON.parse((await (await POST(request())).text()).replace(/^data: |[\r\n]+$/g, ""));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.execute.mockRejectedValueOnce(new AiUserError("Your account has reached its hourly AI agent limit. Try again in about 12 minutes."));
+    expect(await event()).toMatchObject({ type: "error", message: "Your account has reached its hourly AI agent limit. Try again in about 12 minutes." });
+    mocks.execute.mockRejectedValueOnce(new Error("connection to 10.0.0.3 refused"));
+    expect((await event()).message).toBe("The AI agent could not complete this request. Your saved drafts are unchanged.");
+    log.mockRestore();
   });
 
   it("rejects oversized payloads before creating the stream", async () => {

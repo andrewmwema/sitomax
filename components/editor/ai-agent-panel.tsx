@@ -7,6 +7,7 @@ import { Check, ChevronDown, LoaderCircle, MessageSquarePlus, Pencil, Sparkles, 
 import { applyAgentChanges } from "@/app/editor/[pageId]/agent-actions";
 import { appliedChangesSchema, type AppliedAgentChanges } from "@/lib/ai/agent-apply-types";
 import { agentReviewPayloadSchema, type AgentReviewPayload } from "@/lib/ai/agent-review";
+import { agentRunUsageSchema, describeAgentUsage, type AgentRunUsage } from "@/lib/ai/agent-usage";
 import { useInteractions } from "./interaction-context";
 import { ROOT_ZONE } from "@/lib/editor/tree";
 import { AgentReviewCanvas, AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
@@ -153,6 +154,7 @@ type LatestRun = Run & {
   awaiting?: { kind: string; payload: Record<string, unknown> } | null;
   review: AgentReviewPayload | null;
   applied: AppliedAgentChanges | null;
+  usage: AgentRunUsage | null;
 };
 type ThreadResponse = {
   threads: Thread[];
@@ -202,6 +204,7 @@ function threadRunResponse(value: unknown): ThreadResponse | null {
         ? { awaiting: { kind: rawRun.awaiting.kind, payload: rawRun.awaiting.payload } } : {}),
       review: agentReviewPayloadSchema.safeParse(rawRun.review).data ?? null,
       applied: appliedChangesSchema.safeParse(rawRun.applied).data ?? null,
+      usage: agentRunUsageSchema.safeParse(rawRun.usage).data ?? null,
     }
     : null;
   return { threads, messages, latestRun };
@@ -281,6 +284,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
   const [applied, setApplied] = useState<AppliedAgentChanges | null>(null);
   const [applyReport, setApplyReport] = useState<AgentApplyReport | null>(null);
   const [working, setWorking] = useState<"apply" | "undo" | null>(null);
+  const [usage, setUsage] = useState<AgentRunUsage | null>(null);
   const threadIdRef = useRef<string | null>(threadId);
   const controller = useRef<AbortController | null>(null);
   const loadSequence = useRef(0);
@@ -304,6 +308,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     setReviewSession(null);
     setApplied(null);
     setApplyReport(null);
+    setUsage(null);
     setError("");
     setPending(null);
     setRun(null);
@@ -325,6 +330,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       setRun(data.latestRun);
       setPending(makePending(data.latestRun));
       setApplied(data.latestRun?.applied ?? null);
+      setUsage(data.latestRun?.usage ?? null);
       setReviewSession(data.latestRun?.review?.changes.length
         ? { threadId: nextThreadId, review: newAgentReview(data.latestRun.review) } : null);
     } catch (cause) {
@@ -380,6 +386,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       if (reviewSession?.threadId !== event.threadId) setReviewSession(null);
       setApplied(null);
       setApplyReport(null);
+      setUsage(null);
       setRun({ id: event.runId, status: "running" });
       setPending(null);
       try { await refreshThreads(); }
@@ -430,6 +437,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
         if (activeThreadId && parsedReview.success && parsedReview.data.changes.length) {
           setReviewSession({ threadId: activeThreadId, review: newAgentReview(parsedReview.data) });
         } else setReviewSession(null);
+        setUsage(agentRunUsageSchema.safeParse(event.usage).data ?? null);
         setPending(null);
         try { await refreshThreads(); }
         catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh AI conversations."); }
@@ -714,6 +722,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
           </li>)}
         </ol>
       </details> : null}
+      {usage && !streaming ? <p className="text-[10px] text-zinc-500">This request: {describeAgentUsage(usage)}</p> : null}
       {reviewSession?.threadId === threadId ? <AgentReviewCard review={reviewSession.review}
         onChange={(review) => setReviewSession({ ...reviewSession, review })} currentPageId={pageId}
         onApply={() => void applyChanges()} applying={working === "apply"}

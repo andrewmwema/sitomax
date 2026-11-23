@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { appliedChangesSchema } from "@/lib/ai/agent-apply-types";
 import { createAgentReviewPayload } from "@/lib/ai/agent-review";
-import { deleteAiAgentThread, renameAiAgentThread } from "@/lib/ai/usage";
+import { deleteAiAgentThread, getAiAgentRunUsage, loadAiAgentRunState, renameAiAgentThread } from "@/lib/ai/usage";
 import { createClient } from "@/lib/supabase/server";
 
 const threadIdSchema = z.uuid();
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     supabase.from("ai_agent_messages").select("id, role, content, created_at")
       .eq("thread_id", query.data.threadId).in("role", ["user", "assistant"])
       .order("created_at", { ascending: true }).limit(200),
-    supabase.from("ai_agent_runs").select("id, status, run_state, changeset")
+    supabase.from("ai_agent_runs").select("id, status, changeset")
       .eq("thread_id", query.data.threadId).order("started_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (messageResult.error || runResult.error) {
@@ -71,7 +71,23 @@ export async function GET(request: Request) {
     return Response.json({ message: "Could not load this AI conversation." }, { status: 500 });
   }
 
-  const runState = runResult.data ? runStateSchema.safeParse(runResult.data.run_state) : null;
+  let runState = null;
+  let usage = null;
+  if (runResult.data) {
+    try {
+      // The saved model conversation and the run's cost are not readable with the user's own access.
+      const finished = ["completed", "stopped", "failed"].includes(runResult.data.status);
+      const [state, cost] = await Promise.all([
+        loadAiAgentRunState(supabase, query.data.threadId, runResult.data.id),
+        finished ? getAiAgentRunUsage(supabase, query.data.threadId, runResult.data.id) : null,
+      ]);
+      runState = runStateSchema.safeParse(state);
+      usage = cost;
+    } catch (cause) {
+      console.error("Could not load AI run state", { type: cause instanceof Error ? cause.name : "Unknown" });
+      return Response.json({ message: "Could not load this AI conversation." }, { status: 500 });
+    }
+  }
   const awaiting = runState?.success && runState.data.awaiting?.kind !== "credit"
     ? runState.data.awaiting ?? null
     : runState?.success && runState.data.awaiting?.kind === "credit"
@@ -102,6 +118,7 @@ export async function GET(request: Request) {
       awaiting,
       review: applied ? null : createAgentReviewPayload(runResult.data.changeset),
       applied,
+      usage,
     } : null,
   });
 }

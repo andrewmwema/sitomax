@@ -20,6 +20,11 @@ export function providerFailure(cause: unknown) {
   };
 }
 
+/** Statuses at which the provider refused the request before generating anything billable. */
+export function isDefinitiveProviderFailure(status: number | undefined) {
+  return status !== undefined && [400, 401, 403, 404, 412, 413, 422, 429, 431].includes(status);
+}
+
 export class AiProviderError extends Error {
   constructor(message: string, readonly details: NonNullable<ReturnType<typeof providerFailure>>) {
     super(message);

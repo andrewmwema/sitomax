@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { executeAgentRequest } from "@/lib/ai/agent";
+import { AiUserError } from "@/lib/ai/errors";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -43,9 +44,10 @@ export async function POST(request: Request) {
       } catch (cause) {
         const requestId = crypto.randomUUID();
         console.error("AI agent request failed", { requestId, type: cause instanceof Error ? cause.name : "Unknown" });
+        // Limits and run-state problems are written for the user; anything else stays generic.
         const message = cause instanceof z.ZodError
           ? "The AI agent request is invalid."
-          : cause instanceof Error && cause.message.startsWith("A large AI run requires")
+          : cause instanceof AiUserError
             ? cause.message
             : "The AI agent could not complete this request. Your saved drafts are unchanged.";
         send({ type: "error", message, requestId });

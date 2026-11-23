@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AI_ACTIONS, modelForAction, type AiAction, type AiModel } from "./models";
 import { assertPricedModel, calculateCostUsd, tokenUsageSchema, type TokenUsage } from "./pricing";
+import { agentRunUsageSchema, type AgentRunUsage } from "./agent-usage";
+import { AiUserError } from "./errors";
 
 export type AiReservation = { id: string; model: AiModel };
 
@@ -41,7 +43,7 @@ export async function checkLimit(
     ...(parsed.customGeneration ? { p_custom: true } : {}),
   });
   if (reserveError) {
-    if (reserveError.code === "P0001" || reserveError.code === "42501") throw new Error(reserveError.message);
+    if (reserveError.code === "P0001" || reserveError.code === "42501") throw new AiUserError(reserveError.message);
     throw new Error("Could not reserve AI usage. Please retry.", { cause: reserveError });
   }
   return { id: z.uuid().parse(id), model };
@@ -158,7 +160,25 @@ export async function upgradeAiAgentRequest(accountId: string, requestId: string
   const { error } = await createAdminClient().rpc("upgrade_ai_agent_request", {
     p_request_id: z.uuid().parse(requestId),
   });
-  if (error) throw new Error(error.code === "P0001" ? error.message : "Could not reserve credits for this large AI run.", { cause: error });
+  if (error?.code === "P0001") throw new AiUserError(error.message);
+  if (error) throw new Error("Could not reserve credits for this large AI run.", { cause: error });
+}
+
+/**
+ * Counts one agent request (a message, an answer, an approval or a Continue)
+ * against the account's hourly and daily limits. Agency staff are exempt.
+ */
+export async function reserveAiAgentSlot(accountId: string) {
+  const user = await authorizeAccount(z.uuid().parse(accountId));
+  const { error } = await createAdminClient().rpc("reserve_ai_agent_slot", { p_user_id: user.id, p_account_id: accountId });
+  if (!error) return;
+  if (error.code === "P0001" || error.code === "42501") throw new AiUserError(error.message);
+  // Until its migration is applied there is no account limit to enforce.
+  if (error.code === "PGRST202" || error.code === "42883") {
+    console.error("AI agent account limits are not installed", { code: error.code });
+    return;
+  }
+  throw new Error("Could not check the AI agent limit. Please retry.", { cause: error });
 }
 
 type AgentSupabase = Awaited<ReturnType<typeof import("@/lib/supabase/server").createClient>>;
@@ -172,6 +192,41 @@ async function assertAgentRunAccess(supabase: AgentSupabase, threadId: string, r
   const { data, error } = await supabase.from("ai_agent_runs").select("id")
     .eq("id", runId).eq("thread_id", threadId).maybeSingle();
   if (error || !data) throw new Error("This AI run is unavailable.");
+}
+
+/** The saved model conversation of a run. Clients cannot read it: it holds token counts. */
+export async function loadAiAgentRunState(supabase: AgentSupabase, threadId: string, runId: string): Promise<unknown> {
+  await assertAgentRunAccess(supabase, threadId, runId);
+  const { data, error } = await createAdminClient().from("ai_agent_runs").select("run_state")
+    .eq("id", runId).eq("thread_id", threadId).maybeSingle();
+  if (error || !data) throw new Error("This AI run is unavailable.", { cause: error });
+  return data.run_state;
+}
+
+/** What a run cost: credits for everyone, token counts and provider cost for the agency only. */
+export async function getAiAgentRunUsage(supabase: AgentSupabase, threadId: string, runId: string): Promise<AgentRunUsage | null> {
+  await assertAgentRunAccess(supabase, threadId, runId);
+  const [{ data, error }, agency] = await Promise.all([
+    createAdminClient().from("ai_agent_runs")
+      .select("usage, cost_usd, request:ai_requests(credits_used, is_unlimited, status)")
+      .eq("id", runId).eq("thread_id", threadId).maybeSingle(),
+    supabase.rpc("is_super_admin"),
+  ]);
+  const run = z.object({
+    usage: tokenUsageSchema, cost_usd: z.coerce.number().nonnegative(),
+    request: z.object({ credits_used: z.number().int(), is_unlimited: z.boolean(), status: z.string() }).nullable(),
+  }).safeParse(data);
+  if (error || !run.success) {
+    console.error("Could not load AI run usage", { code: error?.code ?? "ValidationError" });
+    return null;
+  }
+  const { request, usage, cost_usd } = run.data;
+  const charge = !request || request.status === "failed" ? "none" : request.is_unlimited ? "unlimited"
+    : request.credits_used > 0 ? "credits" : "included";
+  return agentRunUsageSchema.parse({
+    charge, credits: charge === "credits" ? request!.credits_used : 0,
+    ...(!agency.error && agency.data === true ? { tokens: usage, costUsd: cost_usd } : {}),
+  });
 }
 
 export async function createAiAgentThread(supabase: AgentSupabase, userId: string, siteId: string, title: string) {
