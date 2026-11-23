@@ -46,12 +46,7 @@ begin
 
   -- One request at a time per account, so two tabs cannot both take the last slot.
   perform pg_advisory_xact_lock(hashtextextended('ai-agent-account:' || p_account_id::text, 0));
-  select * into limits from public.ai_limits where account_id = p_account_id;
-  if not found then
-    raise warning 'AI limits missing for account %; using default agent request limits.', p_account_id;
-    limits.agent_requests_per_hour := 30;
-    limits.agent_requests_per_day := 150;
-  end if;
+  select * into strict limits from public.ai_limits where account_id = p_account_id;
   request_time := clock_timestamp();
   delete from public.ai_agent_request_log
     where account_id = p_account_id and created_at <= request_time - interval '1 day';
@@ -89,7 +84,7 @@ grant select (id, thread_id, status, request_id, changeset, started_at, finished
 -- The same figures are kept per request in the usage ledger, which account
 -- owners could read. Owners see their allowance and credits through
 -- ai_account_summaries; the ledger with token counts and cost is the agency's.
-drop policy if exists "owners read AI usage" on public.ai_usage;
+drop policy "owners read AI usage" on public.ai_usage;
 create policy "agency reads AI usage" on public.ai_usage for select to authenticated
   using (public.is_super_admin());
 

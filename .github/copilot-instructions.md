@@ -102,5 +102,4 @@ SUPABASE_SEND_EMAIL_HOOK_SECRET=  # server only; signed Auth email hook secret
 - Leads are `form_submissions`; preserve owner/agency RLS for leads, notes, timelines, settings and exports. Lead email and daily digests use the default Postmark transactional stream. `/api/cron/leads` uses scoped, secret-checked RPCs with the anon key, never the service role. See the README for worker setup.
 - Lead replies and forwards use `POSTMARK_LEADS_STREAM`. Inbound lives only on the canonical platform host and requires Basic Auth plus a signed thread address. Never include these addresses, credentials or message bodies in logs.
 - Changes to sites.subdomain, sites.custom_domain, sites.domain_verified or sites.account_id must be done in server actions with lib/supabase/admin.ts after checking the user's permission. Regular users can only update sites.name and sites.theme.
-Before every commit: run `npx tsc --noEmit` and `npm run lint` and
-fix all errors. Never push code that fails type checking.
+Before every commit, run `npx tsc --noEmit` and `npm run lint` and fix all errors; never push if either fails. Never edit a migration file after it has been committed; always add a new migration with the next number.
