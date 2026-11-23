@@ -20,6 +20,10 @@ export function blockFields(type: string): Fields {
   return component.fields as Fields;
 }
 
+export function validateBlockProps(type: string, value: unknown) {
+  return fieldsSchema(blockFields(type)).parse(value);
+}
+
 export function isImageField(field: Field): boolean {
   return field.type === "custom" && "aiKind" in field && field.aiKind === "image";
 }

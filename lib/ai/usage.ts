@@ -152,3 +152,71 @@ export async function releaseFailedRequest(reservation: AiReservation): Promise<
   });
   if (error) throw new Error("Could not release the failed AI request reservation.", { cause: error });
 }
+
+export async function upgradeAiAgentRequest(accountId: string, requestId: string) {
+  await authorizeAccount(z.uuid().parse(accountId));
+  const { error } = await createAdminClient().rpc("upgrade_ai_agent_request", {
+    p_request_id: z.uuid().parse(requestId),
+  });
+  if (error) throw new Error(error.code === "P0001" ? error.message : "Could not reserve credits for this large AI run.", { cause: error });
+}
+
+type AgentSupabase = Awaited<ReturnType<typeof import("@/lib/supabase/server").createClient>>;
+
+async function assertAgentThreadAccess(supabase: AgentSupabase, threadId: string) {
+  const { data, error } = await supabase.from("ai_agent_threads").select("id").eq("id", threadId).maybeSingle();
+  if (error || !data) throw new Error("This AI conversation is unavailable.");
+}
+
+async function assertAgentRunAccess(supabase: AgentSupabase, threadId: string, runId: string) {
+  const { data, error } = await supabase.from("ai_agent_runs").select("id")
+    .eq("id", runId).eq("thread_id", threadId).maybeSingle();
+  if (error || !data) throw new Error("This AI run is unavailable.");
+}
+
+export async function createAiAgentThread(supabase: AgentSupabase, userId: string, siteId: string, title: string) {
+  const { data: site, error: siteError } = await supabase.from("sites").select("id").eq("id", siteId).maybeSingle();
+  if (siteError || !site) throw new Error("This site is unavailable to your account.");
+  const { data, error } = await createAdminClient().from("ai_agent_threads")
+    .insert({ site_id: siteId, user_id: userId, title }).select("id").single();
+  if (error || !data) throw new Error("Could not start an AI conversation.");
+  return data.id;
+}
+
+export async function createAiAgentRun(supabase: AgentSupabase, threadId: string, values: {
+  request_id: string; changeset: unknown; run_state: unknown;
+}) {
+  await assertAgentThreadAccess(supabase, threadId);
+  const { data, error } = await createAdminClient().from("ai_agent_runs")
+    .insert({ thread_id: threadId, status: "running", ...values }).select("id").single();
+  if (error || !data) throw new Error("Could not start the AI run.");
+  return data.id;
+}
+
+export async function saveAiAgentRun(supabase: AgentSupabase, threadId: string, runId: string, values: {
+  status: string; changeset?: unknown; run_state?: unknown; usage?: TokenUsage; cost_usd?: number;
+  finished_at?: string | null;
+}) {
+  await assertAgentRunAccess(supabase, threadId, runId);
+  const { error } = await createAdminClient().from("ai_agent_runs").update(values)
+    .eq("id", runId).eq("thread_id", threadId);
+  if (error) throw new Error("Could not save the AI run state.", { cause: error });
+}
+
+export async function claimAiAgentRun(supabase: AgentSupabase, threadId: string, runId: string, expectedStatus: string) {
+  await assertAgentRunAccess(supabase, threadId, runId);
+  const { data, error } = await createAdminClient().from("ai_agent_runs")
+    .update({ status: "running", finished_at: null }).eq("id", runId).eq("thread_id", threadId)
+    .eq("status", expectedStatus).select("id").maybeSingle();
+  if (error) throw new Error("Could not continue this AI run.", { cause: error });
+  return Boolean(data);
+}
+
+export async function appendAiAgentMessage(supabase: AgentSupabase, threadId: string, runId: string, values: {
+  role: "user" | "assistant" | "tool"; content: string; tool_calls: unknown[];
+}) {
+  await assertAgentRunAccess(supabase, threadId, runId);
+  const { error } = await createAdminClient().from("ai_agent_messages")
+    .insert({ thread_id: threadId, run_id: runId, ...values });
+  if (error) throw new Error("Could not save the AI conversation.", { cause: error });
+}
