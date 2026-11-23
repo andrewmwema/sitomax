@@ -24,7 +24,23 @@ export type EvalCase = {
 export type EvalResult = {
   id: string; request: string; passed: boolean; failures: string[]; notes: string[];
   terminal: string; steps: number; toolErrors: number; changes: number; tokens: TokenUsage; costUsd: number;
+  /** Tool calls refused on their first attempt. A repeat refusal of the same tool, before it works, is the same failure. */
+  firstAttemptFailures: number;
 };
+
+/** How many tool calls were refused on the first attempt, counting a slip and its failed repairs once. */
+export function firstAttemptFailures(events: AgentEvent[]) {
+  const failing = new Set<string>();
+  let count = 0;
+  for (const event of events) {
+    const name = String(event.name);
+    if (event.type === "tool_error" && !failing.has(name)) {
+      failing.add(name);
+      count++;
+    } else if (event.type === "tool") failing.delete(name);
+  }
+  return count;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -153,7 +169,7 @@ const added = (changeset: AgentChangeset, pageId: string, type: string) => {
   return content(changeset.working, pageId).some((item) => item.type === type && !before.has(item.props.id));
 };
 
-/** Ten requests of the kinds the brief names, each with a check that it was carried out. */
+/** Requests of the kinds the brief names, each with a check that it was carried out. */
 export const EVAL_CASES: EvalCase[] = [
   { id: "premium", request: "Make the site feel more premium.",
     verify: (changeset) => changeset.changes.length >= 2 ? null : "Expected several coordinated changes." },
@@ -195,6 +211,25 @@ export const EVAL_CASES: EvalCase[] = [
     } },
   { id: "blog", request: "Draft a blog post about preventing frozen pipes in winter.",
     verify: (changeset) => changeset.working.posts.length === changeset.baseline.posts.length + 1 ? null : "No blog post was drafted." },
+  // Design-heavy requests: these are where tool input most often needs a second attempt.
+  { id: "footer-style", request: 'Give the footer a dark navy background (#0b2545) with white text, and change its tagline to "Here whenever you need us."',
+    verify: (changeset) => changeset.working.pages.every((page) => {
+      const footer = content(changeset.working, page.id).find((item) => item.type === "Footer");
+      return footer?.props.tagline === "Here whenever you need us." && JSON.stringify(footer.props.design).toLowerCase().includes("#0b2545");
+    }) ? null : "Not every page's footer has the new tagline and the navy background." },
+  { id: "icon-row", request: "On the About page, add a section with three icons in a row for our promises: on time, tidy and honest, each with a short line of text. Put a thin divider and some space above it.",
+    verify: (changeset) => {
+      const before = new Set(content(changeset.baseline, fixtureIds.about).map((item) => item.props.id));
+      const fresh = JSON.stringify(content(changeset.working, fixtureIds.about).filter((item) => !before.has(item.props.id)));
+      return /"type":"Icon(?:List)?"|"icon":/.test(fresh) && /tidy/i.test(fresh) ? null : "No section with the three promises and their icons was added to About.";
+    } },
+  { id: "section-style", request: "On the home page, give the hero more padding at the top and bottom and center its text. Give the \"Why Harbour Plumbing\" section a soft shadow, rounded corners and a light grey background.",
+    verify: (changeset) => {
+      const design = (snapshot: AgentChangeset["working"], id: string) =>
+        JSON.stringify(content(snapshot, fixtureIds.home).find((item) => item.props.id === id)?.props.design ?? {});
+      return ["home-hero", "home-why-section"].every((id) => design(changeset.working, id) !== design(changeset.baseline, id))
+        ? null : "The hero and the Why section were not both restyled.";
+    } },
 ];
 
 class CostLimitReached extends Error {}
@@ -264,7 +299,7 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
     id: testCase.id, request: testCase.request.split("\n")[0], passed: failures.length === 0, failures,
     notes: [...quality.fixed.map((item) => `Fixed: ${item}`), ...quality.notes],
     terminal, steps: events.filter((event) => event.type === "step").length,
-    toolErrors: events.filter((event) => event.type === "tool_error").length,
+    toolErrors: events.filter((event) => event.type === "tool_error").length, firstAttemptFailures: firstAttemptFailures(events),
     changes: changeset.changes.length, tokens: state.tokenUsage, costUsd: calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage),
   };
 }

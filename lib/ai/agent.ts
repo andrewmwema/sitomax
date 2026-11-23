@@ -13,7 +13,7 @@ import {
   type AiReservation,
 } from "./usage";
 import { calculateCostUsd, tokenUsageSchema, type TokenUsage } from "./pricing";
-import { headerSchema, defaultHeader } from "@/lib/header";
+import { headerEditSchema, headerSchema, defaultHeader } from "@/lib/header";
 import { themeSchema } from "@/lib/theme/schema";
 import { nearestContrast, bestContrastingTextColor } from "@/lib/theme/contrast";
 import type { BlockDesign } from "@/lib/sections/design";
@@ -24,17 +24,18 @@ import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import { buildCustomSections, customSectionSchema } from "./custom-layout";
 import { designPatchSchema, editDesign, editMediaUrl } from "./edit-design";
 import { freshFooter } from "./site-footer";
-import { agentToolSchemas, agentTools } from "./agent-tools";
+import { agentToolParameters, agentToolSchemas, agentTools, themePatchSchema } from "./agent-tools";
 import { createAgentReviewPayload, jsonEqual, reviewPatches, type ReviewPatch } from "./agent-review";
 import { appendUserContent, compactToolResults, dropThinking, summarizeHistory, withTurnContext } from "./agent-memory";
 import {
-  agentPlanSchema, APP_NOTE, newAgentPlan, openPlanSteps, planNudge, planReminder, recordPlanProgress, unfinishedPlanSteps,
+  agentPlanSchema, APP_NOTE, newAgentPlan, openPlanSteps, plainWords, planNudge, planReminder, recordPlanProgress, unfinishedPlanSteps,
   type AgentPlan, type PlanProgress,
 } from "./agent-plan";
 import { checkQuality, type QualityReport } from "./agent-quality";
 import { AiUserError } from "./errors";
-import { parseWithNumbers } from "./lenient-numbers";
-import { AiProviderError, aiErrorMessage, isDefinitiveProviderFailure, providerFailure } from "./provider-error";
+import { addNote, parseLenient } from "./lenient-input";
+import { DESIGN_KEYS, normalizeColor, normalizeDesignPatch, normalizeThemePatch, normalizeToolInput } from "./agent-normalize";
+import { AiProviderError, aiErrorMessage, isAgencyViewer, isDefinitiveProviderFailure, providerFailure } from "./provider-error";
 
 const MAX_TOOL_CALLS = 40;
 const MAX_CHANGES = 60;
@@ -57,7 +58,9 @@ FINDING THINGS. The latest message always ends with the CURRENT SITE OVERVIEW, w
 
 PLANS. For requests touching more than 3 sections or more than 1 page, call plan with a concise ordered plan and wait for approval before making any changes. After approval, carry out every step on every page it names; do not stop part-way or ask whether to continue. Call report_progress when a step is finished (several steps at once is fine). If a step cannot be done, report it as skipped with the reason. Write your closing summary only when every step is done or skipped. A run with more than 10 changes costs 3 credits; the app asks the user to approve that when it is reached, so do not ask about credits yourself.
 
-EDITING. Send only the properties you change. The footer is a section repeated on every page: change it only with update_footer, which applies the same change to the footer of every page. Curated designs arrive with sample content: replace all of it with supplied facts or [placeholders], and never leave sample names, numbers, prices or reviews in place. After adding a section or page, choose its images with set_image. Keep the existing brand consistent. Never invent business facts, prices, reviews, statistics, credentials, or contact details; use clearly marked [placeholders] for unknown details. A placeholder names what is missing, such as [average rating] or [price], and never holds a made-up value such as [4.9]. Make accessible WCAG AA and mobile-friendly choices. Explain changes in plain English. You may only propose business-information edits as a note: do not modify it. Never publish, change domains, billing, accounts, or user settings. All edits are temporary changeset entries until the user keeps them.`;
+TOOL INPUT. Follow each tool's description, schema and example exactly: use the key names and option values given there, and write objects and lists as objects and lists, never as JSON strings. When a tool result has notes, part of what you sent was left out or replaced: read them, and send that part again properly if it matters.
+
+EDITING. Send only the properties you change. The footer is a section repeated on every page: change it only with update_footer, which applies the same change to the footer of every page. Curated designs arrive with sample content: replace all of it with supplied facts or [placeholders], and never leave sample names, numbers, prices or reviews in place. After adding a section or page, choose its images with set_image. Keep the existing brand consistent. Never invent business facts, prices, reviews, statistics, credentials, or contact details; use clearly marked [placeholders] for unknown details. A placeholder names what is missing, such as [average rating] or [price], and never holds a made-up value such as [4.9]. Make accessible WCAG AA and mobile-friendly choices. Explain changes in plain English. Whatever the user reads (replies, plan steps, questions) names pages and sections in plain words and never shows an id such as a pageId or sectionId. You may only propose business-information edits as a note: do not modify it. Never publish, change domains, billing, accounts, or user settings. All edits are temporary changeset entries until the user keeps them.`;
 
 const record = z.record(z.string(), z.unknown());
 
@@ -142,7 +145,11 @@ const agentStateSchema = z.object({
   reservationId: z.uuid(), largeCreditConfirmed: z.boolean(),
 });
 const requestSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), siteId: z.uuid(), threadId: z.uuid().optional(), message: z.string().trim().min(1).max(4000), largeRunConfirmed: z.boolean().optional() }),
+  z.object({
+    action: z.literal("start"), siteId: z.uuid(), threadId: z.uuid().optional(), message: z.string().trim().min(1).max(4000),
+    /** What the editor adds for the model: the selected section or insert position. It holds ids, so it is not shown or stored as the user's message. */
+    context: z.string().trim().max(1000).optional(), largeRunConfirmed: z.boolean().optional(),
+  }),
   z.object({ action: z.enum(["continue", "approve_plan", "reject_plan", "change_plan", "approve_large_run", "reject_large_run", "answer"]), threadId: z.uuid(), runId: z.uuid(), answer: z.string().max(2000).optional() }),
 ]);
 export type AgentEvent = Record<string, unknown> & { type: string };
@@ -251,8 +258,8 @@ function safeTheme(raw: unknown) {
   }
   return { ...parsed, colors };
 }
-function safeHeader(raw: unknown) {
-  const header = parseWithNumbers(headerSchema, raw);
+function safeHeader(raw: unknown, notes?: string[]) {
+  const header = parseLenient(headerSchema, raw, { notes, label: "header" });
   for (const device of ["desktop", "tablet", "mobile"] as const) {
     const settings = header[device];
     const backgrounds = [settings.color, settings.scrollColor].filter((color): color is string => Boolean(color));
@@ -482,32 +489,93 @@ const UNEDITABLE_TYPES = new Set(["Embed", "Navigation"]);
 // The footer shows these from Business information, which the agent may not change.
 const FOOTER_CONTACT_PROPS = ["phone", "email", "address", "hours"];
 
+/** What a list item's missing setting is taken to be: empty text, or the block's own default for a layout choice. */
+function blankValue(field: Field, fallback: unknown): unknown {
+  switch (field.type) {
+    case "text": case "textarea": case "richtext": return "";
+    case "radio": case "select": return fallback ?? field.options[0]?.value;
+    case "number": return fallback ?? 0;
+    case "array": return [];
+    case "custom": return "aiKind" in field && field.aiKind === "icon" ? "check" : "aiKind" in field ? "" : undefined;
+    default: return undefined;
+  }
+}
+/**
+ * List items as the block stores them. A model often sends only the settings
+ * it has something to say about ("title" without "icon"), or plain strings
+ * for a list of texts; the rest is filled in so the item is complete.
+ */
+function completeListItems(field: Field | undefined, value: unknown): unknown {
+  if (field?.type !== "array" || !Array.isArray(value)) return value;
+  const fields = field.arrayFields as Record<string, Field>;
+  const defaults = isRecord(field.defaultItemProps) ? field.defaultItemProps : {};
+  const textKey = Object.keys(fields).find((key) => ["text", "textarea", "richtext"].includes(fields[key].type));
+  return value.map((entry) => {
+    const item = typeof entry === "string" && textKey ? { [textKey]: entry } : entry;
+    if (!isRecord(item)) return item;
+    const complete: Record<string, unknown> = { ...item };
+    for (const [key, child] of Object.entries(fields)) {
+      if (complete[key] !== undefined) continue;
+      const blank = blankValue(child, defaults[key]);
+      if (blank !== undefined) complete[key] = blank;
+    }
+    return complete;
+  });
+}
+/**
+ * What a model sent as a block's content, split into content and the design
+ * settings among it: a design object, or settings such as textColor that the
+ * block has no property for.
+ */
+function splitDesign(type: string, patch: Record<string, unknown>) {
+  const fields = blockFields(type);
+  const props: Record<string, unknown> = {};
+  let design: Record<string, unknown> | undefined;
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === "design" && isRecord(value)) design = { ...design, ...value };
+    else if (key !== "design" && DESIGN_KEYS.has(key) && !(key in fields)) design = { [key]: value, ...design };
+    else props[key] = value;
+  }
+  return { props, design };
+}
 /**
  * Merges an agent edit into stored props. Only the edited properties are
  * validated, so content the editor stored in a shape the AI schemas do not
- * model stays editable and untouched.
+ * model stays editable and untouched. Properties the block does not have, and
+ * images that were not chosen with set_image, are left out and noted; the
+ * edit fails only when nothing in it can be applied.
  */
-function validateStoredProps(type: string, before: Record<string, unknown>, patch: Record<string, unknown>, pages: Page[]) {
+function validateStoredProps(type: string, before: Record<string, unknown>, patch: Record<string, unknown>, pages: Page[], notes: string[] = []) {
   const component = puckConfig.components[type as keyof typeof puckConfig.components];
   if (!component?.fields || UNEDITABLE_TYPES.has(type)) throw new Error("This section type does not support AI content editing.");
   const fields = blockFields(type);
   const schemas = agentFieldSchemas(type);
+  const baseline = { ...component.defaultProps as Record<string, unknown> | undefined, ...before };
+  // Existing images may be kept, moved or removed; new ones only come from set_image.
+  const images = new Set(collectFieldValues(fields, baseline, isImageField));
   const edits: Record<string, unknown> = {};
+  const ignored: string[] = [];
+  const ignore = (text: string) => { ignored.push(text); addNote(notes, text); };
   for (const [key, value] of Object.entries(patch)) {
     if (key === "id") continue;
     if (key === "design") throw new Error("Use update_section_design to change a section's design.");
     const schema = schemas[key];
-    if (!schema) throw new Error(`Unsupported section property: ${key}.`);
+    if (!schema) {
+      ignore(`Unsupported section property: ${key}. It was ignored. ${type} has: ${Object.keys(schemas).join(", ")}.`);
+      continue;
+    }
+    if (isImageField(fields[key]) && typeof value === "string" && value !== "" && !images.has(value)) {
+      ignore(`${key} was left as it is: images are chosen with set_image, not written as a value.`);
+      continue;
+    }
     try {
-      edits[key] = parseWithNumbers(schema, value);
+      edits[key] = parseLenient(schema, completeListItems(fields[key], value), { notes, label: key });
     } catch (error) {
       if (!(error instanceof z.ZodError)) throw error;
       throw new z.ZodError(error.issues.map((issue) => ({ ...issue, path: [key, ...issue.path] })));
     }
   }
-  const baseline = { ...component.defaultProps as Record<string, unknown> | undefined, ...before };
-  // Existing images may be kept, moved or removed; new ones only come from set_image.
-  const images = new Set(collectFieldValues(fields, baseline, isImageField));
+  if (!Object.keys(edits).length && ignored.length) throw new ToolInputError(`Nothing in this edit could be applied. ${ignored.join(" ")}`);
   if (collectFieldValues(fields, edits, isImageField).some((value) => typeof value === "string" && value !== "" && !images.has(value))) {
     throw new Error("Use set_image to change an image.");
   }
@@ -517,6 +585,31 @@ function validateStoredProps(type: string, before: Record<string, unknown>, patc
     }
   }
   return { ...before, ...edits };
+}
+/** Applies a design patch, as the model wrote it, to a stored block. Returns the design before and after. */
+function patchDesign(item: Item, raw: unknown, changeset: Changeset, notes: string[], warnings: Set<string>) {
+  const before = item.props.design ?? {};
+  const patch = parseLenient(designPatchSchema, normalizeDesignPatch(raw), { notes, label: "design" });
+  const after = editDesign(isRecord(before) ? before as BlockDesign : {}, patch, themeSchema.parse(changeset.working.theme), warnings);
+  item.props.design = after;
+  return { before, after };
+}
+/** A curated design by its id, or by the way a model wrote it: another case, its name, or a block type. */
+function findDesign(value: unknown) {
+  const wanted = String(value ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-");
+  const design = agentDesigns.find((entry) => entry.id === value) ?? agentDesigns.find((entry) => entry.id.toLowerCase() === wanted)
+    ?? agentDesigns.find((entry) => entry.name.toLowerCase().replace(/[\s_]+/g, "-") === wanted)
+    ?? agentDesigns.find((entry) => entry.blockType.toLowerCase() === wanted.replaceAll("-", ""));
+  if (design) return design;
+  const related = agentDesigns.filter((entry) => wanted.split("-").some((part) => part.length > 2 && `${entry.id} ${entry.blockType}`.toLowerCase().includes(part)));
+  throw new ToolInputError("That curated section design is unavailable. Use a designId from list_section_designs.",
+    (related.length ? related : agentDesigns).slice(0, 40).map(({ id, blockType, name }) => ({ designId: id, blockType, name })));
+}
+/** Image settings of a block, as set_image names them. */
+function imageFieldPaths(fields: Record<string, Field>): string[] {
+  return Object.entries(fields).flatMap(([key, field]) => isImageField(field) ? [key]
+    : field.type === "array" ? Object.entries(field.arrayFields as Record<string, Field>).flatMap(([child, entry]) => isImageField(entry) ? [`${key}.0.${child}`] : [])
+      : []);
 }
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return isRecord(value) && Object.getPrototypeOf(value) === Object.prototype;
@@ -528,10 +621,6 @@ function mergePatch(base: unknown, patch: unknown): unknown {
   for (const [key, value] of Object.entries(patch)) merged[key] = mergePatch(base[key], value);
   return merged;
 }
-const themePatchSchema = themeSchema.pick({
-  style: true, headingFont: true, bodyFont: true, radius: true, buttonStyle: true,
-}).extend({ colors: themeSchema.shape.colors.unwrap().strict().optional() }).strict();
-
 /** Section refs for the images a new custom layout still needs, on the page it was added to. */
 function imagesOn(pageId: string, notes: Record<string, unknown>) {
   return Array.isArray(notes.imagesToSet) ? notes.imagesToSet.map((image) => ({ pageId, ...(isRecord(image) ? image : {}) })) : [];
@@ -554,36 +643,46 @@ export type AgentToolContext = {
   /** Replaces the stock photo library, for runs that must not fetch or store images. */
   choosePhoto?: (query: string, alt?: string) => Promise<{ url: string; alt: string }>;
 };
+const NOTHING_CHANGED = "Nothing changed: the site already matches this request.";
 /** Runs one agent tool against the changeset sandbox. Exported so the tool guardrails can be tested directly. */
 export async function makeToolResult(name: string, input: unknown, changeset: Changeset, context: AgentToolContext): Promise<unknown> {
   const before = WRITE_TOOLS.has(name) ? clone(changeset.working) : null;
   const count = changeset.changes.length;
-  const result = await executeTool(name, input, changeset, context);
+  // What was left out of the input instead of failing the call. The model is told, so it can send it properly if it matters.
+  const notes: string[] = [];
+  const result = await executeTool(name, input, changeset, context, notes);
+  if (notes.length) console.warn("AI agent tool input was adjusted", { tool: name, notes: notes.slice(0, 5).map((note) => note.slice(0, 160)) });
+  const told = (value: unknown) => !notes.length ? value : isRecord(value) ? { ...value, notes } : { results: value, notes };
   if (before) {
     // What a tool returns goes to the model, so it is masked like everything the model reads.
-    const toolResult = withoutEmbedCode(result);
+    const toolResult = withoutEmbedCode(told(result));
     const added = changeset.changes.slice(count);
     if (added.length !== 1) throw new Error("The agent could not prepare this change for review.");
     added[0].patches = reviewPatches(before, changeset.working);
     if (!added[0].patches.length) {
-      // Nothing to review, and nothing that should count towards a large run.
+      // Nothing to review, and nothing that should count towards a large run. Asking for what
+      // is already there is not a failure, so the model is told and the run carries on.
       changeset.changes.length = count;
-      throw new Error("Nothing changed: the site already matches this request.");
+      return told({ staged: false, message: NOTHING_CHANGED });
     }
     return toolResult;
   }
-  return withoutEmbedCode(result);
+  return withoutEmbedCode(told(result));
 }
 
-function executeTool(name: string, input: unknown, changeset: Changeset, context: AgentToolContext): Promise<unknown> | unknown {
+function executeTool(name: string, input: unknown, changeset: Changeset, context: AgentToolContext, notes: string[]): Promise<unknown> | unknown {
   if (!toolsByName.has(name)) throw new Error("This tool is unavailable.");
   const zod = toolSchemas.get(name);
   if (!zod) throw new Error("This tool has no input validator.");
-  const args = parseWithNumbers(zod, input) as Record<string, unknown>;
-  if (name === "insert_section") requireDesignChoice(args, []);
+  const args = parseLenient(zod, normalizeToolInput(name, input, agentToolParameters.get(name) ?? new Set(), notes), { notes }) as Record<string, unknown>;
+  // A curated design and a custom layout in one call: the layout was written out, so it is the one meant.
+  const oneChoice = (value: Record<string, unknown>) => {
+    if (value.customSection !== undefined && typeof value.designId === "string" && value.designId) delete value.designId;
+  };
+  if (name === "insert_section") { oneChoice(args); requireDesignChoice(args, []); }
   if (name === "create_page" && Array.isArray(args.sections)) {
     args.sections.forEach((section, index) => {
-      if (isRecord(section)) requireDesignChoice(section, ["sections", index]);
+      if (isRecord(section)) { oneChoice(section); requireDesignChoice(section, ["sections", index]); }
     });
   }
 
@@ -653,13 +752,13 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     }
     case "update_theme": {
       const before = changeset.working.theme;
-      const after = safeTheme(mergePatch(before, parseWithNumbers(themePatchSchema, args.patch)));
+      const after = safeTheme(mergePatch(before, parseLenient(themePatchSchema, normalizeThemePatch(args.patch), { notes, label: "patch" })));
       changeset.working.theme = after;
       return staged(pushChange(changeset, "theme", "Update site theme", before, after), { theme: after });
     }
     case "update_header": {
       const before = changeset.working.header;
-      const after = safeHeader(mergePatch(before, record.parse(args.header)));
+      const after = safeHeader(mergePatch(before, headerPatch(record.parse(args.header))), notes);
       // As everywhere else, the agent may reuse the site's images but not bring in outside ones.
       const images = (header: unknown) => {
         const found: unknown[] = [];
@@ -681,17 +780,23 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       return staged(pushChange(changeset, "header", "Update site header", before, after));
     }
     case "update_footer": {
-      const patch = args.props === undefined ? {} : record.parse(args.props);
-      if (FOOTER_CONTACT_PROPS.some((key) => key in patch)) {
+      // Colours and spacing sent among the footer's content are design settings.
+      const split = splitDesign("Footer", args.props === undefined ? {} : record.parse(args.props));
+      const patch = split.props;
+      const designPatch = split.design || args.design !== undefined ? { ...split.design, ...(isRecord(args.design) ? args.design : {}) } : null;
+      for (const key of FOOTER_CONTACT_PROPS) {
+        if (!(key in patch)) continue;
+        delete patch[key];
+        addNote(notes, `${key} was left as it is: contact details come from Business information, which you cannot change. Suggest the change to the user instead.`);
+      }
+      if (!Object.keys(patch).length && !designPatch) {
         throw new Error("Contact details come from Business information, which you cannot change. Suggest the change to the user instead.");
       }
-      const design = args.design === undefined ? null : parseWithNumbers(designPatchSchema, record.parse(args.design));
       const warnings = new Set<string>();
-      const currentTheme = themeSchema.parse(changeset.working.theme);
       const edit = (props: Record<string, unknown>) => {
-        const next = Object.keys(patch).length ? validateStoredProps("Footer", props, patch, changeset.working.pages) : { ...props };
-        if (design) next.design = editDesign(isRecord(props.design) ? props.design as BlockDesign : {}, design, currentTheme, warnings);
-        return next;
+        const item: Item = { type: "Footer", props: Object.keys(patch).length ? validateStoredProps("Footer", props, patch, changeset.working.pages, notes) : { ...props } };
+        if (designPatch) patchDesign(item, designPatch, changeset, notes, warnings);
+        return item.props;
       };
       // There is no site-wide footer yet: every page holds its own copy, so each copy gets the same change.
       const pages: { pageId: string; sectionId: string }[] = [];
@@ -720,27 +825,27 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     case "update_section_props": {
       const { page, data, item } = resolveSection(changeset, String(args.pageId), String(args.sectionId), "element");
       const before = item.props;
-      const after = validateStoredProps(item.type, before, record.parse(args.props), changeset.working.pages);
-      item.props = after;
+      // Design settings sent with the content are applied too, rather than refused.
+      const { props, design } = splitDesign(item.type, record.parse(args.props));
+      const warnings = new Set<string>();
+      item.props = Object.keys(props).length || !design ? validateStoredProps(item.type, before, props, changeset.working.pages, notes) : { ...before };
+      if (design) patchDesign(item, design, changeset, notes, warnings);
+      const after = item.props;
       page.draft_data = sanitizePuckData(data);
-      return staged(pushChange(changeset, "section_props", `Update ${item.type} section`, before, after, page.id, item.props.id));
+      const change = pushChange(changeset, "section_props", `Update ${item.type} section`, before, after, page.id, item.props.id);
+      return staged(change, warnings.size ? { warnings: [...warnings] } : {});
     }
     case "update_section_design": {
       const { page, data, item } = resolveSection(changeset, String(args.pageId), String(args.sectionId), "element");
-      const before = item.props.design ?? {};
-      const patch = parseWithNumbers(designPatchSchema, record.parse(args.design));
       const warnings = new Set<string>();
-      const currentTheme = themeSchema.parse(changeset.working.theme);
-      const after = editDesign(isRecord(before) ? before as BlockDesign : {}, patch, currentTheme, warnings);
-      item.props.design = after;
+      const { before, after } = patchDesign(item, record.parse(args.design), changeset, notes, warnings);
       page.draft_data = sanitizePuckData(data);
       const change = pushChange(changeset, "section_design", `Update ${item.type} design`, before, after, page.id, item.props.id);
       return staged(change, warnings.size ? { warnings: [...warnings] } : {});
     }
     case "switch_section_design": {
       const { page, data, index, item } = resolveSection(changeset, String(args.pageId), String(args.sectionId), "section");
-      const design = agentDesigns.find((entry) => entry.id === args.designId);
-      if (!design) throw new Error("That curated section design is unavailable.");
+      const design = findDesign(args.designId);
       if (UNEDITABLE_TYPES.has(item.type)) throw new Error("This section type does not support AI content editing.");
       const replacement = defaultSection(design.id);
       const fields = blockFields(design.blockType);
@@ -765,9 +870,9 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       const page = getPage(changeset, String(args.pageId));
       const data = puckDataSchema.parse(page.draft_data);
       let item: Item;
-      let notes: Record<string, unknown> = {};
+      let sectionNotes: Record<string, unknown> = {};
       if (name === "insert_section") {
-        ({ item, notes } = newSection(args, changeset));
+        ({ item, notes: sectionNotes } = newSection(args, changeset, notes));
       } else {
         const { item: existing } = resolveSection(changeset, page.id, String(args.sectionId), "section");
         item = clone(existing);
@@ -778,11 +883,11 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       data.content.splice(index, 0, item);
       page.draft_data = sanitizePuckData(data);
       const change = pushChange(changeset, name, `${name === "insert_section" ? "Insert" : "Duplicate"} ${item.type} section`, null, item, page.id, item.props.id);
-      const imagesToSet = imagesOn(page.id, notes);
+      const imagesToSet = imagesOn(page.id, sectionNotes);
       // The new section is returned in full: its sample content has to be replaced, and its nested ids are new.
       return staged(change, {
         section: readableSection(item), ...(imagesToSet.length ? { imagesToSet } : {}),
-        ...(notes.warnings ? { warnings: notes.warnings } : {}),
+        ...(sectionNotes.warnings ? { warnings: sectionNotes.warnings } : {}),
       });
     }
     case "move_section": {
@@ -810,7 +915,7 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     case "create_page": {
       const slug = String(args.slug);
       if (changeset.working.pages.some((page) => page.slug === slug)) throw new Error("A page with that URL already exists.");
-      const sections = (args.sections as Record<string, unknown>[]).map((section) => newSection(section, changeset));
+      const sections = (args.sections as Record<string, unknown>[]).map((section) => newSection(section, changeset, notes));
       const id = crypto.randomUUID();
       const imagesToSet = sections.flatMap(({ notes }) => imagesOn(id, notes));
       const warnings = sections.flatMap(({ notes }) => Array.isArray(notes.warnings) ? notes.warnings : []);
@@ -854,10 +959,17 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       return (async () => {
         const { page, data, item } = resolveSection(changeset, String(args.pageId), String(args.sectionId), "element");
         const fields = blockFields(item.type);
-        const path = String(args.field);
-        const field = fieldAtPath(fields, path);
+        const available = imageFieldPaths(fields);
+        let path = String(args.field).replace(/\[(\d+)\]/g, ".$1");
+        let field = fieldAtPath(fields, path);
+        // A block with one image has only one place a photo can go, whatever the model called it.
+        if ((!field || !isImageField(field)) && available.length === 1 && !available[0].includes(".")) {
+          [path] = available;
+          field = fields[path];
+        }
         if (!field || !isImageField(field)) {
-          throw new Error("Choose a supported image field on this section.");
+          throw new ToolInputError(available.length ? "Choose a supported image field on this section. In a list, the number is the item's position, starting at 0."
+            : `Choose a supported image field on this section. ${item.type} has no image of its own.`, available.length ? available : undefined);
         }
         const photo = await (context.choosePhoto ?? stockPhoto(context))(String(args.query), args.alt ? String(args.alt) : undefined);
         const before = getPathValue(item.props, path);
@@ -925,13 +1037,17 @@ function blogContent(blocks: unknown, existingMedia: string[]) {
   return content;
 }
 /** A new section from a curated design (optionally with content) or a custom layout. */
-function newSection(args: Record<string, unknown>, changeset: Changeset): { item: Item; notes: Record<string, unknown> } {
+function newSection(args: Record<string, unknown>, changeset: Changeset, notes: string[]): { item: Item; notes: Record<string, unknown> } {
   if (args.customSection !== undefined) return customLayoutSection(args.customSection, changeset);
-  const design = agentDesigns.find((entry) => entry.id === args.designId);
-  if (!design) throw new Error("That curated section design is unavailable.");
+  const design = findDesign(args.designId);
   const item = defaultSection(design.id);
-  if (args.props !== undefined) item.props = validateStoredProps(item.type, item.props, record.parse(args.props), changeset.working.pages);
-  return { item, notes: {} };
+  const warnings = new Set<string>();
+  if (args.props !== undefined) {
+    const { props, design: look } = splitDesign(item.type, record.parse(args.props));
+    if (Object.keys(props).length) item.props = validateStoredProps(item.type, item.props, props, changeset.working.pages, notes);
+    if (look) patchDesign(item, look, changeset, notes, warnings);
+  }
+  return { item, notes: warnings.size ? { warnings: [...warnings] } : {} };
 }
 function stockPhoto(context: AgentToolContext) {
   return async (query: string, alt?: string) => {
@@ -944,6 +1060,33 @@ function stockPhoto(context: AgentToolContext) {
 }
 
 const toolSchemas = agentToolSchemas;
+const HEADER_DEVICE_KEYS = new Set(Object.keys(headerEditSchema.shape.settings.shape));
+const HEADER_COLORS = ["color", "gradientTo", "textColor", "hoverColor", "scrollColor", "panelColor", "panelTextColor", "borderColor"];
+/**
+ * A header patch as update_header takes it. Look-and-feel settings live per
+ * device; sent at the top, they are meant for the desktop header, which the
+ * smaller screens follow.
+ */
+function headerPatch(raw: Record<string, unknown>) {
+  const patch = structuredClone(raw);
+  for (const key of Object.keys(patch)) {
+    if (key in headerSchema.shape || !(HEADER_DEVICE_KEYS.has(key) || key === "backgroundColor")) continue;
+    const desktop = isRecord(patch.desktop) ? patch.desktop : {};
+    desktop[key] ??= patch[key];
+    patch.desktop = desktop;
+    delete patch[key];
+  }
+  for (const device of ["desktop", "tablet", "mobile"]) {
+    const settings = patch[device];
+    if (!isRecord(settings)) continue;
+    if ("backgroundColor" in settings) {
+      settings.color ??= settings.backgroundColor;
+      delete settings.backgroundColor;
+    }
+    for (const key of HEADER_COLORS) if (key in settings) settings[key] = normalizeColor(settings[key]);
+  }
+  return patch;
+}
 const toolsByName = new Map<string, Anthropic.Tool>(agentTools.map((tool) => [tool.name, tool]));
 
 async function saveRun(supabase: Supabase, threadId: string, runId: string, status: string, changeset: Changeset, state: AgentState, finished: boolean) {
@@ -1181,13 +1324,14 @@ export async function runAgentLoop(run: {
         : `Tool input is still invalid after one repair attempt: ${problem}.`;
     };
     const failed = (call: Anthropic.ToolUseBlock, error: unknown) => {
-      const repairable = error instanceof z.ZodError || error instanceof ToolInputError;
-      const message = repairable ? invalidInput(call.name, toolErrorMessage(error)) : toolErrorMessage(error);
-      // The choices listed for the model are ids; the user is shown the sentence alone.
-      const shown = error instanceof ToolInputError ? error.message : message;
+      const input = error instanceof z.ZodError || error instanceof ToolInputError;
+      // Only a first slip in the input is something the model is asked to repair with its next call.
+      const repairable = input && !state.toolRepairs[call.name];
+      const message = input ? invalidInput(call.name, toolErrorMessage(error)) : toolErrorMessage(error);
       toolResults.push({ type: "tool_result", tool_use_id: call.id, is_error: true, content: message });
-      callSummaries.push({ name: call.name, error: shown });
-      emit({ type: "tool_error", callId: call.id, name: call.name, input: call.input, message: shown });
+      callSummaries.push({ name: call.name, error: message.slice(0, 4000) });
+      // What the model was told. It is written for the model; clientAgentEvent decides what a browser is sent.
+      emit({ type: "tool_error", callId: call.id, name: call.name, input: call.input, message, repairable });
     };
     for (const call of calls) {
       if (state.toolCalls >= MAX_TOOL_CALLS || state.changesThisRun >= MAX_CHANGES || overBudget()) {
@@ -1198,12 +1342,13 @@ export async function runAgentLoop(run: {
       state.toolCalls++;
       emit({ type: "step", callId: call.id, name: call.name, input: call.input, status: "running" });
       if (call.name === "plan" || call.name === "ask_user") {
-        const parsed = toolSchemas.get(call.name)!.safeParse(call.input);
-        if (!parsed.success) {
-          failed(call, parsed.error);
+        let payload: Record<string, unknown>;
+        try {
+          payload = parseLenient(toolSchemas.get(call.name)!, normalizeToolInput(call.name, call.input, agentToolParameters.get(call.name) ?? new Set())) as Record<string, unknown>;
+        } catch (error) {
+          failed(call, error);
           continue;
         }
-        const payload = parsed.data as Record<string, unknown>;
         state.awaiting = { kind: call.name === "plan" ? "plan" : "question", toolUseId: call.id, toolName: call.name, payload };
         terminal = call.name === "plan" ? "awaiting_approval" : "awaiting_input";
         emit({ type: call.name === "plan" ? "plan" : "question", callId: call.id, threadId, runId, ...payload });
@@ -1212,7 +1357,7 @@ export async function runAgentLoop(run: {
       }
       if (call.name === "report_progress") {
         try {
-          const { steps } = parseWithNumbers(toolSchemas.get(call.name)!, call.input) as { steps: PlanProgress[] };
+          const { steps } = parseLenient(toolSchemas.get(call.name)!, call.input) as { steps: PlanProgress[] };
           if (recordPlanProgress(state.plan, steps)) state.nudges = 0;
           delete state.toolRepairs[call.name];
           const result = { recorded: true, openSteps: openPlanSteps(state.plan) };
@@ -1226,10 +1371,11 @@ export async function runAgentLoop(run: {
       }
       const saved = WRITE_TOOLS.has(call.name) ? clone(changeset) : null;
       try {
-        if (saved && state.runChanges >= AGENT_LIMITS.largeRunChanges && !state.largeCreditConfirmed) {
-          // Ask for the credits only for a change that can be made: try it on a copy first.
-          // Choosing a photo stores it, so that one tool is not tried twice.
-          if (call.name !== "set_image") await makeToolResult(call.name, call.input, clone(changeset), context);
+        // Ask for the credits only for a change that can be made and changes something: try it on a copy first.
+        // Choosing a photo stores it, so that one tool is not tried twice.
+        const trial = saved && state.runChanges >= AGENT_LIMITS.largeRunChanges && !state.largeCreditConfirmed
+          ? { result: call.name === "set_image" ? null : await makeToolResult(call.name, call.input, clone(changeset), context) } : null;
+        if (trial && !(isRecord(trial.result) && trial.result.staged === false)) {
           state.awaiting = { kind: "credit", toolUseId: call.id, toolName: call.name, payload: { input: call.input as Record<string, unknown> } };
           terminal = "awaiting_approval";
           emit({
@@ -1278,15 +1424,42 @@ export async function runAgentLoop(run: {
 const SERVICE_BUSY = "The AI service is busy or did not respond. Your progress is saved: press Continue to try again.";
 const SERVICE_REJECTED = "The AI service could not process this request. Changes staged so far are saved for you to review.";
 
+/** Shown to clients for a step that failed. What went wrong is written for the model, and names ids. */
+const STEP_FAILED = "This step could not be completed.";
+/**
+ * What the browser is sent for an event. Tool errors are written for the
+ * model and name ids and internal settings, so clients get a plain sentence;
+ * agency staff also get the technical message. Tool results are for the
+ * model only.
+ */
+export function clientAgentEvent(event: AgentEvent, technical: boolean): AgentEvent {
+  if (event.type === "tool_error") {
+    const { message, ...rest } = event;
+    return { ...rest, message: STEP_FAILED, ...(technical && typeof message === "string" ? { details: message } : {}) };
+  }
+  // What the user reads names pages and sections in words. The agent is told so; this is the safety net.
+  if (event.type === "plan" || event.type === "question") {
+    const { steps, rationale, question, options } = event;
+    return { ...event, ...plainWords({ steps, rationale, question, options }) };
+  }
+  if ((event.type === "done" || event.type === "paused") && event.unfinished !== undefined) return { ...event, unfinished: plainWords(event.unfinished) };
+  if (event.type !== "tool") return event;
+  const { result: _forTheModel, ...rest } = event;
+  void _forTheModel;
+  return rest;
+}
+
 export async function executeAgentRequest(
   supabase: Supabase,
   userId: string,
   raw: unknown,
-  emit: (event: AgentEvent) => void,
+  send: (event: AgentEvent) => void,
   signal?: AbortSignal,
   model: AgentModel = anthropicModel(),
 ) {
   const input = requestSchema.parse(raw);
+  const technical = await isAgencyViewer();
+  const emit = (event: AgentEvent) => send(clientAgentEvent(event, technical));
   let threadId: string;
   let runId: string;
   let changeset: Changeset;
@@ -1302,7 +1475,8 @@ export async function executeAgentRequest(
     const snapshot = await loadSnapshot(supabase, input.siteId);
     accountId = snapshot.site.account_id;
     const fresh = (): Changeset => ({ version: 1, siteId: input.siteId, baseline: clone(snapshot), working: clone(snapshot), changes: [] });
-    let messages: Anthropic.MessageParam[] = [{ role: "user", content: input.message }];
+    const request = [input.message, input.context].filter(Boolean).join("\n\n");
+    let messages: Anthropic.MessageParam[] = [{ role: "user", content: request }];
     if (input.threadId) {
       const { data: thread, error: threadError } = await supabase.from("ai_agent_threads")
         .select("id, site_id").eq("id", input.threadId).maybeSingle();
@@ -1330,7 +1504,7 @@ export async function executeAgentRequest(
         messages = [...summarizeHistory(previousState.messages as Anthropic.MessageParam[], applied
           ? { note: ["The changes from the earlier requests were applied to the site drafts.", unfinished].filter(Boolean).join("\n") }
           : { staged: changeset.changes.map((change) => change.label), ...(unfinished ? { note: unfinished } : {}) }),
-        { role: "user", content: input.message }];
+        { role: "user", content: request }];
       } else {
         changeset = fresh();
       }
@@ -1409,8 +1583,8 @@ export async function executeAgentRequest(
             state.messages.push({ role: "user", content: [{
               type: "tool_result", tool_use_id: awaiting.toolUseId, is_error: true, content: message,
             }] });
-            emit({ type: "tool_error", callId: awaiting.toolUseId, name: awaiting.toolName, input: pendingInput,
-              message: cause instanceof ToolInputError ? cause.message : message });
+            emit({ type: "tool_error", callId: awaiting.toolUseId, name: awaiting.toolName, input: pendingInput, message,
+              repairable: cause instanceof z.ZodError || cause instanceof ToolInputError });
           }
         } else {
           state.messages.push({ role: "user", content: [{

@@ -2,7 +2,7 @@
 // valid and keeps the agent's rules (no invented facts, AA contrast).
 //
 //   node scripts/agent-evals.mjs --dry-run        check the harness; no provider request
-//   node scripts/agent-evals.mjs                  all ten requests against Anthropic (uses ANTHROPIC_API_KEY)
+//   node scripts/agent-evals.mjs                  every request against Anthropic (uses ANTHROPIC_API_KEY)
 //   node scripts/agent-evals.mjs --only faq,blog  selected requests
 //   node scripts/agent-evals.mjs --verbose        print each step as it happens
 //   node scripts/agent-evals.mjs --budget 5       stop spending at 5 USD in total (default 3)
@@ -72,7 +72,7 @@ try {
     spent += result.costUsd;
     const { inputTokens, outputTokens, cacheReadTokens, cacheWrite5mTokens, cacheWrite1hTokens } = result.tokens;
     const tokens = inputTokens + outputTokens + cacheReadTokens + cacheWrite5mTokens + cacheWrite1hTokens;
-    console.log(`  ${result.passed ? "PASS" : "FAIL"} · ${result.steps} steps, ${result.toolErrors} tool errors, ${result.changes} changes`
+    console.log(`  ${result.passed ? "PASS" : "FAIL"} · ${result.steps} steps, ${result.toolErrors} tool errors (${result.firstAttemptFailures} first attempts), ${result.changes} changes`
       + (dryRun ? "" : ` · ${tokens.toLocaleString("en-US")} tokens · ${formatAiCost(result.costUsd, true)}`));
     for (const failure of result.failures) console.log(`    ✗ ${redact(failure)}`);
     for (const note of result.notes) console.log(`    – ${note}`);
@@ -80,9 +80,12 @@ try {
 
   const failed = results.filter((result) => !result.passed);
   const skipped = cases.length - results.length;
+  // A tool call refused on its first attempt costs a step and, in the editor, a wait; this is the number to keep down.
+  const refused = results.reduce((total, result) => total + result.firstAttemptFailures, 0);
+  console.log(`\nFirst-attempt tool failures: ${refused} in ${results.filter((result) => result.firstAttemptFailures).length} of ${results.length} requests.`);
   console.log(dryRun
-    ? `\nHarness ${failed.length ? "FAILED" : "OK"}: ${results.length - failed.length}/${results.length} scripted runs completed and kept the rules.`
-    : `\n${results.length - failed.length}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""} · total ${formatAiCost(spent, true)}`);
+    ? `Harness ${failed.length ? "FAILED" : "OK"}: ${results.length - failed.length}/${results.length} scripted runs completed and kept the rules.`
+    : `${results.length - failed.length}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""} · total ${formatAiCost(spent, true)}`);
   process.exitCode = failed.length || skipped ? 1 : 0;
 } catch (cause) {
   console.error(redact(cause instanceof Error ? cause.message : "Agent evals failed."));

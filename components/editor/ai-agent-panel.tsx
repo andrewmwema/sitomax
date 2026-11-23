@@ -7,12 +7,14 @@ import { Check, ChevronDown, LoaderCircle, MessageSquarePlus, Pencil, Sparkles, 
 import { applyAgentChanges } from "@/app/editor/[pageId]/agent-actions";
 import { appliedChangesSchema, type AppliedAgentChanges } from "@/lib/ai/agent-apply-types";
 import { unfinishedStepSchema, type UnfinishedStep } from "@/lib/ai/agent-plan";
+import { applyAgentStep, settleAgentSteps, type AgentStep, type AgentStepUpdate } from "@/lib/ai/agent-steps";
 import { agentReviewPayloadSchema, type AgentReviewPayload } from "@/lib/ai/agent-review";
 import { agentRunUsageSchema, describeAgentUsage, type AgentRunUsage } from "@/lib/ai/agent-usage";
 import { useInteractions } from "./interaction-context";
 import { ROOT_ZONE } from "@/lib/editor/tree";
 import { AgentReviewCanvas, AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
 import { AgentAppliedCard, applyToast, undoAgentApply, type AgentApplyReport } from "./agent-applied-card";
+import { AgentStepList } from "./agent-step-list";
 import {
   PanelContext, useAiAgentPanel, type AgentEditorBridge, type AgentRequest, type ReviewSession,
 } from "./ai-agent-context";
@@ -172,7 +174,6 @@ export function AiAgentPanelProvider({ children, siteId, pageId, editor }: {
 type Page = { id: string; slug: string; title: string | null; nav_label?: string | null };
 type Thread = { id: string; title: string; updated_at: string };
 type Message = { id: string; role: "user" | "assistant"; content: string; streaming?: boolean };
-type Step = { callId: string; label: string; status: "running" | "done" | "error" | "waiting"; error?: string };
 type Pending =
   | { kind: "plan"; steps: string[]; rationale?: string }
   | { kind: "question"; question: string; options: string[] }
@@ -311,7 +312,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [steps, setSteps] = useState<Step[]>([]);
+  const [steps, setSteps] = useState<AgentStep[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -329,17 +330,13 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
   const threadIdRef = useRef<string | null>(threadId);
   const controller = useRef<AbortController | null>(null);
   const loadSequence = useRef(0);
+  /** Whether the run stopped to ask the user something, so its steps are not over yet. */
+  const waitingForUser = useRef(false);
   const responseHasText = useRef(false);
   const promptField = useRef<HTMLTextAreaElement>(null);
 
-  const updateSteps = useCallback((callId: string, value: Partial<Step> & Pick<Step, "label">) => {
-    setSteps((previous) => {
-      const index = previous.findIndex((step) => step.callId === callId);
-      if (index < 0) return [...previous, { callId, status: "running", ...value }];
-      const next = [...previous];
-      next[index] = { ...next[index], ...value };
-      return next;
-    });
+  const updateSteps = useCallback((update: AgentStepUpdate) => {
+    setSteps((previous) => applyAgentStep(previous, update));
   }, []);
 
   const loadThread = useCallback(async (nextThreadId: string | null) => {
@@ -438,35 +435,37 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     } else if (event.type === "text" && typeof event.text === "string") {
       responseHasText.current = true;
       addAssistantText(event.text);
-    } else if (event.type === "step" && typeof event.callId === "string") {
-      updateSteps(event.callId, { label: toolLabel(event.name, event.input, pages), status: "running" });
-    } else if (event.type === "tool" && typeof event.callId === "string") {
-      updateSteps(event.callId, { label: toolLabel(event.name, event.input, pages), status: "done" });
-    } else if (event.type === "tool_error" && typeof event.callId === "string") {
-      updateSteps(event.callId, {
-        label: toolLabel(event.name, event.input, pages), status: "error",
-        ...(typeof event.message === "string" ? { error: event.message } : {}),
+    } else if ((event.type === "step" || event.type === "tool" || event.type === "tool_error") && typeof event.callId === "string") {
+      // Input the agent was asked to repair is not shown as a failure: its next call of the same step usually works.
+      // Anything else a step was refused for is final.
+      updateSteps({
+        callId: event.callId, name: String(event.name), label: toolLabel(event.name, event.input, pages),
+        status: event.type === "step" ? "running" : event.type === "tool" ? "done" : event.repairable === true ? "retrying" : "error",
+        ...(event.type === "tool_error" && typeof event.message === "string" ? { error: event.message } : {}),
+        // Only agency staff are sent the technical message.
+        ...(event.type === "tool_error" && typeof event.details === "string" ? { details: [event.details] } : {}),
       });
     } else if (event.type === "plan" && typeof event.callId === "string") {
       const steps = Array.isArray(event.steps) ? event.steps.filter((step): step is string => typeof step === "string") : [];
       setPending({ kind: "plan", steps, ...(typeof event.rationale === "string" ? { rationale: event.rationale } : {}) });
-      updateSteps(event.callId, { label: "Plan ready for your approval", status: "waiting" });
+      updateSteps({ callId: event.callId, name: "plan", label: "Plan ready for your approval", status: "waiting" });
     } else if (event.type === "question" && typeof event.callId === "string" && typeof event.question === "string") {
       setPending({
         kind: "question", question: event.question,
         options: Array.isArray(event.options) ? event.options.filter((option): option is string => typeof option === "string") : [],
       });
-      updateSteps(event.callId, { label: "Waiting for your answer", status: "waiting" });
+      updateSteps({ callId: event.callId, name: "ask_user", label: "Waiting for your answer", status: "waiting" });
     } else if (event.type === "credit_confirmation" && typeof event.callId === "string") {
       setPending({
         kind: "credit", message: typeof event.message === "string" ? event.message : "This run needs 3 credits to continue.",
         credits: typeof event.credits === "number" ? event.credits : 3,
       });
-      updateSteps(event.callId, { label: "Waiting for credit approval", status: "waiting" });
+      updateSteps({ callId: event.callId, name: "credit", label: "Waiting for credit approval", status: "waiting" });
     } else if (event.type === "error") {
       setError(typeof event.message === "string" ? event.message : "The agent could not complete this request.");
     } else if (event.type === "done" || event.type === "paused" ||
       event.type === "awaiting_approval" || event.type === "awaiting_input") {
+      waitingForUser.current = event.type === "awaiting_approval" || event.type === "awaiting_input";
       setStreaming(false);
       setRun((previous) => previous ? {
         ...previous,
@@ -496,6 +495,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     const activeController = new AbortController();
     controller.current = activeController;
     responseHasText.current = false;
+    waitingForUser.current = false;
     setStreaming(true);
     setError("");
     try {
@@ -537,6 +537,8 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     } finally {
       if (controller.current === activeController) controller.current = null;
       setStreaming(false);
+      // However the stream ended, a step nobody repaired did fail, unless the agent is only waiting for an answer.
+      if (!waitingForUser.current) setSteps((previous) => settleAgentSteps(previous, true));
       setMessages((previous) => previous.map((message) => message.streaming ? { ...message, streaming: false } : message));
       const stoppedThreadId = threadIdRef.current;
       if (activeController.signal.aborted && stoppedThreadId) {
@@ -546,7 +548,8 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     }
   }
 
-  function contextualPrompt(value: string) {
+  /** What the model is told about the editor's selection. It holds ids, so it travels apart from the user's own words. */
+  function requestContext() {
     // The agent addresses a section by its page and its id together.
     const selected = contexts.includes("section") && section
       ? `selected section "${section.label}" (pageId ${section.pageId}, sectionId ${section.id})`
@@ -556,10 +559,10 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       contexts.includes("header") ? "the global site header" : null,
       selected,
     ].filter(Boolean);
-    const focused = context.length ? `${value}\n\nFocus on this context: ${context.join("; ")}.` : value;
-    return insert
-      ? `${focused}\n\nInsert the new section on the page with pageId ${insert.pageId} at position ${insert.position} (0 is the top of the page).`
-      : focused;
+    return [
+      context.length ? `Focus on this context: ${context.join("; ")}.` : "",
+      insert ? `Insert the new section on the page with pageId ${insert.pageId} at position ${insert.position} (0 is the top of the page).` : "",
+    ].filter(Boolean).join("\n\n");
   }
 
   async function applyChanges() {
@@ -617,8 +620,9 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     clearInsert();
     setSteps([]);
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: "user", content: text }]);
+    const context = requestContext();
     await streamRequest({
-      action: "start", siteId, ...(threadId ? { threadId } : {}), message: contextualPrompt(text),
+      action: "start", siteId, ...(threadId ? { threadId } : {}), message: text, ...(context ? { context } : {}),
     });
   }
 
@@ -762,15 +766,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
           {streaming ? <LoaderCircle size={13} className="animate-spin text-violet-600" /> : <ChevronDown size={13} />}
           {streaming ? "Working on your request" : "Agent steps"}
         </summary>
-        <ol className="space-y-2 border-t border-zinc-100 px-3 py-2">
-          {steps.map((step) => <li key={step.callId} className="flex items-start gap-2 text-xs">
-            {step.status === "running" ? <LoaderCircle size={13} className="mt-0.5 animate-spin text-violet-600" />
-              : step.status === "done" ? <Check size={13} className="mt-0.5 text-green-700" />
-                : step.status === "error" ? <X size={13} className="mt-0.5 text-red-600" />
-                  : <span className="mt-0.5 h-3 w-3 rounded-full border border-amber-500" />}
-            <span className="text-zinc-700">{step.label}{step.error ? <span className="block text-red-600">{step.error}</span> : null}</span>
-          </li>)}
-        </ol>
+        <AgentStepList steps={steps} streaming={streaming} />
       </details> : null}
       {usage && !streaming ? <p className="text-[10px] text-zinc-500">This request: {describeAgentUsage(usage)}</p> : null}
       {reviewSession?.threadId === threadId ? <AgentReviewCard review={reviewSession.review}
@@ -851,8 +847,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
             controller.current?.abort();
             setStreaming(false);
             setRun((previous) => previous ? { ...previous, status: "stopped" } : previous);
-            setSteps((previous) => previous.map((step) => step.status === "running"
-              ? { ...step, status: "error", error: "Stopped" } : step));
+            setSteps((previous) => settleAgentSteps(previous, true));
           }} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs text-red-700"><Square size={12} />Stop</button>
             : <button type="submit" disabled={!prompt.trim() || Boolean(pending) || prompt.length > 3600}
               className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">Send</button>}

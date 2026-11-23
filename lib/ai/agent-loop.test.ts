@@ -187,8 +187,10 @@ describe("AI agent run loop", () => {
     expect(await run()).toBe("completed");
     expect(events.some((event) => event.type === "credit_confirmation")).toBe(false);
     expect(events.filter((event) => event.type === "tool_error").map((event) => String(event.message))).toEqual([
-      "Unsupported section property: notAProp.", "Nothing changed: the site already matches this request.",
+      expect.stringContaining("Unsupported section property: notAProp."),
     ]);
+    // An edit that changes nothing is answered as such, without an error and without asking for credits.
+    expect(events.filter((event) => event.type === "tool").at(-1)).toMatchObject({ result: { staged: false } });
     expect(state.awaiting).toBeUndefined();
     expect(state.runChanges).toBe(10);
     expect(changeset.changes).toHaveLength(10);
@@ -212,6 +214,16 @@ describe("AI agent run loop", () => {
     const errors = repair.events.filter((event) => event.type === "tool_error").map((event) => String(event.message));
     expect(errors[0]).toMatch(/^Invalid tool input: variant: .*Repair the input and retry once\.$/);
     expect(errors[1]).toContain("still invalid after one repair attempt");
+    // Only the first slip is something the model is asked to repair; the chat folds that one into its repair.
+    expect(repair.events.filter((event) => event.type === "tool_error").map((event) => event.repairable)).toEqual([true, false]);
+
+    // A plan or question written loosely is read as what it means instead of being refused.
+    const loose = start(scripted(() => ({ tool: ["plan", { steps: "1. Rewrite the hero\n2. Add an FAQ" }] })));
+    expect(await loose.run()).toBe("awaiting_approval");
+    expect(loose.state.awaiting).toMatchObject({ payload: { steps: ["Rewrite the hero", "Add an FAQ"] } });
+    const single = start(scripted(() => ({ tool: ["ask_user", { question: "Which tone?", options: "Friendly" }] })));
+    expect(await single.run()).toBe("awaiting_input");
+    expect(single.state.awaiting).toMatchObject({ payload: { options: ["Friendly"] } });
     expect(repair.changeset.changes).toHaveLength(0);
     expect(repair.changeset.working).toEqual(repair.changeset.baseline);
   });
@@ -236,8 +248,7 @@ describe("AI agent run loop", () => {
     expect(state.runChanges).toBe(2);
     const errors = events.filter((event) => event.type === "tool_error").map((event) => String(event.message));
     expect(errors).toHaveLength(2);
-    // The user is shown the sentence, not the list of ids.
-    expect(errors[0]).not.toContain("Valid choices");
+    expect(errors[0]).toContain("Valid choices");
     expectAnswered(state.messages);
   });
 

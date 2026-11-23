@@ -129,6 +129,36 @@ describe("AI agent request", () => {
     expect(resumed.at(-1)).toMatchObject({ type: "done", status: "completed" });
   });
 
+  it("sends clients a plain sentence for a failed step, and the technical error and ids only to agency staff", async () => {
+    const wrong = reply([{ type: "tool_use", id: "call-0", name: "update_section_props",
+      input: { pageId: fixtureIds.about, sectionId: "home-hero", props: { heading: "Reliable plumbers" } } }]);
+    const client = await request({ ...start, context: `Focus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).` }, script(wrong, edit, done));
+    expect(client.map((event) => event.type)).toEqual(["run", "step", "tool_error", "step", "tool", "text", "done"]);
+    const failed = client.find((event) => event.type === "tool_error")!;
+    expect(failed).toMatchObject({ callId: "call-0", name: "update_section_props", message: "This step could not be completed.", repairable: true });
+    expect(failed).not.toHaveProperty("details");
+    // What the tool told the model, and what it returned, stay on the server.
+    expect(JSON.stringify(failed)).not.toMatch(/is not on pageId|Valid choices|Repair the input/);
+    expect(client.find((event) => event.type === "tool")).not.toHaveProperty("result");
+    // The model is given the editor's context; the conversation the user reads holds only their own words.
+    const saved = mocks.usage.createAiAgentRun.mock.calls[0][2] as { run_state: { messages: { content: string }[] } };
+    expect(saved.run_state.messages[0].content).toBe(`Improve the hero\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`);
+    expect(mocks.usage.appendAiAgentMessage.mock.calls[0][3]).toMatchObject({ role: "user", content: "Improve the hero" });
+    expect(mocks.usage.createAiAgentThread).toHaveBeenCalledWith(expect.anything(), "user-1", fixtureIds.site, "Improve the hero");
+
+    // A plan step that still names an id is shown without it.
+    const planned = await request(start, script(reply([{ type: "tool_use", id: "plan-0", name: "plan", input: { steps: [
+      `Home (pageId ${fixtureIds.home}): rewrite the hero "Hero-${fixtureIds.post}" heading`, "About: add our story, founded 2004-2010 (sectionId about-text-2)",
+    ] } }])));
+    expect(planned.find((event) => event.type === "plan")).toMatchObject({ steps: ["Home: rewrite the hero heading", "About: add our story, founded 2004-2010"] });
+
+    mocks.isAgency.mockResolvedValue({ data: true, error: null });
+    const agency = await request(start, script(wrong, edit, done));
+    expect(agency.find((event) => event.type === "tool_error")).toMatchObject({
+      message: "This step could not be completed.", details: expect.stringMatching(/^Invalid tool input: sectionId home-hero is not on pageId .*Repair the input and retry once\.$/),
+    });
+  });
+
   it("never ends an approved plan quietly: open steps are listed with Continue, and skipped ones with the reason", async () => {
     const call = (name: string, input: unknown) => reply([{ type: "tool_use", id: `call-${name}`, name, input }]);
     const waiting = newAgentState([

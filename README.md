@@ -330,9 +330,42 @@ and both opening a page and refreshing it after an apply or undo read through
 in the editor as one undoable step without a reload, the unpublished-changes
 count is refreshed, and a confirmation such as "16 changes applied" is shown.
 
-The agent's tools read numbers written as text, such as `"8"` or `"8px"` for a
-radius, spacing or height, as numbers before validating them. Percentages,
-other units and words such as `"large"` are still refused.
+**Tool input.** A tool call the model gets slightly wrong should not cost a
+retry. Three things keep first attempts from being refused:
+
+- *The model is shown exact shapes.* Each tool's description lists its keys,
+  allowed values and an example, and the schema sent for theme, header, footer
+  and design input is the real one rather than an open object.
+- *Common slips are read as what they mean*, before validation
+  ([lenient-input.ts](./lib/ai/lenient-input.ts),
+  [agent-normalize.ts](./lib/ai/agent-normalize.ts)): numbers written as text
+  or with `px` or `rem` (`"8px"`, `"1.5rem"`); options written as numbers or in
+  another spelling (`24` for `"24"`, `2` for `"h2"`, `"Center"`); objects and
+  lists written as JSON strings; one item where a list is expected; other
+  names for the same setting (`textColor` or `backgroundColor` at the top of a
+  design, `padding` without a device, `page_id`); settings sent beside the
+  object they belong in; and, in custom layouts and list items, required
+  settings left out, which get the editor's defaults. An icon outside the
+  curated set becomes the closest curated one, or `check`.
+- *Unknown keys are left out, not refused.* The call goes ahead, the result
+  tells the model what was ignored in `notes`, and a warning
+  (`AI agent tool input was adjusted`) is logged. A call still fails when
+  nothing in it can be applied, or when a value is wrong in a way that has no
+  plain reading: percentages, words such as `"large"`, out-of-range numbers,
+  unknown fonts, images that were not chosen with `set_image`, embed code.
+
+An edit that changes nothing is answered as such and is not an error.
+
+**Steps in the chat.** Clients never see a tool's error text or ids. When a
+call is refused for the way its input was written, the agent is asked to
+repair it, and the attempt and its repair are shown as one step that worked.
+A step turns red, with "This step could not be completed.", when it was
+refused for any other reason, when the repair was refused too, or when the run
+ended without a repair. Agency staff also get **Details** on such steps, with
+the technical message the model was given. The editor's context
+for a message (the selected section, an insert position) is sent to the model
+apart from the user's words and is not stored or shown as part of them, and
+ids are removed from plan steps and questions before they are shown.
 
 **Pages and sections.** The agent addresses a section by its `pageId` and
 `sectionId` together, because the same section id can exist on several pages.
@@ -415,11 +448,12 @@ counts cached input at a tenth.
 
 **Evals.** `node scripts/agent-evals.mjs --dry-run` checks the eval harness
 with a scripted model and sends nothing to the provider.
-`node scripts/agent-evals.mjs` runs ten sample requests against a fixture site
-with the configured API key (about $1 of provider credits, more when the model
-plans a larger job; `--budget` caps the total, 3 USD by default, and one
+`node scripts/agent-evals.mjs` runs thirteen sample requests against a fixture
+site with the configured API key (about $1 of provider credits, more when the
+model plans a larger job; `--budget` caps the total, 3 USD by default, and one
 request may use a quarter of it) and checks that each staged changeset validates,
-invents no facts and keeps AA contrast. `--only faq,blog` runs selected
+invents no facts and keeps AA contrast. It ends with the number of tool calls
+that were refused on their first attempt, which is the number to keep down. `--only faq,blog` runs selected
 requests and `--verbose` prints each step. Evals run in the agent's sandbox:
 they read and write no database and fetch no images.
 

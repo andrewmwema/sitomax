@@ -31,6 +31,17 @@ export class AiProviderError extends Error {
   }
 }
 
+/** Whether the signed-in user is agency staff, who may see technical detail that clients must not. */
+export async function isAgencyViewer(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("is_super_admin");
+    return !error && data === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function aiErrorMessage(cause: unknown, fallback: string): Promise<string> {
   if (!(cause instanceof AiProviderError)) return fallback;
   try {

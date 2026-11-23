@@ -7,9 +7,9 @@ const hero = (props: Record<string, unknown>): [string, unknown] =>
   ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props }];
 
 describe("AI agent evals harness", () => {
-  it("has ten requests, and passes a run that keeps the rules", async () => {
-    expect(EVAL_CASES).toHaveLength(10);
-    expect(new Set(EVAL_CASES.map((entry) => entry.id)).size).toBe(10);
+  it("has thirteen requests, and passes a run that keeps the rules", async () => {
+    expect(EVAL_CASES).toHaveLength(13);
+    expect(new Set(EVAL_CASES.map((entry) => entry.id)).size).toBe(13);
     const result = await runEval(anything, scriptedModel(DRY_RUN_SCRIPT));
     expect(result).toMatchObject({ passed: true, failures: [], terminal: "completed", steps: 2, toolErrors: 0, changes: 1 });
     expect(result.notes).toEqual(["Home: 1 placeholder to fill in before publishing: [service area]."]);
@@ -45,6 +45,7 @@ describe("AI agent evals harness", () => {
     ]));
     expect(invented.passed).toBe(false);
     expect(invented.toolErrors).toBe(1);
+    expect(invented.firstAttemptFailures).toBe(1);
     expect(invented.failures.map((failure) => failure.split(":")[0])).toEqual([
       "Invented statistic", "Invented founding year", "Invented phone number", "Invented price",
     ]);
@@ -57,6 +58,18 @@ describe("AI agent evals harness", () => {
 
     expect((await runEval(anything, scriptedModel(["I could not find anything to change."]))).failures).toEqual(["The run staged no changes."]);
     expect((await runEval(anything, scriptedModel([["get_site_overview", {}]]))).failures[0]).toBe("The run ended paused instead of completing.");
+  });
+
+  it("counts a refused first attempt once, however many repairs it takes", async () => {
+    const wrong: [string, unknown] = ["update_section_props", { pageId: fixtureIds.about, sectionId: "home-hero", props: { heading: "Moved" } }];
+    const result = await runEval(anything, scriptedModel([
+      // Input that used to be refused and is now read as what it means is not a failure.
+      ["update_section_props", { page_id: fixtureIds.home, section_id: "home-hero", props: JSON.stringify({ heading: "Friendly plumbers" }) }],
+      wrong, hero({ heading: "Friendly local plumbers" }),
+      ["insert_section", { pageId: fixtureIds.home, designId: "nope" }], ["insert_section", { pageId: fixtureIds.home, designId: "still-nope" }],
+      "Done.",
+    ]));
+    expect(result).toMatchObject({ toolErrors: 3, firstAttemptFailures: 2, changes: 2 });
   });
 
   it("stops a run that reaches its cost limit", async () => {

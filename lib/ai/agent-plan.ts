@@ -14,6 +14,27 @@ export type UnfinishedStep = z.infer<typeof unfinishedStepSchema>;
 
 export type PlanProgress = { step: number; status: "done" | "skipped"; note?: string };
 
+const ID = String.raw`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`;
+// An id under the name the tools give it: "pageId …", "section_id: …". "page id" in a sentence is ordinary words.
+const NAMED_ID = new RegExp(String.raw`\s*[([]?\b(?:page|section|post|design)(?:Id|ID|_id)\b[:=\s]*["'\`]?[\w-]+["'\`]?[)\]]?`, "g");
+const BARE_ID = new RegExp(String.raw`\s*[([]?["'\`]?\b(?:[A-Za-z]+-)?${ID}\b["'\`]?[)\]]?`, "gi");
+/**
+ * Text the agent wrote for the user, without the ids it works with. The agent
+ * is told to name pages and sections in plain words; this is for when a plan
+ * step or question still carries a pageId or sectionId.
+ */
+export function withoutIds(text: string) {
+  return text.replace(NAMED_ID, "").replace(BARE_ID, "").replace(/\s+([.,;:])/g, "$1").replace(/[ \t]{2,}/g, " ").trim();
+}
+/** `withoutIds` over every string in a value such as a plan or a question. */
+export function plainWords<T>(value: T): T {
+  // A line that was nothing but an id still has to say something.
+  if (typeof value === "string") return (withoutIds(value) || (value.trim() ? "Another change" : value)) as T;
+  if (Array.isArray(value)) return value.map(plainWords) as T;
+  if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, plainWords(entry)])) as T;
+  return value;
+}
+
 export function newAgentPlan(steps: unknown): AgentPlan | undefined {
   const texts = Array.isArray(steps) ? steps.filter((step): step is string => typeof step === "string" && step.trim() !== "") : [];
   return texts.length ? { steps: texts.map((text) => ({ text, status: "pending" as const })) } : undefined;

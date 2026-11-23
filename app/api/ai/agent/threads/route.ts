@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { appliedChangesSchema } from "@/lib/ai/agent-apply-types";
-import { agentPlanSchema, unfinishedPlanSteps } from "@/lib/ai/agent-plan";
+import { agentPlanSchema, plainWords, unfinishedPlanSteps } from "@/lib/ai/agent-plan";
 import { createAgentReviewPayload } from "@/lib/ai/agent-review";
 import { deleteAiAgentThread, getAiAgentRunUsage, loadAiAgentRunState, renameAiAgentThread } from "@/lib/ai/usage";
 import { createClient } from "@/lib/supabase/server";
 
 const threadIdSchema = z.uuid();
+// The two sentences the editor used to append to a message, in the forms it wrote them.
+const LEGACY_CONTEXT = /(?:\n\nFocus on this context: (?:Home page|the global site header|selected section ")[^\n]*)?(?:\n\nInsert the new section on (?:the page with pageId|page) [0-9a-f-]{36} at position \d+ \(0 is the top of the page\)\.)?$/;
 const threadBodySchema = z.object({ threadId: threadIdSchema });
 const renameBodySchema = threadBodySchema.extend({ title: z.string().trim().min(1).max(120) });
 const runStateSchema = z.object({
@@ -114,16 +116,18 @@ export async function GET(request: Request) {
   }
   return Response.json({
     threads: threads ?? [],
-    messages: messageResult.data ?? [],
+    // Messages saved before the editor's context travelled apart from the user's words end with it; it holds ids.
+    messages: (messageResult.data ?? []).map((message) => message.role === "user"
+      ? { ...message, content: message.content.replace(LEGACY_CONTEXT, "") } : message),
     latestRun: runResult.data ? {
       id: runResult.data.id,
       status: runResult.data.status,
-      awaiting,
+      awaiting: plainWords(awaiting),
       review: applied ? null : createAgentReviewPayload(runResult.data.changeset),
       applied,
       usage,
       // What an approved plan left open, so a paused or finished run never looks complete when it is not.
-      unfinished: runState?.success ? unfinishedPlanSteps(runState.data.plan) : [],
+      unfinished: runState?.success ? plainWords(unfinishedPlanSteps(runState.data.plan)) : [],
       pauseReason: runState?.success && runResult.data.status === "paused" ? runState.data.pauseReason ?? null : null,
     } : null,
   });

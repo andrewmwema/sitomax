@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { defaultHeader } from "@/lib/header";
 import { puckConfig } from "@/lib/puck/config";
 import { contrastRatio } from "@/lib/theme/presets";
@@ -128,7 +128,9 @@ describe("AI agent tool guardrails", () => {
     await expect(run(changeset, "update_theme", { patch: { headingFont: "Unknown" } })).rejects.toThrow();
     await expect(run(changeset, "update_theme", { patch: { colors: { accent: "green" } } })).rejects.toThrow();
     await expect(run(changeset, "update_header", { header: { ...header, mobile: { ...header.mobile, layout: "split" } } })).rejects.toThrow();
-    await expect(run(changeset, "update_header", { header: { ...header, desktop: { ...header.desktop, css: "anything" } } })).rejects.toThrow();
+    // A setting the header does not have is left out and noted; with nothing else to change, nothing is staged.
+    expect(await run(changeset, "update_header", { header: { ...header, desktop: { ...header.desktop, css: "anything" } } }))
+      .toEqual({ staged: false, message: expect.stringContaining("Nothing changed"), notes: ["header.desktop.css is not a setting here and was ignored."] });
     expect(changeset.changes).toHaveLength(0);
     expect(changeset.working).toEqual(changeset.baseline);
   });
@@ -176,7 +178,10 @@ describe("AI agent tool guardrails", () => {
     expectReplays(changeset);
     // Pickers the AI schemas cannot express stay out of reach.
     await expect(run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { color: "#ff0000" } })).rejects.toThrow("Unsupported section property");
-    await expect(run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { design: {} } })).rejects.toThrow("update_section_design");
+    // Design settings sent with the content are applied as design, not refused.
+    await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { text: "Trusted locally", design: { shadow: "medium" }, textColor: "#111111" } });
+    expect(nested(changeset.working, "heading").props).toMatchObject({ text: "Trusted locally", design: { shadow: "medium", appearance: { desktop: { textColor: "#111111" } } } });
+    expect(await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { design: {} } })).toMatchObject({ staged: false });
   });
 
   it("keeps links from the link picker and stored images when editing other content", async () => {
@@ -219,9 +224,12 @@ describe("AI agent tool guardrails", () => {
       { icon: "wrench", title: "Repairs", text: "Leaks and bursts.", image: "", imageAlt: "" },
     ] } });
     expect(sections(changeset.working).at(-2)!.props).toMatchObject({ heading: "Our services", variant: services.props.variant });
-    for (const props of [{ variant: "nope" }, { services: [{ title: "Missing fields" }] }, { nope: true }]) {
+    for (const props of [{ variant: "nope" }, { services: [42] }, { nope: true }]) {
       await expect(run(changeset, "insert_section", { pageId, designId: services.id, props })).rejects.toThrow();
     }
+    // A list item that names only what it has something to say about is completed, not refused.
+    await run(changeset, "insert_section", { pageId, designId: services.id, props: { services: [{ title: "Boiler servicing" }] } });
+    expect(sections(changeset.working).at(-2)!.props.services).toEqual([{ icon: "check", title: "Boiler servicing", text: "", image: "", imageAlt: "" }]);
     await expect(run(changeset, "insert_section", { pageId })).rejects.toThrow("exactly one");
     await expect(run(changeset, "insert_section", { pageId, designId: "nope" })).rejects.toThrow("unavailable");
     expect(await run(changeset, "list_section_designs", { blockType: "Services" })).toMatchObject({
@@ -248,7 +256,7 @@ describe("AI agent tool guardrails", () => {
     expectReplays(changeset);
 
     for (const broken of [
-      { ...customSection, rows: [{ ...customSection.rows[0], layout: "1" }] },
+      { ...customSection, rows: [{ ...customSection.rows[0], columns: Array.from({ length: 5 }, () => customSection.rows[0].columns[0]) }] },
       { ...customSection, rows: [{ ...customSection.rows[0], columns: [{ ...customSection.rows[0].columns[0], elements: [{ type: "Embed", code: "<script></script>" }] }, customSection.rows[0].columns[1]] }] },
     ]) await expect(run(changeset, "insert_section", { pageId, customSection: broken })).rejects.toThrow();
     expect(changeset.changes).toHaveLength(2);
@@ -273,7 +281,7 @@ describe("AI agent tool guardrails", () => {
       { title: "About", slug: "about", navLabel: "About", sections: [] },
       { title: "Admin", slug: "dashboard", navLabel: "Admin", sections: [] },
       { title: "Long", slug: "long", navLabel: "A label of four words", sections: [] },
-      { title: "Both", slug: "both", navLabel: "Both", sections: [{ designId: hero.id, customSection }] },
+      { title: "Neither", slug: "neither", navLabel: "Neither", sections: [{ props: { heading: "No design" } }] },
     ]) await expect(run(changeset, "create_page", page)).rejects.toThrow();
     expect(changeset.working.pages).toHaveLength(2);
   });
@@ -287,7 +295,10 @@ describe("AI agent tool guardrails", () => {
 
     await run(changeset, "update_theme", { patch: { colors: { secondary: "#aa5500" }, radius: 12 } });
     expect(changeset.working.theme).toMatchObject({ colors: { primary: "#0055aa", secondary: "#aa5500", text: "#111111" }, radius: 12, headingFont: "Inter" });
-    await expect(run(changeset, "update_theme", { patch: { logoUrl: "https://example.com/logo.png" } })).rejects.toThrow();
+    // The logo is not the agent's to change.
+    expect(await run(changeset, "update_theme", { patch: { logoUrl: "https://example.com/logo.png" } }))
+      .toEqual({ staged: false, message: expect.stringContaining("Nothing changed"), notes: ["patch.logoUrl is not a setting here and was ignored."] });
+    expect(changeset.working.theme).not.toHaveProperty("logoUrl");
 
     await run(changeset, "update_header", { header: { desktop: { sticky: true } } });
     expect(changeset.working.header.menu).toEqual(menu);
@@ -366,6 +377,80 @@ describe("AI agent tool guardrails", () => {
     const none = fixtureChangeset();
     for (const index of [0, 1, 2, 3]) sections(none.working, index).pop();
     await expect(run(none, "update_footer", { props: { tagline: "Nowhere to go" } })).rejects.toThrow("No page on this site has a footer");
+  });
+
+  it("carries out the first attempts that used to be refused, and tells the model what it left out", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const photos: Context = { ...context, accountId: fixtureIds.account, siteId: fixtureIds.site, choosePhoto: async (query) => ({ url: `/samples/${query}.jpg`, alt: query }) };
+    const attempt = async (name: string, input: unknown) => {
+      const changeset = fixtureChangeset();
+      const result = await makeToolResult(name, input, changeset, photos) as { notes?: string[] };
+      expect(changeset.changes, name).toHaveLength(1);
+      expectReplays(changeset);
+      return { changeset, result, home: sections(changeset.working, 0), footer: sections(changeset.working, 1).at(-1)!.props };
+    };
+
+    // Reported: customSection…size: expected one of "24"|"32"|"48"|"64".
+    const icons = await attempt("insert_section", { pageId: fixtureIds.home, position: 0, customSection: { background: "soft", width: "contained", rowGap: 32,
+      rows: [{ layout: "1-1", gap: 32, columns: [1, 2].map((number) => ({ surface: "none", verticalAlign: "top", gap: 16, elements: [
+        { type: "Icon", icon: "clock", size: 48, style: "soft", color: "primary", align: "center" },
+        { type: "Heading", text: `Promise ${number}`, level: 3, align: "center" },
+        { type: "Divider", lineStyle: "solid", thickness: 1, color: "border", width: 50, align: "center" },
+      ] })) }] } });
+    expect(JSON.stringify(icons.home[0])).toMatch(/"size":"48".*"level":"h3".*"thickness":"1".*"width":"50"/);
+    expect(icons.result.notes).toBeUndefined();
+
+    // Reported: props: expected record, received string.
+    const json = await attempt("update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: JSON.stringify({ heading: "Hello", buttonText: "Book a visit" }) });
+    expect(json.home[0].props).toMatchObject({ heading: "Hello", buttonText: "Book a visit" });
+
+    // Reported: update_footer: Unrecognized key "textColor". The colour lands in the footer's real colour setting, on every page.
+    for (const input of [
+      { design: { textColor: "#ffffff", backgroundColor: "#0b2545" } },
+      { props: { tagline: "Here to help", textColor: "#ffffff", backgroundColor: "#0b2545" } },
+      { tagline: "Here to help", background: "#0b2545", color: "white" },
+    ]) {
+      const { footer, result } = await attempt("update_footer", input);
+      expect(footer.design, JSON.stringify(input)).toMatchObject({ background: { type: "color", color: "#0b2545" }, appearance: { desktop: { textColor: "#ffffff" } } });
+      expect(result.notes, JSON.stringify(input)).toBeUndefined();
+    }
+
+    // Seen in the evals: a property the block does not have, and an icon outside the curated set.
+    const extra = await attempt("update_section_props", { pageId: fixtureIds.home, sectionId: "home-why-0", props: { text: "Why us", size: "xl", level: 3 } });
+    expect(extra.result.notes).toEqual(["Unsupported section property: size. It was ignored. Heading has: text, level, font, weight, align."]);
+    expect(JSON.stringify(extra.home[2])).toContain('"text":"Why us","level":"h3"');
+    const icon = await attempt("insert_section", { pageId: fixtureIds.home, customSection: { rows: [{ columns: [{ elements: [
+      { type: "IconList", items: [{ icon: "pound-sterling", text: "Fair prices" }, "No call-out fee"] }] }] }] } });
+    expect(icon.result.notes).toEqual([expect.stringContaining('there is no "pound-sterling" icon, so "check" was used')]);
+
+    // Other common first attempts.
+    const design = await attempt("update_section_design", { page_id: fixtureIds.home, section_id: "home-hero", padding: "6rem", textAlign: "center", shadow: true });
+    expect(design.home[0].props.design).toMatchObject({ shadow: "soft", spacing: { desktop: { paddingTop: 96, paddingLeft: 96 } }, appearance: { desktop: { align: "center" } } });
+    const theme = await attempt("update_theme", { colors: { primary: "#0B2545" }, fonts: { heading: "playfair display" }, borderRadius: "12px", logoUrl: "https://example.com/logo.png" });
+    expect(theme.changeset.working.theme).toMatchObject({ headingFont: "Playfair Display", radius: 12, colors: { primary: "#0B2545", text: "#17202b" } });
+    expect(theme.result.notes).toEqual(["patch.logoUrl is not a setting here and was ignored."]);
+    const header = await attempt("update_header", { header: { sticky: "true", desktop: { weight: 600, backgroundColor: "white" }, css: "x" } });
+    expect(header.changeset.working.header.desktop).toMatchObject({ sticky: true, weight: "600", color: "#ffffff" });
+    expect(header.result.notes).toEqual(["header.css is not a setting here and was ignored."]);
+    const page = await attempt("create_page", { title: "Careers at Harbour", sections: [{ designId: "Hero", props: { heading: "Join us", colour: "red" } }] });
+    expect(page.changeset.working.pages[4]).toMatchObject({ slug: "careers-at-harbour", nav_label: "Careers at Harbour" });
+    expect(page.result.notes).toEqual([expect.stringContaining("Unsupported section property: colour.")]);
+    const contact = await attempt("update_footer", { props: { tagline: "Here to help", phone: "555 0100" } });
+    expect(contact.footer).toMatchObject({ tagline: "Here to help", phone: "" });
+    expect(contact.result.notes).toEqual([expect.stringContaining("phone was left as it is: contact details come from Business information")]);
+    const image = await attempt("set_image", { pageId: fixtureIds.home, sectionId: "home-services", field: "services[0].image", query: "pipes" });
+    expect((image.home[1].props.services as { image: string }[])[0].image).toBe("/samples/pipes.jpg");
+    // Each adjusted call is logged for the agency, by what was left out and never by content.
+    expect(warn).toHaveBeenCalledWith("AI agent tool input was adjusted", expect.objectContaining({ tool: "update_theme" }));
+
+    // An edit in which nothing can be applied still fails, and says what the block does have.
+    const changeset = fixtureChangeset();
+    await expect(run(changeset, "update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: { colour: "red", backgroundImage: "https://example.com/a.jpg" } }))
+      .rejects.toThrow(/Nothing in this edit could be applied\. Unsupported section property: colour\..*Hero has: .*set_image/);
+    await expect(run(changeset, "set_image", { pageId: fixtureIds.home, sectionId: "home-hero", field: "photo", query: "pipes" })).rejects.toThrow(ToolInputError);
+    await expect(run(changeset, "switch_section_design", { pageId: fixtureIds.home, sectionId: "home-hero", designId: "no-such-design" })).rejects.toThrow("unavailable");
+    expect(changeset.changes).toHaveLength(0);
+    warn.mockRestore();
   });
 
   it("checks that a pageId and sectionId belong together, and answers a mismatch with the pairs that do", async () => {
@@ -463,7 +548,7 @@ describe("AI agent tool guardrails", () => {
       ["create_blog_post_draft", { title: "Again", slug: "preventing-frozen-pipes", blocks: [{ type: "divider" }] }, "already uses that URL"],
       ["create_blog_post_draft", { title: "Photo", slug: "photo", blocks: [{ ...image, url: "https://example.com/new.jpg" }] }, "cannot be added"],
       ["update_blog_post_draft", { postId: draftId, blocks: [{ ...image, url: "https://example.com/new.jpg" }] }, "cannot be added"],
-      ["update_blog_post_draft", { postId: draftId, patch: { title: "Old shape" } }, "Unrecognized"],
+      ["update_blog_post_draft", { postId: draftId, patch: { title: "Old shape" } }, "at least one field"],
       ["update_blog_post_draft", { postId: draftId }, "at least one field"],
       ["update_blog_post_draft", { postId: liveId, title: "Changed live" }, "Only an unpublished draft"],
     ] as const) await expect(run(changeset, name, input), JSON.stringify(input)).rejects.toThrow(message);
@@ -498,8 +583,12 @@ describe("AI agent tool guardrails", () => {
       ["update_header", { header: {} }],
       ["move_section", { pageId, sectionId: "hero", position: 0 }],
       ["update_page_settings", { pageId, hidden: false }],
-    ] as const) await expect(run(changeset, name, input), name).rejects.toThrow("Nothing changed");
+    ] as const) {
+      // Asking for what is already there is not an error: the model is told, and nothing is added to the review.
+      expect(await run(changeset, name, input), name).toEqual({ staged: false, message: "Nothing changed: the site already matches this request." });
+    }
     expect(changeset.changes).toHaveLength(1);
+    expect(changeset.working.pages).toEqual(expect.arrayContaining([expect.objectContaining({ id: pageId })]));
   });
 
   it("lets the header reuse the site's images but not bring in outside ones", async () => {
@@ -541,8 +630,8 @@ describe("AI agent tool guardrails", () => {
     for (const [name, input] of [
       ["update_theme", { patch: { radius: "99px" } }],
       ["update_theme", { patch: { radius: "50%" } }],
-      ["update_section_design", { pageId, sectionId: "hero", design: { spacing: { desktop: { paddingTop: "10rem" } } } }],
-      ["insert_section", { pageId, customSection: { ...customSection, rowGap: "30px" } }],
+      ["update_section_design", { pageId, sectionId: "hero", design: { spacing: { desktop: { paddingTop: "20rem" } } } }],
+      ["update_section_design", { pageId, sectionId: "hero", design: { spacing: { desktop: { paddingTop: "large" } } } }],
     ] as const) await expect(run(changeset, name, input), JSON.stringify(input)).rejects.toThrow();
     expect(changeset.changes).toHaveLength(4);
   });
