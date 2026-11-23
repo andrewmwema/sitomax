@@ -62,7 +62,7 @@ async function EditorLoader({
     supabase
       .from("pages")
       .select(
-        "id, slug, title, seo, draft_data, published_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, draft_header, published_header, business, seo)",
+        "id, slug, title, seo, draft_data, draft_version, published_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, draft_header, published_header, business, seo)",
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -75,7 +75,7 @@ async function EditorLoader({
   const headersReady = !headerMigrationMissing(loaded.error);
   if (!headersReady) console.warn("Global header migration is not applied; the editor is preserving per-page Navigation.");
   const result = headersReady ? loaded : await supabase.from("pages").select(
-    "id, slug, title, seo, draft_data, published_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, business, seo)",
+    "id, slug, title, seo, draft_data, draft_version, published_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, business, seo)",
   ).eq("id", pageId).maybeSingle();
   if (result.error) throw new Error("Unable to load the editor.", { cause: result.error });
   const data = result.data;
@@ -136,7 +136,7 @@ async function EditorLoader({
   return (
     <PageEditor
       key={data.id}
-      page={{ id: data.id, slug: data.slug, title: data.title }}
+      page={{ id: data.id, slug: data.slug, title: data.title, draftVersion: data.draft_version }}
       site={{ ...site, theme: site.draft_theme ?? site.theme }}
       siteSeo={siteSeo}
       business={businessSchema.parse({ ...emptyBusiness, ...(site.business as object) })}

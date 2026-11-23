@@ -25,7 +25,11 @@ describe("dashboard site filters", () => {
     await act(async () => button("Live").click());
     expect(container.textContent).toContain("Live site");
     expect(container.textContent).not.toContain("Draft site");
-    expect(container.querySelector('a[href="/editor/p1"]')).not.toBeNull();
+    const edit = container.querySelector<HTMLAnchorElement>('a[href="/editor/p1"]')!;
+    expect(edit.target).toBe("_blank");
+    expect(edit.rel).toBe("noopener noreferrer");
+    const live = container.querySelector<HTMLAnchorElement>('a[target="_blank"]:not([href^="/"])')!;
+    expect(live.rel).toBe("noopener noreferrer");
     expect(container.querySelector('a[href="/dashboard/sites/1"]')).not.toBeNull();
     expect(container.querySelector('a[href="/dashboard/sites/1/domains"]')?.textContent?.trim()).toBe("Connect domain");
     await act(async () => button("Drafts").click());
@@ -69,6 +73,9 @@ describe("dashboard site filters", () => {
     });
     expect(window.localStorage.getItem("sitomax-sites-view")).toBe("list");
     expect(container.querySelector("table")).not.toBeNull();
+    const listEdit = container.querySelector<HTMLAnchorElement>('a[href="/editor/home"]')!;
+    expect(listEdit.target).toBe("_blank");
+    expect(listEdit.rel).toBe("noopener noreferrer");
     await act(async () => {
       const select = container.querySelector<HTMLSelectElement>('[aria-label="Filter by client"]')!;
       changeControlValue(select, "South Client");

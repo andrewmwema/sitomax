@@ -125,11 +125,14 @@ describe("AI site wizard", () => {
       container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(mocks.push).not.toHaveBeenCalled();
-    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Open editor")!.click());
-    expect(mocks.push).toHaveBeenCalledWith(`/editor/${site.accountId}`);
-    mocks.push.mockClear();
-    await clickButton("Open site editor");
-    expect(mocks.push).toHaveBeenCalledWith(`/editor/${site.accountId}`);
+    const editors = [...container.querySelectorAll<HTMLAnchorElement>(`a[href="/editor/${site.accountId}"]`)];
+    expect(editors).toHaveLength(2);
+    for (const link of editors) {
+      expect(link.target).toBe("_blank");
+      expect(link.rel).toBe("noopener noreferrer");
+      expect(link.getAttribute("onclick")).toBeNull();
+    }
+    expect(mocks.push).not.toHaveBeenCalled();
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({ siteId: site.id, confirmReplace: true, services: ["Drain repairs"] });
     expect(container.textContent).toContain("Image placeholders were used.");
   });

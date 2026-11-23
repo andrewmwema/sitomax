@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import {
   createPage,
   deletePage,
@@ -149,12 +148,13 @@ export function PagesManager({
                 >
                   ↓
                 </button>
-                <Link
+                <a
                   href={`/editor/${page.id}`}
+                  target="_blank" rel="noopener noreferrer"
                   className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md bg-primary px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-primary/90 md:min-h-0 md:min-w-0"
                 >
                   Edit
-                </Link>
+                </a>
                 <button
                   type="button"
                   disabled={pending}

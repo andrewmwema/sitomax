@@ -28,7 +28,7 @@ async function updatePageSeo(siteId: string, pageId: string, rawFields: unknown,
   if (!validatedRoot.success) return invalid;
   const { supabase } = await requireUser();
   const { data: page, error: pageError } = await supabase.from("pages")
-    .select("id, site_id, draft_data").eq("id", parsedIds.data.pageId).eq("site_id", parsedIds.data.siteId).maybeSingle();
+    .select("id, site_id, draft_data, draft_version").eq("id", parsedIds.data.pageId).eq("site_id", parsedIds.data.siteId).maybeSingle();
   if (pageError || !page) {
     if (pageError) console.error("Could not load page SEO draft", pageError.message);
     return { error: "Could not load this page.", success: "" };
@@ -42,7 +42,7 @@ async function updatePageSeo(siteId: string, pageId: string, rawFields: unknown,
       props: { ...parsedData.data.root.props, ...validatedRoot.data },
     },
   };
-  const result = await (publish ? publishPage : savePageDraft)(page.id, nextData);
+  const result = await (publish ? publishPage : savePageDraft)(page.id, nextData, page.draft_version);
   if (result.status !== "success") return {
     error: result.status === "error" ? result.message : "Page was not updated.",
     success: "",

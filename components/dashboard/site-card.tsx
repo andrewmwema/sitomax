@@ -41,7 +41,7 @@ export function SiteCard({ site, marketingSubdomain }: { site: SiteCardSite; mar
     <div className="p-5">
       <div className="flex items-start justify-between gap-2"><div className="min-w-0">
         <h3 className="truncate text-[15px] font-semibold">{site.name ?? site.subdomain}</h3>
-        <a href={url} target="_blank" rel="noreferrer" className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-[#6B6A66] hover:text-[#121212]"><span className="truncate">{url.replace(/^https?:\/\//, "")}</span><ArrowUpRight size={12} className="shrink-0" /></a>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-[#6B6A66] hover:text-[#121212]"><span className="truncate">{url.replace(/^https?:\/\//, "")}</span><ArrowUpRight size={12} className="shrink-0" /></a>
         {site.createdAt ? <span className="mt-1 block text-[11px] text-[#77756F]">Added {new Date(site.createdAt).toLocaleDateString("en", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}</span> : null}
         {site.custom_domain && !site.domain_verified ? <span className="text-xs text-amber-700">Custom domain pending</span> : null}
       </div></div>
@@ -52,7 +52,7 @@ export function SiteCard({ site, marketingSubdomain }: { site: SiteCardSite; mar
           {site.canManageDomains ? <Link href={`/dashboard/sites/${site.id}/domains`} className="platform-button">
             {site.custom_domain ? "Domains" : "Connect domain"}
           </Link> : null}
-          {homePage ? <Link href={`/editor/${homePage.id}`} className="platform-button platform-button-primary"><Pencil size={12} />Edit</Link> :
+          {homePage ? <a href={`/editor/${homePage.id}`} target="_blank" rel="noopener noreferrer" className="platform-button platform-button-primary"><Pencil size={12} />Edit</a> :
             <span className="text-xs text-[#6B6A66]">No pages yet</span>}
         </div>
       </div>

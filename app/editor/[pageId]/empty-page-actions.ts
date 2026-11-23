@@ -15,9 +15,9 @@ export async function buildEmptyPageWithAi(pageId: string) {
   }
 }
 
-export async function saveEmptyPageWithAi(pageId: string, data: unknown, expectedDraft: unknown) {
+export async function saveEmptyPageWithAi(pageId: string, data: unknown, expectedDraft: unknown, expectedVersion: string) {
   try {
-    return await saveEmptyPage(pageId, data, expectedDraft);
+    return await saveEmptyPage(pageId, data, expectedDraft, expectedVersion);
   } catch (cause) {
     unstable_rethrow(cause);
     return { status: "error" as const, message: cause instanceof Error && cause.name === "Error"

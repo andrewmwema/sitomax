@@ -41,7 +41,7 @@ async function DomainContent({ params, searchParams }: {
       </Link> / Domains</p>
       <h1 className="mt-1 text-2xl font-semibold">Domains</h1>
       <p className="mt-2 text-sm text-zinc-600">Give your website a home on your own domain.</p>
-      {editorPage ? <Link href={`/editor/${editorPage}`} className="platform-button mt-4">Back to editor</Link> : null}
+      {editorPage ? <a href={`/editor/${editorPage}`} target="_blank" rel="noopener noreferrer" className="platform-button mt-4">Back to editor</a> : null}
     </header>
     <SiteSettingsNav siteId={siteId} current="domains" canManageDomains />
     <DomainSettings siteId={siteId} initial={initial} assistance={assistance} />

@@ -20,6 +20,7 @@ import {
   type PublishSelection,
 } from "@/lib/publishing";
 import { getSiteUrl } from "@/lib/site-url";
+import { pageVersionSchema, versionedPageData, type EditorSaveResult } from "@/lib/editor/page-version";
 
 /**
  * Editor Server Actions. All queries run with the user-scoped client, so
@@ -43,11 +44,12 @@ async function updatePage(
   pageId: string,
   rawData: unknown,
   publish: boolean,
+  expectedVersion: string,
   ai?: { snapshot: boolean; theme?: z.infer<typeof themeSchema>; expectedTheme?: z.infer<typeof themeSchema> },
-): Promise<ActionState> {
+): Promise<EditorSaveResult> {
   const parsedId = z.uuid().safeParse(pageId);
   const parsedData = puckDataSchema.safeParse(rawData);
-  if (!parsedId.success || !parsedData.success) {
+  if (!parsedId.success || !parsedData.success || !pageVersionSchema.safeParse(expectedVersion).success) {
     return { status: "error", message: "Invalid page data." };
   }
   const parsedRoot = rootSeoSchema.safeParse(parsedData.data.root.props ?? {});
@@ -109,7 +111,8 @@ async function updatePage(
 
   // Rich text props are client-authored HTML: sanitize before storing so
   // malicious markup never reaches site visitors or other editors.
-  const cleanData = sanitizePuckData(parsedData.data);
+  const clean = sanitizePuckData(parsedData.data);
+  const { data: cleanData, version } = versionedPageData(clean, expectedVersion);
   if (cleanData.root.props) {
     delete cleanData.root.props.__editorTheme;
     delete cleanData.root.props.__editorHeader;
@@ -127,10 +130,10 @@ async function updatePage(
     if (error) {
       console.error("Could not save page and global header", { code: error.code });
       return { status: "error", message: error.code === "40001"
-        ? "The site header or theme changed in another editor. Reload before saving."
-        : "Could not save the page and header. Check that the global header migration has been applied." };
+        ? "The page, site header or theme changed in another editor. Reload before saving."
+        : "Could not save the page and header. Check that the global header migration has been applied.", conflict: error.code === "40001" };
     }
-    return { status: "success", message: publish ? "Page and site header published." : "Draft saved." };
+    return { status: "success", message: publish ? "Page and site header published." : "Draft saved.", version };
   }
 
   if (ai) {
@@ -141,10 +144,10 @@ async function updatePage(
     if (error || saved !== true) {
       console.error("Could not save AI draft", { code: error?.code });
       return { status: "error", message: error?.code === "40001"
-        ? "The site theme changed in another editor. Reload before trying again."
-        : "Could not save the AI draft. Check that the editor history migration has been applied." };
+        ? "The page or site theme changed in another editor. Reload before trying again."
+        : "Could not save the AI draft. Check that the editor history migration has been applied.", conflict: error?.code === "40001" };
     }
-    return { status: "success", message: "Draft saved." };
+    return { status: "success", message: "Draft saved.", version };
   }
 
   const update: Record<string, unknown> = {
@@ -160,17 +163,20 @@ async function updatePage(
   const { data: updated, error } = await supabase.from("pages").update(update).eq("id", parsedId.data).select("id");
   if (error || !updated?.length) {
     console.error("Unable to save page", error);
-    return { status: "error", message: "Could not save the page. Please try again." };
+    return { status: "error", message: error?.code === "40001"
+      ? "This page changed in another editor. Reload before saving."
+      : "Could not save the page. Please try again.", conflict: error?.code === "40001" };
   }
 
   return {
     status: "success",
     message: publish ? "Page published." : "Draft saved.",
+    version,
   };
 }
 
-export async function savePageDraft(pageId: string, data: unknown): Promise<ActionState> {
-  return updatePage(pageId, data, false);
+export async function savePageDraft(pageId: string, data: unknown, expectedVersion: string): Promise<EditorSaveResult> {
+  return updatePage(pageId, data, false, expectedVersion);
 }
 
 export async function savePageMenuLabel(pageId: string, label: string, hidden?: boolean): Promise<ActionState> {
@@ -187,14 +193,14 @@ export async function savePageMenuLabel(pageId: string, label: string, hidden?: 
   return { status: "success", message: "Menu settings saved." };
 }
 
-export async function saveAiEdit(pageId: string, data: unknown, raw: unknown): Promise<ActionState> {
+export async function saveAiEdit(pageId: string, data: unknown, raw: unknown, expectedVersion: string): Promise<EditorSaveResult> {
   const parsed = z.strictObject({ snapshot: z.boolean(), theme: themeSchema.optional(), expectedTheme: themeSchema.optional() }).safeParse(raw);
   if (!parsed.success) return { status: "error", message: "Invalid theme or draft snapshot." };
-  return updatePage(pageId, data, false, parsed.data);
+  return updatePage(pageId, data, false, expectedVersion, parsed.data);
 }
 
-export async function publishPage(pageId: string, data: unknown): Promise<ActionState> {
-  return updatePage(pageId, data, true);
+export async function publishPage(pageId: string, data: unknown, expectedVersion: string): Promise<EditorSaveResult> {
+  return updatePage(pageId, data, true, expectedVersion);
 }
 
 export async function getSitePublishState(siteId: string) {
@@ -304,7 +310,7 @@ export async function listPageVersions(pageId: string): Promise<{ id: string; pu
   return data ?? [];
 }
 
-export async function restorePageVersion(pageId: string, versionId: string) {
+export async function restorePageVersion(pageId: string, versionId: string, expectedVersion: string) {
   const parsed = z.object({ pageId: z.uuid(), versionId: z.uuid() }).safeParse({ pageId, versionId });
   if (!parsed.success) return { status: "error" as const, message: "Invalid page version." };
   const { supabase } = await requireUser();
@@ -327,9 +333,9 @@ export async function restorePageVersion(pageId: string, versionId: string) {
       const site = z.object({ theme: z.unknown(), draft_theme: z.unknown() }).parse(data.site);
       expectedTheme = themeSchema.parse(site.draft_theme ?? site.theme ?? {});
     }
-    const result = await updatePage(pageId, version.data, false, theme ? { theme, expectedTheme, snapshot: false } : undefined);
+    const result = await updatePage(pageId, version.data, false, expectedVersion, theme ? { theme, expectedTheme, snapshot: false } : undefined);
     return result.status === "success" ? {
-      status: "success" as const, message: "Version restored to draft.", data: version.data, theme,
+      status: "success" as const, message: "Version restored to draft.", data: version.data, theme, version: result.version,
     } : result;
   }
   const { data: page, error: pageError } = await supabase.from("pages").select("site:sites(draft_header, theme, draft_theme, business)")
@@ -349,12 +355,12 @@ export async function restorePageVersion(pageId: string, versionId: string) {
     ...(legacy ? { __legacyNavigation: true } : {}),
   };
   const data = { ...previous, root: { ...previous.root, props: restoredProps } };
-  const result = await updatePage(pageId, data, false, { snapshot: false, ...(theme ? {
+  const result = await updatePage(pageId, data, false, expectedVersion, { snapshot: false, ...(theme ? {
     theme, expectedTheme: themeSchema.parse(site.draft_theme ?? site.theme ?? {}),
   } : {}) });
   delete data.root.props.__expectedHeader;
   return result.status === "success"
-    ? { status: "success" as const, message: "Version restored to draft. Publish to make it live.", data, theme, header: restoredHeader }
+    ? { status: "success" as const, message: "Version restored to draft. Publish to make it live.", data, theme, header: restoredHeader, version: result.version }
     : result;
 }
 /**

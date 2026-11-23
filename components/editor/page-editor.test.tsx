@@ -83,11 +83,12 @@ vi.mock("./section-library", () => ({
 vi.mock("./save-design-dialog", () => ({ SaveDesignDialog: () => null }));
 vi.mock("./editor-interactions", () => ({ EditorInteractions: () => null }));
 vi.mock("./theme-panel", () => ({ ThemePanel: () => null }));
+vi.mock("./editor-concurrency-notice", () => ({ EditorConcurrencyNotice: () => null }));
 
 import { PageEditor } from "./page-editor";
 
 const props: ComponentProps<typeof PageEditor> = {
-  page: { id: "home-page", slug: "", title: "Home" },
+  page: { id: "home-page", slug: "", title: "Home", draftVersion: "00000000-0000-4000-8000-000000000001" },
   site: {
     id: "site", account_id: "account", name: "Example", subdomain: "example",
     custom_domain: null, domain_verified: false, theme: {},
@@ -274,8 +275,10 @@ describe("editor navigation", () => {
       const container = document.createElement("div");
       const root = createRoot(container);
       await act(async () => root.render(<PageEditor {...props} />));
-      const exit = container.querySelector<HTMLButtonElement>('[aria-label="Back to dashboard"]')!;
+      const exit = container.querySelector<HTMLAnchorElement>('[aria-label="Back to dashboard"]')!;
       expect(exit.textContent).toContain("Dashboard");
+      expect(exit.getAttribute("href")).toBe("/dashboard");
+      expect(exit.getAttribute("target")).toBeNull();
       expect(container.querySelector('.editor-phone-notice a[href="/dashboard"]')?.textContent).toContain("Back to dashboard");
       await act(async () => exit.click());
       expect(mocks.save).toHaveBeenCalledOnce();
@@ -289,12 +292,14 @@ describe("editor navigation", () => {
       mocks.dirty = false;
       await act(async () => root.render(<PageEditor {...props} />));
       mocks.save.mockClear();
-      await act(async () => exit.click());
-      expect(mocks.save).not.toHaveBeenCalled();
-      expect(mocks.push).toHaveBeenCalledWith("/dashboard");
+      expect(exit.getAttribute("href")).toBe("/dashboard");
+      expect(exit.getAttribute("target")).toBeNull();
       mocks.busy = "save";
       await act(async () => root.render(<PageEditor {...props} />));
-      expect(exit.disabled).toBe(true);
+      expect(exit.getAttribute("aria-disabled")).toBe("true");
+      const busyClick = new MouseEvent("click", { bubbles: true, cancelable: true });
+      await act(async () => exit.dispatchEvent(busyClick));
+      expect(busyClick.defaultPrevented).toBe(true);
       await act(async () => root.unmount());
     });
 

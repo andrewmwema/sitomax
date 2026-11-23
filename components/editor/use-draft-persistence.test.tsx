@@ -20,34 +20,37 @@ vi.mock("@/app/editor/[pageId]/empty-page-actions", () => ({
 }));
 
 import { useDraftPersistence } from "./use-draft-persistence";
-import { savePageDraft } from "@/app/editor/[pageId]/actions";
+import { publishPage, restorePageVersion, saveAiEdit, savePageDraft } from "@/app/editor/[pageId]/actions";
 import { defaultHeader } from "@/lib/header";
 
 const base = { content: [], root: { props: { title: "Team", description: "Keep local SEO." } } };
 const generated: Data = { content: [{ type: "Section", props: { id: "generated" } }], root: { props: { title: "Stored title" } } };
 const theme = {};
+const INITIAL_VERSION = "00000000-0000-4000-8000-000000000001";
+const NEXT_VERSION = "00000000-0000-4000-8000-000000000002";
 let persistence: ReturnType<typeof useDraftPersistence>;
 let root: ReturnType<typeof createRoot>;
 function Harness() {
-  const value = useDraftPersistence("page", theme, undefined, mocks.draftSaved);
+  const value = useDraftPersistence("page", theme, undefined, mocks.draftSaved, INITIAL_VERSION);
   useEffect(() => { persistence = value; }, [value]);
   return null;
 }
 
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.useFakeTimers();
   vi.clearAllMocks();
   mocks.data = structuredClone(base);
   mocks.build.mockResolvedValue({ status: "success", data: generated, expectedDraft: {}, warnings: ["Review imagery."] });
-  mocks.save.mockResolvedValue({ status: "success" });
+  mocks.save.mockResolvedValue({ status: "success", version: NEXT_VERSION });
   root = createRoot(document.createElement("div"));
   await act(async () => root.render(<Harness />));
 });
-afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("empty-page persistence", () => {
   it("reports a saved page draft so the editor can update its unpublished indicator", async () => {
-    vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved." });
+    vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
     await act(async () => { expect(await persistence.save()).toBe(true); });
     expect(mocks.draftSaved).toHaveBeenCalledWith(base, "save");
   });
@@ -56,9 +59,9 @@ describe("empty-page persistence", () => {
     const header = defaultHeader("Example");
     const props = { ...base.root.props, __editorHeader: header };
     mocks.data = { ...base, root: { props } };
-    vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved." });
+    vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
     await act(async () => { expect(await persistence.buildEmptyPage()).toBe(true); });
-    expect(savePageDraft).toHaveBeenCalledWith("page", { ...mocks.data, root: { props: { ...props, __expectedHeader: null } } });
+    expect(savePageDraft).toHaveBeenCalledWith("page", { ...mocks.data, root: { props: { ...props, __expectedHeader: null } } }, INITIAL_VERSION);
     expect(mocks.build).toHaveBeenCalledOnce();
     expect(vi.mocked(savePageDraft).mock.invocationCallOrder[0]).toBeLessThan(mocks.build.mock.invocationCallOrder[0]);
   });
@@ -66,9 +69,9 @@ describe("empty-page persistence", () => {
     const initial = defaultHeader("Initial");
     const changed = defaultHeader("Changed");
     const final = defaultHeader("Final");
-    vi.mocked(savePageDraft).mockResolvedValueOnce({ status: "success", message: "Saved." })
+    vi.mocked(savePageDraft).mockResolvedValueOnce({ status: "success", message: "Saved.", version: NEXT_VERSION })
       .mockResolvedValueOnce({ status: "error", message: "Retry." })
-      .mockResolvedValueOnce({ status: "success", message: "Saved." });
+      .mockResolvedValueOnce({ status: "success", message: "Saved.", version: NEXT_VERSION });
     for (const header of [initial, changed, final]) {
       const props = { ...base.root.props, __editorHeader: header };
       mocks.data = { ...base, root: { props } };
@@ -78,12 +81,13 @@ describe("empty-page persistence", () => {
     expect(calls[0][1]).toMatchObject({ root: { props: { __expectedHeader: null } } });
     expect(calls[1][1]).toMatchObject({ root: { props: { __expectedHeader: initial } } });
     expect(calls[2][1]).toMatchObject({ root: { props: { __expectedHeader: initial } } });
+    expect(calls.map((call) => call[2])).toEqual([INITIAL_VERSION, NEXT_VERSION, NEXT_VERSION]);
   });
   it("saves generated content without losing local root settings and marks only the persisted draft saved", async () => {
     await act(async () => { expect(await persistence.buildEmptyPage()).toBe(true); });
     expect(mocks.save).toHaveBeenCalledWith("page", {
       ...generated, root: { props: { ...base.root.props, generationWarnings: ["Review imagery."] } },
-    }, {});
+    }, {}, INITIAL_VERSION);
     expect(mocks.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "setData", recordHistory: true }));
     expect(persistence.buildNotes).toEqual(["Review imagery."]);
     expect(persistence.busy).toBeNull();
@@ -118,7 +122,7 @@ describe("empty-page persistence", () => {
     await act(async () => { operation = persistence.buildEmptyPage(); });
     const props = { ...base.root.props, description: "Newer local SEO." };
     mocks.data = { ...base, root: { props } };
-    await act(async () => { finish({ status: "success" }); expect(await operation).toBe(false); });
+    await act(async () => { finish({ status: "success", version: NEXT_VERSION }); expect(await operation).toBe(false); });
     expect(mocks.dispatch).not.toHaveBeenCalled();
     expect(persistence.error).toContain("newer local changes were retained");
   });
@@ -137,5 +141,38 @@ describe("empty-page persistence", () => {
     });
     expect(mocks.build).toHaveBeenCalledOnce();
     await act(async () => { finish({ status: "error", message: "Unavailable" }); await operation; });
+  });
+
+  it("blocks all later saves after a conflict without replacing local content", async () => {
+    mocks.data = { ...base, root: { props: { title: "Keep my unsaved changes" } } };
+    vi.mocked(savePageDraft).mockResolvedValueOnce({ status: "error", conflict: true, message: "This page changed. Reload before saving." });
+    await act(async () => { expect(await persistence.save()).toBe(false); });
+    expect(persistence.reloadRequired).toBe(true);
+    await act(async () => {
+      expect(await persistence.save()).toBe(false);
+      expect(await persistence.restore("version")).toBe(false);
+      expect(await persistence.buildEmptyPage()).toBe(false);
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(savePageDraft).toHaveBeenCalledOnce();
+    expect(persistence.dirty).toBe(true);
+    expect(mocks.build).not.toHaveBeenCalled();
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(persistence.error).toContain("Reload");
+  });
+
+  it("carries successful replacement versions through AI edits, history restoration and publishing", async () => {
+    const restoredVersion = "00000000-0000-4000-8000-000000000003";
+    vi.mocked(saveAiEdit).mockResolvedValueOnce({ status: "success", message: "Saved", version: NEXT_VERSION });
+    vi.mocked(restorePageVersion).mockResolvedValueOnce({
+      status: "success", message: "Restored", version: restoredVersion, data: base, theme: undefined,
+    });
+    vi.mocked(publishPage).mockResolvedValueOnce({ status: "success", message: "Published", version: INITIAL_VERSION });
+    await act(async () => { expect(await persistence.applyAi(base, base)).toBe(true); });
+    expect(saveAiEdit).toHaveBeenCalledWith("page", base, { snapshot: true }, INITIAL_VERSION);
+    await act(async () => { expect(await persistence.restore("history")).toBe(true); });
+    expect(restorePageVersion).toHaveBeenCalledWith("page", "history", NEXT_VERSION);
+    await act(async () => { expect(await persistence.save("publish")).toBe(true); });
+    expect(publishPage).toHaveBeenCalledWith("page", base, restoredVersion);
   });
 });

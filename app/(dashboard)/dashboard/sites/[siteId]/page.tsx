@@ -82,7 +82,7 @@ async function SiteDetail({
           <a
             href={url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="text-sm text-primary hover:underline"
           >
             {url.replace(/^https?:\/\//, "")}
@@ -94,7 +94,7 @@ async function SiteDetail({
           <a
             href={url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="platform-button platform-button-primary"
           >
             View live

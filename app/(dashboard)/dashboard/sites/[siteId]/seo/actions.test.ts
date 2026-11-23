@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.update.mockReturnValue({ eq: () => ({ select: mocks.selected }) });
   mocks.selected.mockResolvedValue({ data: [{ id: site }], error: null });
-  mocks.page.mockResolvedValue({ data: { id: site, site_id: site, draft_data: {
+  mocks.page.mockResolvedValue({ data: { id: site, site_id: site, draft_version: site, draft_data: {
     root: { props: { title: "Page" } }, content: [{ type: "Hero", props: { heading: "Welcome" } }],
   } }, error: null });
   mocks.insert.mockResolvedValue({ error: null });
@@ -41,17 +41,17 @@ describe("SEO actions", () => {
   it("saves per-page SEO into the draft and publishes it through editor validation", async () => {
     const fields = { seoTitle: "Search title", description: "Page summary", socialImage: "/share.jpg", indexing: "noindex" };
     expect(await savePageSeoDraft(site, site, fields)).toMatchObject({ error: "", success: "Draft saved. Publish to apply." });
-    expect(mocks.update).toHaveBeenLastCalledWith({
+    expect(mocks.update.mock.calls.at(-1)![0]).toMatchObject({
       draft_data: {
         root: { props: { title: "Page", ...fields } },
         content: [{ type: "Hero", props: { heading: "Welcome" } }],
       },
     });
     expect(await publishPageSeo(site, site, fields)).toMatchObject({ error: "", success: "Page published with these SEO settings." });
-    expect(mocks.update).toHaveBeenLastCalledWith(expect.objectContaining({
-      published_data: expect.objectContaining({ root: { props: { title: "Page", ...fields } } }),
+    expect(mocks.update.mock.calls.at(-1)![0]).toMatchObject({
+      published_data: { root: { props: { title: "Page", ...fields } } },
       seo: { title: "Search title", description: "Page summary", image: "/share.jpg", noindex: true },
-    }));
+    });
     expect(await savePageSeoDraft(site, site, { ...fields, socialImage: "javascript:alert(1)" })).toMatchObject({ error: expect.any(String) });
   });
   it("rejects off-site, self-referential and reserved redirects", async () => {

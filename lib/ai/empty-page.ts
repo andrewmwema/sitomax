@@ -1,4 +1,5 @@
 import "server-only";
+import { pageVersionSchema, versionedPageData, type EditorSaveResult } from "@/lib/editor/page-version";
 
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
@@ -118,8 +119,9 @@ const generatedDraft = z.looseObject({
   root: z.looseObject({ props: record.optional() }),
 });
 
-export async function saveEmptyPage(pageId: string, rawData: unknown, rawExpectedDraft: unknown) {
+export async function saveEmptyPage(pageId: string, rawData: unknown, rawExpectedDraft: unknown, expectedVersion: string): Promise<EditorSaveResult> {
   const id = z.uuid().parse(pageId);
+  pageVersionSchema.parse(expectedVersion);
   const expectedDraft = storedDraft.parse(rawExpectedDraft);
   const data = generatedDraft.parse(rawData);
   // This action never accepts embeds, including ones hidden in nested slots.
@@ -131,7 +133,7 @@ export async function saveEmptyPage(pageId: string, rawData: unknown, rawExpecte
     Object.values(item).forEach(validateTypes);
   };
   validateTypes(data);
-  const clean = sanitizePuckData(data);
+  const { data: clean, version } = versionedPageData(sanitizePuckData(data), expectedVersion);
   if (clean.root.props) {
     delete clean.root.props.__editorTheme;
     delete clean.root.props.__editorHeader;
@@ -142,6 +144,10 @@ export async function saveEmptyPage(pageId: string, rawData: unknown, rawExpecte
   // (including root settings) must never be replaced by an AI result.
   const { data: saved, error } = await supabase.from("pages").update({ draft_data: clean })
     .eq("id", id).eq("draft_data", JSON.stringify(expectedDraft)).select("id");
-  if (error || !saved?.length) throw new Error("The page changed or is no longer available. Reload before building it again.");
-  return { status: "success" as const, message: "AI page saved to draft. Publish to make it live." };
+  if (error || !saved?.length) {
+    console.error("Could not save the AI page", { code: error?.code });
+    return { status: "error", conflict: error?.code === "40001" || !error,
+      message: "The page changed or is no longer available. Reload before building it again." };
+  }
+  return { status: "success", version, message: "AI page saved to draft. Publish to make it live." };
 }

@@ -154,7 +154,7 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     {result.warnings.length ? <ul role="status" className="my-4 list-disc space-y-2 pl-5 text-sm text-amber-900">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
     <ul className="space-y-3">{result.pages.map((page) => <li key={page.slug} className="creation-result-row text-sm">
       <span className="font-medium">{page.label}<span className={`mt-1 block text-xs font-normal ${page.built ? "text-green-700" : "text-amber-800"}`}>{page.built ? "Draft built" : "Not built — needs attention"}</span></span>
-      {page.built && page.pageId ? <button type="button" className="creation-secondary" onClick={() => router.push(`/editor/${page.pageId}`)}>Open editor</button> : null}
+      {page.built && page.pageId ? <a href={`/editor/${page.pageId}`} target="_blank" rel="noopener noreferrer" className="creation-secondary">Open editor</a> : null}
       {!page.built && page.retryId ? <button type="button" disabled={busy} className="creation-secondary"
         onClick={() => void generate(page.retryId)}>Retry (free)</button> : null}
     </li>)}</ul>
@@ -163,9 +163,9 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     {error ? <p role="alert" className="creation-error">{error}</p> : null}
     <footer className="creation-footer"><span className="creation-hint">Failed-page retries are free. Nothing publishes automatically.</span>
       <div className="creation-footer-actions">
-        {editorPageId ? <button type="button" className="creation-primary" onClick={() => router.push(`/editor/${editorPageId}`)}>
+        {editorPageId ? <a href={`/editor/${editorPageId}`} target="_blank" rel="noopener noreferrer" className="creation-primary">
           Open site editor<ArrowRight size={15} aria-hidden="true" />
-        </button> : null}
+        </a> : null}
         <button type="button" className="creation-secondary" onClick={() => router.push(`/dashboard/sites/${result.siteId}`)}>Site overview<ArrowRight size={15} aria-hidden="true" /></button>
       </div>
     </footer>

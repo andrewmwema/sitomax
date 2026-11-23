@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { linkContext } from "@/lib/links";
 import { PagesManager } from "./pages-panel";
 import { EditorIconPicker } from "./editor-icon-picker";
@@ -71,6 +72,7 @@ import { canonicalUrl } from "@/lib/seo-public";
 
 import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
 import { isEmptyPage } from "@/lib/editor/empty-page";
+import { EditorConcurrencyNotice } from "./editor-concurrency-notice";
 import { blogManagerHref } from "@/lib/blog-navigation";
 import type { BlogFeedMetadata } from "@/components/blocks/blog-posts";
 import { defaultHeader, extractNavigation, headerSchema, type HeaderRoot } from "@/lib/header";
@@ -85,6 +87,7 @@ import {
 
 type EditorUi = {
   pageId: string;
+  draftVersion: string;
   siteId: string;
   siteName: string;
   canManageDomains: boolean;
@@ -124,14 +127,14 @@ function usePersistence() {
 }
 
 function EditorRuntime({ children }: { children: React.ReactNode }) {
-  const { pageId, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
+  const { pageId, draftVersion, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
   const { pages, updatePagePublishState } = useInteractions();
   const markDraftSaved = useCallback((draft: Data, kind: "save" | "publish") => {
     if (kind === "publish") updatePagePublishState(pageId, false, false, true);
     else updatePagePublishState(pageId, hasUnpublishedPageChanges(draft, publishedData),
       hasUnpublishedFooterChanges(draft, publishedData));
   }, [pageId, publishedData, updatePagePublishState]);
-  const persistence = useDraftPersistence(pageId, theme, initialHeader, markDraftSaved);
+  const persistence = useDraftPersistence(pageId, theme, initialHeader, markDraftSaved, draftVersion);
   return <PersistenceContext.Provider value={persistence}><AskAiProvider pageId={pageId} theme={theme} persistence={persistence}
     metadata={{ siteMenu: { links: pageMenuLinks(pages.filter(page => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) },
       siteLinks: linkContext(pages), pagePath: `/${pages.find(page => page.id === pageId)?.slug ?? ""}`, headersReady }}>
@@ -201,10 +204,13 @@ function EditorHeader({ actions }: { actions: React.ReactNode }) {
   };
   return <header ref={header} className="editor-topbar" aria-label="Website editor">
     <div className="editor-topbar-location">
-      <button type="button" className="editor-back-button" aria-label="Back to dashboard" title="Save changes and return to dashboard"
-        disabled={persistence.busy !== null} onClick={async () => {
+      <Link href="/dashboard" className="editor-back-button" aria-label="Back to dashboard" title="Save changes and return to dashboard"
+        aria-disabled={persistence.busy !== null} onClick={async (event) => {
+          if (persistence.busy !== null) { event.preventDefault(); return; }
+          if (!persistence.dirty || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
           if (!persistence.dirty || await persistence.save()) router.push("/dashboard");
-        }}><ArrowLeft size={16} /><span>Dashboard</span></button>
+        }}><ArrowLeft size={16} /><span>Dashboard</span></Link>
       <div className="editor-page-location">
         <span className="editor-site-name" title={siteName}>{siteName}</span>
         <select aria-label="Switch page" value={pageId} disabled={persistence.busy !== null}
@@ -229,6 +235,7 @@ function EditorHeader({ actions }: { actions: React.ReactNode }) {
         onClick={() => history.forward()}><Redo2 size={17} /></button>
     </div>
     {actions}
+    <EditorConcurrencyNotice pageId={pageId} reloadRequired={persistence.reloadRequired} />
   </header>;
 }
 
@@ -572,7 +579,7 @@ function HeaderActions() {
       <a
         href={previewUrl}
         target="_blank"
-        rel="noreferrer"
+        rel="noopener noreferrer"
         className="platform-button editor-preview-button"
       >
         <Eye size={13} />Preview
@@ -764,7 +771,7 @@ export function PageEditor({
   pendingSiteChanges,
   publishedData,
 }: {
-  page: { id: string; slug: string; title: string | null };
+  page: { id: string; slug: string; title: string | null; draftVersion: string };
   site: { id: string; account_id: string; name: string | null; subdomain: string; custom_domain: string | null; domain_verified: boolean; theme: SiteTheme | null; draft_header?: unknown };
   initialData: Record<string, unknown>;
   previewUrl: string;
@@ -831,6 +838,7 @@ export function PageEditor({
   const editorUi = useMemo<EditorUi>(
     () => ({
       pageId: page.id,
+      draftVersion: page.draftVersion,
       seoPages,
       pageTitle: page.title || page.slug || "Home",
       publicUrl: canonicalUrl({
@@ -847,7 +855,7 @@ export function PageEditor({
       business, updateBusiness: setBusiness, theme, initialHeader: site.draft_header, headersReady,
       pendingSiteChanges, publishedData,
     }),
-    [page.id, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady, canManageDomains, pendingSiteChanges, publishedData],
+    [page.id, page.draftVersion, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady, canManageDomains, pendingSiteChanges, publishedData],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(
@@ -931,7 +939,7 @@ export function PageEditor({
               <p className="platform-eyebrow">Website editor</p>
               <h1>Editing works best on a larger screen.</h1>
               <p>Open a tablet or computer to shape your site. You can still preview your last saved draft here.</p>
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="platform-button platform-button-primary"><Eye size={16} />Preview website</a>
+              <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="platform-button platform-button-primary"><Eye size={16} />Preview website</a>
               <a href="/dashboard" className="platform-button"><ArrowLeft size={16} />Back to dashboard</a>
             </section>
             <div className="editor-desktop-workspace">

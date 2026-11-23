@@ -43,25 +43,17 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("returns to the originating editor page only after saving the current draft", async () => {
+it("opens the originating editor in a new tab without navigating away from the post draft", async () => {
   const title = container.querySelector<HTMLInputElement>('input[placeholder="Give your post a title"]')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(title, "Revised title");
     title.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  const back = [...container.querySelectorAll("button")].find((button) => button.textContent === "Back to editor")!;
-  mocks.save.mockResolvedValueOnce({ status: "error", message: "Could not save" });
-  await act(async () => back.click());
+  const back = container.querySelector<HTMLAnchorElement>('a[href="/editor/about"]')!;
+  expect(back.target).toBe("_blank");
+  expect(back.rel).toBe("noopener noreferrer");
+  expect(title.value).toBe("Revised title");
   expect(mocks.push).not.toHaveBeenCalled();
-  expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not save");
-
-  let finishSave!: (result: { status: "success" }) => void;
-  mocks.save.mockReturnValueOnce(new Promise((resolve) => { finishSave = resolve; }));
-  await act(async () => back.click());
-  expect(mocks.save).toHaveBeenLastCalledWith("first", expect.objectContaining({ title: "Revised title" }));
-  expect(mocks.push).not.toHaveBeenCalled();
-  await act(async () => finishSave({ status: "success" }));
-  expect(mocks.push).toHaveBeenCalledWith("/editor/about");
 });
 
 it("carries the editor page through Posts and adjacent-post navigation", async () => {

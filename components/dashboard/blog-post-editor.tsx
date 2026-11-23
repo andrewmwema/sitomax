@@ -355,8 +355,7 @@ export function BlogPostEditor(props: Props) {
     <main className="platform-ui min-h-screen bg-[#FBFBFA]"
       style={{ "--font-heading": fontFamily(props.headingFont), "--font-body": fontFamily(props.bodyFont), fontFamily: "var(--font-body)" } as CSSProperties}>
       <header className="sticky top-0 z-30 flex min-h-16 flex-wrap items-center gap-3 border-b border-[#E8E7E3] bg-white/95 px-4 backdrop-blur sm:px-7">
-        {props.editorPageId ? <button type="button" className="platform-button" disabled={busy}
-          onClick={() => void navigateAfterSave(`/editor/${props.editorPageId}`)}><ArrowLeft size={15} />Back to editor</button> : null}
+        {props.editorPageId ? <a href={`/editor/${props.editorPageId}`} target="_blank" rel="noopener noreferrer" className="platform-button"><ArrowLeft size={15} />Back to editor</a> : null}
         <button type="button" className="platform-button" disabled={busy}
           onClick={() => void navigateAfterSave(siteHref)} aria-label="Back to posts">Posts</button>
         <div className="min-w-0 flex-1">

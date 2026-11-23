@@ -117,8 +117,8 @@ describe("saving an AI page", () => {
     content: [{ type: "Section", props: { id: "generated", rows: [] } }] };
 
   it("atomically compares the full empty snapshot and updates only draft content via the RLS client", async () => {
-    await expect(saveEmptyPage(pageId, data, draft)).resolves.toMatchObject({ status: "success" });
-    expect(mocks.update).toHaveBeenCalledWith({ draft_data: {
+    await expect(saveEmptyPage(pageId, data, draft, pageId)).resolves.toMatchObject({ status: "success" });
+    expect(mocks.update.mock.calls[0][0]).toMatchObject({ draft_data: {
       ...data, root: { props: { title: "Team" } },
     } });
     expect(mocks.eq).toHaveBeenCalledWith("id", pageId);
@@ -130,17 +130,17 @@ describe("saving an AI page", () => {
   it("fails safely when another editor saved, access was revoked, or the database rejected the write", async () => {
     mocks.save.mockResolvedValueOnce({ data: [], error: null })
       .mockResolvedValueOnce({ data: null, error: { code: "42501" } });
-    await expect(saveEmptyPage(pageId, data, draft)).rejects.toThrow("page changed");
-    await expect(saveEmptyPage(pageId, data, draft)).rejects.toThrow("page changed");
+    await expect(saveEmptyPage(pageId, data, draft, pageId)).resolves.toMatchObject({ status: "error", conflict: true });
+    await expect(saveEmptyPage(pageId, data, draft, pageId)).resolves.toMatchObject({ status: "error" });
   });
 
   it("rejects a nonempty comparison snapshot and nested embeds without touching the database", async () => {
-    await expect(saveEmptyPage(pageId, data, { ...draft, content: [{ type: "Hero" }] })).rejects.toThrow("Only empty");
+    await expect(saveEmptyPage(pageId, data, { ...draft, content: [{ type: "Hero" }] }, pageId)).rejects.toThrow("Only empty");
     await expect(saveEmptyPage(pageId, {
       ...data, content: [{ type: "Section", props: { id: "section", rows: [
         { type: "Embed", props: { id: "embed", code: "<script>bad()</script>" } },
       ] } }],
-    }, draft)).rejects.toThrow("embeds");
+    }, draft, pageId)).rejects.toThrow("embeds");
     expect(mocks.update).not.toHaveBeenCalled();
   });
 });

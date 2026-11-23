@@ -115,13 +115,13 @@ export function SiteGrid({
               <td className="px-5"><Link href={`/dashboard/sites/${site.id}`} className="font-medium hover:underline">{site.name || site.subdomain}</Link></td>
               <td className="px-4 text-[#6B6A66]">{site.accountName ?? "—"}</td>
               <td className="px-4"><span className={`inline-flex items-center gap-1.5 text-xs ${live ? "text-emerald-700" : "text-[#6B6A66]"}`}><span className={`size-1.5 rounded-full ${live ? "bg-emerald-600" : "bg-[#A8A7A2]"}`} />{live ? "Live" : "Draft"}</span></td>
-              <td className="px-4"><a href={url} target="_blank" rel="noreferrer" className="inline-flex max-w-48 items-center gap-1 truncate text-[#5F5E5A] hover:underline">{url.replace(/^https?:\/\//, "")}<ArrowUpRight size={12} className="shrink-0" /></a></td>
+              <td className="px-4"><a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-48 items-center gap-1 truncate text-[#5F5E5A] hover:underline">{url.replace(/^https?:\/\//, "")}<ArrowUpRight size={12} className="shrink-0" /></a></td>
               <td className="px-4 text-xs text-[#6B6A66]">{site.createdAt ? new Date(site.createdAt).toLocaleDateString("en", { timeZone: "UTC" }) : "—"}</td>
               <td className="px-5"><div className="flex justify-end gap-2">
-                {home ? <Link href={`/editor/${home.id}`} aria-label={`Edit ${site.name || site.subdomain}`} className="platform-button"><Pencil size={13} />Edit</Link> : null}
+                {home ? <a href={`/editor/${home.id}`} target="_blank" rel="noopener noreferrer" aria-label={`Edit ${site.name || site.subdomain}`} className="platform-button"><Pencil size={13} />Edit</a> : null}
                 <Link href={`/dashboard/sites/${site.id}`} className="platform-button">Manage</Link>
                 {site.canManageDomains ? <Link href={`/dashboard/sites/${site.id}/domains`} className="platform-button">Domains</Link> : null}
-                <a href={url} target="_blank" rel="noreferrer" aria-label={`Visit ${site.name || site.subdomain}`} className="platform-button"><ExternalLink size={13} /></a>
+                <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`Visit ${site.name || site.subdomain}`} className="platform-button"><ExternalLink size={13} /></a>
               </div></td>
             </tr>;
           })}</tbody>

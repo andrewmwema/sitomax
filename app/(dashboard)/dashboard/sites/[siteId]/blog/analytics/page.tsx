@@ -29,7 +29,7 @@ export default async function BlogAnalyticsPage({ params, searchParams }: PagePr
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Blog Analytics</h1>
         <p className="mt-1 text-sm text-zinc-500">{site.name || site.subdomain}</p>
       </div>
-      {editorPageId ? <Link href={`/editor/${editorPageId}`} className="platform-button">Back to editor</Link> : null}
+      {editorPageId ? <a href={`/editor/${editorPageId}`} target="_blank" rel="noopener noreferrer" className="platform-button">Back to editor</a> : null}
     </header>
     <nav aria-label="Reporting period" className="my-6 flex flex-wrap gap-2">
       {analyticsDaysSchema.unwrap().options.map((range) => <Link key={range} href={blogAnalyticsHref(siteId, editorPageId, range)}
@@ -48,7 +48,7 @@ export default async function BlogAnalyticsPage({ params, searchParams }: PagePr
           <h2 className="font-semibold">Top posts</h2>
           {parsed.data.posts.length ? <ol className="mt-2 divide-y divide-zinc-200">
             {parsed.data.posts.map((post) => <li key={post.id} className="flex items-start justify-between gap-4 py-3 text-sm">
-              <Link href={blogManagerHref(siteId, editorPageId, post.id)} className="min-w-0 wrap-break-word hover:underline">{post.title}</Link>
+              <a href={blogManagerHref(siteId, editorPageId, post.id)} target="_blank" rel="noopener noreferrer" className="min-w-0 wrap-break-word hover:underline">{post.title}</a>
               <span className="shrink-0 tabular-nums">{post.visits.toLocaleString()} {post.visits === 1 ? "view" : "views"}</span>
             </li>)}
           </ol> : <p className="mt-2 text-sm text-zinc-500">No post views recorded in this period yet.</p>}

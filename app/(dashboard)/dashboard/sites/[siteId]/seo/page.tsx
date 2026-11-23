@@ -84,7 +84,7 @@ async function SeoContent({ params }: { params: PageProps<"/dashboard/sites/[sit
         return <li key={page.id} className="flex flex-wrap items-start justify-between gap-3 py-4">
           <div><p className="font-medium">{page.title || page.slug || "Home"} <span className={`ml-2 text-sm ${color}`}>{score}%</span></p>
             <p className="mt-1 text-sm text-zinc-600">{issues.length ? issues.join(" · ") : "No issues found"}</p></div>
-          <Link href={`/editor/${page.id}`} className="text-sm font-medium text-[#4B3FE0] underline">Fix</Link></li>;
+          <a href={`/editor/${page.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-[#4B3FE0] underline">Fix</a></li>;
       })}</ul>
     </section>
   </section>;

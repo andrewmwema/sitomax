@@ -23,14 +23,23 @@ const usePuck = createUsePuck();
 export function useDraftPersistence(
   pageId: string,
   theme: SiteTheme,
-  initialHeader?: unknown,
-  onDraftSaved?: (data: Data, kind: "save" | "publish") => void,
+  initialHeader: unknown,
+  onDraftSaved: ((data: Data, kind: "save" | "publish") => void) | undefined,
+  initialVersion: string,
 ) {
   const getPuck = useGetPuck();
   const data = usePuck((state) => state.appState.data);
   const [saved, setSaved] = useState(() => JSON.stringify(data));
   const [busy, setBusy] = useState<"save" | "publish" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadRequired, setReloadRequired] = useState(false);
+  const blocked = useRef(false);
+  const version = useRef(initialVersion);
+  const rejectSave = useCallback((result: { message: string; conflict?: boolean }) => {
+    setError(result.message);
+    if (result.conflict) { blocked.current = true; setReloadRequired(true); }
+    return false;
+  }, []);
   const [buildNotes, setBuildNotes] = useState<string[]>([]);
   const active = useRef<Promise<boolean> | null>(null);
   const savedTheme = useRef(theme);
@@ -50,6 +59,7 @@ export function useDraftPersistence(
 
   const save = useCallback(async (kind: "save" | "publish" = "save"): Promise<boolean> => {
     while (active.current) await active.current;
+    if (blocked.current) return false;
     const snapshot = structuredClone(getPuck().appState.data);
     setBusy(kind); setError(null);
     const operation = (async () => {
@@ -57,11 +67,11 @@ export function useDraftPersistence(
         const override = JSON.stringify(themeOverride(snapshot));
         if (override !== lastOverride.current) {
           const next = editorTheme(snapshot, theme);
-          const result = await saveAiEdit(pageId, forSaving(snapshot), { snapshot: false, theme: next, expectedTheme: savedTheme.current });
+          const result = await saveAiEdit(pageId, forSaving(snapshot), { snapshot: false, theme: next, expectedTheme: savedTheme.current }, version.current);
           if (result.status !== "success") {
-            setError(result.status === "error" ? result.message : "The theme was not saved.");
-            return false;
+            return rejectSave(result);
           }
+          version.current = result.version;
           savedTheme.current = next;
           markHeaderSaved(snapshot);
           lastOverride.current = override;
@@ -71,11 +81,11 @@ export function useDraftPersistence(
             return true;
           }
         }
-        const result = await (kind === "publish" ? publishPage : savePageDraft)(pageId, forSaving(snapshot));
+        const result = await (kind === "publish" ? publishPage : savePageDraft)(pageId, forSaving(snapshot), version.current);
         if (result.status !== "success") {
-          setError(result.status === "error" ? result.message : "The page was not saved.");
-          return false;
+          return rejectSave(result);
         }
+        version.current = result.version;
         setSaved(JSON.stringify(snapshot));
         markHeaderSaved(snapshot);
         onDraftSaved?.(snapshot, kind);
@@ -88,10 +98,11 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved, rejectSave]);
 
   const applyAi = useCallback(async (base: Data, next: Data, nextTheme?: SiteTheme, capture = true): Promise<boolean> => {
     while (active.current) await active.current;
+    if (blocked.current) return false;
     if (JSON.stringify(getPuck().appState.data) !== JSON.stringify(base)) {
       setError("The draft changed during preview. Generate a new proposal.");
       return false;
@@ -102,11 +113,11 @@ export function useDraftPersistence(
       try {
         const result = await saveAiEdit(pageId, forSaving(snapshot), { snapshot: capture, ...(nextTheme ? {
           theme: nextTheme, expectedTheme: lastOverride.current ? savedTheme.current : theme,
-        } : {}) });
+        } : {}) }, version.current);
         if (result.status !== "success") {
-          setError(result.status === "error" ? result.message : "The AI edit was not saved.");
-          return false;
+          return rejectSave(result);
         }
+        version.current = result.version;
         if (nextTheme) {
           savedTheme.current = nextTheme;
           lastOverride.current = JSON.stringify(nextTheme);
@@ -124,10 +135,10 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved, rejectSave]);
 
   const buildEmptyPage = useCallback(async (): Promise<boolean> => {
-    if (active.current) return false;
+    if (active.current || blocked.current) return false;
     const base = structuredClone(getPuck().appState.data);
     if (!isEmptyPage(base)) {
       setError("Only empty pages can be built with AI.");
@@ -147,8 +158,9 @@ export function useDraftPersistence(
         const next = { ...proposal.data, root: { ...base.root, props: {
           ...base.root.props, generationWarnings: proposal.warnings,
         } } } as Data;
-        const result = await saveEmptyPageWithAi(pageId, next, proposal.expectedDraft);
-        if (result.status !== "success") { setError(result.message); return false; }
+        const result = await saveEmptyPageWithAi(pageId, next, proposal.expectedDraft, version.current);
+        if (result.status !== "success") return rejectSave(result);
+        version.current = result.version;
         setBuildNotes(proposal.warnings);
         if (JSON.stringify(getPuck().appState.data) !== JSON.stringify(base)) {
           setError("The AI draft was saved, but newer local changes were retained. Reload to review the saved draft.");
@@ -166,18 +178,19 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, save, onDraftSaved]);
+  }, [getPuck, pageId, save, onDraftSaved, rejectSave]);
 
   const restore = useCallback(async (versionId: string): Promise<boolean> => {
     while (active.current) await active.current;
+    if (blocked.current) return false;
     setBusy("restore"); setError(null);
     const operation = (async () => {
       try {
-        const result = await restorePageVersion(pageId, versionId);
+        const result = await restorePageVersion(pageId, versionId, version.current);
         if (result.status !== "success" || !("data" in result)) {
-          setError(result.status === "error" ? result.message : "Version could not be restored.");
-          return false;
+          return rejectSave(result);
         }
+        version.current = result.version;
         const current = getPuck().appState.data;
         const restored = result.theme || themeOverride(current)
           ? withEditorTheme(result.data as Data, result.theme ?? editorTheme(current, theme)) : result.data as Data;
@@ -199,11 +212,11 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, onDraftSaved]);
+  }, [getPuck, pageId, theme, onDraftSaved, rejectSave]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (!active.current && JSON.stringify(getPuck().appState.data) !== saved) void save();
+      if (!blocked.current && !active.current && JSON.stringify(getPuck().appState.data) !== saved) void save();
     }, 10_000);
     return () => clearInterval(timer);
   }, [getPuck, save, saved]);
@@ -215,5 +228,5 @@ export function useDraftPersistence(
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  return { busy, dirty, error, save, restore, applyAi, buildEmptyPage, buildNotes };
+  return { busy, dirty, error, reloadRequired, save, restore, applyAi, buildEmptyPage, buildNotes };
 }

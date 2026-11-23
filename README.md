@@ -81,12 +81,23 @@ shared detail drawer; the media picker is a native modal so it also works above
 other dialogs. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
 
+Dashboard Edit/Open editor links (including blog post edits), previews and live-site
+links open in a new tab; the editor's **Dashboard** link stays in the same tab.
+Apply `supabase/migrations/0045_editor_concurrency.sql` before deploying this editor:
+it adds page versions and account-authorized editor-session heartbeats. Website pages
+warn when another tab or user is editing (refreshed every 15 seconds; abandoned
+sessions expire after 45 seconds). Saves, publishing, AI edits and history restores
+check the loaded page version atomically, including shared header/theme transactions.
+A stale save retains the local canvas, stops subsequent saves and prompts a reload;
+copy any unsaved changes before reloading. Published content is unchanged by presence
+checks or rejected saves.
+
 The editor tool rail uses compact, color-coded icons while retaining their
 existing click targets and selection indicator.
 
 Owners and agency admins can open **Domain** in the editor header or tool rail
 to save their draft and open the site's existing domain settings. **Back to
-editor** returns to the page they were editing.
+editor** opens the page they were editing in a new tab.
 
 Select words directly inside editable canvas text to replace them. Section headings
 and body copy open the floating formatting toolbar, including heading levels 1–6.

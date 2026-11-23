@@ -70,7 +70,7 @@ export function BlogManager(props: Props) {
           <p className="mt-1 text-sm text-zinc-500">{props.siteName} · {props.timezone}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {props.editorPageId ? <Link href={`/editor/${props.editorPageId}`} className="platform-button"><ArrowLeft size={15} />Back to editor</Link> : null}
+          {props.editorPageId ? <a href={`/editor/${props.editorPageId}`} target="_blank" rel="noopener noreferrer" className="platform-button"><ArrowLeft size={15} />Back to editor</a> : null}
           <Link href={`/dashboard/sites/${props.siteId}`} className="platform-button">Site overview</Link>
           {tab === "Posts" ? <CreatePostDialog siteId={props.siteId} editorPageId={props.editorPageId} authors={props.authors} /> : null}
         </div>
@@ -234,7 +234,7 @@ function PostsView({ siteId, editorPageId, subdomain, settings, posts, categorie
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={post.cover_image} alt="" className="size-12 rounded-lg object-cover" />
                 </> : <span aria-hidden className="flex size-12 items-center justify-center rounded-lg bg-[#F4F3EF] text-zinc-400"><BookOpen size={17} /></span>}
-                <div className="min-w-0"><Link href={blogManagerHref(siteId, editorPageId, post.id)} className="block truncate font-medium hover:underline">{post.title}</Link>
+                <div className="min-w-0"><a href={blogManagerHref(siteId, editorPageId, post.id)} target="_blank" rel="noopener noreferrer" className="block truncate font-medium hover:underline">{post.title}</a>
                   <p className="mt-0.5 max-w-[380px] truncate text-xs text-zinc-500">{post.excerpt || `/${post.slug}`}</p></div>
               </div>
             </td>
@@ -243,8 +243,8 @@ function PostsView({ siteId, editorPageId, subdomain, settings, posts, categorie
             <td className="p-3 text-xs text-zinc-600">{date(post.created_at)}</td>
             <td className="p-3 text-xs text-zinc-600">{date(post.published_at)}</td>
             <td className="p-3"><div className="flex items-center gap-2">
-              <Link href={blogManagerHref(siteId, editorPageId, post.id)} className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Edit</Link>
-              <Link href={blogManagerHref(siteId, editorPageId, post.id, "settings")} className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Settings</Link>
+              <a href={blogManagerHref(siteId, editorPageId, post.id)} target="_blank" rel="noopener noreferrer" className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Edit</a>
+              <a href={blogManagerHref(siteId, editorPageId, post.id, "settings")} target="_blank" rel="noopener noreferrer" className="text-xs text-[#4B3FE0] opacity-0 underline transition group-hover:opacity-100 focus:opacity-100">Settings</a>
               {post.status !== "published" || post.has_unpublished_changes
                 ? <QuickPublishButton post={post} onMessage={setMessage} />
                 : null}
@@ -356,10 +356,10 @@ function PostMenu({ post, siteId, editorPageId, subdomain, blogPath, onMessage }
           maxHeight: `${Math.max(0, opensAbove ? above : below)}px`,
         });
       }}>
-      <Link href={blogManagerHref(siteId, editorPageId, post.id)} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Edit</Link>
-      <Link href={blogManagerHref(siteId, editorPageId, post.id, "settings")} className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Settings</Link>
+      <a href={blogManagerHref(siteId, editorPageId, post.id)} target="_blank" rel="noopener noreferrer" className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Edit</a>
+      <a href={blogManagerHref(siteId, editorPageId, post.id, "settings")} target="_blank" rel="noopener noreferrer" className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">Settings</a>
       {post.status === "published" ? <a href={`/s/${encodeURIComponent(subdomain)}${blogPath.replace(/\/+$/, "")}/${post.slug.split("/").map(encodeURIComponent).join("/")}`}
-        target="_blank" rel="noreferrer" onClick={() => menu.current?.hidePopover()}
+        target="_blank" rel="noopener noreferrer" onClick={() => menu.current?.hidePopover()}
         className="block rounded-lg px-3 py-2 text-xs hover:bg-zinc-50">View live</a> : null}
       {post.status === "published" && post.has_unpublished_changes ? <button type="button" disabled={busy}
         onClick={() => void run(() => setBlogPostStatus(post.id, "published"))}
@@ -516,7 +516,7 @@ function AltTextRow({ siteId, editorPageId, entry }: Pick<Props, "siteId" | "edi
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={entry.imageUrl} alt="" className="size-16 rounded-lg object-cover" />
     <div className="min-w-40 flex-1">
-      <Link href={blogManagerHref(siteId, editorPageId, entry.postId)} className="text-sm font-medium hover:underline">{entry.postTitle}</Link>
+      <a href={blogManagerHref(siteId, editorPageId, entry.postId)} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:underline">{entry.postTitle}</a>
       <p className="mt-1 text-xs capitalize text-zinc-500">{entry.location === "cover" ? "Main image" : entry.location === "thumbnail" ? "Social image" : `${entry.location} in post`}</p>
     </div>
     <label className="min-w-52 flex-[2] text-xs">Alt text
