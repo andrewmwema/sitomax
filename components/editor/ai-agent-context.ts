@@ -24,6 +24,8 @@ export type PanelContextValue = {
   reviewSession: ReviewSession | null;
   setReviewSession: (value: ReviewSession | null) => void;
   editor: AgentEditorBridge;
+  /** Shows a short confirmation over the editor, whether or not the chat is open. */
+  notify: (message: string) => void;
 };
 export const PanelContext = createContext<PanelContextValue | null>(null);
 

@@ -327,10 +327,13 @@ describe("editor navigation", () => {
       expect(container.querySelector('[aria-label="Review AI changes"]')).toBeNull();
       expect(container.textContent).toContain("AI: Make the site premium");
       expect(container.textContent).toContain("Not applied (1)");
+      const toast = () => container.querySelector('[data-agent-toast][role="status"]')?.textContent;
+      expect(toast()).toBe("1 change applied");
 
       await act(async () => button("Undo these changes").click());
       expect(mocks.undoAgent).toHaveBeenCalledWith({ siteId: "site", applyId: applied.id, pageId: "home-page" });
       expect(container.textContent).toContain("Undone 1 change · Skipped 1 (edited since)");
+      expect(toast()).toBe("1 change undone · 1 skipped");
       expect(container.querySelector(`a[href="/editor/${aboutId}"]`)?.textContent).toBe("About");
       expect(button("Undo these changes")).toBeUndefined();
       await act(async () => root.unmount());

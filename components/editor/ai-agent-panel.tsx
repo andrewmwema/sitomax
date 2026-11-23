@@ -11,7 +11,7 @@ import { agentRunUsageSchema, describeAgentUsage, type AgentRunUsage } from "@/l
 import { useInteractions } from "./interaction-context";
 import { ROOT_ZONE } from "@/lib/editor/tree";
 import { AgentReviewCanvas, AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
-import { AgentAppliedCard, undoAgentApply, type AgentApplyReport } from "./agent-applied-card";
+import { AgentAppliedCard, applyToast, undoAgentApply, type AgentApplyReport } from "./agent-applied-card";
 import {
   PanelContext, useAiAgentPanel, type AgentEditorBridge, type AgentRequest, type ReviewSession,
 } from "./ai-agent-context";
@@ -34,12 +34,38 @@ export function AgentCanvas({ children, pageId }: { children: React.ReactNode; p
     : children;
 }
 
+/** A short confirmation that stays visible above the canvas, the chat and any open dialog. */
+function AgentToast({ toast }: { toast: { id: number; message: string } | null }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    // The top layer keeps it above a modal dialog such as History; without it the message shows in place.
+    if (!toast || !element || typeof element.showPopover !== "function") return;
+    element.showPopover();
+    return () => { if (element.isConnected && element.matches(":popover-open")) element.hidePopover(); };
+  }, [toast]);
+  return <div ref={ref} popover="manual" role="status" aria-live="polite" data-agent-toast
+    className="pointer-events-none fixed bottom-6 left-1/2 right-auto top-auto z-[200] m-0 -translate-x-1/2 overflow-visible border-0 bg-transparent p-0">
+    {toast ? <p key={toast.id} className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
+      <Check size={15} className="shrink-0 text-green-400" />{toast.message}
+    </p> : null}
+  </div>;
+}
+
 export function AiAgentPanelProvider({ children, siteId, pageId, editor }: {
   children: React.ReactNode; siteId: string; pageId: string; editor: AgentEditorBridge;
 }) {
   const getPuck = useGetPuck();
   const { pages } = useInteractions();
   const [open, setOpen] = useState(false);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const toastCount = useRef(0);
+  const notify = useCallback((message: string) => setToast({ id: ++toastCount.current, message }), []);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const [section, setSection] = useState<SectionContext | null>(null);
   const [insert, setInsert] = useState<InsertContext | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -133,11 +159,12 @@ export function AiAgentPanelProvider({ children, siteId, pageId, editor }: {
   const composer: Composer = {
     prompt, setPrompt, contexts, setContexts, section, insert, clearInsert: () => setInsert(null),
   };
-  return <PanelContext.Provider value={{ open, toggle, openWith: show, reviewSession, setReviewSession, editor }}>
+  return <PanelContext.Provider value={{ open, toggle, openWith: show, reviewSession, setReviewSession, editor, notify }}>
     {children}
     {open ? <AiAgentPanel siteId={siteId} pageId={pageId} pages={pages} composer={composer} focusRequest={focusRequest}
-      reviewSession={reviewSession} setReviewSession={setReviewSession} editor={editor}
+      reviewSession={reviewSession} setReviewSession={setReviewSession} editor={editor} notify={notify}
       onClose={() => setOpen(false)} /> : null}
+    <AgentToast toast={toast} />
   </PanelContext.Provider>;
 }
 
@@ -258,10 +285,10 @@ function toolLabel(name: unknown, rawInput: unknown, pages: Page[]) {
   }
 }
 
-function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSession, setReviewSession, editor, onClose }: {
+function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSession, setReviewSession, editor, notify, onClose }: {
   siteId: string; pageId: string; pages: Page[]; composer: Composer; focusRequest: number;
   reviewSession: ReviewSession | null; setReviewSession: (value: ReviewSession | null) => void;
-  editor: AgentEditorBridge; onClose: () => void;
+  editor: AgentEditorBridge; notify: (message: string) => void; onClose: () => void;
 }) {
   const { prompt, setPrompt, contexts, setContexts, section, insert, clearInsert } = composer;
   const router = useRouter();
@@ -535,6 +562,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       setApplied(result.applied);
       setApplyReport({ dropped: result.dropped, notes: result.notes });
       setReviewSession(null);
+      notify(applyToast(result.applied));
       if (!await editor.adopt(result.editor)) setError("The changes were applied. Reload the editor to continue editing.");
     } catch (cause) {
       console.error("Could not apply AI changes", { type: cause instanceof Error ? cause.name : "Unknown" });
@@ -553,6 +581,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       if (result.status === "error") setError(result.message);
       else if (result.status === "success") {
         setApplied(result.applied);
+        notify(applyToast(result.applied));
         if (result.left) router.push(homePage && homePage.id !== pageId ? `/editor/${homePage.id}` : "/dashboard");
       }
     } finally {

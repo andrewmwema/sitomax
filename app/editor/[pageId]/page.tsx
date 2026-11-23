@@ -13,7 +13,7 @@ import type { SeoPageSummary } from "@/components/editor/seo-panel";
 import { headerMigrationMissing } from "@/lib/header";
 import { loadEditorBlogFeed } from "@/lib/blog-editor-feed";
 import { hasUnpublishedFooterChanges, hasUnpublishedPageChanges } from "@/lib/publishing";
-import { editorInitialData } from "@/lib/editor/initial-data";
+import { EDITOR_DRAFT_SOURCE, editorDraft } from "@/lib/editor/initial-data";
 
 /**
  * Full-screen visual editor for a page.
@@ -63,7 +63,7 @@ async function EditorLoader({
     supabase
       .from("pages")
       .select(
-        "id, slug, title, seo, draft_data, draft_version, published_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, theme, draft_theme, draft_header, published_header, business, seo)",
+        `id, slug, title, ${EDITOR_DRAFT_SOURCE.page}, published_data, site:sites(id, account_id, name, subdomain, custom_domain, domain_verified, ${EDITOR_DRAFT_SOURCE.site}, published_header, business, seo)`,
       )
       .eq("id", pageId)
       .maybeSingle(),
@@ -121,16 +121,16 @@ async function EditorLoader({
   const generated = z.object({
     root: z.object({ props: z.object({ generationWarnings: z.array(z.string()).optional() }).optional() }).optional(),
   }).safeParse(data.draft_data);
-  const initialData = editorInitialData(data.draft_data, data.seo);
+  const draft = editorDraft(data, site);
 
   return (
     <PageEditor
       key={data.id}
-      page={{ id: data.id, slug: data.slug, title: data.title, draftVersion: data.draft_version }}
-      site={{ ...site, theme: site.draft_theme ?? site.theme }}
+      page={{ id: data.id, slug: data.slug, title: data.title, draftVersion: draft.version }}
+      site={{ ...site, theme: draft.theme }}
       siteSeo={siteSeo}
       business={businessSchema.parse({ ...emptyBusiness, ...(site.business as object) })}
-      initialData={initialData}
+      initialData={draft.data}
       publishedData={data.published_data}
       previewUrl={previewUrl}
       blogFeed={blogFeed}

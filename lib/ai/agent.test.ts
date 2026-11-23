@@ -383,4 +383,34 @@ describe("AI agent tool guardrails", () => {
     await run(changeset, "update_header", { header: { logo: { mode: "text", image: "" }, mobile: { image: "/samples/tools.jpg" } } });
     expect(changeset.working.header).toMatchObject({ logo: { mode: "text", image: "" }, desktop: { image: logo }, mobile: { image: "/samples/tools.jpg" } });
   });
+
+  it("reads numeric design values written as text, so one of them does not cost the whole edit", async () => {
+    const changeset = staged();
+    // One refused value fails the whole edit, and a real run's retry then dropped the button style it had asked for.
+    await run(changeset, "update_theme", { patch: { radius: "14px", buttonStyle: "pill" } });
+    expect(changeset.working.theme).toMatchObject({ radius: 14, buttonStyle: "pill", colors: { background: "#ffffff" } });
+
+    await run(changeset, "update_section_design", { pageId, sectionId: "hero", design: {
+      spacing: { desktop: { paddingTop: "96px", paddingBottom: "96" } }, border: { width: "1px", radius: "12" },
+      background: { type: "gradient", from: "#0b2545", to: "#13315c", angle: "135" },
+    } });
+    expect(sections(changeset.working)[0].props.design).toMatchObject({
+      spacing: { desktop: { paddingTop: 96, paddingBottom: 96 } }, border: { width: 1, radius: 12 }, background: { angle: 135 },
+    });
+
+    await run(changeset, "update_header", { header: { desktop: { height: "80px", fontSize: "15" } } });
+    expect(changeset.working.header.desktop).toMatchObject({ height: 80, fontSize: 15 });
+
+    await run(changeset, "insert_section", { pageId, position: "0", customSection: { ...customSection, rowGap: "32px",
+      rows: [{ ...customSection.rows[0], gap: "24" }] } });
+    expect(sections(changeset.working)[0].props).toMatchObject({ rowGap: 32, rows: [{ props: { gap: 24 } }] });
+
+    for (const [name, input] of [
+      ["update_theme", { patch: { radius: "99px" } }],
+      ["update_theme", { patch: { radius: "50%" } }],
+      ["update_section_design", { pageId, sectionId: "hero", design: { spacing: { desktop: { paddingTop: "10rem" } } } }],
+      ["insert_section", { pageId, customSection: { ...customSection, rowGap: "30px" } }],
+    ] as const) await expect(run(changeset, name, input), JSON.stringify(input)).rejects.toThrow();
+    expect(changeset.changes).toHaveLength(4);
+  });
 });

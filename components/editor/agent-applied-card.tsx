@@ -16,6 +16,13 @@ export function undoSummary(result: AgentUndoResult) {
   return `Undone ${plural(result.undone)}${result.skipped ? ` · Skipped ${result.skipped} (edited since)` : ""}`;
 }
 
+/** The confirmation shown once drafts were written: "16 changes applied", or the undo result. */
+export function applyToast(applied: AppliedAgentChanges) {
+  const undo = applied.undo_result;
+  return undo ? `${plural(undo.undone)} undone${undo.skipped ? ` · ${undo.skipped} skipped` : ""}`
+    : `${plural(applied.change_count)} applied`;
+}
+
 function itemHref(siteId: string, item: AgentUndoResult["skipped_items"][number]) {
   if (!item.target_id) return null;
   return item.kind.startsWith("page") ? `/editor/${item.target_id}` : `/dashboard/sites/${siteId}/blog/${item.target_id}`;

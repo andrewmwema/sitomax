@@ -29,6 +29,7 @@ import { createAgentReviewPayload, jsonEqual, reviewPatches, type ReviewPatch } 
 import { dropThinking, summarizeHistory, trimToolResults } from "./agent-memory";
 import { checkQuality, type QualityReport } from "./agent-quality";
 import { AiUserError } from "./errors";
+import { parseWithNumbers } from "./lenient-numbers";
 import { AiProviderError, aiErrorMessage, isDefinitiveProviderFailure, providerFailure } from "./provider-error";
 
 const MAX_TOOL_CALLS = 40;
@@ -200,7 +201,7 @@ function safeTheme(raw: unknown) {
   return { ...parsed, colors };
 }
 function safeHeader(raw: unknown) {
-  const header = headerSchema.parse(raw);
+  const header = parseWithNumbers(headerSchema, raw);
   for (const device of ["desktop", "tablet", "mobile"] as const) {
     const settings = header[device];
     const backgrounds = [settings.color, settings.scrollColor].filter((color): color is string => Boolean(color));
@@ -387,11 +388,12 @@ function validateStoredProps(type: string, before: Record<string, unknown>, patc
     if (key === "design") throw new Error("Use update_section_design to change a section's design.");
     const schema = schemas[key];
     if (!schema) throw new Error(`Unsupported section property: ${key}.`);
-    const parsed = schema.safeParse(value);
-    if (!parsed.success) {
-      throw new z.ZodError(parsed.error.issues.map((issue) => ({ ...issue, path: [key, ...issue.path] })));
+    try {
+      edits[key] = parseWithNumbers(schema, value);
+    } catch (error) {
+      if (!(error instanceof z.ZodError)) throw error;
+      throw new z.ZodError(error.issues.map((issue) => ({ ...issue, path: [key, ...issue.path] })));
     }
-    edits[key] = parsed.data;
   }
   const baseline = { ...component.defaultProps as Record<string, unknown> | undefined, ...before };
   // Existing images may be kept, moved or removed; new ones only come from set_image.
@@ -463,7 +465,7 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
   if (!toolsByName.has(name)) throw new Error("This tool is unavailable.");
   const zod = toolSchemas.get(name);
   if (!zod) throw new Error("This tool has no input validator.");
-  const args = zod.parse(input) as Record<string, unknown>;
+  const args = parseWithNumbers(zod, input) as Record<string, unknown>;
   if (name === "insert_section") requireDesignChoice(args, []);
   if (name === "create_page" && Array.isArray(args.sections)) {
     args.sections.forEach((section, index) => {
@@ -527,7 +529,7 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     }
     case "update_theme": {
       const before = changeset.working.theme;
-      const after = safeTheme(mergePatch(before, themePatchSchema.parse(args.patch)));
+      const after = safeTheme(mergePatch(before, parseWithNumbers(themePatchSchema, args.patch)));
       changeset.working.theme = after;
       return pushChange(changeset, "theme", "Update site theme", before, after);
     }
@@ -579,7 +581,7 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       const data = puckDataSchema.parse(page.draft_data);
       const item = findNestedItem(data, String(args.sectionId));
       const before = item.props.design ?? {};
-      const patch = designPatchSchema.parse(record.parse(args.design));
+      const patch = parseWithNumbers(designPatchSchema, record.parse(args.design));
       const warnings = new Set<string>();
       const currentTheme = themeSchema.parse(changeset.working.theme);
       const after = editDesign(isRecord(before) ? before as BlockDesign : {}, patch, currentTheme, warnings);

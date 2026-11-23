@@ -32,10 +32,20 @@ exact local test URL above and never reads `.env.local` or production keys.
 `supabase/tests/ai_agent_apply.sql` covers the AI agent's transactional apply
 and site-wide undo, including access control. `supabase/tests/ai_agent_limits.sql`
 covers the per-account agent limit, credit charging and who can read
-conversations and their cost. Every other file in
+conversations and their cost. Every other `.sql` file in
 `supabase/tests/` is a test that passes against the latest schema, except
 `local_shims.sql`, which `reset` applies itself to stand in for Supabase's
 built-in schemas.
+
+`supabase/tests/ai_agent_apply_editor.test.ts` is a Vitest test over the same
+database. It stages theme, header and section changes with the agent's tools,
+applies them, reads the drafts back the way the editor opens a page, then
+undoes them and checks the originals are back. It is skipped unless
+`TEST_DATABASE_URL` is set, and rolls back everything it writes:
+
+```sh
+TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm test
+```
 
 ## Platform appearance
 
@@ -309,6 +319,20 @@ the current drafts first: a change to content that was edited since the run,
 or that depends on a change you undid, is skipped and listed. Menu labels and
 visibility of published pages are live settings and are never changed by the
 agent. Nothing is published.
+
+Drafts have no tables of their own. Apply and undo write the columns the editor
+opens and Publish reads: `pages.draft_data` (which includes each page's copy of
+the shared footer), `sites.draft_theme` and `sites.draft_header`; every page
+write also changes `pages.draft_version`. `EDITOR_DRAFT_SOURCE` in
+[lib/editor/initial-data.ts](./lib/editor/initial-data.ts) names these columns,
+and both opening a page and refreshing it after an apply or undo read through
+`editorDraft` there. After either, the open page, theme and header are replaced
+in the editor as one undoable step without a reload, the unpublished-changes
+count is refreshed, and a confirmation such as "16 changes applied" is shown.
+
+The agent's tools read numbers written as text, such as `"8"` or `"8px"` for a
+radius, spacing or height, as numbers before validating them. Percentages,
+other units and words such as `"large"` are still refused.
 
 **Undo these changes**, on the applied card and under **History → AI changes
 across the site**, reverses one apply across the whole site in one transaction.

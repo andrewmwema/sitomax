@@ -7,7 +7,7 @@ import { useGetPuck } from "@puckeditor/core";
 import { listPageVersions } from "@/app/editor/[pageId]/actions";
 import { listAgentChanges } from "@/app/editor/[pageId]/agent-actions";
 import type { AppliedAgentChanges } from "@/lib/ai/agent-apply-types";
-import { SkippedItems, undoAgentApply, undoSummary } from "./agent-applied-card";
+import { SkippedItems, applyToast, undoAgentApply, undoSummary } from "./agent-applied-card";
 import { useOptionalAiAgentPanel } from "./ai-agent-context";
 import { Command, History } from "lucide-react";
 import { useSectionLibrary } from "./section-library";
@@ -92,6 +92,7 @@ export function VersionHistory({ persistence, siteId }: { persistence: Persisten
       if (result.status === "error") setAiError(result.message);
       else if (result.status === "success") {
         setAiChanges((previous) => previous.map((entry) => entry.id === change.id ? result.applied : entry));
+        agent.notify(applyToast(result.applied));
         if (result.left) {
           const home = pages.find((page) => page.slug === "" && page.id !== pageId);
           router.push(home ? `/editor/${home.id}` : "/dashboard");

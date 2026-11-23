@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import { editorInitialData } from "@/lib/editor/initial-data";
+import { EDITOR_DRAFT_SOURCE, editorDraft } from "@/lib/editor/initial-data";
 import { headerSchema } from "@/lib/header";
 import { sanitizePuckData } from "@/lib/richtext";
 import { themeSchema } from "@/lib/theme/schema";
@@ -57,19 +57,17 @@ async function findApply(supabase: Supabase, siteId: string, applyId: string) {
 /** The open page as stored now, for the editor to adopt without a reload. */
 async function loadEditorState(supabase: Supabase, pageId: string): Promise<AgentEditorState> {
   const { data, error } = await supabase.from("pages")
-    .select("seo, draft_data, draft_version, site:sites(theme, draft_theme, draft_header)").eq("id", pageId).maybeSingle();
+    .select(`${EDITOR_DRAFT_SOURCE.page}, site:sites(${EDITOR_DRAFT_SOURCE.site})`).eq("id", pageId).maybeSingle();
   if (error) throw new Error("Could not load the updated page.", { cause: error });
   if (!data) return { deleted: true };
   const site = z.object({ theme: z.unknown(), draft_theme: z.unknown(), draft_header: z.unknown() }).parse(data.site);
-  return {
-    data: editorInitialData(data.draft_data, data.seo),
-    version: z.uuid().parse(data.draft_version),
-    theme: themeSchema.parse(site.draft_theme ?? site.theme ?? {}),
-    draftHeader: site.draft_header ?? null,
-  };
+  // The same read as opening the editor, so what is adopted is what a reload would show.
+  const draft = editorDraft({ ...data, draft_version: z.uuid().parse(data.draft_version) }, site);
+  return { ...draft, theme: themeSchema.parse(draft.theme ?? {}) };
 }
 
-function validatedItems(items: ApplyItem[]): ApplyItem[] {
+/** Checks planned writes against the schemas the editor reads them with. */
+export function validateApplyItems(items: ApplyItem[]): ApplyItem[] {
   return items.map((item) => {
     if (item.kind === "theme") return { ...item, after: themeSchema.parse(item.after) };
     if (item.kind === "header") return { ...item, after: headerSchema.parse(item.after) };
@@ -118,7 +116,7 @@ export async function applyAgentRun(raw: unknown): Promise<AgentApplyResult> {
       posts: Object.fromEntries(postFactsSchema.parse(rows.posts).map((post) => [post.id, { updatedAt: post.updated_at }])),
     };
     plan = planAgentApply(snapshot, meta, review.changes, new Set(undone));
-    plan.items = validatedItems(plan.items);
+    plan.items = validateApplyItems(plan.items);
   } catch (cause) {
     console.error("Could not prepare AI changes", { type: cause instanceof Error ? cause.name : "Unknown" });
     return { status: "error", message: "Could not prepare these AI changes. Nothing was changed." };
