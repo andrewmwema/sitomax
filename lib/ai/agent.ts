@@ -22,6 +22,7 @@ import { puckConfig } from "@/lib/puck/config";
 import { ELEMENT_TYPES, ROW_LAYOUTS } from "@/lib/layout/structure";
 import { designPatchSchema, editDesign } from "./edit-design";
 import { agentToolSchemas, agentTools } from "./agent-tools";
+import { reviewPatches, type ReviewPatch } from "./agent-review";
 
 const MAX_TOOL_CALLS = 40;
 const MAX_CHANGES = 60;
@@ -133,7 +134,7 @@ type SiteSnapshot = {
   posts: Post[];
   blogSettings: Record<string, unknown>;
 };
-type Change = { id: string; kind: string; label: string; pageId?: string; before: unknown; after: unknown };
+type Change = { id: string; kind: string; label: string; pageId?: string; before: unknown; after: unknown; patches?: ReviewPatch[] };
 type Changeset = {
   version: 1;
   siteId: string;
@@ -415,7 +416,23 @@ function validateStoredProps(type: string, before: Record<string, unknown>, patc
     ...(before.design === undefined ? {} : { design: before.design }),
   };
 }
-function makeToolResult(name: string, input: unknown, changeset: Changeset, context: {
+async function makeToolResult(name: string, input: unknown, changeset: Changeset, context: {
+  supabase: Supabase; accountId: string; siteId: string;
+}): Promise<unknown> {
+  const before = WRITE_TOOLS.has(name) ? clone(changeset.working) : null;
+  const count = changeset.changes.length;
+  const result = await executeTool(name, input, changeset, context);
+  if (before) {
+    const toolResult = clone(result);
+    const added = changeset.changes.slice(count);
+    if (added.length !== 1) throw new Error("The agent could not prepare this change for review.");
+    added[0].patches = reviewPatches(before, changeset.working);
+    return toolResult;
+  }
+  return result;
+}
+
+function executeTool(name: string, input: unknown, changeset: Changeset, context: {
   supabase: Supabase; accountId: string; siteId: string;
 }): Promise<unknown> | unknown {
   if (!toolsByName.has(name)) throw new Error("This tool is unavailable.");
