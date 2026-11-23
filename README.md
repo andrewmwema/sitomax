@@ -10,6 +10,28 @@ Use Node.js 22.x locally and in Vercel. The npm override pins jsdom to 26.1.0
 so the server-side rich-text sanitizer can load without requiring the ESM-only
 `@exodus/bytes` package.
 
+## Local database tests
+
+On Debian with `apt-get`, `dpkg-deb`, and `openssl`, the test harness downloads
+PostgreSQL 17 and pg_cron into the ignored `.test-db/` directory without
+installing system packages. It creates a disposable cluster with a generated
+local password and binds only to `127.0.0.1:55439`. Do not put real data in it.
+The Supabase auth and storage shims are minimal test substitutes, not a full
+Supabase installation.
+
+```sh
+export TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test
+bash scripts/test-db.sh reset  # drops only this local test database and applies every migration
+PGPASSFILE="$PWD/.test-db/pgpass" .test-db/install/usr/lib/postgresql/17/bin/psql \
+  "$TEST_DATABASE_URL" -w -X -v ON_ERROR_STOP=1 -f supabase/tests/blog_scheduled_publishing.sql
+bash scripts/test-db.sh stop
+```
+
+`start` starts the cluster without resetting it. The script accepts only the
+exact local test URL above and never reads `.env.local` or production keys.
+Some older SQL tests target a particular migration version and may not work
+unchanged against the latest schema.
+
 ## Platform appearance
 
 The dashboard, authentication screens and editor share the warm neutral,
