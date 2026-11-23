@@ -90,7 +90,7 @@ describe("AI agent request", () => {
     expect(JSON.stringify(events)).not.toMatch(/costUsd|tokenUsage|inputTokens/);
     expect(lastSave()).toMatchObject({ status: "completed", changeset: { quality: { fixed: [] } }, finished_at: expect.any(String) });
     expect(mocks.usage.recordUsage).toHaveBeenCalledWith({ id: reservation, model: expect.any(String) },
-      expect.objectContaining({ inputTokens: 2000, outputTokens: 200 }));
+      expect.objectContaining({ inputTokens: 2000, outputTokens: 200 }), expect.closeTo(0.006, 6));
     expect(mocks.usage.releaseFailedRequest).not.toHaveBeenCalled();
   });
 

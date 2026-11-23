@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { SITE_GENERATION_MODEL, SMALL_EDIT_MODEL } from "./models";
 
-type Rates = {
+export type Rates = {
   input: number;
   output: number;
   cacheRead?: number;
@@ -34,12 +34,18 @@ export function assertPricedModel(model: string) {
   if (!Object.hasOwn(AI_PRICING, model)) throw new Error(`No AI pricing configured for model: ${model}`);
 }
 
-export function calculateCostUsd(model: string, raw: TokenUsage): number {
+/** The prices one request is billed at. Haiku's long-context prices apply to the whole request. */
+export function ratesFor(model: string, usage: TokenUsage): Rates {
   assertPricedModel(model);
-  const usage = tokenUsageSchema.parse(raw);
   const config = AI_PRICING[model];
   const promptTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheWrite5mTokens + usage.cacheWrite1hTokens;
-  const rates = config.longContext && promptTokens > config.longContext.above ? config.longContext.rates : config.standard;
+  return config.longContext && promptTokens > config.longContext.above ? config.longContext.rates : config.standard;
+}
+
+/** The cost of one request. A run of several requests is the sum of each, never the cost of their summed tokens. */
+export function calculateCostUsd(model: string, raw: TokenUsage): number {
+  const usage = tokenUsageSchema.parse(raw);
+  const rates = ratesFor(model, usage);
   const terms: [number, number | undefined, string][] = [
     [usage.inputTokens, rates.input, "input"],
     [usage.outputTokens, rates.output, "output"],

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { formatAiCost } from "./cost-format";
 import { tokenUsageSchema } from "./pricing";
+import { agentCostSchema } from "./agent-cost";
 
 /**
  * What one agent run cost. Clients see credits; token counts and the provider
@@ -12,6 +13,8 @@ export const agentRunUsageSchema = z.object({
   credits: z.number().int().min(0).max(3),
   tokens: tokenUsageSchema.optional(),
   costUsd: z.number().nonnegative().optional(),
+  /** Where the tokens and money went, by part of the prompt and by model. */
+  breakdown: agentCostSchema.optional(),
 });
 export type AgentRunUsage = z.infer<typeof agentRunUsageSchema>;
 

@@ -10,6 +10,7 @@ import { unfinishedStepSchema, type UnfinishedStep } from "@/lib/ai/agent-plan";
 import { applyAgentStep, settleAgentSteps, type AgentStep, type AgentStepUpdate } from "@/lib/ai/agent-steps";
 import { agentReviewPayloadSchema, type AgentReviewPayload } from "@/lib/ai/agent-review";
 import { agentRunUsageSchema, describeAgentUsage, type AgentRunUsage } from "@/lib/ai/agent-usage";
+import { describeAgentCost } from "@/lib/ai/agent-cost";
 import { useInteractions } from "./interaction-context";
 import { ROOT_ZONE } from "@/lib/editor/tree";
 import { AgentReviewCanvas, AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
@@ -769,6 +770,10 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
         <AgentStepList steps={steps} streaming={streaming} />
       </details> : null}
       {usage && !streaming ? <p className="text-[10px] text-zinc-500">This request: {describeAgentUsage(usage)}</p> : null}
+      {usage?.breakdown && !streaming ? <details className="text-[10px] text-zinc-500">
+        <summary className="cursor-pointer">Cost details</summary>
+        <ul className="mt-1 space-y-0.5">{describeAgentCost(usage.breakdown).map((line) => <li key={line}>{line}</li>)}</ul>
+      </details> : null}
       {reviewSession?.threadId === threadId ? <AgentReviewCard review={reviewSession.review}
         onChange={(review) => setReviewSession({ ...reviewSession, review })} currentPageId={pageId}
         onApply={() => void applyChanges()} applying={working === "apply"}

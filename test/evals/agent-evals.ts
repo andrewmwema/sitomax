@@ -6,8 +6,8 @@ import {
 import { planAgentApply, type ApplyMeta } from "@/lib/ai/agent-apply-plan";
 import { unfinishedPlanSteps } from "@/lib/ai/agent-plan";
 import { createAgentReviewPayload, jsonEqual, previewAgentReview } from "@/lib/ai/agent-review";
-import { SITE_GENERATION_MODEL } from "@/lib/ai/models";
-import { calculateCostUsd, type TokenUsage } from "@/lib/ai/pricing";
+import { emptyAgentCost, type AgentCost } from "@/lib/ai/agent-cost";
+import type { TokenUsage } from "@/lib/ai/pricing";
 import { headerSchema } from "@/lib/header";
 import { sanitizePuckData } from "@/lib/richtext";
 import { contrastRatio } from "@/lib/theme/presets";
@@ -15,15 +15,26 @@ import { themeSchema } from "@/lib/theme/schema";
 import { fixtureBusiness, fixtureChangeset, fixtureIds } from "@/test/fixtures/agent-site";
 
 type Item = { type: string; props: Record<string, unknown> };
+/**
+ * What a request works on, which is what its cost is judged against: `section`
+ * edits what is already in one or two sections of a page, `page` adds to or
+ * rewrites one page, `site` works across pages or on what every page shares.
+ */
+export type EvalKind = "section" | "page" | "site" | "blog";
 export type EvalCase = {
   id: string;
+  kind: EvalKind;
   request: string;
   /** Whether the request was carried out, beyond the rules every run must keep. Returns a problem or null. */
   verify: (changeset: AgentChangeset) => string | null;
 };
 export type EvalResult = {
-  id: string; request: string; passed: boolean; failures: string[]; notes: string[];
+  id: string; kind: EvalKind; request: string; passed: boolean; failures: string[]; notes: string[];
   terminal: string; steps: number; toolErrors: number; changes: number; tokens: TokenUsage; costUsd: number;
+  /** Where the money went: by part of the prompt, by model, and how much came from the cache. */
+  cost: AgentCost;
+  /** Each model request in order, to see what the cache did. */
+  calls: { model: string; usage: TokenUsage; costUsd: number }[];
   /** Tool calls refused on their first attempt. A repeat refusal of the same tool, before it works, is the same failure. */
   firstAttemptFailures: number;
 };
@@ -171,29 +182,29 @@ const added = (changeset: AgentChangeset, pageId: string, type: string) => {
 
 /** Requests of the kinds the brief names, each with a check that it was carried out. */
 export const EVAL_CASES: EvalCase[] = [
-  { id: "premium", request: "Make the site feel more premium.",
+  { id: "premium", kind: "site", request: "Make the site feel more premium.",
     verify: (changeset) => changeset.changes.length >= 2 ? null : "Expected several coordinated changes." },
-  { id: "about", request: "Write a fuller About page.",
+  { id: "about", kind: "page", request: "Write a fuller About page.",
     verify: (changeset) => texts(content(changeset.working, fixtureIds.about)).join(" ").length >
       texts(content(changeset.baseline, fixtureIds.about)).join(" ").length + 300 ? null : "The About page did not get fuller." },
-  { id: "brand-colors", request: "Use our brand colors: navy #0b2545 as the main color and gold #c9a227 as the second color.",
+  { id: "brand-colors", kind: "site", request: "Use our brand colors: navy #0b2545 as the main color and gold #c9a227 as the second color.",
     verify: (changeset) => {
       const colors = themeSchema.parse(changeset.working.theme).colors ?? {};
       return colors.primary?.toLowerCase() === "#0b2545" && colors.secondary?.toLowerCase() === "#c9a227" && colors.background
         ? null : "The theme does not use the requested colors, or lost its other colors.";
     } },
-  { id: "seo", request: "Improve SEO on every page.",
+  { id: "seo", kind: "site", request: "Improve SEO on every page.",
     verify: (changeset) => changeset.working.pages.every((page) => isRecord(page.seo) && page.seo.title && page.seo.description)
       ? null : "Not every page has an SEO title and description." },
-  { id: "faq", request: "Add an FAQ to Pricing.",
+  { id: "faq", kind: "page", request: "Add an FAQ to Pricing.",
     verify: (changeset) => added(changeset, fixtureIds.pricing, "Faq") || added(changeset, fixtureIds.pricing, "Section")
       ? null : "No FAQ section was added to Pricing." },
-  { id: "reviews", request: "Add a customer reviews section to the home page. We have not collected any reviews yet.",
+  { id: "reviews", kind: "page", request: "Add a customer reviews section to the home page. We have not collected any reviews yet.",
     verify: (changeset) => added(changeset, fixtureIds.home, "Testimonials") || added(changeset, fixtureIds.home, "Section")
       ? null : "No reviews section was added to the home page." },
-  { id: "careers", request: "Create a Careers page and add it to the menu. We are hiring a plumber and an apprentice.",
+  { id: "careers", kind: "page", request: "Create a Careers page and add it to the menu. We are hiring a plumber and an apprentice.",
     verify: (changeset) => changeset.working.pages.some((page) => page.slug === "careers" && !page.hide_from_menu) ? null : "No Careers page in the menu." },
-  { id: "hero-button", request: `Change the hero button on the home page to say "Book a visit" and link it to the contact page.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
+  { id: "hero-button", kind: "section", request: `Change the hero button on the home page to say "Book a visit" and link it to the contact page.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
     verify: (changeset) => {
       const props = content(changeset.working, fixtureIds.home).find((item) => item.props.id === "home-hero")?.props ?? {};
       const link = props.buttonLink;
@@ -201,7 +212,24 @@ export const EVAL_CASES: EvalCase[] = [
       return props.buttonText === "Book a visit" && toContact && changedPages(changeset).length === 1 ? null
         : "The hero button was not changed as asked, or other pages were touched.";
     } },
-  { id: "prices", request: "On the home page, add a short section about boiler servicing with our phone number and what it costs.",
+  { id: "rewrite", kind: "section", request: `Rewrite the hero heading and the line under it to be warmer and more inviting. Keep them short.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
+    verify: (changeset) => {
+      const [before, after] = [changeset.baseline, changeset.working].map((snapshot) => content(snapshot, fixtureIds.home).find((item) => item.props.id === "home-hero")?.props ?? {});
+      return after.heading !== before.heading && after.subheading !== before.subheading && String(after.heading).length <= 80 && changedPages(changeset).length === 1
+        ? null : "The hero heading and subheading were not both rewritten, or other pages were touched.";
+    } },
+  { id: "alt-text", kind: "section", request: `Write alt text for the image in this section.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
+    verify: (changeset) => {
+      const props = content(changeset.working, fixtureIds.home).find((item) => item.props.id === "home-hero")?.props ?? {};
+      return typeof props.backgroundImageAlt === "string" && props.backgroundImageAlt.trim().length >= 10 && changedPages(changeset).length === 1
+        ? null : "The hero image did not get alt text, or other pages were touched.";
+    } },
+  { id: "page-seo", kind: "section", request: "Write an SEO title and description for the Pricing page.",
+    verify: (changeset) => {
+      const seo = changeset.working.pages.find((page) => page.id === fixtureIds.pricing)?.seo;
+      return isRecord(seo) && seo.title && seo.description && changedPages(changeset).length === 1 ? null : "The Pricing page did not get an SEO title and description, or other pages were touched.";
+    } },
+  { id: "prices", kind: "page", request: "On the home page, add a short section about boiler servicing with our phone number and what it costs.",
     verify: (changeset) => {
       const before = new Set(texts(content(changeset.baseline, fixtureIds.home)));
       const fresh = texts(content(changeset.working, fixtureIds.home)).filter((text) => !before.has(text)).join(" ");
@@ -209,21 +237,21 @@ export const EVAL_CASES: EvalCase[] = [
       return digits(fresh).includes(digits(fixtureBusiness.phone).slice(-7)) && /\[[^[\]]+\]/.test(fresh) ? null
         : "The new section must show the phone number on file and a placeholder for the unknown price.";
     } },
-  { id: "blog", request: "Draft a blog post about preventing frozen pipes in winter.",
+  { id: "blog", kind: "blog", request: "Draft a blog post about preventing frozen pipes in winter.",
     verify: (changeset) => changeset.working.posts.length === changeset.baseline.posts.length + 1 ? null : "No blog post was drafted." },
   // Design-heavy requests: these are where tool input most often needs a second attempt.
-  { id: "footer-style", request: 'Give the footer a dark navy background (#0b2545) with white text, and change its tagline to "Here whenever you need us."',
+  { id: "footer-style", kind: "site", request: 'Give the footer a dark navy background (#0b2545) with white text, and change its tagline to "Here whenever you need us."',
     verify: (changeset) => changeset.working.pages.every((page) => {
       const footer = content(changeset.working, page.id).find((item) => item.type === "Footer");
       return footer?.props.tagline === "Here whenever you need us." && JSON.stringify(footer.props.design).toLowerCase().includes("#0b2545");
     }) ? null : "Not every page's footer has the new tagline and the navy background." },
-  { id: "icon-row", request: "On the About page, add a section with three icons in a row for our promises: on time, tidy and honest, each with a short line of text. Put a thin divider and some space above it.",
+  { id: "icon-row", kind: "page", request: "On the About page, add a section with three icons in a row for our promises: on time, tidy and honest, each with a short line of text. Put a thin divider and some space above it.",
     verify: (changeset) => {
       const before = new Set(content(changeset.baseline, fixtureIds.about).map((item) => item.props.id));
       const fresh = JSON.stringify(content(changeset.working, fixtureIds.about).filter((item) => !before.has(item.props.id)));
       return /"type":"Icon(?:List)?"|"icon":/.test(fresh) && /tidy/i.test(fresh) ? null : "No section with the three promises and their icons was added to About.";
     } },
-  { id: "section-style", request: "On the home page, give the hero more padding at the top and bottom and center its text. Give the \"Why Harbour Plumbing\" section a soft shadow, rounded corners and a light grey background.",
+  { id: "section-style", kind: "section", request: "On the home page, give the hero more padding at the top and bottom and center its text. Give the \"Why Harbour Plumbing\" section a soft shadow, rounded corners and a light grey background.",
     verify: (changeset) => {
       const design = (snapshot: AgentChangeset["working"], id: string) =>
         JSON.stringify(content(snapshot, fixtureIds.home).find((item) => item.props.id === id)?.props.design ?? {});
@@ -259,13 +287,14 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
   const events: AgentEvent[] = [];
   const emit = (event: AgentEvent) => { events.push(event); options.onEvent?.(event); };
   const failures: string[] = [];
-  const spent = () => calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage);
+  const calls: EvalResult["calls"] = [];
+  const spent = () => state.cost?.costUsd ?? 0;
   let terminal = "failed";
   let continued = false;
   try {
     for (let round = 0; round < 8; round++) {
       terminal = await runAgentLoop({
-        changeset, state, context, emit, threadId: "eval", runId: testCase.id,
+        changeset, state, context, emit, threadId: "eval", runId: testCase.id, onModelCall: (call) => calls.push(call),
         model: (params, call) => {
           if (options.maxCostUsd !== undefined && spent() >= options.maxCostUsd) throw new CostLimitReached();
           return model(params, call);
@@ -296,11 +325,11 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
     if (unmet) failures.push(unmet);
   }
   return {
-    id: testCase.id, request: testCase.request.split("\n")[0], passed: failures.length === 0, failures,
+    id: testCase.id, kind: testCase.kind, request: testCase.request.split("\n")[0], passed: failures.length === 0, failures,
     notes: [...quality.fixed.map((item) => `Fixed: ${item}`), ...quality.notes],
     terminal, steps: events.filter((event) => event.type === "step").length,
     toolErrors: events.filter((event) => event.type === "tool_error").length, firstAttemptFailures: firstAttemptFailures(events),
-    changes: changeset.changes.length, tokens: state.tokenUsage, costUsd: calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage),
+    changes: changeset.changes.length, tokens: state.tokenUsage, costUsd: spent(), cost: state.cost ?? emptyAgentCost(), calls,
   };
 }
 

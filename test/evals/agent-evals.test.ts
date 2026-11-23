@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { fixtureIds } from "@/test/fixtures/agent-site";
 import { DRY_RUN_SCRIPT, EVAL_CASES, runEval, scriptedModel, type EvalCase } from "./agent-evals";
 
-const anything: EvalCase = { id: "harness", request: "Anything", verify: () => null };
+const anything: EvalCase = { id: "harness", kind: "section", request: "Anything", verify: () => null };
 const hero = (props: Record<string, unknown>): [string, unknown] =>
   ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props }];
 
 describe("AI agent evals harness", () => {
-  it("has thirteen requests, and passes a run that keeps the rules", async () => {
-    expect(EVAL_CASES).toHaveLength(13);
-    expect(new Set(EVAL_CASES.map((entry) => entry.id)).size).toBe(13);
+  it("has sixteen requests, and passes a run that keeps the rules", async () => {
+    expect(EVAL_CASES).toHaveLength(16);
+    expect(new Set(EVAL_CASES.map((entry) => entry.id)).size).toBe(16);
     const result = await runEval(anything, scriptedModel(DRY_RUN_SCRIPT));
     expect(result).toMatchObject({ passed: true, failures: [], terminal: "completed", steps: 2, toolErrors: 0, changes: 1 });
     expect(result.notes).toEqual(["Home: 1 placeholder to fill in before publishing: [service area]."]);

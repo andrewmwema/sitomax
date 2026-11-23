@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { AI_ACTIONS, modelForAction, type AiAction, type AiModel } from "./models";
 import { assertPricedModel, calculateCostUsd, tokenUsageSchema, type TokenUsage } from "./pricing";
 import { agentRunUsageSchema, type AgentRunUsage } from "./agent-usage";
+import { agentCostSchema } from "./agent-cost";
 import { AiUserError } from "./errors";
 
 export type AiReservation = { id: string; model: AiModel };
@@ -135,10 +136,14 @@ export async function finishSiteGeneration(id: string, success: boolean, siteId?
   if (error) throw new Error(`Generation ${id} needs usage reconciliation. Contact your agency before retrying.`, { cause: error });
 }
 
-export async function recordUsage(reservation: AiReservation, rawUsage: TokenUsage): Promise<void> {
+/**
+ * `costUsd` is given by callers that priced each of several model requests
+ * themselves, such as an agent run that used more than one model.
+ */
+export async function recordUsage(reservation: AiReservation, rawUsage: TokenUsage, costUsd?: number): Promise<void> {
   const id = z.uuid().parse(reservation.id);
   const usage = tokenUsageSchema.parse(rawUsage);
-  const cost = calculateCostUsd(reservation.model, usage);
+  const cost = costUsd === undefined ? calculateCostUsd(reservation.model, usage) : z.number().nonnegative().parse(costUsd);
   const { error } = await createAdminClient().rpc("finish_ai_request", {
     p_request_id: id, p_failed: false,
     p_input_tokens: usage.inputTokens, p_output_tokens: usage.outputTokens,
@@ -208,24 +213,24 @@ export async function getAiAgentRunUsage(supabase: AgentSupabase, threadId: stri
   await assertAgentRunAccess(supabase, threadId, runId);
   const [{ data, error }, agency] = await Promise.all([
     createAdminClient().from("ai_agent_runs")
-      .select("usage, cost_usd, request:ai_requests(credits_used, is_unlimited, status)")
+      .select("usage, cost_usd, breakdown:run_state->cost, request:ai_requests(credits_used, is_unlimited, status)")
       .eq("id", runId).eq("thread_id", threadId).maybeSingle(),
     supabase.rpc("is_super_admin"),
   ]);
   const run = z.object({
-    usage: tokenUsageSchema, cost_usd: z.coerce.number().nonnegative(),
+    usage: tokenUsageSchema, cost_usd: z.coerce.number().nonnegative(), breakdown: agentCostSchema.nullish().catch(null),
     request: z.object({ credits_used: z.number().int(), is_unlimited: z.boolean(), status: z.string() }).nullable(),
   }).safeParse(data);
   if (error || !run.success) {
     console.error("Could not load AI run usage", { code: error?.code ?? "ValidationError" });
     return null;
   }
-  const { request, usage, cost_usd } = run.data;
+  const { request, usage, cost_usd, breakdown } = run.data;
   const charge = !request || request.status === "failed" ? "none" : request.is_unlimited ? "unlimited"
     : request.credits_used > 0 ? "credits" : "included";
   return agentRunUsageSchema.parse({
     charge, credits: charge === "credits" ? request!.credits_used : 0,
-    ...(!agency.error && agency.data === true ? { tokens: usage, costUsd: cost_usd } : {}),
+    ...(!agency.error && agency.data === true ? { tokens: usage, costUsd: cost_usd, ...(breakdown ? { breakdown } : {}) } : {}),
   });
 }
 
