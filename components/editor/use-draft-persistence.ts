@@ -29,7 +29,10 @@ export function useDraftPersistence(
 ) {
   const getPuck = useGetPuck();
   const data = usePuck((state) => state.appState.data);
-  const [saved, setSaved] = useState(() => JSON.stringify(data));
+  const [saved, setSavedState] = useState(() => JSON.stringify(data));
+  // Mirrors `saved` so callbacks that outlive a render compare against the latest save.
+  const savedRef = useRef(saved);
+  const setSaved = useCallback((value: string) => { savedRef.current = value; setSavedState(value); }, []);
   const [busy, setBusy] = useState<"save" | "publish" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadRequired, setReloadRequired] = useState(false);
@@ -98,7 +101,7 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved, rejectSave]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved, rejectSave, setSaved]);
 
   const applyAi = useCallback(async (base: Data, next: Data, nextTheme?: SiteTheme, capture = true): Promise<boolean> => {
     while (active.current) await active.current;
@@ -135,7 +138,7 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved, rejectSave]);
+  }, [getPuck, pageId, theme, forSaving, markHeaderSaved, onDraftSaved, rejectSave, setSaved]);
 
   const buildEmptyPage = useCallback(async (): Promise<boolean> => {
     if (active.current || blocked.current) return false;
@@ -178,7 +181,7 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, save, onDraftSaved, rejectSave]);
+  }, [getPuck, pageId, save, onDraftSaved, rejectSave, setSaved]);
 
   const restore = useCallback(async (versionId: string): Promise<boolean> => {
     while (active.current) await active.current;
@@ -212,7 +215,32 @@ export function useDraftPersistence(
     })();
     active.current = operation;
     return operation;
-  }, [getPuck, pageId, theme, onDraftSaved, rejectSave]);
+  }, [getPuck, pageId, theme, onDraftSaved, rejectSave, setSaved]);
+
+  /**
+   * Replaces the open draft with one written on the server (AI apply or undo)
+   * as a single undoable step. Returns false if local edits would be lost.
+   */
+  const adopt = useCallback(async (next: { data: Data; version: string; theme: SiteTheme; draftHeader: unknown }): Promise<boolean> => {
+    while (active.current) await active.current;
+    if (blocked.current) return false;
+    const current = getPuck().appState.data;
+    if (JSON.stringify(current) !== savedRef.current) {
+      return rejectSave({ message: "Your drafts were updated. Reload to continue editing.", conflict: true });
+    }
+    const themed = themeOverride(current) !== undefined || JSON.stringify(next.theme) !== JSON.stringify(theme);
+    const snapshot = themed ? withEditorTheme(next.data, next.theme) : next.data;
+    if (themed) lastOverride.current = JSON.stringify(next.theme);
+    savedTheme.current = next.theme;
+    savedHeader.current = next.draftHeader ?? null;
+    version.current = next.version;
+    getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } });
+    getPuck().dispatch({ type: "setData", data: snapshot, recordHistory: true });
+    setSaved(JSON.stringify(snapshot));
+    setError(null);
+    onDraftSaved?.(snapshot, "save");
+    return true;
+  }, [getPuck, theme, onDraftSaved, rejectSave, setSaved]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -228,5 +256,5 @@ export function useDraftPersistence(
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  return { busy, dirty, error, reloadRequired, save, restore, applyAi, buildEmptyPage, buildNotes };
+  return { busy, dirty, error, reloadRequired, save, restore, applyAi, adopt, buildEmptyPage, buildNotes };
 }

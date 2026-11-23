@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   header: false,
   plugins: [] as string[],
   publishState: vi.fn(),
+  adopt: vi.fn(),
+  applyAgent: vi.fn(),
+  undoAgent: vi.fn(),
 }));
 
 function puckState() {
@@ -29,6 +32,8 @@ function puckState() {
     appState: { data: mocks.data, ui: { leftSideBarVisible: true, rightSideBarVisible: false, leftSideBarWidth: 280, rightSideBarWidth: 300 } },
     history: { hasPast: true, hasFuture: false, back: mocks.back, forward: mocks.forward },
     dispatch: mocks.dispatch,
+    selectedItem: null,
+    getPermissions: () => ({ edit: true }),
   };
 }
 
@@ -79,14 +84,19 @@ vi.mock("@/app/editor/[pageId]/actions", () => ({
 }));
 vi.mock("./use-draft-persistence", () => ({
   useDraftPersistence: () => ({ dirty: mocks.dirty, busy: mocks.busy, error: null, save: mocks.save,
-    buildEmptyPage: mocks.build, buildNotes: [] }),
+    adopt: mocks.adopt, buildEmptyPage: mocks.build, buildNotes: [] }),
 }));
 vi.mock("./seo-panel", () => ({
   SeoPanel: ({ onSelectPage }: { onSelectPage: (id: string) => void }) =>
     <button onClick={() => onSelectPage("about-page")}>Select About</button>,
 }));
 vi.mock("./editor-ai", () => ({ EditorAiProvider: ({ children }: { children: ReactNode }) => children }));
-vi.mock("@/app/editor/[pageId]/ai-actions", () => ({ suggestEditorEdits: vi.fn() }));
+vi.mock("@/app/editor/[pageId]/ai-actions", () => ({ editorAi: vi.fn() }));
+vi.mock("@/app/editor/[pageId]/agent-actions", () => ({
+  applyAgentChanges: (...args: unknown[]) => mocks.applyAgent(...args),
+  undoAgentChanges: (...args: unknown[]) => mocks.undoAgent(...args),
+  listAgentChanges: vi.fn().mockResolvedValue([]),
+}));
 vi.mock("./section-library", () => ({
   ROOT_ZONE: "root:default-zone",
   SectionLibraryContext: { Provider: ({ children }: { children: ReactNode }) => children },
@@ -265,6 +275,85 @@ describe("editor navigation", () => {
       await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Green")!.click());
       await vi.waitFor(() => expect(container.textContent).toContain("I'll use green."));
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(3);
+      await act(async () => root.unmount());
+    });
+
+    it("applies kept changes to drafts, then undoes them site-wide and links the skipped items", async () => {
+      mocks.header = true;
+      mocks.dirty = true;
+      mocks.adopt.mockResolvedValue(true);
+      vi.stubGlobal("confirm", () => true);
+      const thread = { id: "11111111-1111-4111-8111-111111111111", title: "Make the site premium", updated_at: "2026-01-01T00:00:00Z" };
+      const runId = "22222222-2222-4222-8222-222222222222";
+      const aboutId = "33333333-3333-4333-8333-333333333333";
+      const value = (style: string) => ({ present: true, value: style });
+      const review = {
+        changes: ["theme", "about"].map((id) => ({ id, kind: "theme", label: `Update ${id}`,
+          patches: [{ path: ["theme", id], before: value("classic"), after: value("modern") }] })),
+        baseline: { theme: { theme: "classic", about: "classic" }, header: {}, footer: {}, pages: [] },
+        working: { theme: { theme: "modern", about: "modern" }, header: {}, footer: {}, pages: [] },
+      };
+      const applied = {
+        id: "44444444-4444-4444-8444-444444444444", run_id: runId, summary: thread.title, change_count: 1,
+        applied_by_name: "Olive Owner", applied_at: "2026-01-02T00:00:00Z",
+        undone_by_name: null, undone_at: null, undo_result: null, can_undo: true,
+      };
+      const editor = { data: { root: { props: { title: "Home" } }, content: [] }, version: "v2", theme: { style: "modern" }, draftHeader: null };
+      mocks.applyAgent.mockResolvedValue({ status: "success", applied, notes: [], editor,
+        dropped: [{ id: "about", label: "Update about", reason: "This content was edited after the AI prepared the change." }] });
+      mocks.undoAgent.mockResolvedValue({ status: "success", editor: null, applied: {
+        ...applied, can_undo: false, undone_by_name: "Eddie Editor", undone_at: "2026-01-03T00:00:00Z",
+        undo_result: { undone: 1, skipped: 1, undone_items: ["theme"], skipped_items: [
+          { key: `page:${aboutId}`, kind: "page", target_id: aboutId, label: "About", reason: "edited" }] },
+      } });
+      vi.stubGlobal("fetch", vi.fn(async (input: string) => ({ ok: true, json: async () => ({
+        threads: [thread], messages: [],
+        latestRun: input.includes("threadId") ? { id: runId, status: "completed", review, applied: null } : null,
+      }) })));
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      const button = (text: string) => [...container.querySelectorAll("button")].find((item) => item.textContent?.trim() === text)!;
+      await act(async () => root.render(<PageEditor {...props} />));
+      await act(async () => container.querySelector<HTMLButtonElement>(".editor-agent-toggle")!.click());
+      await act(async () => button(thread.title).click());
+      await act(async () => button("Undo").click());
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Keep Update about"]')!.click());
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Undo Update theme"]')!.click());
+      await act(async () => button("Apply 1 change to drafts").click());
+
+      expect(mocks.save).toHaveBeenCalledTimes(1);
+      expect(mocks.applyAgent).toHaveBeenCalledWith({ siteId: "site", threadId: thread.id, runId, pageId: "home-page", undone: ["theme"] });
+      expect(mocks.adopt).toHaveBeenCalledWith(expect.objectContaining({ version: "v2", theme: { style: "modern" }, draftHeader: null }));
+      expect(container.querySelector('[aria-label="Review AI changes"]')).toBeNull();
+      expect(container.textContent).toContain("AI: Make the site premium");
+      expect(container.textContent).toContain("Not applied (1)");
+
+      await act(async () => button("Undo these changes").click());
+      expect(mocks.undoAgent).toHaveBeenCalledWith({ siteId: "site", applyId: applied.id, pageId: "home-page" });
+      expect(container.textContent).toContain("Undone 1 change · Skipped 1 (edited since)");
+      expect(container.querySelector(`a[href="/editor/${aboutId}"]`)?.textContent).toBe("About");
+      expect(button("Undo these changes")).toBeUndefined();
+      await act(async () => root.unmount());
+    });
+
+    it("routes the old Ask AI entry points to the agent with a prefilled request and insert position", async () => {
+      mocks.header = true;
+      mocks.renderedPanel = "ai";
+      mocks.data = { content: [{ type: "Hero", props: { id: "hero" } }, { type: "Footer", props: { id: "footer" } }], root: { props: {} } };
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true, json: async () => ({ threads: [], messages: [], latestRun: null }),
+      }));
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      await act(async () => root.render(<PageEditor {...props} />));
+      expect([...container.querySelectorAll("button")].some((item) => item.textContent?.trim() === "Ask AI")).toBe(false);
+      await act(async () => [...container.querySelectorAll("button")]
+        .find((item) => item.textContent?.trim() === "Add a section with AI")!.click());
+      const prompt = container.querySelector<HTMLTextAreaElement>('[aria-label="Message the AI site agent"]')!;
+      expect(prompt.value).toBe("Add a section here: ");
+      expect(container.textContent).toContain("@Insert at position 2");
+      await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true })));
+      expect(container.querySelector('[aria-label="AI site agent"]')).toBeNull();
       await act(async () => root.unmount());
     });
 

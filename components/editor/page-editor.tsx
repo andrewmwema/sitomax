@@ -64,19 +64,19 @@ import { EditorInteractions, SelectionMenuButton } from "./editor-interactions";
 import { useDraftPersistence } from "./use-draft-persistence";
 import { EditorCommands, VersionHistory } from "./editor-commands";
 import { EditorAiProvider } from "./editor-ai";
-import { useEditorAi } from "./editor-ai-context";
-import { AiAgentPanelProvider, useAiAgentPanel } from "./ai-agent-panel";
+import { AgentCanvas, AiAgentPanelProvider } from "./ai-agent-panel";
+import { useAiAgentPanel, type AgentEditorBridge } from "./ai-agent-context";
 import { SeoPanel } from "@/components/editor/seo-panel";
 import type { SeoPageSummary } from "@/components/editor/seo-panel";
 import type { SiteSeo } from "@/lib/seo";
 import { canonicalUrl } from "@/lib/seo-public";
 
-import { AskAiCanvas, AskAiProvider, useAskAi } from "./ask-ai";
+import { editorPuckData } from "@/lib/editor/initial-data";
 import { isEmptyPage } from "@/lib/editor/empty-page";
 import { EditorConcurrencyNotice } from "./editor-concurrency-notice";
 import { blogManagerHref } from "@/lib/blog-navigation";
 import type { BlogFeedMetadata } from "@/components/blocks/blog-posts";
-import { defaultHeader, extractNavigation, headerSchema, type HeaderRoot } from "@/lib/header";
+import { defaultHeader, editorHeader } from "@/lib/header";
 import { renderHeaderEditor } from "./header-editor";
 import { PublishChangesDialog, type PublishDialogState } from "./publish-changes-dialog";
 import {
@@ -128,22 +128,41 @@ function usePersistence() {
 }
 
 function EditorRuntime({ children }: { children: React.ReactNode }) {
-  const { pageId, siteId, draftVersion, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
+  const { pageId, siteId, siteName, draftVersion, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
   const { pages, updatePagePublishState } = useInteractions();
+  const getPuck = useGetPuck();
   const markDraftSaved = useCallback((draft: Data, kind: "save" | "publish") => {
     if (kind === "publish") updatePagePublishState(pageId, false, false, true);
     else updatePagePublishState(pageId, hasUnpublishedPageChanges(draft, publishedData),
       hasUnpublishedFooterChanges(draft, publishedData));
   }, [pageId, publishedData, updatePagePublishState]);
   const persistence = useDraftPersistence(pageId, theme, initialHeader, markDraftSaved, draftVersion);
-  return <PersistenceContext.Provider value={persistence}><AiAgentPanelProvider siteId={siteId} pageId={pageId}>
-    <AskAiProvider pageId={pageId} theme={theme} persistence={persistence}
-    metadata={{ siteMenu: { links: pageMenuLinks(pages.filter(page => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) },
-      siteLinks: linkContext(pages), pagePath: `/${pages.find(page => page.id === pageId)?.slug ?? ""}`, headersReady }}>
+  const { dirty, save, adopt } = persistence;
+  const agentEditor = useMemo<AgentEditorBridge>(() => ({
+    saveDraft: async () => !dirty || await save(),
+    adopt: async (state) => {
+      if (!state) return true;
+      if (state.deleted) return false;
+      const current = getPuck().appState.data;
+      const title: unknown = current.root.props?.title;
+      return adopt({
+        data: editorPuckData(state.data, {
+          headersReady, pageTitle: typeof title === "string" ? title : null, draftHeader: state.draftHeader,
+          fallbackHeader: () => editorHeader(current) ?? defaultHeader(business.businessName || siteName, theme.logoUrl),
+        }),
+        version: state.version, theme: state.theme, draftHeader: state.draftHeader,
+      });
+    },
+    previewMetadata: {
+      siteMenu: { links: pageMenuLinks(pages.filter(page => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) },
+      siteLinks: linkContext(pages), pagePath: `/${pages.find(page => page.id === pageId)?.slug ?? ""}`, headersReady,
+    },
+  }), [adopt, business, dirty, getPuck, headersReady, pageId, pages, save, siteName, theme.logoUrl]);
+  return <PersistenceContext.Provider value={persistence}><AiAgentPanelProvider siteId={siteId} pageId={pageId} editor={agentEditor}>
     <EditorPanelLayout />
     {children}
     <EditorThemePanel />
-  </AskAiProvider></AiAgentPanelProvider></PersistenceContext.Provider>;
+  </AiAgentPanelProvider></PersistenceContext.Provider>;
 }
 
 function EditorPanelLayout() {
@@ -232,7 +251,7 @@ function EditorHeader({ actions }: { actions: React.ReactNode }) {
       <button type="button" className="editor-icon-button" aria-label="Toggle inspector" title="Toggle inspector"
         aria-pressed={ui.rightSideBarVisible} onClick={() => togglePanel("right")}><PanelRight size={17} /></button>
       <button type="button" className="editor-icon-button editor-agent-toggle" aria-label="Toggle AI chat"
-        title="AI chat (Ctrl/Cmd+J)" aria-pressed={aiPanel.open} aria-keyshortcuts="Control+J Meta+J"
+        title="AI chat (Ctrl/Cmd+J)" aria-pressed={aiPanel.open} aria-keyshortcuts="Control+J Meta+J Control+K Meta+K"
         onClick={aiPanel.toggle}><Sparkles size={17} /></button>
       <span className="editor-toolbar-separator" />
       <button type="button" className="editor-icon-button" aria-label="Undo" title="Undo (⌘/Ctrl+Z)" disabled={!history.hasPast || persistence.busy !== null}
@@ -403,27 +422,24 @@ function SeoTool() {
 }
 
 function AiTool() {
-  const { openAdd } = useEditorAi();
-  const askAi = useAskAi();
+  const agent = useAiAgentPanel();
+  const getPuck = useGetPuck();
   const selection = usePuckStore((state) => state.appState.ui.itemSelector);
   const canEdit = usePuckStore((state) => state.getPermissions({ item: state.selectedItem }).edit !== false);
   const topLevel = selection && (!selection.zone || selection.zone === ROOT_ZONE) && canEdit;
-  return <div className="editor-panel"><header className="editor-panel-header"><p className="platform-eyebrow mb-1">Creative assistant</p><h2 className="font-semibold">AI editing</h2>
-    <p className="mt-2 text-xs leading-relaxed text-zinc-500">Preview changes before adding them to your draft.</p></header>
-    <button type="button" disabled={!topLevel} onClick={() => askAi?.open()} className="platform-button mt-4 w-full">Edit selected section</button>
-    <button type="button" onClick={openAdd} className="platform-button platform-button-ai mt-2 w-full"><Sparkles size={14} />Add a section with AI</button>
+  return <div className="editor-panel"><header className="editor-panel-header"><p className="platform-eyebrow mb-1">Creative assistant</p><h2 className="font-semibold">AI site agent</h2>
+    <p className="mt-2 text-xs leading-relaxed text-zinc-500">Ask for changes across pages, the theme, header and blog. Review them before they reach your drafts.</p></header>
+    <button type="button" onClick={() => agent.openWith({})} className="platform-button platform-button-ai mt-4 w-full"><Sparkles size={14} />Open AI chat</button>
+    <button type="button" disabled={!topLevel} onClick={() => agent.openWith({})} className="platform-button mt-2 w-full">Edit selected section</button>
+    <button type="button" onClick={() => {
+      const { appState } = getPuck();
+      const selector = appState.ui.itemSelector;
+      agent.openWith({
+        prompt: "Add a section here: ",
+        insertAt: selector && (!selector.zone || selector.zone === ROOT_ZONE) ? selector.index + 1 : appState.data.content.length,
+      });
+    }} className="platform-button mt-2 w-full">Add a section with AI</button>
   </div>;
-}
-
-function AiCommandBar() {
-  const { openAdd } = useEditorAi();
-  return <aside aria-label="AI editing" className="platform-ui editor-ai-bar">
-    <button type="button" onClick={openAdd} className="flex w-full items-center gap-3 text-left">
-      <span className="rounded-xl bg-[#F1EFFF] p-2.5 text-[#4B3FE0]"><Sparkles size={16} strokeWidth={1.6} /></span>
-      <span className="flex-1"><span className="block text-xs font-medium text-[#3D3C39]">Add a section with AI</span><span className="mt-0.5 block text-[11px] text-[#6B6A66]">Describe an idea. Preview the possibilities.</span></span>
-      <ArrowUpRight size={16} className="text-[#6B6A66]" />
-    </button>
-  </aside>;
 }
 
 function EditorDrawer({ children }: { children: React.ReactNode }) {
@@ -461,7 +477,6 @@ const BLOCK_LABELS = Object.fromEntries(
 /** Header buttons: Save draft, Preview, Publish and the theme panel toggle. */
 function HeaderActions() {
   const getPuck = useGetPuck();
-  const askAi = useAskAi();
   const { siteId, previewUrl, openThemePanel, pendingSiteChanges } = useEditorUi();
   const persistence = usePersistence();
   const { busy } = persistence;
@@ -559,8 +574,6 @@ function HeaderActions() {
         Unpublished changes <span className="rounded-full bg-amber-100 px-1.5">{pendingCount}</span>
       </span> : null}
       {publishError ? <span role="alert" className="max-w-48 text-xs text-red-700">{publishError}</span> : null}
-      <button type="button" onClick={() => askAi?.open()} disabled={!!askAi?.proposal} aria-keyshortcuts="Control+K Meta+K"
-        className="platform-button platform-button-ai"><Sparkles size={13} />Ask AI</button>
       <details className="editor-more" onKeyDown={(event) => {
         if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); }
       }} onBlur={(event) => {
@@ -689,7 +702,7 @@ function EditorActionBar({
   dragHandle?: React.ReactNode;
 }) {
   const { openSaveDesign, isSuperAdmin } = useSectionLibrary();
-  const askAi = useAskAi();
+  const agent = useAiAgentPanel();
   const getPuck = useGetPuck();
   const zone = usePuckStore((s) => s.appState.ui.itemSelector?.zone);
   const selectedType = usePuckStore((s) => s.selectedItem?.type);
@@ -726,7 +739,7 @@ function EditorActionBar({
   return (
     <ActionBar>
       <ActionBar.Group>
-        <ActionBar.Action label="Ask AI about this section" disabled={!topLevel || !canEdit} onClick={() => askAi?.open()}><Sparkles size={16} /></ActionBar.Action>
+        <ActionBar.Action label="Ask AI about this section" disabled={!topLevel || !canEdit} onClick={() => agent.openWith({})}><Sparkles size={16} /></ActionBar.Action>
         {parentAction}
         {label ? <ActionBar.Label label={label} /> : null}
       </ActionBar.Group>
@@ -890,15 +903,14 @@ export function PageEditor({
       drawer: ({ children }) => <EditorDrawer>{children}</EditorDrawer>,
       fields: (props) => <EditorInspector {...props} />,
       preview: ({ children }) => (
-        <AskAiCanvas pageId={page.id}>
+        <AgentCanvas pageId={page.id}>
           {children}
           <BuildEmptyPage canvas />
           <AutoBuildPage />
           <CanvasInsertZones />
           <AddSectionEndBar />
           <SectionGhost />
-          <AiCommandBar />
-        </AskAiCanvas>
+        </AgentCanvas>
       ),
       puck: ({ children }) => (
         <EditorRuntime><EditorAiProvider>
@@ -916,23 +928,11 @@ export function PageEditor({
   const config = useMemo(() => editorConfig(isSuperAdmin, headersReady), [isSuperAdmin, headersReady]);
   const plugins = useMemo(() => canManageDomains ? editorPlugins : editorPlugins.filter((plugin) => plugin.name !== "domain"), [canManageDomains]);
 
-  const data = useMemo<Data>(() => {
-    const raw = (initialData ?? {}) as Partial<Data>;
-    const extracted = extractNavigation({ content: raw.content ?? [] });
-    const rootProps: HeaderRoot = raw.root?.props ?? {};
-    return {
-      ...raw,
-      content: headersReady && !rootProps.__legacyNavigation ? extracted.data.content : raw.content ?? [],
-      root: {
-        ...raw.root,
-        props: { title: page.title ?? "", description: "", ...rootProps,
-          ...(headersReady ? { __editorHeader: site.draft_header ? headerSchema.parse(site.draft_header) :
-            extracted.header ?? defaultHeader(business.businessName || site.name || "", theme.logoUrl) } : {}),
-        },
-      },
-    } as Data;
+  const data = useMemo<Data>(() => editorPuckData(initialData, {
+    headersReady, pageTitle: page.title, draftHeader: site.draft_header,
+    fallbackHeader: () => defaultHeader(business.businessName || site.name || "", theme.logoUrl),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }), []);
 
   return (
     <EditorSiteContext.Provider value={{ siteId: site.id, query: business.businessType }}>

@@ -1,35 +1,49 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useGetPuck } from "@puckeditor/core";
 import { Check, ChevronDown, LoaderCircle, MessageSquarePlus, Pencil, Sparkles, Square, Trash2, X } from "lucide-react";
+import { applyAgentChanges } from "@/app/editor/[pageId]/agent-actions";
+import { appliedChangesSchema, type AppliedAgentChanges } from "@/lib/ai/agent-apply-types";
 import { agentReviewPayloadSchema, type AgentReviewPayload } from "@/lib/ai/agent-review";
 import { useInteractions } from "./interaction-context";
-import { ROOT_ZONE } from "./section-library";
-import { AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
+import { ROOT_ZONE } from "@/lib/editor/tree";
+import { AgentReviewCanvas, AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
+import { AgentAppliedCard, undoAgentApply, type AgentApplyReport } from "./agent-applied-card";
+import {
+  PanelContext, useAiAgentPanel, type AgentEditorBridge, type AgentRequest, type ReviewSession,
+} from "./ai-agent-context";
 
 type SectionContext = { id: string; label: string; pageId: string };
-type ReviewSession = { threadId: string; review: AgentReviewState };
+type InsertContext = { position: number; pageId: string };
 type ReviewSelection = Pick<AgentReviewState, "decisions" | "activeChangeId" | "comparison">;
-type PanelContextValue = {
-  open: boolean; toggle: () => void; reviewSession: ReviewSession | null;
-  setReviewSession: (value: ReviewSession | null) => void;
+type Composer = {
+  prompt: string; setPrompt: (value: string) => void;
+  contexts: string[]; setContexts: (update: (previous: string[]) => string[]) => void;
+  section: SectionContext | null;
+  insert: InsertContext | null; clearInsert: () => void;
 };
-const PanelContext = createContext<PanelContextValue | null>(null);
 
-export function useAiAgentPanel() {
-  const context = useContext(PanelContext);
-  if (!context) throw new Error("AI agent panel context missing");
-  return context;
+/** The canvas shows the pending changeset while it is under review. */
+export function AgentCanvas({ children, pageId }: { children: React.ReactNode; pageId: string }) {
+  const { reviewSession, editor } = useAiAgentPanel();
+  return reviewSession
+    ? <AgentReviewCanvas review={reviewSession.review} pageId={pageId} metadata={editor.previewMetadata} />
+    : children;
 }
 
-export function AiAgentPanelProvider({ children, siteId, pageId }: {
-  children: React.ReactNode; siteId: string; pageId: string;
+export function AiAgentPanelProvider({ children, siteId, pageId, editor }: {
+  children: React.ReactNode; siteId: string; pageId: string; editor: AgentEditorBridge;
 }) {
   const getPuck = useGetPuck();
   const { pages } = useInteractions();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SectionContext | null>(null);
+  const [insert, setInsert] = useState<InsertContext | null>(null);
+  const [prompt, setPrompt] = useState("");
+  const [contexts, setContexts] = useState<string[]>([]);
+  const [focusRequest, setFocusRequest] = useState(0);
   const [reviewSession, setReviewSessionState] = useState<ReviewSession | null>(null);
   const reviewCache = useRef(new Map<string, ReviewSelection>());
   const setReviewSession = useCallback((next: ReviewSession | null) => {
@@ -57,27 +71,43 @@ export function AiAgentPanelProvider({ children, siteId, pageId }: {
     }
     setReviewSessionState(next);
   }, []);
-  const toggle = useCallback(() => {
-    if (open) { setOpen(false); return; }
-    const { appState, selectedItem } = getPuck();
+
+  const sectionContext = useCallback((sectionId?: string): SectionContext | null => {
+    const { appState, selectedItem, config, getPermissions } = getPuck();
     const selector = appState.ui.itemSelector;
-    const selected = selector && (!selector.zone || selector.zone === ROOT_ZONE)
-      ? appState.data.content[selector.index] : null;
-    if (selected && selectedItem && selected.props.id === selectedItem.props.id &&
-      selected.type !== "Embed" && getPuck().getPermissions({ item: selected }).edit !== false) {
-      setSection({
-        id: String(selected.props.id),
-        label: getPuck().config.components[selected.type]?.label ?? selected.type,
-        pageId,
-      });
-    } else setSection(null);
-    getPuck().dispatch({ type: "setUi", ui: { rightSideBarVisible: false } });
+    const selected = sectionId ? appState.data.content.find((item) => item.props.id === sectionId)
+      : selector && (!selector.zone || selector.zone === ROOT_ZONE) && selectedItem
+        && appState.data.content[selector.index]?.props.id === selectedItem.props.id
+        ? appState.data.content[selector.index] : undefined;
+    if (!selected || selected.type === "Embed" || getPermissions({ item: selected }).edit === false) return null;
+    return { id: String(selected.props.id), label: config.components[selected.type]?.label ?? selected.type, pageId };
+  }, [getPuck, pageId]);
+
+  const show = useCallback((request: AgentRequest) => {
+    const { appState, dispatch } = getPuck();
+    const target = request.header || request.insertAt !== undefined ? null : sectionContext(request.sectionId);
+    setSection(target);
+    setContexts([...(target ? ["section"] : []), ...(request.header ? ["header"] : [])]);
+    // The agent counts positions among editable sections; the header and footer stay fixed.
+    setInsert(request.insertAt === undefined ? null : {
+      pageId, position: appState.data.content.slice(0, request.insertAt)
+        .filter((item) => item.type !== "Footer" && item.type !== "Navigation").length,
+    });
+    // A request without its own prompt keeps whatever the user had started typing.
+    if (request.prompt !== undefined) setPrompt(request.prompt);
+    setFocusRequest((value) => value + 1);
+    dispatch({ type: "setUi", ui: { rightSideBarVisible: false } });
     setOpen(true);
-  }, [getPuck, open, pageId]);
+  }, [getPuck, pageId, sectionContext]);
+  const toggle = useCallback(() => {
+    if (open) setOpen(false);
+    else show({});
+  }, [open, show]);
 
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.key.toLowerCase() !== "j") return;
+      // Ctrl/Cmd+K was the old Ask AI shortcut and now opens the same agent.
+      if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || !["j", "k"].includes(event.key.toLowerCase())) return;
       event.preventDefault();
       toggle();
     };
@@ -99,10 +129,13 @@ export function AiAgentPanelProvider({ children, siteId, pageId }: {
     };
   }, [toggle]);
 
-  return <PanelContext.Provider value={{ open, toggle, reviewSession, setReviewSession }}>
+  const composer: Composer = {
+    prompt, setPrompt, contexts, setContexts, section, insert, clearInsert: () => setInsert(null),
+  };
+  return <PanelContext.Provider value={{ open, toggle, openWith: show, reviewSession, setReviewSession, editor }}>
     {children}
-    {open ? <AiAgentPanel siteId={siteId} pageId={pageId} pages={pages} section={section}
-      reviewSession={reviewSession} setReviewSession={setReviewSession}
+    {open ? <AiAgentPanel siteId={siteId} pageId={pageId} pages={pages} composer={composer} focusRequest={focusRequest}
+      reviewSession={reviewSession} setReviewSession={setReviewSession} editor={editor}
       onClose={() => setOpen(false)} /> : null}
   </PanelContext.Provider>;
 }
@@ -119,6 +152,7 @@ type Run = { id: string; status: string };
 type LatestRun = Run & {
   awaiting?: { kind: string; payload: Record<string, unknown> } | null;
   review: AgentReviewPayload | null;
+  applied: AppliedAgentChanges | null;
 };
 type ThreadResponse = {
   threads: Thread[];
@@ -166,8 +200,8 @@ function threadRunResponse(value: unknown): ThreadResponse | null {
       status: rawRun.status,
       ...(isRecord(rawRun.awaiting) && typeof rawRun.awaiting.kind === "string" && isRecord(rawRun.awaiting.payload)
         ? { awaiting: { kind: rawRun.awaiting.kind, payload: rawRun.awaiting.payload } } : {}),
-      review: agentReviewPayloadSchema.safeParse(rawRun.review).success
-        ? agentReviewPayloadSchema.parse(rawRun.review) : null,
+      review: agentReviewPayloadSchema.safeParse(rawRun.review).data ?? null,
+      applied: appliedChangesSchema.safeParse(rawRun.applied).data ?? null,
     }
     : null;
   return { threads, messages, latestRun };
@@ -221,10 +255,13 @@ function toolLabel(name: unknown, rawInput: unknown, pages: Page[]) {
   }
 }
 
-function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReviewSession, onClose }: {
-  siteId: string; pageId: string; pages: Page[]; section: SectionContext | null;
-  reviewSession: ReviewSession | null; setReviewSession: (value: ReviewSession | null) => void; onClose: () => void;
+function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSession, setReviewSession, editor, onClose }: {
+  siteId: string; pageId: string; pages: Page[]; composer: Composer; focusRequest: number;
+  reviewSession: ReviewSession | null; setReviewSession: (value: ReviewSession | null) => void;
+  editor: AgentEditorBridge; onClose: () => void;
 }) {
+  const { prompt, setPrompt, contexts, setContexts, section, insert, clearInsert } = composer;
+  const router = useRouter();
   const homePage = pages.find((page) => page.slug === "");
   const currentPage = pages.find((page) => page.id === pageId);
   const [width, setWidth] = useState(420);
@@ -235,14 +272,15 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
   const [pending, setPending] = useState<Pending | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [streaming, setStreaming] = useState(false);
-  const [prompt, setPrompt] = useState("");
   const [planChange, setPlanChange] = useState("");
   const [planChangeOpen, setPlanChangeOpen] = useState(false);
   const [error, setError] = useState("");
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [contexts, setContexts] = useState<string[]>(section ? ["section"] : []);
+  const [applied, setApplied] = useState<AppliedAgentChanges | null>(null);
+  const [applyReport, setApplyReport] = useState<AgentApplyReport | null>(null);
+  const [working, setWorking] = useState<"apply" | "undo" | null>(null);
   const threadIdRef = useRef<string | null>(threadId);
   const controller = useRef<AbortController | null>(null);
   const loadSequence = useRef(0);
@@ -264,6 +302,8 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
     setThreadId(nextThreadId);
     threadIdRef.current = nextThreadId;
     setReviewSession(null);
+    setApplied(null);
+    setApplyReport(null);
     setError("");
     setPending(null);
     setRun(null);
@@ -284,6 +324,7 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
       setMessages(data.messages);
       setRun(data.latestRun);
       setPending(makePending(data.latestRun));
+      setApplied(data.latestRun?.applied ?? null);
       setReviewSession(data.latestRun?.review?.changes.length
         ? { threadId: nextThreadId, review: newAgentReview(data.latestRun.review) } : null);
     } catch (cause) {
@@ -315,6 +356,13 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
 
   useEffect(() => () => controller.current?.abort(), []);
 
+  useEffect(() => {
+    const field = promptField.current;
+    if (!field) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  }, [focusRequest]);
+
   function addAssistantText(text: string) {
     setMessages((previous) => {
       const last = previous.at(-1);
@@ -330,6 +378,8 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
       setThreadId(event.threadId);
       threadIdRef.current = event.threadId;
       if (reviewSession?.threadId !== event.threadId) setReviewSession(null);
+      setApplied(null);
+      setApplyReport(null);
       setRun({ id: event.runId, status: "running" });
       setPending(null);
       try { await refreshThreads(); }
@@ -450,13 +500,63 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
       contexts.includes("header") ? "the global site header" : null,
       selected,
     ].filter(Boolean);
-    return context.length ? `${value}\n\nFocus on this context: ${context.join("; ")}.` : value;
+    const focused = context.length ? `${value}\n\nFocus on this context: ${context.join("; ")}.` : value;
+    return insert
+      ? `${focused}\n\nInsert the new section on page ${insert.pageId} at position ${insert.position} (0 is the top of the page).`
+      : focused;
+  }
+
+  async function applyChanges() {
+    if (!reviewSession || !run || !threadId || working || streaming) return;
+    setWorking("apply");
+    setError("");
+    try {
+      // Unsaved edits are saved first so the changes are rebased on them, not over them.
+      if (!await editor.saveDraft()) {
+        setError("Your draft could not be saved, so nothing was applied. Check the editor status and try again.");
+        return;
+      }
+      const undone = Object.entries(reviewSession.review.decisions)
+        .filter(([, decision]) => decision === "undone").map(([id]) => id);
+      const result = await applyAgentChanges({ siteId, threadId, runId: run.id, pageId, undone });
+      if (result.status === "error") {
+        setError(result.message);
+        setApplyReport(result.dropped?.length ? { dropped: result.dropped, notes: [] } : null);
+        return;
+      }
+      setApplied(result.applied);
+      setApplyReport({ dropped: result.dropped, notes: result.notes });
+      setReviewSession(null);
+      if (!await editor.adopt(result.editor)) setError("The changes were applied. Reload the editor to continue editing.");
+    } catch (cause) {
+      console.error("Could not apply AI changes", { type: cause instanceof Error ? cause.name : "Unknown" });
+      setError("Could not confirm that the AI changes were applied. Reload the editor before trying again.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function undoChanges() {
+    if (!applied || working || streaming) return;
+    setWorking("undo");
+    setError("");
+    try {
+      const result = await undoAgentApply(editor, { siteId, applyId: applied.id, pageId });
+      if (result.status === "error") setError(result.message);
+      else if (result.status === "success") {
+        setApplied(result.applied);
+        if (result.left) router.push(homePage && homePage.id !== pageId ? `/editor/${homePage.id}` : "/dashboard");
+      }
+    } finally {
+      setWorking(null);
+    }
   }
 
   async function sendPrompt(value: string) {
     const text = value.trim();
-    if (!text || streaming || pending || text.length > 3600) return;
+    if (!text || streaming || pending || working || text.length > 3600) return;
     setPrompt("");
+    clearInsert();
     setSteps([]);
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: "user", content: text }]);
     await streamRequest({
@@ -580,6 +680,9 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
         aria-pressed={contexts.includes(id)} title={id === "section" ? section?.label : label}
         onClick={() => setContexts((previous) => previous.includes(id) ? previous.filter((item) => item !== id) : [...previous, id])}
         className={`rounded-full border px-2.5 py-1 text-[11px] disabled:opacity-40 ${contexts.includes(id) ? "border-violet-200 bg-violet-50 text-violet-800" : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"}`}>{label}</button>)}
+      {insert ? <button type="button" aria-pressed title="Remove the insert position" onClick={clearInsert}
+        className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] text-violet-800">
+        @Insert at position {insert.position + 1} <X size={10} className="inline" /></button> : null}
       {selectedThread ? <span className="ml-auto self-center truncate text-[10px] text-zinc-400">{selectedThread.title}</span> : null}
     </div>
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite">
@@ -612,7 +715,11 @@ function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReview
         </ol>
       </details> : null}
       {reviewSession?.threadId === threadId ? <AgentReviewCard review={reviewSession.review}
-        onChange={(review) => setReviewSession({ ...reviewSession, review })} currentPageId={pageId} /> : null}
+        onChange={(review) => setReviewSession({ ...reviewSession, review })} currentPageId={pageId}
+        onApply={() => void applyChanges()} applying={working === "apply"}
+        disabled={streaming || working !== null || !run || !["completed", "stopped", "failed"].includes(run.status)} /> : null}
+      {applied || applyReport ? <AgentAppliedCard applied={applied} report={applyReport} siteId={siteId}
+        undoing={working === "undo"} disabled={streaming || working !== null} onUndo={() => void undoChanges()} /> : null}
       {pending?.kind === "plan" ? <section className="rounded-xl border border-violet-200 bg-violet-50 p-3" aria-label="Proposed plan">
         <h3 className="text-xs font-semibold text-violet-950">Proposed plan</h3>
         {pending.rationale ? <p className="mt-1 text-xs text-violet-900">{pending.rationale}</p> : null}

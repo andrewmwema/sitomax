@@ -7,7 +7,7 @@ import { HEADER_LAYOUTS, COMPACT_LAYOUTS, headerSchema, headerDesign, headerColo
 import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
 import { ImageUploadField } from "./image-upload-field";
 import { LinkFieldControl } from "./link-picker";
-import { useAskAi } from "./ask-ai";
+import { useOptionalAiAgentPanel } from "./ai-agent-context";
 import { useInteractions } from "./interaction-context";
 import { HexColorInput } from "./hex-color-input";
 
@@ -194,7 +194,7 @@ function LayoutThumbnail({ layout }: { layout: string }) {
 
 export function HeaderCanvas({ children }: { children: ReactNode }) {
   const getPuck = useGetPuck();
-  const askAi = useAskAi();
+  const agent = useOptionalAiAgentPanel();
   const [selected, setSelected] = useState(false);
   const [tab, setTab] = useState<Tab | null>(null);
   const [canvas, setCanvas] = useState<HTMLElement | null>(null);
@@ -228,7 +228,7 @@ export function HeaderCanvas({ children }: { children: ReactNode }) {
     <button type="button" aria-label="Edit site-wide header" className="absolute inset-0 z-10 cursor-pointer bg-transparent focus-visible:outline-2 focus-visible:outline-indigo-500"
       onClick={event => { event.stopPropagation(); setSelected(true); getPuck().dispatch({ type: "setUi", ui: { itemSelector: null } }); }} />
     {selected && !selection ? <div role="toolbar" aria-label="Header actions" className="platform-ui absolute right-2 top-2 z-20 flex flex-wrap gap-1 rounded-lg border bg-white p-1 text-xs text-zinc-800 shadow-lg">
-      <button type="button" className="rounded px-2 py-2 hover:bg-zinc-100" onClick={() => askAi?.open(undefined, "header")}>Ask AI</button>
+      <button type="button" className="rounded px-2 py-2 hover:bg-zinc-100" onClick={() => agent?.openWith({ header: true })}>Ask AI</button>
       {(["content", "design", "layout"] as const).map(value => <button key={value} type="button" className="rounded px-2 py-2 hover:bg-zinc-100"
         onClick={() => setTab(value)}>{value === "layout" ? "Change layout" : `Edit ${value}`}</button>)}
       <button type="button" className="rounded px-2 py-2 hover:bg-zinc-100" onClick={hide}>Hide on this page</button>

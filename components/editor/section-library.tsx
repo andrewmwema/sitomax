@@ -4,7 +4,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
 import { useGetPuck, type Data } from "@puckeditor/core";
-import { Grid2X2, List, Search, X, ZoomIn } from "lucide-react";
+import { Grid2X2, List, Search, Sparkles, X, ZoomIn } from "lucide-react";
 import type { SiteTheme } from "@/lib/theme/presets";
 import {
   SECTION_CATEGORIES, designsForCategory, sectionCatalog, searchSectionDesigns,
@@ -13,6 +13,7 @@ import {
 import { listSavedDesigns, setDesignGlobal } from "@/lib/sections/actions";
 import { buildDesignItem } from "@/lib/sections/library";
 import { DesignThumbnail } from "./design-thumbnail";
+import { useOptionalAiAgentPanel } from "./ai-agent-context";
 import { ROW_LAYOUTS, ROW_LAYOUT_IDS, blankSection } from "@/lib/layout/structure";
 
 export const ROOT_ZONE = "root:default-zone";
@@ -46,6 +47,7 @@ export function SectionLibraryPanel() {
 function LibraryContent() {
   const { library, closeLibrary, theme, setPreview, isSuperAdmin } = useSectionLibrary();
   const getPuck = useGetPuck();
+  const agent = useOptionalAiAgentPanel();
   const panelRef = useRef<HTMLElement>(null);
   const [tab, setTab] = useState<"designed" | "saved">("designed");
   const [category, setCategory] = useState<SectionCategory>(library.category ?? "Hero");
@@ -154,7 +156,15 @@ function LibraryContent() {
           <h2 className="text-base font-semibold tracking-tight text-zinc-900">Section library</h2>
           <p className="mt-1 text-xs text-zinc-500">Insert at position {library.index + 1} · Hover to try it</p>
         </div>
-        <button type="button" onClick={closeLibrary} aria-label="Close section library" className="rounded-lg p-2 hover:bg-zinc-100"><X size={18} /></button>
+        <div className="flex items-center gap-2">
+          {agent ? <button type="button" className="platform-button platform-button-ai" onClick={() => {
+            const insertAt = Math.min(library.index, getPuck().appState.data.content.length);
+            setPreview(null);
+            closeLibrary();
+            agent.openWith({ prompt: "Add a section here: ", insertAt });
+          }}><Sparkles size={13} />Ask AI</button> : null}
+          <button type="button" onClick={closeLibrary} aria-label="Close section library" className="rounded-lg p-2 hover:bg-zinc-100"><X size={18} /></button>
+        </div>
       </header>
       <div role="tablist" aria-label="Design source" className="flex gap-1 border-b border-zinc-200 px-4 pt-2">
         {(["designed", "saved"] as const).map((value) => (

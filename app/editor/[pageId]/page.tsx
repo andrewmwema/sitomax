@@ -13,6 +13,7 @@ import type { SeoPageSummary } from "@/components/editor/seo-panel";
 import { headerMigrationMissing } from "@/lib/header";
 import { loadEditorBlogFeed } from "@/lib/blog-editor-feed";
 import { hasUnpublishedFooterChanges, hasUnpublishedPageChanges } from "@/lib/publishing";
+import { editorInitialData } from "@/lib/editor/initial-data";
 
 /**
  * Full-screen visual editor for a page.
@@ -120,18 +121,7 @@ async function EditorLoader({
   const generated = z.object({
     root: z.object({ props: z.object({ generationWarnings: z.array(z.string()).optional() }).optional() }).optional(),
   }).safeParse(data.draft_data);
-  const savedSeo = z.object({
-    image: z.string().optional(), noindex: z.boolean().nullable().optional(),
-  }).safeParse(data.seo).data;
-  const draft = z.object({ root: z.object({ props: z.record(z.string(), z.unknown()).optional() }).passthrough().optional() })
-    .passthrough().parse(data.draft_data);
-  const draftProps = draft.root?.props ?? {};
-  const initialData = { ...draft, root: { ...draft.root, props: {
-    ...(savedSeo?.image !== undefined && draftProps.socialImage === undefined ? { socialImage: savedSeo.image } : {}),
-    ...(savedSeo?.noindex !== undefined && draftProps.indexing === undefined
-      ? { indexing: savedSeo.noindex === null ? "inherit" : savedSeo.noindex ? "noindex" : "index" } : {}),
-    ...draftProps,
-  } } };
+  const initialData = editorInitialData(data.draft_data, data.seo);
 
   return (
     <PageEditor

@@ -4,8 +4,6 @@ import { createContext, useContext } from "react";
 import type { Editor } from "@tiptap/react";
 
 export type AiUi = {
-  openSection: () => void;
-  openAdd: () => void;
   openText: (editor: Editor) => void;
 };
 export const AiContext = createContext<AiUi | null>(null);

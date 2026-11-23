@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { appliedChangesSchema } from "@/lib/ai/agent-apply-types";
 import { createAgentReviewPayload } from "@/lib/ai/agent-review";
 import { deleteAiAgentThread, renameAiAgentThread } from "@/lib/ai/usage";
 import { createClient } from "@/lib/supabase/server";
@@ -76,6 +77,22 @@ export async function GET(request: Request) {
     : runState?.success && runState.data.awaiting?.kind === "credit"
       ? { kind: "credit" as const, payload: {} }
       : null;
+  // A run whose changes were applied shows its applied card, not a second review.
+  let applied = null;
+  if (runResult.data) {
+    const applies = await supabase.rpc("list_ai_agent_applies", { p_site_id: query.data.siteId, p_run_id: runResult.data.id });
+    // Before the apply migration runs nothing can have been applied.
+    if (applies.error && !["PGRST202", "42883"].includes(applies.error.code)) {
+      console.error("Could not load applied AI changes", { type: applies.error.code ?? "DatabaseError" });
+      return Response.json({ message: "Could not load this AI conversation." }, { status: 500 });
+    }
+    const parsed = z.array(appliedChangesSchema).max(1).safeParse(applies.data ?? []);
+    if (!parsed.success) {
+      console.error("Applied AI changes have an unexpected shape", { type: "ValidationError" });
+      return Response.json({ message: "Could not load this AI conversation." }, { status: 500 });
+    }
+    applied = parsed.data[0] ?? null;
+  }
   return Response.json({
     threads: threads ?? [],
     messages: messageResult.data ?? [],
@@ -83,7 +100,8 @@ export async function GET(request: Request) {
       id: runResult.data.id,
       status: runResult.data.status,
       awaiting,
-      review: createAgentReviewPayload(runResult.data.changeset),
+      review: applied ? null : createAgentReviewPayload(runResult.data.changeset),
+      applied,
     } : null,
   });
 }

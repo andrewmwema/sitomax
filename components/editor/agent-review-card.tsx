@@ -5,6 +5,7 @@ import { Render, type Data } from "@puckeditor/core";
 import { Check, Eye, RotateCcw, Sparkles } from "lucide-react";
 import { z } from "zod";
 import {
+  footerChanges,
   previewAgentReview,
   type AgentReviewDecision,
   type AgentReviewPayload,
@@ -69,7 +70,7 @@ const previewDataSchema = z.looseObject({
   zones: z.record(z.string(), z.array(previewSectionSchema)).optional(),
 });
 
-function reviewData(snapshot: AgentReviewPayload["working"], pageId: string): Data | null {
+function reviewData(snapshot: AgentReviewPayload["working"], pageId: string, baselineFooter: unknown): Data | null {
   const page = pageFor(snapshot, pageId);
   if (!isRecord(page) || !isRecord(page.draft_data)) return null;
   const parsed = previewDataSchema.safeParse(page.draft_data);
@@ -77,14 +78,11 @@ function reviewData(snapshot: AgentReviewPayload["working"], pageId: string): Da
   if (!parsed.success || !header.success) return null;
   const raw = parsed.data;
   const content: Data["content"] = raw.content.filter((item) => item.type !== "Navigation");
-  const footer = isRecord(snapshot.footer) ? snapshot.footer : null;
-  if (footer) {
-    const index = content.findIndex((item) => item.type === "Footer");
-    const currentFooter = index >= 0 ? content[index].props : undefined;
-    const id = currentFooter?.id ?? (typeof footer.id === "string" && footer.id ? footer.id : `agent-review-footer-${pageId}`);
-    const props = { ...footer, ...currentFooter, id };
-    if (index >= 0) content[index] = { ...content[index], props };
-    else content.push({ type: "Footer", props });
+  // Shows what applying does: changed footer fields land on every page that has a footer.
+  const footer = footerChanges(baselineFooter, snapshot.footer);
+  const index = content.findIndex((item) => item.type === "Footer");
+  if (index >= 0 && Object.keys(footer).length) {
+    content[index] = { ...content[index], props: { ...content[index].props, ...footer } };
   }
   const rootProps = { ...raw.root.props, __editorHeader: header.data };
   return {
@@ -126,10 +124,13 @@ function renderedSections(container: HTMLElement, data: Data | null) {
   });
 }
 
-export function AgentReviewCard({ review, onChange, currentPageId }: {
+export function AgentReviewCard({ review, onChange, currentPageId, onApply, applying, disabled }: {
   review: AgentReviewState;
   onChange: (next: AgentReviewState) => void;
   currentPageId: string;
+  onApply: () => void;
+  applying: boolean;
+  disabled: boolean;
 }) {
   const groups = useMemo(() => {
     const result = new Map<string, { label: string; changes: AgentReviewPayload["changes"] }>();
@@ -142,6 +143,7 @@ export function AgentReviewCard({ review, onChange, currentPageId }: {
     return [...result.values()];
   }, [review]);
   const pageCount = new Set(review.changes.flatMap((change) => change.pageId ? [change.pageId] : [])).size;
+  const keptCount = review.changes.filter((change) => review.decisions[change.id] !== "undone").length;
 
   if (!review.changes.length) return null;
 
@@ -219,6 +221,15 @@ export function AgentReviewCard({ review, onChange, currentPageId }: {
         </ul>
       </section>)}
     </div>
+    <footer className="border-t border-violet-100 p-3">
+      <button type="button" disabled={disabled || keptCount === 0} onClick={onApply}
+        className="w-full rounded-lg bg-violet-700 px-3 py-2 text-xs font-medium text-white hover:bg-violet-800 disabled:opacity-50">
+        {applying ? "Applying..." : `Apply ${keptCount} ${keptCount === 1 ? "change" : "changes"} to drafts`}
+      </button>
+      <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+        Saved to drafts in one step that you can undo from here or History. Changes to content you edited since are skipped and listed. Nothing is published.
+      </p>
+    </footer>
   </section>;
 }
 
@@ -241,9 +252,9 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
     : previewAgentReview(review, review.decisions);
   const selected = review.comparison === "before" ? before : after;
   const selectedPage = selected.snapshot ? pageFor(selected.snapshot, targetPageId) : null;
-  const preview = selected.snapshot ? reviewData(selected.snapshot, targetPageId) : null;
-  const beforePage = before.snapshot ? reviewData(before.snapshot, targetPageId) : null;
-  const afterPage = after.snapshot ? reviewData(after.snapshot, targetPageId) : null;
+  const preview = selected.snapshot ? reviewData(selected.snapshot, targetPageId, review.baseline.footer) : null;
+  const beforePage = before.snapshot ? reviewData(before.snapshot, targetPageId, review.baseline.footer) : null;
+  const afterPage = after.snapshot ? reviewData(after.snapshot, targetPageId, review.baseline.footer) : null;
   const changedIds = changedSectionIds(beforePage, afterPage);
   if (activeChange?.kind === "theme" || (!activeChange && JSON.stringify(review.baseline.theme) !== JSON.stringify(review.working.theme))) {
     for (const id of sectionIds(preview)) changedIds.add(id);

@@ -395,23 +395,8 @@ body {
   background-color: #fffaf0;
 }
 
-.editor-ai-bar {
-  position: fixed;
-  z-index: 20;
-  bottom: 52px;
-  left: 50%;
-  width: min(460px, calc(100vw - 120px));
-  transform: translateX(-50%);
-  border: 1px solid #E8E7E3;
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: white;
-  box-shadow: 0 8px 24px rgb(18 18 18 / 10%);
-}
-
 @media (max-width: 637px) {
   .section-library-panel { left: 0; width: 100vw; }
-  .editor-ai-bar { display: none; }
 }
 
 .shell-responsive {

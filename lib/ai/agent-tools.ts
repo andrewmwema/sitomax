@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { ELEMENT_TYPES } from "@/lib/layout/structure";
+import { RESERVED_PAGE_SLUGS } from "@/lib/page-slugs";
 
 const jsonScalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const jsonValues: z.ZodType[] = [jsonScalar];
@@ -14,6 +15,10 @@ for (let depth = 1; depth <= 5; depth++) {
 }
 const jsonObject = z.record(z.string(), jsonValues[5]);
 const sectionRef = z.object({ pageId: z.uuid(), sectionId: z.string().min(1).max(200) });
+// The same rules as the Pages panel and the database, so staged page settings can always be applied.
+const navLabel = z.string().trim().min(1).max(40).regex(/^\S+( \S+){0,2}$/, "Use at most three words for a menu label.");
+const pageSlug = z.string().trim().min(1).max(60).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  .refine((slug) => !RESERVED_PAGE_SLUGS.has(slug), "That page address is reserved. Choose another.");
 
 const elementSchema = z.object({
   type: z.enum(ELEMENT_TYPES),
@@ -95,12 +100,12 @@ const specs = [
   { name: "delete_section", description: "Remove a section from a page.", schema: sectionRef },
   { name: "create_page", description: "Stage a page with curated designs or validated custom layout sections.", schema: z.object({
     title: z.string().trim().min(1).max(200),
-    slug: z.string().trim().min(1).max(200).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    navLabel: z.string().trim().max(80),
+    slug: pageSlug,
+    navLabel,
     sections: pageSections.max(20),
   }) },
   { name: "update_page_settings", description: "Stage page title, navigation, SEO, and visibility settings.", schema: z.object({
-    pageId: z.uuid(), title: z.string().trim().min(1).max(200).optional(), navLabel: z.string().trim().max(80).optional(),
+    pageId: z.uuid(), title: z.string().trim().min(1).max(200).optional(), navLabel: navLabel.optional(),
     seoTitle: z.string().max(200).optional(), seoDescription: z.string().max(500).optional(), hidden: z.boolean().optional(),
   }) },
   { name: "set_image", description: "Search Pixabay, save a selected image to site assets, and stage it into a section image field.", schema: sectionRef.extend({

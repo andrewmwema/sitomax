@@ -22,15 +22,39 @@ describe("agent review patches", () => {
     expect(baseline.pages[0].draft_data.content[0].props.description).toBe("Original");
   });
 
-  it("replays moves and refuses to overwrite a manually edited collection", () => {
+  it("rebases a move over text edits and refuses it once the structure itself changed", () => {
     const moved = structuredClone(baseline);
     moved.pages[0].draft_data.content.reverse();
     const patches = reviewPatches(baseline, moved);
     expect(applyReviewPatches(baseline, patches)).toEqual(moved);
+    expect(undoReviewPatches(moved, patches)).toEqual(baseline);
     const edited = structuredClone(baseline);
     edited.pages[0].draft_data.content[0].props.title = "Manual edit";
-    expect(() => applyReviewPatches(edited, patches)).toThrow("draft changed");
-    expect(edited.pages[0].draft_data.content[0].props.title).toBe("Manual edit");
+    const rebased = applyReviewPatches(edited, patches).pages[0].draft_data.content;
+    expect(rebased.map((item) => item.props.id)).toEqual(["text", "hero"]);
+    expect(rebased[1].props.title).toBe("Manual edit");
+    const restructured = structuredClone(baseline);
+    restructured.pages[0].draft_data.content.pop();
+    expect(() => applyReviewPatches(restructured, patches)).toThrow("draft changed");
+  });
+
+  it("merges an inserted section into a manually changed page and guards deleted sections", () => {
+    const inserted = structuredClone(baseline);
+    inserted.pages[0].draft_data.content.splice(1, 0, { type: "Faq", props: { id: "faq", title: "Questions" } });
+    const insert = reviewPatches(baseline, inserted);
+    const manual = structuredClone(baseline);
+    manual.pages[0].draft_data.content[0].props.title = "Manual edit";
+    manual.pages[0].draft_data.content.push({ type: "Cta", props: { id: "cta", title: "Call us" } });
+    const merged = applyReviewPatches(manual, insert).pages[0].draft_data.content;
+    expect(merged.map((item) => item.props.id)).toEqual(["hero", "faq", "text", "cta"]);
+    expect(merged[0].props.title).toBe("Manual edit");
+    expect(undoReviewPatches(inserted, insert)).toEqual(baseline);
+
+    const removed = structuredClone(baseline);
+    removed.pages[0].draft_data.content.shift();
+    const remove = reviewPatches(baseline, removed);
+    expect(applyReviewPatches(baseline, remove)).toEqual(removed);
+    expect(() => applyReviewPatches(manual, remove)).toThrow("draft changed");
   });
 
   it("round-trips an image and alt-text change through persisted patches and undo", () => {

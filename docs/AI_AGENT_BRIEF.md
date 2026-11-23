@@ -97,6 +97,18 @@ version-history snapshot ("AI: Made site more premium"). Nothing is
 published until the user presses Publish. If the user edits a section
 manually while a changeset is pending, warn and rebase or drop that
 change.
+- The undo step is site-wide, because a changeset spans pages, the
+  theme, header and blog: "Undo these changes" on the applied card
+  and "Undo AI: <summary>" in History reverse one apply in one
+  database transaction.
+- Undo skips items edited or published since and reports them:
+  "Undone N changes · Skipped M (edited since)" with links. Created
+  pages and posts are deleted only if never published and unedited.
+- Any member who can edit the site may undo. Undo lasts 30 days, or
+  until a later publish includes the changes; after publishing,
+  restore a published version from History instead.
+- Apply and undo never change published content, and both are
+  recorded in History with who did it and when.
 - Remove the old "Ask AI" panel and the separate "Add a section
   with AI" floating prompt; route those entry points into the agent
   (e.g. "+ Add section → ✨ Ask AI" opens the agent with a prefilled

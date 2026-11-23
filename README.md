@@ -29,8 +29,10 @@ bash scripts/test-db.sh stop
 
 `start` starts the cluster without resetting it. The script accepts only the
 exact local test URL above and never reads `.env.local` or production keys.
-Some older SQL tests target a particular migration version and may not work
-unchanged against the latest schema.
+`supabase/tests/ai_agent_apply.sql` covers the AI agent's transactional apply
+and site-wide undo, including access control. Some older SQL tests target a
+particular migration version and may not work unchanged against the latest
+schema.
 
 ## Platform appearance
 
@@ -171,9 +173,9 @@ support Tab, Arrow Down and Escape. Header text/hover/menu-panel/scroll colors
 are contrast-adjusted; image, gradient and transparent backgrounds use solid
 text backings for predictable AA contrast.
 
-**Ask AI → Whole site header** changes only validated layout/style settings.
-It sends header and business context, not page content, and uses the existing
-preview/apply, history and credit accounting. Templates and both AI generation
+**Ask AI** in the header toolbar opens the AI site agent focused on the
+site-wide header; it changes only validated layout/style settings and goes
+through the agent's review, apply and undo. Templates and both AI generation
 modes are normalized at the database boundary so their Navigation initializes
 a missing header without replacing an existing site header.
 
@@ -280,16 +282,33 @@ page links, retaining shared navigation/footer styling. It saves only a draft;
 review the result before publishing. Nonempty pages are never replaced, and a
 concurrent draft change cancels the save. Each AI attempt is metered.
 
-### Ask AI to edit
+### AI site agent
 
-Apply [0022_editor_ai_history.sql](./supabase/migrations/0022_editor_ai_history.sql)
-after the preceding migrations. Open **Ask AI** from the editor header
-(Ctrl/Cmd+K) or a section’s toolbar/menu. Choose a section, page, or site theme.
-The assistant proposes typed, validated edits and previews them in the canvas
-without changing the draft. Apply records one undo step and an **AI edit** in
-version history; deletion proposals need separate confirmation. Theme edits
-are staged site-wide and go live on publish. Generating or refining a proposal
-uses one AI credit, including when you choose not to apply it.
+Apply [0046_ai_agent.sql](./supabase/migrations/0046_ai_agent.sql) and
+[0047_ai_agent_apply.sql](./supabase/migrations/0047_ai_agent_apply.sql) after
+the preceding migrations. Open the AI chat from the editor's top bar
+(Ctrl/Cmd+J, or Ctrl/Cmd+K outside a text field), a section's toolbar or menu,
+the header toolbar, or **Ask AI** in the section library, which passes the
+insert position. The agent stages changes across pages, the theme, header,
+footer and blog drafts, and previews them in the canvas without touching drafts.
+
+**Apply to drafts** writes the kept changes in one database transaction and
+records an **AI edit** in each touched page's history. Changes are rebased on
+the current drafts first: a change to content that was edited since the run,
+or that depends on a change you undid, is skipped and listed. Menu labels and
+visibility of published pages are live settings and are never changed by the
+agent. Nothing is published.
+
+**Undo these changes**, on the applied card and under **History → AI changes
+across the site**, reverses one apply across the whole site in one transaction.
+Any member who can edit the site may undo. Items edited or published since are
+skipped and listed with links; pages and posts the agent created are deleted
+only if they were never published and are unedited. Undo is available for 30
+days, or until the changes are published; after that, restore a published
+version from History. History shows who applied and undid each set of changes.
+
+The former Ask AI panel and floating "Add a section with AI" prompt were
+removed. **Rewrite with AI** for selected text is unchanged.
 
 ### Stock photos
 

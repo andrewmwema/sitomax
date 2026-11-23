@@ -3,21 +3,38 @@ import { z } from "zod";
 type PathPart = string | { id: string };
 type Value = { present: false } | { present: true; value: unknown };
 
-export type ReviewPatch = {
+type ValuePatch = {
   path: PathPart[];
   before: Value;
   after: Value;
 };
+/**
+ * Structure change to an array of items with stable IDs. Surviving items are
+ * patched separately, so adding, moving or removing an item does not conflict
+ * with text edits elsewhere in the same array.
+ */
+type OrderPatch = {
+  path: PathPart[];
+  order: { before: string[]; after: string[] };
+  added: Record<string, unknown>;
+  removed: Record<string, unknown>;
+};
+export type ReviewPatch = ValuePatch | OrderPatch;
 
 const valueSchema = z.discriminatedUnion("present", [
   z.strictObject({ present: z.literal(false) }),
   z.strictObject({ present: z.literal(true), value: z.unknown() }),
 ]);
-const reviewPatchSchema = z.strictObject({
-  path: z.array(z.union([z.string(), z.strictObject({ id: z.string() })])).min(1),
-  before: valueSchema,
-  after: valueSchema,
-});
+const pathSchema = z.array(z.union([z.string(), z.strictObject({ id: z.string() })])).min(1);
+const reviewPatchSchema = z.union([
+  z.strictObject({ path: pathSchema, before: valueSchema, after: valueSchema }),
+  z.strictObject({
+    path: pathSchema,
+    order: z.strictObject({ before: z.array(z.string()), after: z.array(z.string()) }),
+    added: z.record(z.string(), z.unknown()),
+    removed: z.record(z.string(), z.unknown()),
+  }),
+]);
 const changeSchema = z.object({
   id: z.string().min(1),
   kind: z.string().min(1),
@@ -37,10 +54,15 @@ export const agentReviewPayloadSchema = z.strictObject({
   working: snapshotSchema,
 });
 export type AgentReviewPayload = z.infer<typeof agentReviewPayloadSchema>;
+export type AgentReviewChange = AgentReviewPayload["changes"][number];
 export type AgentReviewDecision = "kept" | "undone";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function jsonEqual(left: unknown, right: unknown): boolean {
+  return equal(left, right);
 }
 
 function equal(left: unknown, right: unknown): boolean {
@@ -54,6 +76,13 @@ function equal(left: unknown, right: unknown): boolean {
       keys.every((key) => Object.hasOwn(right, key) && equal(left[key], right[key]));
   }
   return false;
+}
+
+/** Footer fields that differ. The footer is one shared block repeated on every page that shows it. */
+export function footerChanges(before: unknown, after: unknown): Record<string, unknown> {
+  if (!isObject(after)) return {};
+  const base = isObject(before) ? before : {};
+  return Object.fromEntries(Object.entries(after).filter(([key, value]) => key !== "id" && !equal(base[key], value)));
 }
 
 function itemId(item: unknown): string | undefined {
@@ -110,14 +139,23 @@ export function reviewPatches(before: unknown, after: unknown): ReviewPatch[] {
         return;
       }
       if (Array.isArray(oldValue.value) && Array.isArray(newValue.value)) {
-        const oldIds = stableIds(oldValue.value);
-        const newIds = stableIds(newValue.value);
-        if (oldIds && newIds && equal(oldIds, newIds)) {
-          oldIds.forEach((id, index) => visit(
-            { present: true, value: (oldValue.value as unknown[])[index] },
-            { present: true, value: (newValue.value as unknown[])[index] },
-            [...path, { id }],
-          ));
+        const oldItems = oldValue.value;
+        const newItems = newValue.value;
+        const oldIds = stableIds(oldItems);
+        const newIds = stableIds(newItems);
+        if (oldIds && newIds) {
+          if (!equal(oldIds, newIds)) {
+            const only = (ids: string[], other: string[], items: unknown[]) => Object.fromEntries(
+              ids.flatMap((id, index) => other.includes(id) ? [] : [[id, structuredClone(items[index])]]));
+            patches.push({
+              path, order: { before: oldIds, after: newIds },
+              added: only(newIds, oldIds, newItems), removed: only(oldIds, newIds, oldItems),
+            });
+          }
+          oldIds.forEach((id, index) => {
+            const next = newIds.indexOf(id);
+            if (next >= 0) visit({ present: true, value: oldItems[index] }, { present: true, value: newItems[next] }, [...path, { id }]);
+          });
           return;
         }
       }
@@ -150,7 +188,41 @@ function readPath(root: unknown, path: PathPart[]): Value {
   return Object.hasOwn(parent, key) ? { present: true, value: parent[key] } : { present: false };
 }
 
+const CHANGED = "The draft changed. Review this change again.";
+
+function applyOrderPatch(root: unknown, patch: OrderPatch) {
+  const { parent, key } = resolveParent(root, patch.path);
+  const current = Object.hasOwn(parent, key) ? parent[key] : undefined;
+  const ids = Array.isArray(current) ? stableIds(current) : null;
+  if (!Array.isArray(current) || !ids) throw new Error(CHANGED);
+  const items = new Map(ids.map((id, index) => [id, current[index]]));
+  if (Object.keys(patch.added).some((id) => items.has(id))) throw new Error(CHANGED);
+  for (const [id, item] of Object.entries(patch.removed)) {
+    if (items.has(id) && !equal(items.get(id), item)) throw new Error(CHANGED);
+  }
+  const { before, after } = patch.order;
+  let next: string[];
+  if (equal(before.filter((id) => after.includes(id)), after.filter((id) => before.includes(id)))) {
+    // Only additions and removals: merge them into the current order.
+    next = ids.filter((id) => !Object.hasOwn(patch.removed, id));
+    after.forEach((id, index) => {
+      if (!Object.hasOwn(patch.added, id)) return;
+      const anchor = index > 0 ? next.indexOf(after[index - 1]) : -1;
+      if (index > 0 && anchor < 0) throw new Error(CHANGED);
+      next.splice(anchor + 1, 0, id);
+    });
+  } else {
+    if (!equal(ids, before)) throw new Error(CHANGED);
+    next = after;
+  }
+  Object.defineProperty(parent, key, {
+    value: next.map((id) => Object.hasOwn(patch.added, id) ? structuredClone(patch.added[id]) : items.get(id)),
+    writable: true, enumerable: true, configurable: true,
+  });
+}
+
 function applyPatch(root: unknown, patch: ReviewPatch) {
+  if ("order" in patch) return applyOrderPatch(root, patch);
   const { parent, key } = resolveParent(root, patch.path);
   const present = Object.hasOwn(parent, key);
   if (present !== patch.before.present || (present && patch.before.present && !equal(parent[key], patch.before.value))) {
@@ -179,6 +251,7 @@ export function previewAgentReview(
     payload.changes.slice(0, throughIndex + 1).forEach((change) => {
       if (decisions[change.id] === "undone" || change.kind === "create_blog_post" || change.kind === "update_blog_post") return;
       for (const patch of change.patches) {
+        if ("order" in patch) { applyPatch(snapshot, patch); continue; }
         const current = readPath(snapshot, patch.path);
         const matchesBefore = current.present === patch.before.present &&
           (!current.present || !patch.before.present || equal(current.value, patch.before.value));
@@ -207,7 +280,7 @@ export function previewAgentReview(
 }
 
 export function undoReviewPatches<T>(source: T, patches: ReviewPatch[]): T {
-  return applyReviewPatches(source, [...patches].reverse().map(({ path, before, after }) => ({
-    path, before: after, after: before,
-  })));
+  return applyReviewPatches(source, [...patches].reverse().map((patch): ReviewPatch => "order" in patch
+    ? { path: patch.path, order: { before: patch.order.after, after: patch.order.before }, added: patch.removed, removed: patch.added }
+    : { path: patch.path, before: patch.after, after: patch.before }));
 }

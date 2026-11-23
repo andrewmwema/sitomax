@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useGetPuck } from "@puckeditor/core";
 import { listPageVersions } from "@/app/editor/[pageId]/actions";
+import { listAgentChanges } from "@/app/editor/[pageId]/agent-actions";
+import type { AppliedAgentChanges } from "@/lib/ai/agent-apply-types";
+import { SkippedItems, undoAgentApply, undoSummary } from "./agent-applied-card";
+import { useOptionalAiAgentPanel } from "./ai-agent-context";
 import { Command, History } from "lucide-react";
 import { useSectionLibrary } from "./section-library";
 import { useInteractions } from "./interaction-context";
@@ -59,16 +63,41 @@ export function EditorCommands({ persistence, onPublish, onTheme }: {
 }
 
 export function VersionHistory({ persistence, siteId }: { persistence: Persistence; siteId: string }) {
-  const { pageId } = useInteractions();
+  const { pageId, pages } = useInteractions();
+  const agent = useOptionalAiAgentPanel();
+  const router = useRouter();
   const ref = useRef<HTMLDialogElement>(null);
   const [versions, setVersions] = useState<Awaited<ReturnType<typeof listPageVersions>>>([]);
+  const [aiChanges, setAiChanges] = useState<AppliedAgentChanges[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [undoing, setUndoing] = useState<string | null>(null);
   const load = async () => {
-    ref.current?.showModal(); setLoading(true); setError(null);
+    ref.current?.showModal(); setLoading(true); setError(null); setAiError(null);
     try { setVersions(await listPageVersions(pageId)); }
     catch (cause) { console.error("Unable to load version history", cause); setError("Could not load versions. Check that the version-history migration has been applied, then retry."); }
-    finally { setLoading(false); }
+    try { setAiChanges(await listAgentChanges(siteId)); }
+    catch (cause) {
+      console.error("Unable to load AI changes", { type: cause instanceof Error ? cause.name : "Unknown" });
+      setAiError("Could not load AI changes. Check that the latest database update has been applied, then retry.");
+    }
+    setLoading(false);
+  };
+  const undo = async (change: AppliedAgentChanges) => {
+    if (!agent || undoing) return;
+    setUndoing(change.id); setAiError(null);
+    try {
+      const result = await undoAgentApply(agent.editor, { siteId, applyId: change.id, pageId });
+      if (result.status === "error") setAiError(result.message);
+      else if (result.status === "success") {
+        setAiChanges((previous) => previous.map((entry) => entry.id === change.id ? result.applied : entry));
+        if (result.left) {
+          const home = pages.find((page) => page.slug === "" && page.id !== pageId);
+          router.push(home ? `/editor/${home.id}` : "/dashboard");
+        }
+      }
+    } finally { setUndoing(null); }
   };
   return <>
     <button type="button" onClick={() => void load()} className="platform-button"><History size={14} />History</button>
@@ -89,6 +118,24 @@ export function VersionHistory({ persistence, siteId }: { persistence: Persisten
         </li>)}
       </ol>
       {!loading && !error && !versions.length ? <p className="text-xs text-zinc-500">No versions yet.</p> : null}
+      <h3 className="mt-4 text-xs font-semibold">AI changes across the site</h3>
+      <p className="my-1 text-xs text-zinc-500">Undo reverses one set of AI changes on every page, the theme and the header at once. It is available for 30 days, or until the changes are published.</p>
+      {aiError ? <p role="alert" className="text-xs text-red-600">{aiError}</p> : null}
+      <ol className="my-2 max-h-64 overflow-y-auto">
+        {aiChanges.map((change) => <li key={change.id} className="border-t py-3 text-xs">
+          <p className="font-medium">AI: {change.summary}</p>
+          <p className="mt-0.5 text-zinc-500">Applied by {change.applied_by_name} · <time dateTime={change.applied_at}>{new Date(change.applied_at).toLocaleString()}</time></p>
+          {change.undo_result ? <>
+            <p className="mt-1">{undoSummary(change.undo_result)}</p>
+            <p className="mt-0.5 text-zinc-500">Undone by {change.undone_by_name}{change.undone_at ? <> · <time dateTime={change.undone_at}>{new Date(change.undone_at).toLocaleString()}</time></> : null}</p>
+            <SkippedItems result={change.undo_result} siteId={siteId} />
+          </> : change.can_undo && agent ? <button type="button" disabled={undoing !== null || persistence.busy !== null}
+            className="mt-2 rounded border px-3 py-1 disabled:opacity-40" onClick={() => void undo(change)}>
+            {undoing === change.id ? "Undoing..." : `Undo AI: ${change.summary}`}</button>
+            : <p className="mt-1 text-zinc-500">Undo is no longer available.</p>}
+        </li>)}
+      </ol>
+      {!loading && !aiError && !aiChanges.length ? <p className="text-xs text-zinc-500">No AI changes yet.</p> : null}
       <button type="button" onClick={() => ref.current?.close()} className="text-xs underline">Close</button>
     </dialog>
   </>;

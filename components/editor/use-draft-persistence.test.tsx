@@ -143,6 +143,32 @@ describe("empty-page persistence", () => {
     await act(async () => { finish({ status: "error", message: "Unavailable" }); await operation; });
   });
 
+  it("adopts a server-written draft as one undoable step and continues from its version and header", async () => {
+    const header = defaultHeader("Applied");
+    const props = { title: "Team", __editorHeader: header };
+    const applied: Data = { content: [{ type: "Hero", props: { id: "ai" } }], root: { props } };
+    await act(async () => {
+      expect(await persistence.adopt({ data: applied, version: NEXT_VERSION, theme: { style: "modern" }, draftHeader: header })).toBe(true);
+    });
+    const adopted = mocks.dispatch.mock.calls.find(([action]) => action.type === "setData")![0];
+    expect(adopted).toMatchObject({ recordHistory: true, data: { content: applied.content, root: { props: { __editorTheme: { style: "modern" } } } } });
+    mocks.data = adopted.data;
+    vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
+    await act(async () => { expect(await persistence.save()).toBe(true); });
+    expect(saveAiEdit).not.toHaveBeenCalled();
+    expect(savePageDraft).toHaveBeenCalledWith("page",
+      expect.objectContaining({ root: { props: expect.objectContaining({ __expectedHeader: header }) } }), NEXT_VERSION);
+  });
+
+  it("refuses to adopt a server-written draft over unsaved local edits", async () => {
+    mocks.data = { ...base, content: [{ type: "Text", props: { id: "local" } }] };
+    await act(async () => {
+      expect(await persistence.adopt({ data: generated, version: NEXT_VERSION, theme, draftHeader: null })).toBe(false);
+    });
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(persistence.reloadRequired).toBe(true);
+  });
+
   it("blocks all later saves after a conflict without replacing local content", async () => {
     mocks.data = { ...base, root: { props: { title: "Keep my unsaved changes" } } };
     vi.mocked(savePageDraft).mockResolvedValueOnce({ status: "error", conflict: true, message: "This page changed. Reload before saving." });
