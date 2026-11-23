@@ -3,11 +3,18 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useGetPuck } from "@puckeditor/core";
 import { Check, ChevronDown, LoaderCircle, MessageSquarePlus, Pencil, Sparkles, Square, Trash2, X } from "lucide-react";
+import { agentReviewPayloadSchema, type AgentReviewPayload } from "@/lib/ai/agent-review";
 import { useInteractions } from "./interaction-context";
 import { ROOT_ZONE } from "./section-library";
+import { AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
 
 type SectionContext = { id: string; label: string; pageId: string };
-type PanelContextValue = { open: boolean; toggle: () => void };
+type ReviewSession = { threadId: string; review: AgentReviewState };
+type ReviewSelection = Pick<AgentReviewState, "decisions" | "activeChangeId" | "comparison">;
+type PanelContextValue = {
+  open: boolean; toggle: () => void; reviewSession: ReviewSession | null;
+  setReviewSession: (value: ReviewSession | null) => void;
+};
 const PanelContext = createContext<PanelContextValue | null>(null);
 
 export function useAiAgentPanel() {
@@ -23,6 +30,33 @@ export function AiAgentPanelProvider({ children, siteId, pageId }: {
   const { pages } = useInteractions();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SectionContext | null>(null);
+  const [reviewSession, setReviewSessionState] = useState<ReviewSession | null>(null);
+  const reviewCache = useRef(new Map<string, ReviewSelection>());
+  const setReviewSession = useCallback((next: ReviewSession | null) => {
+    if (next) {
+      const previous = reviewCache.current.get(next.threadId);
+      if (previous) {
+        const ids = new Set(next.review.changes.map((change) => change.id));
+        next = {
+          ...next,
+          review: {
+            ...next.review,
+            decisions: { ...previous.decisions, ...next.review.decisions },
+            activeChangeId: next.review.activeChangeId && ids.has(next.review.activeChangeId)
+              ? next.review.activeChangeId
+              : previous.activeChangeId && ids.has(previous.activeChangeId) ? previous.activeChangeId : null,
+            comparison: next.review.activeChangeId ? next.review.comparison : previous.comparison,
+          },
+        };
+      }
+      reviewCache.current.set(next.threadId, {
+        decisions: next.review.decisions,
+        activeChangeId: next.review.activeChangeId,
+        comparison: next.review.comparison,
+      });
+    }
+    setReviewSessionState(next);
+  }, []);
   const toggle = useCallback(() => {
     if (open) { setOpen(false); return; }
     const { appState, selectedItem } = getPuck();
@@ -65,9 +99,10 @@ export function AiAgentPanelProvider({ children, siteId, pageId }: {
     };
   }, [toggle]);
 
-  return <PanelContext.Provider value={{ open, toggle }}>
+  return <PanelContext.Provider value={{ open, toggle, reviewSession, setReviewSession }}>
     {children}
     {open ? <AiAgentPanel siteId={siteId} pageId={pageId} pages={pages} section={section}
+      reviewSession={reviewSession} setReviewSession={setReviewSession}
       onClose={() => setOpen(false)} /> : null}
   </PanelContext.Provider>;
 }
@@ -81,10 +116,14 @@ type Pending =
   | { kind: "question"; question: string; options: string[] }
   | { kind: "credit"; message: string; credits: number };
 type Run = { id: string; status: string };
+type LatestRun = Run & {
+  awaiting?: { kind: string; payload: Record<string, unknown> } | null;
+  review: AgentReviewPayload | null;
+};
 type ThreadResponse = {
   threads: Thread[];
   messages: Message[];
-  latestRun: (Run & { awaiting?: { kind: string; payload: Record<string, unknown> } | null }) | null;
+  latestRun: LatestRun | null;
 };
 
 const suggestedPrompts = [
@@ -127,6 +166,8 @@ function threadRunResponse(value: unknown): ThreadResponse | null {
       status: rawRun.status,
       ...(isRecord(rawRun.awaiting) && typeof rawRun.awaiting.kind === "string" && isRecord(rawRun.awaiting.payload)
         ? { awaiting: { kind: rawRun.awaiting.kind, payload: rawRun.awaiting.payload } } : {}),
+      review: agentReviewPayloadSchema.safeParse(rawRun.review).success
+        ? agentReviewPayloadSchema.parse(rawRun.review) : null,
     }
     : null;
   return { threads, messages, latestRun };
@@ -180,8 +221,9 @@ function toolLabel(name: unknown, rawInput: unknown, pages: Page[]) {
   }
 }
 
-function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
-  siteId: string; pageId: string; pages: Page[]; section: SectionContext | null; onClose: () => void;
+function AiAgentPanel({ siteId, pageId, pages, section, reviewSession, setReviewSession, onClose }: {
+  siteId: string; pageId: string; pages: Page[]; section: SectionContext | null;
+  reviewSession: ReviewSession | null; setReviewSession: (value: ReviewSession | null) => void; onClose: () => void;
 }) {
   const homePage = pages.find((page) => page.slug === "");
   const currentPage = pages.find((page) => page.id === pageId);
@@ -201,6 +243,7 @@ function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
   const [renameValue, setRenameValue] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [contexts, setContexts] = useState<string[]>(section ? ["section"] : []);
+  const threadIdRef = useRef<string | null>(threadId);
   const controller = useRef<AbortController | null>(null);
   const loadSequence = useRef(0);
   const responseHasText = useRef(false);
@@ -219,6 +262,8 @@ function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
   const loadThread = useCallback(async (nextThreadId: string | null) => {
     const sequence = ++loadSequence.current;
     setThreadId(nextThreadId);
+    threadIdRef.current = nextThreadId;
+    setReviewSession(null);
     setError("");
     setPending(null);
     setRun(null);
@@ -239,10 +284,12 @@ function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
       setMessages(data.messages);
       setRun(data.latestRun);
       setPending(makePending(data.latestRun));
+      setReviewSession(data.latestRun?.review?.changes.length
+        ? { threadId: nextThreadId, review: newAgentReview(data.latestRun.review) } : null);
     } catch (cause) {
       if (sequence === loadSequence.current) setError(cause instanceof Error ? cause.message : "Could not load this AI conversation.");
     }
-  }, [siteId]);
+  }, [setReviewSession, siteId]);
 
   const fetchThreads = useCallback(async () => {
     const response = await fetch(`/api/ai/agent/threads?siteId=${encodeURIComponent(siteId)}`);
@@ -281,6 +328,8 @@ function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
   async function handleEvent(event: Record<string, unknown>) {
     if (event.type === "run" && typeof event.threadId === "string" && typeof event.runId === "string") {
       setThreadId(event.threadId);
+      threadIdRef.current = event.threadId;
+      if (reviewSession?.threadId !== event.threadId) setReviewSession(null);
       setRun({ id: event.runId, status: "running" });
       setPending(null);
       try { await refreshThreads(); }
@@ -326,6 +375,11 @@ function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
         if (!responseHasText.current && typeof event.summary === "string" && event.summary) {
           addAssistantText(event.summary);
         }
+        const parsedReview = agentReviewPayloadSchema.safeParse(event.review);
+        const activeThreadId = typeof event.threadId === "string" ? event.threadId : threadIdRef.current;
+        if (activeThreadId && parsedReview.success && parsedReview.data.changes.length) {
+          setReviewSession({ threadId: activeThreadId, review: newAgentReview(parsedReview.data) });
+        } else setReviewSession(null);
         setPending(null);
         try { await refreshThreads(); }
         catch (cause) { setError(cause instanceof Error ? cause.message : "Could not refresh AI conversations."); }
@@ -379,6 +433,11 @@ function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
       if (controller.current === activeController) controller.current = null;
       setStreaming(false);
       setMessages((previous) => previous.map((message) => message.streaming ? { ...message, streaming: false } : message));
+      const stoppedThreadId = threadIdRef.current;
+      if (activeController.signal.aborted && stoppedThreadId) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await loadThread(stoppedThreadId);
+      }
     }
   }
 
@@ -552,6 +611,8 @@ function AiAgentPanel({ siteId, pageId, pages, section, onClose }: {
           </li>)}
         </ol>
       </details> : null}
+      {reviewSession?.threadId === threadId ? <AgentReviewCard review={reviewSession.review}
+        onChange={(review) => setReviewSession({ ...reviewSession, review })} currentPageId={pageId} /> : null}
       {pending?.kind === "plan" ? <section className="rounded-xl border border-violet-200 bg-violet-50 p-3" aria-label="Proposed plan">
         <h3 className="text-xs font-semibold text-violet-950">Proposed plan</h3>
         {pending.rationale ? <p className="mt-1 text-xs text-violet-900">{pending.rationale}</p> : null}

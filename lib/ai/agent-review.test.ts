@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { applyReviewPatches, reviewPatches, undoReviewPatches } from "./agent-review";
+import {
+  applyReviewPatches, createAgentReviewPayload, previewAgentReview, reviewPatches, undoReviewPatches,
+} from "./agent-review";
 
 describe("agent review patches", () => {
   const baseline = {
@@ -45,5 +47,60 @@ describe("agent review patches", () => {
     const patches = reviewPatches(before, after);
     expect(applyReviewPatches(before, patches)).toEqual(after);
     expect(() => applyReviewPatches({ theme: { primary: "red" } }, patches)).toThrow("draft changed");
+  });
+
+  it("builds a preview-only payload without exposing unrelated snapshot data", () => {
+    const changed = structuredClone(baseline);
+    changed.theme.primary = "#008000";
+    const changeset = {
+      baseline: { ...baseline, header: {}, footer: {}, posts: [{ title: "Not needed for canvas" }] },
+      working: { ...changed, header: {}, footer: {}, posts: [{ title: "Not needed for canvas" }] },
+      changes: [{
+        id: "theme-1", kind: "theme", label: "Update site theme",
+        before: baseline.theme, after: changed.theme, patches: reviewPatches(baseline, changed),
+      }],
+    };
+
+    const payload = createAgentReviewPayload(changeset);
+    expect(payload?.baseline).not.toHaveProperty("posts");
+    expect(payload?.changes[0]).not.toHaveProperty("before");
+    expect(previewAgentReview(payload!, {}).snapshot?.theme).toEqual(changed.theme);
+    expect(previewAgentReview(payload!, { "theme-1": "undone" }).snapshot?.theme).toEqual(baseline.theme);
+  });
+
+  it("rebases an included scalar change when an earlier overlapping change is undone", () => {
+    const first = structuredClone(baseline);
+    first.theme.primary = "green";
+    const second = structuredClone(first);
+    second.theme.primary = "blue";
+    const payload = createAgentReviewPayload({
+      baseline: { ...baseline, header: {}, footer: {} },
+      working: { ...second, header: {}, footer: {} },
+      changes: [
+        { id: "first", kind: "theme", label: "First color", patches: reviewPatches(baseline, first) },
+        { id: "second", kind: "theme", label: "Second color", patches: reviewPatches(first, second) },
+      ],
+    });
+
+    expect(payload).not.toBeNull();
+    expect(previewAgentReview(payload!, { first: "undone", second: "kept" }).snapshot?.theme.primary).toBe("blue");
+  });
+
+  it("reports when a kept change depends on an undone structural change", () => {
+    const withPage = structuredClone(baseline);
+    withPage.pages.push({ id: "about", title: "About", draft: { content: [] } });
+    const renamed = structuredClone(withPage);
+    renamed.pages[1].title = "Our story";
+    const payload = createAgentReviewPayload({
+      baseline: { ...baseline, header: {}, footer: {} },
+      working: { ...renamed, header: {}, footer: {} },
+      changes: [
+        { id: "create", kind: "create_page", label: "Create page", patches: reviewPatches(baseline, withPage) },
+        { id: "rename", kind: "page_settings", label: "Rename page", patches: reviewPatches(withPage, renamed) },
+      ],
+    });
+
+    expect(payload).not.toBeNull();
+    expect(previewAgentReview(payload!, { create: "undone", rename: "kept" }).error).toMatch(/depend on an undone change/i);
   });
 });

@@ -22,7 +22,7 @@ import { puckConfig } from "@/lib/puck/config";
 import { ELEMENT_TYPES, ROW_LAYOUTS } from "@/lib/layout/structure";
 import { designPatchSchema, editDesign } from "./edit-design";
 import { agentToolSchemas, agentTools } from "./agent-tools";
-import { reviewPatches, type ReviewPatch } from "./agent-review";
+import { createAgentReviewPayload, reviewPatches, type ReviewPatch } from "./agent-review";
 
 const MAX_TOOL_CALLS = 40;
 const MAX_CHANGES = 60;
@@ -932,7 +932,8 @@ export async function executeAgentRequest(
           await saveRun(supabase, threadId, runId, "completed", changeset, state, true);
           const summary = "Plan rejected. Any previously staged changes remain in the changeset.";
           await insertMessage(supabase, threadId, runId, "assistant", summary);
-          emit({ type: "done", threadId, runId, changes: changeset.changes, summary, costUsd: calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage) });
+          emit({ type: "done", threadId, runId, changes: changeset.changes, review: createAgentReviewPayload(changeset),
+            summary, costUsd: calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage) });
           await finalizeReservation(state);
           return;
         }
@@ -1089,7 +1090,8 @@ export async function executeAgentRequest(
   if (finished) {
     await finalizeReservation(state, providerUncertain);
     emit({ type: "done", threadId, runId, status, summary: assistantText, changes: changeset.changes,
-      costUsd: calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage), tokenUsage: state.tokenUsage, continueAvailable: false });
+      review: createAgentReviewPayload(changeset), costUsd: calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage),
+      tokenUsage: state.tokenUsage, continueAvailable: false });
   } else {
     emit({ type: status, threadId, runId, summary: terminal === "paused" ? "Run limit reached. Continue to resume from the saved state." : undefined,
       changes: changeset.changes, costUsd: calculateCostUsd(SITE_GENERATION_MODEL, state.tokenUsage), continueAvailable: terminal === "paused" });

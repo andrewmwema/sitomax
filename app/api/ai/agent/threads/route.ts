@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createAgentReviewPayload } from "@/lib/ai/agent-review";
 import { deleteAiAgentThread, renameAiAgentThread } from "@/lib/ai/usage";
 import { createClient } from "@/lib/supabase/server";
 
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
     supabase.from("ai_agent_messages").select("id, role, content, created_at")
       .eq("thread_id", query.data.threadId).in("role", ["user", "assistant"])
       .order("created_at", { ascending: true }).limit(200),
-    supabase.from("ai_agent_runs").select("id, status, run_state")
+    supabase.from("ai_agent_runs").select("id, status, run_state, changeset")
       .eq("thread_id", query.data.threadId).order("started_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   if (messageResult.error || runResult.error) {
@@ -78,7 +79,12 @@ export async function GET(request: Request) {
   return Response.json({
     threads: threads ?? [],
     messages: messageResult.data ?? [],
-    latestRun: runResult.data ? { id: runResult.data.id, status: runResult.data.status, awaiting } : null,
+    latestRun: runResult.data ? {
+      id: runResult.data.id,
+      status: runResult.data.status,
+      awaiting,
+      review: createAgentReviewPayload(runResult.data.changeset),
+    } : null,
   });
 }
 

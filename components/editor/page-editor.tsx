@@ -890,7 +890,7 @@ export function PageEditor({
       drawer: ({ children }) => <EditorDrawer>{children}</EditorDrawer>,
       fields: (props) => <EditorInspector {...props} />,
       preview: ({ children }) => (
-        <AskAiCanvas>
+        <AskAiCanvas pageId={page.id}>
           {children}
           <BuildEmptyPage canvas />
           <AutoBuildPage />
@@ -910,7 +910,7 @@ export function PageEditor({
         </EditorAiProvider></EditorRuntime>
       ),
     }),
-    [],
+    [page.id],
   );
 
   const config = useMemo(() => editorConfig(isSuperAdmin, headersReady), [isSuperAdmin, headersReady]);

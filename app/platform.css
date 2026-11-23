@@ -1759,6 +1759,56 @@
   border-bottom: 1px solid var(--platform-line);
 }
 
+.agent-review-canvas-preview {
+  position: relative;
+}
+
+.agent-review-canvas-label {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--platform-line);
+  padding: 8px 12px;
+  background: var(--platform-surface);
+  color: var(--platform-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agent-review-canvas-error {
+  margin: 16px;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 12px;
+}
+
+[data-ai-review-preview] [data-ai-review-changed="true"] {
+  position: relative;
+  outline: 2px solid var(--platform-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+[data-ai-review-preview] [data-ai-review-changed="true"]::after {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 10;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: var(--platform-accent);
+  color: white;
+  content: "AI";
+  font: 600 9px/1.4 system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
 .platform-media-dialog {
   width: min(1024px, calc(100vw - 32px));
   max-width: none;

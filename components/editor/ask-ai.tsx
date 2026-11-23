@@ -10,6 +10,8 @@ import { ROOT_ZONE } from "@/lib/editor/tree";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { editorTheme, type useDraftPersistence } from "./use-draft-persistence";
 import { editorHeader } from "@/lib/header";
+import { useAiAgentPanel } from "./ai-agent-panel";
+import { AgentReviewCanvas } from "./agent-review-card";
 
 const Context = createContext<{
   open: (sectionId?: string, scope?: EditScope) => void; proposal: { data: Data; theme: SiteTheme } | null;
@@ -17,9 +19,11 @@ const Context = createContext<{
 } | null>(null);
 export const useAskAi = () => useContext(Context);
 
-export function AskAiCanvas({ children }: { children: ReactNode }) {
+export function AskAiCanvas({ children, pageId }: { children: ReactNode; pageId: string }) {
   const context = useAskAi();
+  const { reviewSession } = useAiAgentPanel();
   const proposal = context?.proposal;
+  if (reviewSession) return <AgentReviewCanvas review={reviewSession.review} pageId={pageId} metadata={context?.metadata} />;
   return proposal ? <div data-ai-preview inert><Render config={puckConfig} data={proposal.data}
     metadata={{ ...context?.metadata, theme: proposal.theme, siteHeader: editorHeader(proposal.data) }} /></div> : children;
 }

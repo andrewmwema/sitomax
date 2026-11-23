@@ -89,16 +89,18 @@ B2. Review changes (like a code agent diff):
 - Preview: the canvas shows the changeset applied, with changed
   sections outlined and a small "AI" badge; clicking a change scrolls
   to it; before/after toggle per section and for theme.
-- Keeping changes writes them into drafts as ONE undo step and a
-  version-history snapshot ("AI: Made site more premium"). Nothing is
-  published until the user presses Publish.
-- If the user edits a section manually while a changeset is pending,
-  warn and rebase or drop that change.
+- Keep / Undo choices are review-only in B2; they do not write to
+  drafts. Draft application and conflict handling are deferred to B3.
 
-B3. Remove the old "Ask AI" panel and the separate "Add a section
-with AI" floating prompt; route those entry points into the agent
-(e.g. "+ Add section → ✨ Ask AI" opens the agent with a prefilled
-request and insert position).
+B3. Apply kept changes to drafts as ONE undo step and create a
+version-history snapshot ("AI: Made site more premium"). Nothing is
+published until the user presses Publish. If the user edits a section
+manually while a changeset is pending, warn and rebase or drop that
+change.
+- Remove the old "Ask AI" panel and the separate "Add a section
+  with AI" floating prompt; route those entry points into the agent
+  (e.g. "+ Add section → ✨ Ask AI" opens the agent with a prefilled
+  request and insert position).
 
 =====================================================================
 ## PHASE C — Quality, cost and polish
