@@ -30,9 +30,10 @@ bash scripts/test-db.sh stop
 `start` starts the cluster without resetting it. The script accepts only the
 exact local test URL above and never reads `.env.local` or production keys.
 `supabase/tests/ai_agent_apply.sql` covers the AI agent's transactional apply
-and site-wide undo, including access control. Some older SQL tests target a
-particular migration version and may not work unchanged against the latest
-schema.
+and site-wide undo, including access control. Every other file in
+`supabase/tests/` is a test that passes against the latest schema, except
+`local_shims.sql`, which `reset` applies itself to stand in for Supabase's
+built-in schemas.
 
 ## Platform appearance
 
@@ -109,8 +110,12 @@ Dashboard Edit/Open editor links (including blog post edits), previews and live-
 links open in a new tab; the editor's **Dashboard** link stays in the same tab.
 Apply `supabase/migrations/0045_editor_concurrency.sql` before deploying this editor:
 it adds page versions and account-authorized editor-session heartbeats. Website pages
-warn when another tab or user is editing (refreshed every 15 seconds; abandoned
-sessions expire after 45 seconds). Saves, publishing, AI edits and history restores
+warn when another tab or user is editing (refreshed every 15 seconds and when the
+tab becomes visible again). Closing or reloading a tab ends its session at once
+through a beacon to `/api/editor/presence`, a platform-host-only route that closes
+only the caller's own session; sessions that cannot send it expire after 45
+seconds. If a check fails or is overdue the warning is replaced by a notice that
+other editors could not be checked, rather than left on screen. Saves, publishing, AI edits and history restores
 check the loaded page version atomically, including shared header/theme transactions.
 A stale save retains the local canvas, stops subsequent saves and prompts a reload;
 copy any unsaved changes before reloading. Published content is unchanged by presence
@@ -624,8 +629,10 @@ Run [`0034_leads_phase_a.sql`](./supabase/migrations/0034_leads_phase_a.sql) in
 the Supabase SQL Editor **before deploying** the app. Existing submissions
 become New leads and keep their original received date and read state.
 Account owners see their own account's sites; the agency can see all sites.
-Editors retain site editing access but cannot see lead data. Inbox stats use
-UTC and are scoped by the selected website, independent of list filters.
+Since `0042_leads_inbox_phase_a.sql` the inbox is shared by everyone with access
+to the account, including editors (read state and stars are shared); lead
+settings, exports, webhook deliveries and Trash stay owner and agency only.
+Inbox stats use UTC and are scoped by the selected website, independent of list filters.
 Archiving removes a lead from the active inbox without changing past wins.
 
 With the default Postmark transactional stream configured above, new inquiries

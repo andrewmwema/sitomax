@@ -16,10 +16,16 @@ vi.mock("./section-library", () => ({ SectionLibraryContext: createContext(null)
 vi.mock("./editor-ai-context", () => ({ useOptionalEditorAi: () => null }));
 vi.mock("./link-picker", () => ({ LinkPicker: () => null }));
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+// Tiptap returns focus to the text on the next animation frame. jsdom runs
+// frames on a wall-clock timer, so the test advances them itself: otherwise a
+// pending refocus can land after a later step and reopen the toolbar.
+const nextFrame = () => act(async () => { vi.advanceTimersToNextFrame(); });
 
 it.each([false, true])("keeps dropdowns usable across canvas focus changes (iframe: %s)", async (inFrame) => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
   const host = document.createElement("div");
   const frame = document.createElement("iframe");
   document.body.append(host);
@@ -50,6 +56,7 @@ it.each([false, true])("keeps dropdowns usable across canvas focus changes (ifra
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(editor.getHTML()).toBe("<h2>Example text</h2>");
+    await nextFrame();
     expect(host.querySelector('[aria-label="Text style"]')).not.toBeNull();
     await act(async () => {
       select.value = "p";
@@ -65,6 +72,8 @@ it.each([false, true])("keeps dropdowns usable across canvas focus changes (ifra
     });
     await act(async () => color.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
     expect(editor.getHTML()).toContain("color: rgb(18, 52, 86)");
+    await nextFrame();
+    expect(vi.getTimerCount()).toBe(0);
     await act(async () => select.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(host.querySelector('[role="toolbar"]')).toBeNull();
     await act(async () => editor.view.dom.dispatchEvent(new Event("pointerdown", { bubbles: true })));

@@ -443,7 +443,8 @@ function validateStoredProps(type: string, before: Record<string, unknown>, patc
     ...(before.design === undefined ? {} : { design: before.design }),
   };
 }
-async function makeToolResult(name: string, input: unknown, changeset: Changeset, context: {
+/** Runs one agent tool against the changeset sandbox. Exported so the tool guardrails can be tested directly. */
+export async function makeToolResult(name: string, input: unknown, changeset: Changeset, context: {
   supabase: Supabase; accountId: string; siteId: string;
 }): Promise<unknown> {
   const before = WRITE_TOOLS.has(name) ? clone(changeset.working) : null;

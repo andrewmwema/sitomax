@@ -11,6 +11,41 @@ commit "AI agent phase X: …", push, STOP and summarise. Migrations
 use the next free number; remind me to run them. Keep the inline
 "Rewrite with AI" in the text toolbar (quick, local edits).
 
+## Decisions
+
+Undo of AI changes (final, agreed during phase B3):
+- Scope: undo is site-wide. One "Undo these changes" reverses one
+  apply (pages including the footer, theme, header and blog posts
+  together) in ONE database transaction, so it cannot stop half way.
+- Apply: kept changes are written to drafts in one transaction and
+  recorded as one undo step. Only the person who ran the thread can
+  apply it.
+- Edited since: undo never overwrites later work. An item whose
+  draft was edited or published after the apply is skipped and
+  reported: "Undone N changes · Skipped M (edited since)", with a
+  link to each skipped item.
+- "Edited" is decided by comparing the saved draft values, not
+  version numbers, so undoing a later apply does not block undoing
+  an earlier one. Undo availability is tracked per item.
+- Created pages and blog drafts: deleted on undo only if never
+  published AND not edited since the apply. Otherwise they are kept
+  and listed in the skipped report.
+- Who: anyone who can edit the site (owners, editors and the
+  agency) can undo, whoever applied the changes.
+- Where: on the applied-changes card in the AI panel, and in
+  History as "Undo AI: <summary>".
+- How long: 30 days from the apply, or until a later publish
+  includes those changes. After publishing, use "Restore previous
+  published version" in History instead.
+- Live content: apply and undo only touch drafts. Published content
+  is never changed. For that reason the menu label, menu visibility,
+  title and SEO of a page that has ever been published are live
+  settings and are never written by the agent.
+- Agency-only settings (embed code) are not restored when a client
+  runs the undo; they are reported as skipped.
+- Audit: every apply and every undo is recorded in version history
+  with who did it and when.
+
 =====================================================================
 ## PHASE A — Agent engine (server)
 

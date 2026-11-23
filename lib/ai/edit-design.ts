@@ -2,7 +2,6 @@ import { z } from "zod";
 import { safeHexColor, safeUploadedVideoUrl, videoEmbedUrl, type BlockDesign } from "@/lib/sections/design";
 import { contrastRatio, DEFAULT_COLORS, type SiteTheme } from "@/lib/theme/presets";
 import { nearestContrast } from "@/lib/theme/contrast";
-import { CURATED_FONT_NAMES } from "@/lib/theme/fonts";
 
 const hex = z.string().regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i);
 const bounded = (min: number, max: number) => z.number().int().min(min).max(max);
@@ -46,23 +45,9 @@ export const designPatchSchema = z.strictObject({
     duration: bounded(150, 2000), delay: bounded(0, 1500) }).partial(),
 }).partial();
 
-export const themePatchSchema = z.strictObject({
-  colors: z.strictObject({ primary: hex, secondary: hex, accent: hex, background: hex, text: hex }).partial(),
-  headingFont: z.enum(CURATED_FONT_NAMES), bodyFont: z.enum(CURATED_FONT_NAMES),
-  radius: bounded(0, 48), buttonStyle: z.enum(["rounded", "square", "pill"]),
-}).partial();
-
 export function readableText(text: string, background: string) {
   if (contrastRatio(text, background) >= 4.5) return text;
   return nearestContrast(text, [background]) ?? text;
-}
-
-export function editTheme(theme: SiteTheme, patch: z.infer<typeof themePatchSchema>, warnings: Set<string>): SiteTheme {
-  const next = { ...theme, ...patch, colors: { ...theme.colors, ...patch.colors } };
-  const colors = { ...DEFAULT_COLORS, ...next.colors };
-  const text = readableText(colors.text, colors.background);
-  if (text !== colors.text) { next.colors.text = text; warnings.add("Theme text color was adjusted to meet WCAG AA contrast."); }
-  return next;
 }
 
 export function editDesign(design: BlockDesign, patch: z.infer<typeof designPatchSchema>, theme: SiteTheme, warnings: Set<string>): BlockDesign {

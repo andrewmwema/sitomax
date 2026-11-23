@@ -157,14 +157,6 @@ export function customSiteSectionContract(links: LinkInputs) {
   };
 }
 
-export function customSectionContract() {
-  const schema = z.strictObject({ section: customSectionSchema });
-  return {
-    schema,
-    tool: customSectionTool("add_custom_section", layoutRules, schema),
-  };
-}
-
 function customSectionTool(name: string, description: string, schema: z.ZodType) {
   const { $schema: dialect, ...inputSchema } = z.toJSONSchema(schema, { io: "input", reused: "ref" });
   void dialect;

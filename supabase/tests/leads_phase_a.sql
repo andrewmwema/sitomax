@@ -1,4 +1,4 @@
--- Run against an isolated database with migrations through 0034.
+-- Run only against an isolated test database with every migration applied.
 begin;
 
 insert into auth.users (id, email) values
@@ -73,11 +73,29 @@ begin
 end;
 $$;
 
+-- Since 0042 the inbox is shared by the whole account: editors read and triage
+-- their account's leads. Settings, webhook logs and Trash stay with owners.
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000103',true);
 do $$
+declare
+  a uuid := '00000000-0000-4000-8000-000000000301';
+  lead_a uuid := '00000000-0000-4000-8000-000000000401';
 begin
-  assert not exists (select from public.form_submissions);
-  assert not exists (select from public.lead_events);
+  assert (select count(*) from public.form_submissions) = 2
+    and not exists (select from public.form_submissions where site_id <> a), 'Editors see only their account''s leads';
+  assert exists (select from public.lead_events where lead_id = lead_a)
+    and not exists (select from public.lead_events where site_id <> a);
+  assert (select count(*) from public.lead_notes) = 1, 'Notes are shared with the team';
+  assert public.lead_inbox_action('star', array[lead_a]) = 1, 'Editors share inbox state';
+  assert not public.can_manage_site_leads(a);
+  assert not exists (select from public.lead_site_settings), 'Webhook secrets stay with owners';
+  assert not exists (select from public.lead_webhook_deliveries);
+  begin
+    perform public.lead_inbox_action('trash', array[lead_a]);
+    raise exception 'Editors cannot move leads to Trash';
+  exception when insufficient_privilege then null;
+  end;
+  assert (select deleted_at is null and starred from public.form_submissions where id = lead_a);
 end;
 $$;
 
