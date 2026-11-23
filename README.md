@@ -294,7 +294,10 @@ concurrent draft change cancels the save. Each AI attempt is metered.
 Apply [0046_ai_agent.sql](./supabase/migrations/0046_ai_agent.sql),
 [0047_ai_agent_apply.sql](./supabase/migrations/0047_ai_agent_apply.sql) and
 [0048_ai_agent_limits.sql](./supabase/migrations/0048_ai_agent_limits.sql) after
-the preceding migrations. Open the AI chat from the editor's top bar
+the preceding migrations. Apply `0048` right after deploying this version, not
+before: the previous version reads run columns that `0048` closes to client
+sessions, so its AI chat would fail until the deploy. Until `0048` is applied
+the per-account limit is not enforced. Open the AI chat from the editor's top bar
 (Ctrl/Cmd+J, or Ctrl/Cmd+K outside a text field), a section's toolbar or menu,
 the header toolbar, or **Ask AI** in the section library, which passes the
 insert position. The agent stages changes across pages, the theme, header,
