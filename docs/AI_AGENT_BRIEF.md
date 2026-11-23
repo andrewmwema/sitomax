@@ -55,14 +55,16 @@ Quality, cost and limits (agreed during phase C):
   clashes). Problems already on the site are not touched.
 - Cost display: clients see credits; the agency also sees tokens
   and the provider cost. This is enforced in the database, not only
-  in the panel.
+  in the panel: run cost columns and the usage ledger are closed to
+  client sessions, owners included.
 - Rate limit: 30 agent requests an hour and 150 a day per client
   account, counting every message, answer, plan approval and
   Continue. Agency staff are exempt. Adjustable per account in
   `ai_limits`.
 - A large run (3 credits) is decided by the changes of that run,
-  not by everything staged in the thread. Quality fixes do not
-  count.
+  not by everything staged in the thread. Quality fixes and
+  requests that change nothing do not count, and the user is asked
+  for the credits only for a change that can actually be made.
 - Provider errors: a busy or unreachable service pauses the run so
   Continue retries it at no extra charge; a rejected request ends
   the run with its staged changes kept for review. The agency sees
@@ -73,9 +75,10 @@ Quality, cost and limits (agreed during phase C):
   they are bound to a system prompt that changes with every change.
 - Tool input: only the properties the agent edits are validated, so
   stored content in shapes the AI schemas do not model stays
-  editable. Images come only from set_image; embed code is never
-  shown to the model; footer contact details and business
-  information cannot be changed.
+  editable. Images come only from set_image or the site's media
+  library, in the header too; embed code is never shown to the
+  model, in what it reads or in tool results; footer contact
+  details and business information cannot be changed.
 - Evals run in the sandbox against a fixture site, with a spending
   cap. "No invented facts" is checked by heuristics that know the
   fixture's facts.

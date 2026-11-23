@@ -110,6 +110,21 @@ describe("AI agent run loop", () => {
     expect(state.messages.at(-1)!.role).toBe("assistant");
   });
 
+  it("asks for credits only for a change that can be made, and does not count requests that change nothing", async () => {
+    const invalid: Reply = { tool: ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: { notAProp: 1 } }] };
+    const model = scripted((_params, call) => call <= 10 ? edit(`Heading ${call}`) : call === 11 ? invalid : call === 12 ? edit("Heading 10") : { text: "Done." });
+    const { state, changeset, events, run } = start(model);
+    expect(await run()).toBe("completed");
+    expect(events.some((event) => event.type === "credit_confirmation")).toBe(false);
+    expect(events.filter((event) => event.type === "tool_error").map((event) => String(event.message))).toEqual([
+      "Unsupported section property: notAProp.", "Nothing changed: the site already matches this request.",
+    ]);
+    expect(state.awaiting).toBeUndefined();
+    expect(state.runChanges).toBe(10);
+    expect(changeset.changes).toHaveLength(10);
+    expectAnswered(state.messages);
+  });
+
   it("waits for the user on a plan or a question, and gives the model one chance to repair bad input", async () => {
     const plan = start(scripted(() => ({ tool: ["plan", { steps: ["Rewrite the hero", "Add an FAQ"] }] })));
     expect(await plan.run()).toBe("awaiting_approval");

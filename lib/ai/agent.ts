@@ -22,7 +22,7 @@ import { blogContentSchema, sanitizeBlogContent } from "@/lib/blog";
 import { puckConfig } from "@/lib/puck/config";
 import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import { buildCustomSections, customSectionSchema } from "./custom-layout";
-import { designPatchSchema, editDesign } from "./edit-design";
+import { designPatchSchema, editDesign, editMediaUrl } from "./edit-design";
 import { freshFooter } from "./site-footer";
 import { agentToolSchemas, agentTools } from "./agent-tools";
 import { createAgentReviewPayload, jsonEqual, reviewPatches, type ReviewPatch } from "./agent-review";
@@ -167,12 +167,20 @@ function textFrom(value: unknown): string {
 function itemText(item: Item) {
   return item.type === "Embed" ? "" : textFrom(item.props);
 }
+/** A copy for the model to read, with the code of every Embed anywhere inside it left out. */
+function withoutEmbedCode<T>(value: T): T {
+  const mask = (entry: unknown): unknown => {
+    if (Array.isArray(entry)) return entry.map(mask);
+    if (!isRecord(entry)) return entry;
+    if (isItem(entry) && entry.type === "Embed") {
+      return { type: "Embed", props: { id: entry.props.id, note: "Embed code is managed by the agency. It cannot be read or changed here." } };
+    }
+    return Object.fromEntries(Object.entries(entry).map(([key, child]) => [key, mask(child)]));
+  };
+  return mask(value) as T;
+}
 function readableSection(item: Item): Item {
-  const copy = clone(item);
-  walkItems([copy], (entry) => {
-    if (entry.type === "Embed") entry.props = { id: entry.props.id, note: "Embed code is managed by the agency. It cannot be read or changed here." };
-  });
-  return copy;
+  return withoutEmbedCode(item);
 }
 function sectionDesignId(item: { type: string; props: Record<string, unknown> }) {
   const match = agentDesigns.find((design) => design.blockType === item.type &&
@@ -436,13 +444,19 @@ export async function makeToolResult(name: string, input: unknown, changeset: Ch
   const count = changeset.changes.length;
   const result = await executeTool(name, input, changeset, context);
   if (before) {
-    const toolResult = clone(result);
+    // What a tool returns goes to the model, so it is masked like everything the model reads.
+    const toolResult = withoutEmbedCode(result);
     const added = changeset.changes.slice(count);
     if (added.length !== 1) throw new Error("The agent could not prepare this change for review.");
     added[0].patches = reviewPatches(before, changeset.working);
+    if (!added[0].patches.length) {
+      // Nothing to review, and nothing that should count towards a large run.
+      changeset.changes.length = count;
+      throw new Error("Nothing changed: the site already matches this request.");
+    }
     return toolResult;
   }
-  return result;
+  return withoutEmbedCode(result);
 }
 
 function executeTool(name: string, input: unknown, changeset: Changeset, context: AgentToolContext): Promise<unknown> | unknown {
@@ -520,6 +534,23 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     case "update_header": {
       const before = changeset.working.header;
       const after = safeHeader(mergePatch(before, record.parse(args.header)));
+      // As everywhere else, the agent may reuse the site's images but not bring in outside ones.
+      const images = (header: unknown) => {
+        const found: unknown[] = [];
+        const visit = (value: unknown) => {
+          if (Array.isArray(value)) value.forEach(visit);
+          else if (isRecord(value)) for (const [key, child] of Object.entries(value)) {
+            if (key === "image") found.push(child);
+            else visit(child);
+          }
+        };
+        visit(header);
+        return found;
+      };
+      const known = new Set(images(before));
+      if (images(after).some((image) => image !== "" && !known.has(image) && !editMediaUrl.safeParse(image).success)) {
+        throw new Error("Header images must already be in the site's media library.");
+      }
       changeset.working.header = after;
       return pushChange(changeset, "header", "Update site header", before, after);
     }
@@ -949,18 +980,21 @@ export async function runAgentLoop(run: {
         callSummaries.push({ name: call.name, input: payload });
         continue;
       }
-      if (WRITE_TOOLS.has(call.name) && state.runChanges >= AGENT_LIMITS.largeRunChanges && !state.largeCreditConfirmed) {
-        state.awaiting = { kind: "credit", toolUseId: call.id, toolName: call.name, payload: { input: call.input as Record<string, unknown> } };
-        terminal = "awaiting_approval";
-        emit({
-          type: "credit_confirmation", callId: call.id, threadId, runId, credits: 3,
-          message: "This run has reached 10 changes. Approving the next change will cost 3 credits total.",
-        });
-        callSummaries.push({ name: call.name, awaitingCreditApproval: true });
-        continue;
-      }
       const saved = WRITE_TOOLS.has(call.name) ? clone(changeset) : null;
       try {
+        if (saved && state.runChanges >= AGENT_LIMITS.largeRunChanges && !state.largeCreditConfirmed) {
+          // Ask for the credits only for a change that can be made: try it on a copy first.
+          // Choosing a photo stores it, so that one tool is not tried twice.
+          if (call.name !== "set_image") await makeToolResult(call.name, call.input, clone(changeset), context);
+          state.awaiting = { kind: "credit", toolUseId: call.id, toolName: call.name, payload: { input: call.input as Record<string, unknown> } };
+          terminal = "awaiting_approval";
+          emit({
+            type: "credit_confirmation", callId: call.id, threadId, runId, credits: 3,
+            message: "This run has reached 10 changes. Approving the next change will cost 3 credits total.",
+          });
+          callSummaries.push({ name: call.name, awaitingCreditApproval: true });
+          continue;
+        }
         const previousChanges = changeset.changes.length;
         const result = await makeToolResult(call.name, call.input, changeset, context);
         const addedChanges = changeset.changes.length - previousChanges;

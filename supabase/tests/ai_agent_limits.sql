@@ -207,6 +207,14 @@ begin
     raise exception 'Clients must not read AI reservations.';
   exception when insufficient_privilege then null;
   end;
+  -- The usage ledger holds the same cost per request, so owners cannot read it either.
+  if (select count(*) from public.ai_usage) <> 0 then
+    raise exception 'Clients must not read provider cost in the usage ledger.';
+  end if;
+  -- Owners still see their allowance and credits.
+  if (select count(*) from public.ai_account_summaries() s where s.account_id = acct) <> 1 then
+    raise exception 'Owners must still see their AI allowance.';
+  end if;
   -- Conversations are written by the server only.
   begin
     insert into public.ai_agent_threads(site_id, user_id, title) values (site, owner_id, 'Direct');
@@ -223,6 +231,13 @@ begin
     raise exception 'Clients must not delete messages directly.';
   exception when insufficient_privilege then null;
   end;
+  execute 'reset role';
+
+  perform set_config('request.jwt.claim.sub', admin_id::text, true);
+  execute 'set local role authenticated';
+  if (select cost_usd from public.ai_usage where request_id = request) <> 0.0042 then
+    raise exception 'The agency must read provider cost in the usage ledger.';
+  end if;
   execute 'reset role';
 
   -- Another member of the same account, another account and the agency see nothing of it.

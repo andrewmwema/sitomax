@@ -328,13 +328,17 @@ labels that cannot be used. Each repair is staged as a **Quality fix** change,
 reviewed and applied like any other. Links that lead nowhere, placeholders left
 to fill in, pages sharing a menu label and a crowded menu are listed on the
 review card under **Check before publishing**. Problems that were already on
-the site are left alone.
+the site are left alone. Text colours are only judged where the background
+behind them is known, so text over an image or video, or inside a curated
+block, is never recoloured.
 
 **Cost and limits.** A run costs one included edit, or 1 credit beyond the
 monthly allowance, and 3 credits once it makes more than 10 changes (the app
 asks first). After a run the panel shows clients what it cost in credits; the
 agency also sees token counts and the provider cost. Provider cost, token
-counts and the saved model conversation cannot be read with a client session.
+counts and the saved model conversation cannot be read with a client session;
+`0048` also closes the per-request usage ledger (`ai_usage`) to account owners,
+who keep seeing their allowance and credits.
 Each client account may send 30 agent requests an hour and 150 a day, counting
 every message, answer, plan approval and Continue; agency staff are exempt.
 Change the numbers per account in `ai_limits.agent_requests_per_hour` and
@@ -350,8 +354,9 @@ tool results are kept in full. The model's reasoning is never sent back to it.
 **Evals.** `node scripts/agent-evals.mjs --dry-run` checks the eval harness
 with a scripted model and sends nothing to the provider.
 `node scripts/agent-evals.mjs` runs ten sample requests against a fixture site
-with the configured API key (about $1 of provider credits; `--budget` caps the
-spend, 3 USD by default) and checks that each staged changeset validates,
+with the configured API key (about $1 of provider credits, more when the model
+plans a larger job; `--budget` caps the total, 3 USD by default, and one
+request may use a quarter of it) and checks that each staged changeset validates,
 invents no facts and keeps AA contrast. `--only faq,blog` runs selected
 requests and `--verbose` prints each step. Evals run in the agent's sandbox:
 they read and write no database and fetch no images.

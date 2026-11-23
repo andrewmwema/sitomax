@@ -103,8 +103,52 @@ describe("AI agent changeset quality check", () => {
     after.header = { ...header, menu: { source: "custom", items: [{ label: "Old page", href: "/old", children: [] }] } };
     expect(checkQuality(before, after).report.notes).toEqual([
       "Menu: more than one page is called “about”.",
-      "Menu: there are now 8 pages in the menu. Consider hiding some so it fits on small screens.",
       "Header: a menu link links to /old, which is not a page on this site.",
+      "Menu: there are now 8 pages in the menu. Consider hiding some so it fits on small screens.",
     ]);
+    // A menu that was already crowded is not reported again, least of all when it got shorter.
+    const shorter = structuredClone(after);
+    shorter.pages.at(-1)!.hide_from_menu = true;
+    expect(checkQuality(after, shorter).report.notes).toEqual([]);
+  });
+
+  it("leaves text alone where its background is not known: over media and inside curated blocks", () => {
+    const white = () => ({ appearance: { desktop: { textColor: "#ffffff" }, mobile: { textColor: "#ffffff" } } });
+    const bare = { heading: "Welcome", buttonText: "", buttonLink: "", secondaryButtonText: "", secondaryButtonLink: "", stats: [] };
+    const before = site([layout("main", [heading])]);
+    const after = structuredClone(before);
+    const sections = (after.pages[0].draft_data as { content: Item[] }).content;
+    sections.push(
+      // White text over a photo with a dark overlay, as the agent's design tool sets it.
+      layout("photo", [heading], { ...white(), background: { type: "image", images: ["/samples/hero.jpg"], overlayColor: "#000", overlayOpacity: 80 } }),
+      element("Hero", "hero", { ...bare, design: { ...white(), background: { type: "video", video: {} } } }),
+      // A curated block draws its own backgrounds, which the check cannot see.
+      element("Hero", "plain-hero", { ...bare, design: white() }),
+      // Inside a section with a known colour of its own, white text is judged against that colour.
+      layout("navy", [heading], { ...white(), background: { type: "color", color: "#0b2545" } }),
+      layout("pale", [heading], { ...white(), background: { type: "color", color: "#f5f5f5" } }),
+    );
+    const { site: fixed, report } = checkQuality(before, after);
+    const colors = (fixed.pages[0].draft_data as { content: Item[] }).content.slice(1)
+      .map((item) => (item.props.design as ReturnType<typeof white>).appearance.desktop.textColor);
+    expect(colors.slice(0, 4)).toEqual(["#ffffff", "#ffffff", "#ffffff", "#ffffff"]);
+    expect(contrastRatio(colors[4], "#f5f5f5")).toBeGreaterThanOrEqual(4.5);
+    expect(report).toEqual({ fixed: ["Home: adjusted 1 text colour to stay readable."], notes: [] });
+  });
+
+  it("does not blame the changes for old problems that moved, or mistake blog lists for placeholders", () => {
+    const plan = (name: string, buttonLink: string) =>
+      ({ name, description: "", price: "", period: "", yearlyPrice: "", yearlyPeriod: "", features: "", buttonText: "Sign up", buttonLink, highlighted: false });
+    const before = site([element("Pricing", "pricing", { plans: [plan("Basic", "/old-signup")] })]);
+    const after = structuredClone(before);
+    ((after.pages[0].draft_data as { content: Item[] }).content[0].props.plans as unknown[]).unshift(plan("Starter", "/about"));
+    after.posts = [{ id: "post", title: "Frozen pipes", excerpt: "", draft_content: { version: 1, blocks: [
+      { type: "list", ordered: false, items: ["Insulate pipes", "Find the stopcock"] },
+      { type: "table", rows: [["Job", "Time"], ["Lagging", "1 hour"]] },
+      { type: "paragraph", html: "<p>Call us on [phone number].</p>" },
+    ] } }];
+    expect(checkQuality(before, after).report).toEqual({
+      fixed: [], notes: ["Blog post “Frozen pipes”: 1 placeholder to fill in before publishing: [phone number]."],
+    });
   });
 });

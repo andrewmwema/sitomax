@@ -336,4 +336,51 @@ describe("AI agent tool guardrails", () => {
     ] as const) await expect(run(changeset, name, input), JSON.stringify(input)).rejects.toThrow(message);
     expect(changeset.changes).toHaveLength(2);
   });
+
+  it("never returns embed code to the model, from any tool", async () => {
+    for (const [name, input] of [
+      ["update_section_props", { pageId, sectionId: "custom", props: { background: "dark" } }],
+      ["update_section_props", { pageId, sectionId: "column", props: { surface: "card" } }],
+      ["update_section_design", { pageId, sectionId: "custom", design: { shadow: "soft" } }],
+      ["duplicate_section", { pageId, sectionId: "custom" }],
+      ["move_section", { pageId, sectionId: "custom", position: 0 }],
+      ["delete_section", { pageId, sectionId: "custom" }],
+    ] as const) {
+      const changeset = staged();
+      const result = JSON.stringify(await run(changeset, name, input));
+      expect(result, name).not.toContain("<secret>");
+      // The site itself keeps the code, and so does what the user reviews and applies.
+      expect(changeset.changes, name).toHaveLength(1);
+      if (name !== "delete_section") expect(JSON.stringify(changeset.working), name).toContain("<secret>");
+      expect(JSON.stringify(changeset.baseline), name).toContain("<secret>");
+    }
+  });
+
+  it("stages nothing for a request that changes nothing", async () => {
+    const changeset = staged();
+    await run(changeset, "update_section_props", { pageId, sectionId: "hero", props: { heading: "Reliable local plumbers" } });
+    for (const [name, input] of [
+      ["update_section_props", { pageId, sectionId: "hero", props: { heading: "Reliable local plumbers" } }],
+      ["update_theme", { patch: { colors: { background: "#ffffff" } } }],
+      ["update_header", { header: {} }],
+      ["move_section", { pageId, sectionId: "hero", position: 0 }],
+      ["update_page_settings", { pageId, hidden: false }],
+    ] as const) await expect(run(changeset, name, input), name).rejects.toThrow("Nothing changed");
+    expect(changeset.changes).toHaveLength(1);
+  });
+
+  it("lets the header reuse the site's images but not bring in outside ones", async () => {
+    const changeset = staged();
+    const logo = "https://assets.example/site/logo.png";
+    changeset.working.header = { ...changeset.working.header, logo: { ...changeset.working.header.logo, mode: "image", image: logo } };
+    changeset.baseline = structuredClone(changeset.working);
+    for (const header of [
+      { logo: { image: "https://tracker.example/pixel.png" } },
+      { desktop: { background: "image", image: "https://tracker.example/bg.png" } },
+    ]) await expect(run(changeset, "update_header", { header })).rejects.toThrow("media library");
+    expect(changeset.changes).toHaveLength(0);
+    await run(changeset, "update_header", { header: { desktop: { background: "image", image: logo } } });
+    await run(changeset, "update_header", { header: { logo: { mode: "text", image: "" }, mobile: { image: "/samples/tools.jpg" } } });
+    expect(changeset.working.header).toMatchObject({ logo: { mode: "text", image: "" }, desktop: { image: logo }, mobile: { image: "/samples/tools.jpg" } });
+  });
 });

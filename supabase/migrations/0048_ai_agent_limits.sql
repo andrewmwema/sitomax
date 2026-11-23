@@ -81,4 +81,11 @@ revoke select on public.ai_agent_runs from authenticated;
 grant select (id, thread_id, status, request_id, changeset, started_at, finished_at)
   on public.ai_agent_runs to authenticated;
 
+-- The same figures are kept per request in the usage ledger, which account
+-- owners could read. Owners see their allowance and credits through
+-- ai_account_summaries; the ledger with token counts and cost is the agency's.
+drop policy "owners read AI usage" on public.ai_usage;
+create policy "agency reads AI usage" on public.ai_usage for select to authenticated
+  using (public.is_super_admin());
+
 commit;

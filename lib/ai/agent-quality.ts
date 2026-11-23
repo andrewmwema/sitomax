@@ -82,6 +82,16 @@ function hrefs(value: unknown, found: unknown[] = []): unknown[] {
   }
   return found;
 }
+function strings(value: unknown, found: string[] = []): string[] {
+  if (typeof value === "string") found.push(value);
+  else if (Array.isArray(value)) value.forEach((entry) => strings(entry, found));
+  else if (isRecord(value)) Object.values(value).forEach((entry) => strings(entry, found));
+  return found;
+}
+function menuLabels(site: QualitySite) {
+  return site.pages.filter((page) => !page.hide_from_menu)
+    .map((page) => menuLabelSchema.safeParse(page.nav_label).data ?? defaultMenuLabel(page.slug));
+}
 function placeholders(text: string) {
   return [...new Set(plain(text).match(new RegExp(PLACEHOLDER, "g")) ?? [])];
 }
@@ -140,26 +150,32 @@ function inspect(site: QualitySite): Finding[] {
 
   for (const page of site.pages) {
     const where = pageLabel(page);
-    const visit = (items: Item[], surfaces: string[], nested: boolean) => {
+    // `surfaces` is null where the background behind the text is not known: over an image or
+    // video, and inside curated blocks, whose layouts place text on backgrounds of their own.
+    const visit = (items: Item[], surfaces: string[] | null, nested: boolean) => {
       for (const item of [...items]) {
         const { type, props } = item;
         if (type === "Embed" || type === "Navigation") continue;
         const id = String(props.id ?? "");
         const name = `${where} › ${labelOf(type)}`;
         const design = isRecord(props.design) ? props.design : undefined;
-        const base = type === "Column" && (props.surface === "card" || props.surface === "highlight") ? [colors.background]
-          : props.background === "primary" ? [colors.primary]
-            : props.background === "dark" ? [darkBackground]
-              : props.background === "default" ? [colors.background] : surfaces;
-        const active = resolveContrastBackgrounds(design, base);
+        const layout = nested || type === "Section";
+        const base = !layout ? null
+          : type === "Column" && (props.surface === "card" || props.surface === "highlight") ? [colors.background]
+            : props.background === "primary" ? [colors.primary]
+              : props.background === "dark" ? [darkBackground]
+                : props.background === "default" ? [colors.background] : surfaces;
+        const media = isRecord(design?.background) && (design.background.type === "image" || design.background.type === "video");
+        const own = media ? [] : resolveContrastBackgrounds(design, []);
+        const active = own.length ? own : media ? null : base;
         const appearance = design && isRecord(design.appearance) ? design.appearance : {};
-        const unreadable = DEVICES.flatMap((device) => {
+        const unreadable = !active ? [] : DEVICES.flatMap((device) => {
           const settings = appearance[device];
           if (!isRecord(settings) || typeof settings.textColor !== "string") return [];
           const color = settings.textColor;
           return active.some((background) => assessContrast(color, background)?.passes === false) ? [{ settings, color }] : [];
         });
-        if (unreadable.length) {
+        if (active && unreadable.length) {
           const repairs = unreadable.map(({ settings, color }) =>
             ({ settings, color: nearestContrast(color, active) ?? bestContrastingTextColor(active) }));
           findings.push({
@@ -194,7 +210,8 @@ function inspect(site: QualitySite): Finding[] {
           if (!problem) continue;
           const button = typeof label === "string" && plain(label) ? ` “${plain(label).slice(0, 40)}”` : "";
           findings.push({
-            key: `${page.id}:${id}:link:${path}:${JSON.stringify(value ?? "")}`, kind: "broken_link", pageId: page.id, where,
+            // Without the list position, so reordering a list does not make an old link look new.
+            key: `${page.id}:${id}:link:${path.replace(/\.\d+(?=\.|$)/g, "")}:${JSON.stringify(value ?? "")}`, kind: "broken_link", pageId: page.id, where,
             detail: `${name}:${button ? ` the button${button}` : " a link"} ${problem}.`,
           });
         }
@@ -224,14 +241,9 @@ function inspect(site: QualitySite): Finding[] {
     }
   }
 
-  const menu = site.pages.filter((page) => !page.hide_from_menu)
-    .map((page) => menuLabelSchema.safeParse(page.nav_label).data ?? defaultMenuLabel(page.slug));
+  const menu = menuLabels(site);
   for (const label of new Set(menu.filter((entry, index) => menu.findIndex((other) => other.toLowerCase() === entry.toLowerCase()) !== index))) {
     findings.push({ key: `nav:duplicate:${label.toLowerCase()}`, kind: "nav_label", where: "Menu", detail: `Menu: more than one page is called “${label}”.` });
-  }
-  if (menu.length > MENU_ITEMS) {
-    findings.push({ key: `nav:crowded:${menu.length}`, kind: "nav_label", where: "Menu",
-      detail: `Menu: there are now ${menu.length} pages in the menu. Consider hiding some so it fits on small screens.` });
   }
   for (const [where, value] of [["Header", site.header], ["Footer", site.footer]] as const) {
     for (const href of hrefs(value)) {
@@ -240,8 +252,8 @@ function inspect(site: QualitySite): Finding[] {
     }
   }
   for (const post of site.posts ?? []) {
-    const text = [post.title, post.excerpt ?? "", JSON.stringify(post.draft_content ?? "")].join(" ");
-    for (const token of placeholders(text)) {
+    // Each piece of text on its own: the stored JSON around it has brackets of its own.
+    for (const token of new Set([post.title, post.excerpt ?? "", ...strings(post.draft_content)].flatMap(placeholders))) {
       findings.push({ key: `post:${post.id}:placeholder:${token}`, kind: "placeholder", where: `Blog post “${post.title}”`, detail: token });
     }
   }
@@ -281,6 +293,10 @@ export function checkQuality<T extends QualitySite>(baseline: QualitySite, worki
 
   const left = inspect(site).filter((finding) => !known.has(finding.key));
   const notes = left.filter((finding) => finding.kind !== "placeholder").map((finding) => finding.detail);
+  const menu = menuLabels(site).length;
+  if (menu > MENU_ITEMS && menu > menuLabels(baseline).length) {
+    notes.push(`Menu: there are now ${menu} pages in the menu. Consider hiding some so it fits on small screens.`);
+  }
   const tokens = new Map<string, string[]>();
   for (const finding of left.filter((entry) => entry.kind === "placeholder")) {
     tokens.set(finding.where, [...tokens.get(finding.where) ?? [], finding.detail]);
