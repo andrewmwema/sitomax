@@ -51,10 +51,12 @@ TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm tes
 
 Apply migrations only to a local or staging Supabase project, then run
 `npm run seed:premium-templates` with `NEXT_PUBLIC_SUPABASE_URL` and
-`SUPABASE_SERVICE_ROLE_KEY` set for that same project. The idempotent seed
-uploads the template artwork to the read-only `template-assets` bucket and
-upserts the Showcase, Clarity and Studio master designs. Do not point the seed
-script at production while reviewing this feature.
+`SUPABASE_SERVICE_ROLE_KEY` explicitly set in the process environment for that
+same local project. The seed does not load environment files and refuses
+non-local Supabase URLs. It uploads template artwork to the read-only
+`template-assets` bucket and upserts the Showcase, Clarity and Studio masters.
+See [docs/MIGRATIONS.md](./docs/MIGRATIONS.md) for the production migration
+record and the review-only Phase 1 test-fixture and cleanup procedures.
 
 ## Platform appearance
 

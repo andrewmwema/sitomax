@@ -1,15 +1,17 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { loadEnvConfig } from "@next/env";
 import { premiumTemplates } from "../templates/premium";
-
-loadEnvConfig(process.cwd());
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseUrl || !serviceRoleKey) {
   throw new Error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before seeding templates.");
+}
+
+const target = new URL(supabaseUrl);
+if (target.hostname !== "localhost" && target.hostname !== "127.0.0.1" && target.hostname !== "[::1]") {
+  throw new Error("Premium template seeding is restricted to local Supabase until a production test seed is reviewed.");
 }
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -78,34 +80,41 @@ function rewriteAssetReferences(value: unknown, urls: Map<string, string>): unkn
   return value;
 }
 
-for (const template of Object.values(premiumTemplates)) {
-  const source = {
-    previewImage: template.previewImage,
-    pages: template.pages.map(({ title, slug, nav_label, data }) => ({ title, slug, nav_label, data })),
-  };
-  const assetPaths = collectAssetPaths(source);
-  const urls = new Map<string, string>();
-  for (const assetPath of assetPaths) {
-    urls.set(assetPath, await publicAssetUrl(template.key, assetPath));
+async function main() {
+  for (const template of Object.values(premiumTemplates)) {
+    const source = {
+      previewImage: template.previewImage,
+      pages: template.pages.map(({ title, slug, nav_label, data }) => ({ title, slug, nav_label, data })),
+    };
+    const assetPaths = collectAssetPaths(source);
+    const urls = new Map<string, string>();
+    for (const assetPath of assetPaths) {
+      urls.set(assetPath, await publicAssetUrl(template.key, assetPath));
+    }
+
+    const rewritten = rewriteAssetReferences(source, urls) as typeof source;
+    const { error } = await supabase.from("site_templates").upsert({
+      id: template.key,
+      name: template.name,
+      description: template.description,
+      best_for: template.bestFor,
+      preview_image: rewritten.previewImage,
+      theme: template.theme,
+      business: template.business,
+      pages: rewritten.pages,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
+    if (error) {
+      console.error("Could not save a premium template.", { templateId: template.key, code: error.code });
+      throw new Error(`Premium template seed failed for "${template.key}".`);
+    }
   }
 
-  const rewritten = rewriteAssetReferences(source, urls) as typeof source;
-  const { error } = await supabase.from("site_templates").upsert({
-    id: template.key,
-    name: template.name,
-    description: template.description,
-    best_for: template.bestFor,
-    preview_image: rewritten.previewImage,
-    theme: template.theme,
-    business: template.business,
-    pages: rewritten.pages,
-    is_active: true,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "id" });
-  if (error) {
-    console.error("Could not save a premium template.", { templateId: template.key, code: error.code });
-    throw new Error(`Premium template seed failed for "${template.key}".`);
-  }
+  console.info(`Seeded ${Object.keys(premiumTemplates).length} premium website templates.`);
 }
 
-console.info(`Seeded ${Object.keys(premiumTemplates).length} premium website templates.`);
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : "Premium template seeding failed.");
+  process.exitCode = 1;
+});
