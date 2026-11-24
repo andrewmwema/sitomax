@@ -447,7 +447,8 @@ describe("catalog site generation", () => {
       for (const page of largest) {
         const { tool, slots } = pageFillContract(page);
         const json = JSON.stringify(tool.input_schema);
-        expect(bytes(tool.input_schema)).toBeLessThan(16 * 1024);
+        expect(bytes(tool.input_schema), `${style} ${page.slug}: ${sections.map(({ blockType }) => blockType).join(", ")}`)
+          .toBeLessThan(16 * 1024);
         expect(json).not.toMatch(/"(anyOf|oneOf|prefixItems|blockType|designId|variant)":/);
         expect(slots.map(({ blockType }) => blockType)).toEqual(sections.map(({ blockType }) => blockType));
       }

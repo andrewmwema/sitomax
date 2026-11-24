@@ -16,5 +16,23 @@ export function AnalyticsBeacon({ blogPostId }: { blogPostId?: string }) {
     const body = JSON.stringify({ path: window.location.pathname, referrer, blogPostId });
     navigator.sendBeacon("/api/analytics", new Blob([body], { type: "application/json" }));
   }, [blogPostId]);
+
+  useEffect(() => {
+    function recordClick(event: MouseEvent) {
+      if (!(event.target instanceof Element)) return;
+      const action = event.target.closest('[data-analytics-event="cta_click"]');
+      if (!action) return;
+      const body = JSON.stringify({
+        path: window.location.pathname,
+        referrer: "",
+        event: "cta_click",
+      });
+      navigator.sendBeacon("/api/analytics", new Blob([body], { type: "application/json" }));
+    }
+
+    document.addEventListener("click", recordClick, true);
+    return () => document.removeEventListener("click", recordClick, true);
+  }, []);
+
   return null;
 }

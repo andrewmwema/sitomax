@@ -8,12 +8,13 @@ import { Section } from "./ui/section";
 import { Container } from "./ui/container";
 import { Eyebrow } from "./ui/eyebrow";
 import { RichHeading } from "./ui/heading";
-import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { BlockIcon } from "./ui/icon";
 import { FormSubmission } from "./ui/form-submission";
 import { RichTextContent } from "./ui/rich-text";
+import { ConversionActions } from "./ui/conversion-actions";
+import type { ConversionAction } from "./ui/conversion-actions";
 
 export type HeroStat = { value: string; label: string };
 
@@ -34,8 +35,13 @@ export type HeroProps = {
   subheading: RichText;
   buttonText: string;
   buttonLink: LinkValue;
+  buttonAction?: "link" | "form-popup";
+  buttonFormName?: string;
   secondaryButtonText?: string;
   secondaryButtonLink?: LinkValue;
+  secondaryButtonAction?: "link" | "form-popup";
+  secondaryButtonFormName?: string;
+  trustLine?: string;
   backgroundImage: string;
   backgroundImageAlt?: string;
   /** Second photo for the collage shown by the "stats" variant. */
@@ -76,27 +82,45 @@ function HeroLabel({ badgeText, badgeIcon = "star", eyebrow, editing }: {
 function HeroButtons({
   buttonText,
   buttonLink,
+  buttonAction,
+  buttonFormName,
   secondaryButtonText,
   secondaryButtonLink,
+  secondaryButtonAction,
+  secondaryButtonFormName,
+  trustLine,
   center = false,
 }: Pick<
   HeroProps,
-  "buttonText" | "buttonLink" | "secondaryButtonText" | "secondaryButtonLink"
+  | "buttonText"
+  | "buttonLink"
+  | "buttonAction"
+  | "buttonFormName"
+  | "secondaryButtonText"
+  | "secondaryButtonLink"
+  | "secondaryButtonAction"
+  | "secondaryButtonFormName"
+  | "trustLine"
 > & { center?: boolean }) {
-  if (!buttonText && !secondaryButtonText) return null;
+  const primary: ConversionAction | undefined = buttonText ? {
+    label: buttonText,
+    link: buttonLink,
+    mode: buttonAction,
+    formName: buttonFormName,
+  } : undefined;
+  const secondary: ConversionAction | undefined = secondaryButtonText ? {
+    label: secondaryButtonText,
+    link: secondaryButtonLink,
+    mode: secondaryButtonAction,
+    formName: secondaryButtonFormName,
+  } : undefined;
   return (
-    <div
-      className={`flex w-full flex-col gap-3 pt-1 min-[480px]:w-auto min-[480px]:flex-row min-[480px]:flex-wrap ${
-        center ? "min-[480px]:justify-center" : ""
-      }`}
-    >
-      {buttonText ? <Button href={buttonLink}>{buttonText}</Button> : null}
-      {secondaryButtonText ? (
-        <Button href={secondaryButtonLink} variant="secondary">
-          {secondaryButtonText}
-        </Button>
-      ) : null}
-    </div>
+    <ConversionActions
+      primary={primary}
+      secondary={secondary}
+      trustLine={trustLine}
+      center={center}
+    />
   );
 }
 
@@ -148,13 +172,26 @@ export const Hero: ComponentConfig<HeroProps> = {
     heading: richHeadingField("Heading", 1),
     subheading: richTextField("Subheading"),
     buttonText: { type: "text", label: "Button text", contentEditable: true },
+    buttonAction: {
+      type: "select",
+      label: "Primary action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
     buttonLink: linkField("Button link"),
+    buttonFormName: { type: "text", label: "Popup form name" },
     secondaryButtonText: {
       type: "text",
       label: "Second button text",
       contentEditable: true,
     },
+    secondaryButtonAction: {
+      type: "select",
+      label: "Second action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
     secondaryButtonLink: linkField("Second button link"),
+    secondaryButtonFormName: { type: "text", label: "Second popup form name" },
+    trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
     backgroundImage: imageField("Image"),
     backgroundImageAlt: { type: "text", label: "Image alt text" },
     secondaryImage: imageField("Second image (collage)"),
@@ -213,10 +250,16 @@ export const Hero: ComponentConfig<HeroProps> = {
   // Only show the fields the chosen layout actually uses.
   resolveFields: (data, { fields }) => {
     const variant = data.props.variant ?? data.props.layout ?? "centered";
-    const { backgroundImage, backgroundImageAlt, secondaryImage, secondaryImageAlt, stats, formName, submitText, formFields, ...rest } =
+    const {
+      backgroundImage, backgroundImageAlt, secondaryImage, secondaryImageAlt, stats,
+      formName, submitText, formFields, buttonLink, buttonFormName,
+      secondaryButtonLink, secondaryButtonFormName, ...rest
+    } =
       fields;
     return {
       ...rest,
+      ...(data.props.buttonAction === "form-popup" ? { buttonFormName } : { buttonLink }),
+      ...(data.props.secondaryButtonAction === "form-popup" ? { secondaryButtonFormName } : { secondaryButtonLink }),
       ...(variant === "lead-form" ? null : { backgroundImage, backgroundImageAlt }),
       ...(variant === "stats" ? { secondaryImage, secondaryImageAlt, stats } : null),
       ...(variant === "lead-form" ? { formName, submitText, formFields } : null),
@@ -231,9 +274,14 @@ export const Hero: ComponentConfig<HeroProps> = {
     heading: "Grow your business with us",
     subheading: "We make it easy for your customers to find and contact you.",
     buttonText: "Get in touch",
+    buttonAction: "link",
     buttonLink: "/contact",
     secondaryButtonText: "",
+    secondaryButtonAction: "link",
     secondaryButtonLink: "",
+    buttonFormName: "hero-enquiry",
+    secondaryButtonFormName: "hero-enquiry",
+    trustLine: "",
     backgroundImage: "",
     backgroundImageAlt: "",
     secondaryImage: "",
@@ -262,8 +310,13 @@ export const Hero: ComponentConfig<HeroProps> = {
     subheading,
     buttonText,
     buttonLink,
+    buttonAction,
+    buttonFormName,
     secondaryButtonText,
     secondaryButtonLink,
+    secondaryButtonAction,
+    secondaryButtonFormName,
+    trustLine,
     backgroundImage,
     backgroundImageAlt,
     secondaryImage,
@@ -281,8 +334,13 @@ export const Hero: ComponentConfig<HeroProps> = {
       <HeroButtons
         buttonText={buttonText}
         buttonLink={buttonLink}
+        buttonAction={buttonAction}
+        buttonFormName={buttonFormName}
         secondaryButtonText={secondaryButtonText}
         secondaryButtonLink={secondaryButtonLink}
+        secondaryButtonAction={secondaryButtonAction}
+        secondaryButtonFormName={secondaryButtonFormName}
+        trustLine={trustLine}
         center={center}
       />
     );

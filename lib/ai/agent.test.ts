@@ -270,7 +270,9 @@ describe("AI agent tool guardrails", () => {
     }
     // A list item that names only what it has something to say about is completed, not refused.
     await run(changeset, "insert_section", { pageId, designId: services.id, props: { services: [{ title: "Boiler servicing" }] } });
-    expect(sections(changeset.working).at(-2)!.props.services).toEqual([{ icon: "check", title: "Boiler servicing", text: "", image: "", imageAlt: "" }]);
+    expect(sections(changeset.working).at(-2)!.props.services).toEqual([{
+      icon: "check", title: "Boiler servicing", text: "", image: "", imageAlt: "", actionText: "", actionLink: "",
+    }]);
     await expect(run(changeset, "insert_section", { pageId })).rejects.toThrow("exactly one");
     await expect(run(changeset, "insert_section", { pageId, designId: "nope" })).rejects.toThrow("unavailable");
     expect(await run(changeset, "list_section_designs", { blockType: "Services" })).toMatchObject({

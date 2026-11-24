@@ -1,5 +1,6 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, iconField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import { designField, iconField, imageField, linkField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Heading, RichHeading } from "./ui/heading";
@@ -7,6 +8,7 @@ import { Eyebrow } from "./ui/eyebrow";
 import { Card } from "./ui/card";
 import { BlockIcon } from "./ui/icon";
 import { RichTextContent } from "./ui/rich-text";
+import { ConversionActions } from "./ui/conversion-actions";
 import type { IconValue } from "@/lib/icons";
 
 export type ProcessProps = {
@@ -17,6 +19,15 @@ export type ProcessProps = {
   variant: "steps" | "timeline" | "checklist";
   image: string;
   imageAlt: string;
+  buttonText?: string;
+  buttonLink?: LinkValue;
+  buttonAction?: "link" | "form-popup";
+  buttonFormName?: string;
+  secondaryButtonText?: string;
+  secondaryButtonLink?: LinkValue;
+  secondaryButtonAction?: "link" | "form-popup";
+  secondaryButtonFormName?: string;
+  trustLine?: string;
   steps: { title: string; text: RichText; icon: IconValue }[];
 };
 
@@ -27,6 +38,23 @@ export const Process: ComponentConfig<ProcessProps> = {
     eyebrow: { type: "text", label: "Eyebrow", contentEditable: true },
     heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
+    buttonText: { type: "text", label: "Section button text", contentEditable: true },
+    buttonAction: {
+      type: "select",
+      label: "Primary action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
+    buttonLink: linkField("Section button link"),
+    buttonFormName: { type: "text", label: "Popup form name" },
+    secondaryButtonText: { type: "text", label: "Second button text", contentEditable: true },
+    secondaryButtonAction: {
+      type: "select",
+      label: "Second action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
+    secondaryButtonLink: linkField("Second button link"),
+    secondaryButtonFormName: { type: "text", label: "Second popup form name" },
+    trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
     variant: { type: "select", label: "Layout", options: [{ label: "Numbered step cards", value: "steps" }, { label: "Editorial timeline", value: "timeline" }, { label: "Photo + checklist", value: "checklist" }] },
     image: imageField("Photo"), imageAlt: { type: "text", label: "Photo alt text" },
     steps: {
@@ -38,6 +66,9 @@ export const Process: ComponentConfig<ProcessProps> = {
   defaultProps: {
     design: {}, eyebrow: "How it works", heading: "From first idea to finishing touch",
     text: "<p>A clear path forward, with time to ask questions along the way.</p>",
+    buttonText: "", buttonLink: "", buttonAction: "link",
+    secondaryButtonText: "", secondaryButtonLink: "", secondaryButtonAction: "link",
+    trustLine: "",
     variant: "steps", image: "/samples/team-at-work.jpg", imageAlt: "Sample of a team planning a project",
     steps: [
       { title: "Tell us what you have in mind", text: "<p>Share your ideas, your priorities and anything you would like help working out.</p>", icon: "mail" },
@@ -45,7 +76,11 @@ export const Process: ComponentConfig<ProcessProps> = {
       { title: "Bring the details together", text: "<p>See the plan take shape, then walk through the result and discuss how to care for it.</p>", icon: "sparkles" },
     ],
   },
-  render: ({ eyebrow, heading, text, steps, variant, image, imageAlt, puck }) => (
+  render: ({
+    eyebrow, heading, text, steps, variant, image, imageAlt, puck,
+    buttonText, buttonLink, buttonAction, buttonFormName,
+    secondaryButtonText, secondaryButtonLink, secondaryButtonAction, secondaryButtonFormName, trustLine,
+  }) => (
     <Section background={variant === "steps" ? "soft" : "default"}>
       <div className={`grid gap-12 ${variant === "checklist" ? "items-center lg:grid-cols-2" : ""}`}>
         <div className="flex flex-col gap-4">
@@ -76,6 +111,11 @@ export const Process: ComponentConfig<ProcessProps> = {
           })}
         </ol>
       </div>
+      <ConversionActions
+        primary={buttonText ? { label: buttonText, mode: buttonAction, link: buttonLink, formName: buttonFormName } : undefined}
+        secondary={secondaryButtonText ? { label: secondaryButtonText, mode: secondaryButtonAction, link: secondaryButtonLink, formName: secondaryButtonFormName } : undefined}
+        trustLine={trustLine}
+      />
     </Section>
   ),
 };

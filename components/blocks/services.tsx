@@ -1,5 +1,6 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, iconField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import { designField, iconField, imageField, linkField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
@@ -8,6 +9,8 @@ import { Card } from "./ui/card";
 import { IconTile } from "./ui/icon-tile";
 import { RichTextContent } from "./ui/rich-text";
 import { Tabs } from "./ui/tabs";
+import { Button } from "./ui/button";
+import { ConversionActions } from "./ui/conversion-actions";
 import type { IconValue } from "@/lib/icons";
 
 export type ServiceItem = {
@@ -16,6 +19,8 @@ export type ServiceItem = {
   text: RichText;
   image: string;
   imageAlt: string;
+  actionText?: string;
+  actionLink?: LinkValue;
 };
 
 export type ServicesProps = {
@@ -24,6 +29,15 @@ export type ServicesProps = {
   heading: string;
   text?: RichText;
   services: ServiceItem[];
+  buttonText?: string;
+  buttonLink?: LinkValue;
+  buttonAction?: "link" | "form-popup";
+  buttonFormName?: string;
+  secondaryButtonText?: string;
+  secondaryButtonLink?: LinkValue;
+  secondaryButtonAction?: "link" | "form-popup";
+  secondaryButtonFormName?: string;
+  trustLine?: string;
   variant: "grid" | "bordered" | "image-cards" | "image-rows" | "list" | "tabs" | "tabs-vertical" | "tabs-simple";
 };
 
@@ -47,6 +61,23 @@ export const Services: ComponentConfig<ServicesProps> = {
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
+    buttonText: { type: "text", label: "Section button text", contentEditable: true },
+    buttonAction: {
+      type: "select",
+      label: "Primary action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
+    buttonLink: linkField("Section button link"),
+    buttonFormName: { type: "text", label: "Popup form name" },
+    secondaryButtonText: { type: "text", label: "Second button text", contentEditable: true },
+    secondaryButtonAction: {
+      type: "select",
+      label: "Second action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
+    secondaryButtonLink: linkField("Second button link"),
+    secondaryButtonFormName: { type: "text", label: "Second popup form name" },
+    trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
     services: {
       type: "array",
       label: "Services",
@@ -57,6 +88,8 @@ export const Services: ComponentConfig<ServicesProps> = {
         text: "<p>Describe this service.</p>",
         image: "/samples/home-interior.jpg",
         imageAlt: "Sample of a welcoming home interior",
+        actionText: "",
+        actionLink: "",
       },
       arrayFields: {
         icon: iconField("Icon"),
@@ -64,6 +97,8 @@ export const Services: ComponentConfig<ServicesProps> = {
         text: richTextField("Text"),
         image: imageField("Image"),
         imageAlt: { type: "text", label: "Image alt text" },
+        actionText: { type: "text", label: "Learn more button text", contentEditable: true },
+        actionLink: linkField("Learn more link"),
       },
     },
     variant: {
@@ -86,6 +121,13 @@ export const Services: ComponentConfig<ServicesProps> = {
     eyebrow: "What we do",
     heading: "Our services",
     text: "",
+    buttonText: "",
+    buttonLink: "",
+    buttonAction: "link",
+    secondaryButtonText: "",
+    secondaryButtonLink: "",
+    secondaryButtonAction: "link",
+    trustLine: "",
     services: [
       { icon: "wrench", title: "Service one", text: "<p>Describe this service.</p>", image: "/samples/tools.jpg", imageAlt: "Sample of tools ready for a project" },
       { icon: "clock", title: "Service two", text: "<p>Describe this service.</p>", image: "/samples/home-interior.jpg", imageAlt: "Sample of a comfortable home interior" },
@@ -93,7 +135,19 @@ export const Services: ComponentConfig<ServicesProps> = {
     ],
     variant: "grid",
   },
-  render: ({ eyebrow, heading, text, services, variant = "grid", puck }) => {
+  render: ({
+    eyebrow, heading, text, services, variant = "grid", puck,
+    buttonText, buttonLink, buttonAction, buttonFormName,
+    secondaryButtonText, secondaryButtonLink, secondaryButtonAction, secondaryButtonFormName, trustLine,
+  }) => {
+    const actions = (
+      <ConversionActions
+        primary={buttonText ? { label: buttonText, mode: buttonAction, link: buttonLink, formName: buttonFormName } : undefined}
+        secondary={secondaryButtonText ? { label: secondaryButtonText, mode: secondaryButtonAction, link: secondaryButtonLink, formName: secondaryButtonFormName } : undefined}
+        trustLine={trustLine}
+        center={variant === "grid" || variant === "image-cards"}
+      />
+    );
     const intro = (
       <div className={`section-intro flex min-w-0 flex-col gap-4 ${variant === "grid" || variant === "image-cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
@@ -118,11 +172,13 @@ export const Services: ComponentConfig<ServicesProps> = {
                   <div className="flex min-w-0 flex-col gap-2">
                     <Heading level={3}>{service.title}</Heading>
                     <RichTextContent value={service.text} className="w-full text-base" />
+                    {service.actionText ? <Button href={service.actionLink} variant="secondary" className="mt-2 self-start">{service.actionText}</Button> : null}
                   </div>
                 </div>
               ))}
             </div>
           </div>
+          {actions}
         </Section>
       );
     }
@@ -141,10 +197,12 @@ export const Services: ComponentConfig<ServicesProps> = {
                     {service.title}
                   </Heading>
                   <RichTextContent value={service.text} className="w-full text-base" />
+                  {service.actionText ? <Button href={service.actionLink} variant="secondary" className="self-start">{service.actionText}</Button> : null}
                 </div>
               </div>
             ))}
           </div>
+          {actions}
         </Section>
       );
     }
@@ -168,12 +226,14 @@ export const Services: ComponentConfig<ServicesProps> = {
                         {service.title}
                       </Heading>
                       <RichTextContent value={service.text} className="w-full text-base" />
+                      {service.actionText ? <Button href={service.actionLink} variant="secondary" className="self-start">{service.actionText}</Button> : null}
                     </div>
                   </div>
                 ),
               }))}
             />
           </div>
+          {actions}
         </Section>
       );
     }
@@ -200,9 +260,11 @@ export const Services: ComponentConfig<ServicesProps> = {
                 </div>
                 <Heading level={3}>{service.title}</Heading>
                 <RichTextContent value={service.text} className="w-full text-sm" />
+                {service.actionText ? <Button href={service.actionLink} variant="secondary" className="mt-2 self-start">{service.actionText}</Button> : null}
               </div>
             ))}
           </div>
+          {actions}
         </Section>
       );
     }
@@ -223,6 +285,7 @@ export const Services: ComponentConfig<ServicesProps> = {
                   <div className="flex flex-1 flex-col gap-3 p-6 sm:p-7">
                     <Heading level={3}>{service.title}</Heading>
                     <RichTextContent value={service.text} className="w-full text-sm" />
+                    {service.actionText ? <Button href={service.actionLink} variant="secondary" className="mt-2 self-start">{service.actionText}</Button> : null}
                   </div>
                 </>
               ) : (
@@ -230,11 +293,13 @@ export const Services: ComponentConfig<ServicesProps> = {
                   <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
                   <Heading level={3}>{service.title}</Heading>
                   <RichTextContent value={service.text} className="w-full text-sm" />
+                  {service.actionText ? <Button href={service.actionLink} variant="secondary" className="self-start">{service.actionText}</Button> : null}
                 </>
               )}
             </Card>
           ))}
         </div>
+        {actions}
       </Section>
     );
   },

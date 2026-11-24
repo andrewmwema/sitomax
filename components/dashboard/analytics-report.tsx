@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Globe2, Inbox, Info, Users } from "lucide-react";
+import { BarChart3, Globe2, Inbox, Info, MousePointerClick, Users } from "lucide-react";
 import type { SiteAnalyticsReport } from "@/lib/analytics";
 import { WorkspaceMetrics } from "./workspace-metrics";
 import { TableScrollArea } from "./table-scroll-area";
@@ -12,6 +12,7 @@ export function AnalyticsReport({ report, siteId, siteName, days }: {
       { label: "Total visits", value: report.visits, detail: `${days} calendar days · includes today`, icon: Globe2 },
       { label: "Daily unique visitors", value: report.unique_visitors, detail: "Sum of each day's unique visitors", icon: Users },
       { label: "Form submissions", value: report.form_submissions, detail: "Received in the same UTC period", icon: Inbox },
+      { label: "CTA clicks", value: report.cta_clicks, detail: "Tracked section buttons", icon: MousePointerClick },
     ]} />
     <section className="platform-panel overflow-hidden">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--platform-line)] px-5 py-4">
@@ -30,6 +31,7 @@ export function AnalyticsReport({ report, siteId, siteName, days }: {
         <ul className="mt-3 space-y-2 text-xs leading-relaxed text-[var(--platform-muted)]">
           <li>Dates and reporting periods use UTC. Today is included and may be incomplete.</li>
           <li>Visitor identifiers change daily. The same visitor can be counted on more than one day, so daily uniques are not a deduplicated audience for the entire period.</li>
+          <li>CTA clicks are counted in aggregate; they are not tied to an individual visitor or attributed to a form submission.</li>
           <li>Conversion rates and period comparisons are not shown: the current report does not attribute submissions to visits or return a comparable previous period.</li>
         </ul>
       </section>

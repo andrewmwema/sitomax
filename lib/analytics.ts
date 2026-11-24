@@ -5,6 +5,7 @@ export const siteAnalyticsReportSchema = z.object({
   visits: reportCount,
   unique_visitors: reportCount,
   form_submissions: reportCount,
+  cta_clicks: reportCount.default(0),
   daily: z.array(z.object({ day: z.string(), visits: reportCount })),
   pages: z.array(z.object({ label: z.string(), count: reportCount })),
   referrers: z.array(z.object({ label: z.string(), count: reportCount })),
@@ -22,6 +23,7 @@ export const beaconSchema = z.object({
   path: z.string().min(1).max(2048).regex(/^\/(?!\/)[^?#]*$/),
   referrer: z.string().max(2048),
   blogPostId: z.uuid().optional(),
+  event: z.enum(["cta_click"]).optional(),
 }).strict();
 
 export function referrerOrigin(referrer: string, host: string): string | null {

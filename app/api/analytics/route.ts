@@ -24,6 +24,21 @@ export async function POST(request: Request) {
   const parsed = beaconSchema.safeParse(input);
   if (!parsed.success) return new Response(null, { status: 400 });
 
+  if (parsed.data.event === "cta_click") {
+    const site = await getSiteByHost(key);
+    if (!site) return new Response(null, { status: 404 });
+    const { error } = await createAdminClient().from("conversion_events").insert({
+      site_id: site.id,
+      event_type: "cta_click",
+      path: parsed.data.path,
+    });
+    if (error) {
+      console.error("Could not record analytics conversion event:", error.message);
+      return new Response(null, { status: 500 });
+    }
+    return new Response(null, { status: 204 });
+  }
+
   const salt = process.env.ANALYTICS_HASH_SALT;
   if (!isAnalyticsSaltValid(salt)) return new Response(null, { status: 503 });
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
