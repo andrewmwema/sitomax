@@ -192,7 +192,7 @@ const showcase = createPremiumTemplate({
   name: "Showcase",
   description: "A confident, product-led website for services that need to make their process tangible.",
   bestFor: ["Property services", "Inspection teams", "Product-led businesses"],
-  previewImage: "/template-assets/report-preview.svg",
+  previewImage: "/template-assets/showcase-thumbnail-78c37dd57c490761.png",
   theme: themePreset("showcase-inspections"),
   business: showcaseBusiness,
   navigation: [
@@ -466,7 +466,7 @@ const clarity = createPremiumTemplate({
   name: "Clarity",
   description: "A spacious, editorial foundation for advisors serving different people and business needs.",
   bestFor: ["Financial advisors", "Bookkeepers", "Professional services"],
-  previewImage: "/samples/home-interior.jpg",
+  previewImage: "/template-assets/clarity-thumbnail-c8fcd5ee289551a4.png",
   theme: themePreset("clarity-advisors"),
   business: clarityBusiness,
   navigation: [
@@ -760,7 +760,7 @@ const studio = createPremiumTemplate({
   name: "Studio",
   description: "A bold, portfolio-led foundation for independent agencies and creative practices.",
   bestFor: ["Brand studios", "Creative agencies", "Independent designers"],
-  previewImage: "/template-assets/studio-digital.svg",
+  previewImage: "/template-assets/studio-thumbnail-77a9a4cdcff6bab0.png",
   theme: themePreset("studio-forma"),
   business: studioBusiness,
   navigation: [

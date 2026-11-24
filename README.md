@@ -57,6 +57,9 @@ non-local Supabase URLs. It uploads template artwork to the read-only
 `template-assets` bucket and upserts the Showcase, Clarity and Studio masters.
 See [docs/MIGRATIONS.md](./docs/MIGRATIONS.md) for the production migration
 record and the review-only Phase 1 test-fixture and cleanup procedures.
+The three gallery thumbnails are screenshots of the source-rendered home pages.
+For an existing catalog, the separately reviewed `npm run sync:premium-thumbnails`
+updates only those preview images; see the migration record before use.
 
 ## Platform appearance
 
