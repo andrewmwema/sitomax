@@ -23,6 +23,7 @@ describe("section catalog", () => {
       const shell = design.props.design as BlockDesign | undefined;
       expect(shell, `${design.id} is missing props.design`).toBeDefined();
       expect(shell).toMatchObject({
+        designVersion: 2,
         settings: { fullBleed: true },
         background: { type: expect.any(String) },
         animation: { trigger: expect.any(String) },

@@ -5,6 +5,7 @@ import {
   COLOR_PALETTES,
   DEFAULT_COLORS,
   STYLE_PRESETS,
+  THEME_PRESETS,
   themeFonts,
   type SiteTheme,
   type StyleId,
@@ -20,6 +21,8 @@ import {
   BUTTON_STYLES,
   CORNER_PRESETS,
   FONT_PAIRINGS,
+  applyThemePreset,
+  matchesThemePreset,
   SPACING_PRESETS,
 } from "@/lib/theme/quick-styles";
 import { saveSiteTheme } from "@/app/editor/[pageId]/actions";
@@ -190,6 +193,49 @@ export function ThemePanel({
         {previewFonts ? (
           <link rel="stylesheet" href={googleFontsUrl(CURATED_FONTS.map((font) => font.name))} />
         ) : null}
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+            Curated themes
+          </h3>
+          <p className="text-xs text-zinc-500">Apply a complete visual direction, then customize any detail below.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {THEME_PRESETS.map((preset) => {
+              const active = matchesThemePreset(theme, preset.id);
+              const swatches = [
+                preset.theme.colors?.primary,
+                preset.theme.colors?.secondary,
+                preset.theme.colors?.background,
+                preset.theme.colors?.accent,
+              ];
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  title={preset.description}
+                  aria-pressed={active}
+                  onClick={() => onChange(applyThemePreset(theme, preset.id))}
+                  className={`flex min-w-0 flex-col gap-2 rounded-lg border p-2.5 text-left transition ${
+                    active
+                      ? "border-zinc-900 ring-1 ring-zinc-900"
+                      : "border-zinc-200 hover:border-zinc-400"
+                  }`}
+                >
+                  <span className="flex items-center gap-1" aria-hidden="true">
+                    {swatches.map((color, index) => (
+                      <span
+                        key={`${preset.id}-${index}`}
+                        className="size-4 rounded-full border border-black/10"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </span>
+                  <span className="text-xs font-semibold text-zinc-800">{preset.label}</span>
+                  <span className="text-[10px] leading-snug text-zinc-500">{preset.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
         <section className="flex flex-col gap-3">
           <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
             Style

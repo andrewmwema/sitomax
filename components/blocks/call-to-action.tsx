@@ -5,10 +5,10 @@ import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { RichHeading } from "./ui/heading";
-import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { RichTextContent } from "./ui/rich-text";
 import { EnquiryForm, enquiryFields, enquiryFieldsField, type EnquiryField } from "./ui/enquiry-form";
+import { ConversionActions } from "./ui/conversion-actions";
 
 export type CallToActionProps = {
   design?: BlockDesign;
@@ -17,11 +17,16 @@ export type CallToActionProps = {
   text: RichText;
   buttonText: string;
   buttonLink: LinkValue;
+  buttonAction?: "link" | "form-popup";
+  buttonFormName?: string;
   variant: "dark" | "primary" | "split" | "image" | "form";
   image: string;
   imageAlt?: string;
   secondaryButtonText?: string;
   secondaryButtonLink?: LinkValue;
+  secondaryButtonAction?: "link" | "form-popup";
+  secondaryButtonFormName?: string;
+  trustLine?: string;
   formName?: string;
   formFields?: EnquiryField[];
   formNote?: string;
@@ -35,9 +40,22 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
     heading: richHeadingField("Heading", 2),
     text: richTextField("Text"),
     buttonText: { type: "text", label: "Button text", contentEditable: true },
+    buttonAction: {
+      type: "select",
+      label: "Primary action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
     buttonLink: linkField("Button link"),
+    buttonFormName: { type: "text", label: "Popup form name" },
     secondaryButtonText: { type: "text", label: "Secondary button text" },
+    secondaryButtonAction: {
+      type: "select",
+      label: "Secondary action",
+      options: [{ label: "Link or scroll", value: "link" }, { label: "Form popup", value: "form-popup" }],
+    },
     secondaryButtonLink: linkField("Secondary button link"),
+    secondaryButtonFormName: { type: "text", label: "Secondary popup form name" },
+    trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
     image: imageField("Background photo"),
     imageAlt: { type: "text", label: "Photo alt text" },
     formName: { type: "text", label: "Form name" },
@@ -55,23 +73,41 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
       ],
     },
   },
+  resolveFields: (data, { fields }) => {
+    const { buttonLink, buttonFormName, secondaryButtonLink, secondaryButtonFormName, ...rest } = fields;
+    return {
+      ...rest,
+      ...(data.props.buttonAction === "form-popup" ? { buttonFormName } : { buttonLink }),
+      ...(data.props.secondaryButtonAction === "form-popup" ? { secondaryButtonFormName } : { secondaryButtonLink }),
+    } as typeof fields;
+  },
   defaultProps: {
     design: {},
     eyebrow: "Get started",
     heading: "Ready to get started?",
     text: "Contact us today for a free, no-obligation quote.",
     buttonText: "Contact us",
+    buttonAction: "link",
     buttonLink: "/contact",
     variant: "dark",
     image: "/samples/home-interior.jpg",
     imageAlt: "Sample of a welcoming living space",
     secondaryButtonText: "",
     secondaryButtonLink: "#services",
+    secondaryButtonAction: "link",
+    buttonFormName: "cta-enquiry",
+    secondaryButtonFormName: "cta-enquiry",
+    trustLine: "",
     formName: "project-enquiry",
     formFields: enquiryFields,
     formNote: "Required fields are marked with an asterisk.",
   },
-  render: ({ eyebrow, heading, text, buttonText, buttonLink, variant, image, imageAlt, secondaryButtonText, secondaryButtonLink, formName, formFields, formNote }) => {
+  render: ({
+    eyebrow, heading, text, buttonText, buttonLink, buttonAction, buttonFormName,
+    variant, image, imageAlt, secondaryButtonText, secondaryButtonLink,
+    secondaryButtonAction, secondaryButtonFormName, trustLine,
+    formName, formFields, formNote,
+  }) => {
     const layout = variant ?? "dark";
 
     if (layout === "form") {
@@ -86,6 +122,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
             </div>
             <Card className="p-6 sm:p-8">
               <EnquiryForm formName={formName || "project-enquiry"} submitText={buttonText} fields={formFields ?? enquiryFields} note={formNote} />
+              {trustLine ? <p className="mt-4 text-sm leading-6" style={{ color: "var(--color-muted)" }}>{trustLine}</p> : null}
             </Card>
           </div>
         </Section>
@@ -101,11 +138,13 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
               <RichHeading level={2}>{heading}</RichHeading>
               <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />
             </div>
-            {buttonText ? (
-              <Button href={buttonLink} className="shrink-0">
-                {buttonText}
-              </Button>
-            ) : null}
+            <ConversionActions
+              primary={buttonText ? { label: buttonText, mode: buttonAction, link: buttonLink, formName: buttonFormName } : undefined}
+              secondary={secondaryButtonText ? { label: secondaryButtonText, mode: secondaryButtonAction, link: secondaryButtonLink, formName: secondaryButtonFormName } : undefined}
+              trustLine={trustLine}
+              fields={formFields}
+              className="shrink-0"
+            />
           </div>
         </Section>
       );
@@ -124,14 +163,13 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
           <RichHeading level={2}>{heading}</RichHeading>
           <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />
-          <div className="flex w-full flex-col gap-3 min-[480px]:w-auto min-[480px]:flex-row">
-          {buttonText ? (
-            <Button href={buttonLink}>
-              {buttonText}
-            </Button>
-          ) : null}
-          {secondaryButtonText ? <Button href={secondaryButtonLink} variant="secondary">{secondaryButtonText}</Button> : null}
-          </div>
+          <ConversionActions
+            primary={buttonText ? { label: buttonText, mode: buttonAction, link: buttonLink, formName: buttonFormName } : undefined}
+            secondary={secondaryButtonText ? { label: secondaryButtonText, mode: secondaryButtonAction, link: secondaryButtonLink, formName: secondaryButtonFormName } : undefined}
+            trustLine={trustLine}
+            fields={formFields}
+            center={layout !== "image"}
+          />
         </div>
       </Section>
     );

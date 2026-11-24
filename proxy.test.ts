@@ -68,6 +68,14 @@ describe("host routing", () => {
     expect(mocks.lookup).not.toHaveBeenCalled();
   });
 
+  it("passes the section showcase through forwarded development hosts only in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const response = await proxy(request("https://client.app.github.dev/dev/sections", "client.app.github.dev"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(mocks.updateSession).not.toHaveBeenCalled();
+    expect(mocks.lookup).not.toHaveBeenCalled();
+  });
+
   it("rewrites nested RSS paths to the tenant feed handler despite the XML asset matcher", async () => {
     const response = await proxy(request("https://client.test/journal/rss.xml?source=menu"));
     const target = new URL(response.headers.get("x-middleware-rewrite")!);

@@ -23,8 +23,7 @@ import type { SectionDesign } from "@/lib/sections/catalog";
  * Live previews preserve the site's remotely loaded fonts.
  */
 
-const RENDER_WIDTH = 1280;
-const RENDER_HEIGHT = RENDER_WIDTH * 10 / 16;
+const DEFAULT_RENDER_WIDTH = 1280;
 
 const COPY_MARK = "data-design-thumb-style";
 
@@ -91,15 +90,18 @@ export function DesignThumbnail({
   design,
   theme,
   expanded = false,
+  viewportWidth = DEFAULT_RENDER_WIDTH,
 }: {
   design: SectionDesign;
   theme: SiteTheme;
   expanded?: boolean;
+  /** Actual iframe viewport width; scaling changes only its display size. */
+  viewportWidth?: number;
 }) {
   const [cardWidth, setCardWidth] = useState(0);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
-  const [contentHeight, setContentHeight] = useState(RENDER_HEIGHT);
+  const [contentHeight, setContentHeight] = useState(viewportWidth * 10 / 16);
   const containerRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
 
@@ -179,7 +181,7 @@ export function DesignThumbnail({
       observer.disconnect();
       resizeObserver.disconnect();
     };
-  }, [mountNode, design, theme]);
+  }, [mountNode, design, theme, viewportWidth]);
 
   // Site theme variables (colors, fonts, radii, shadows) on the iframe
   // root, exactly like the page root applies them.
@@ -211,7 +213,7 @@ export function DesignThumbnail({
     [design],
   );
 
-  const scale = cardWidth > 0 ? cardWidth / RENDER_WIDTH : 0.2;
+  const scale = cardWidth > 0 ? cardWidth / viewportWidth : 0.2;
 
   return (
     <div
@@ -229,8 +231,8 @@ export function DesignThumbnail({
         aria-hidden="true"
         className="pointer-events-none absolute left-0 top-0 select-none border-0"
         style={{
-          width: RENDER_WIDTH,
-          height: expanded ? contentHeight : RENDER_HEIGHT,
+          width: viewportWidth,
+          height: expanded ? contentHeight : viewportWidth * 10 / 16,
           transform: `scale(${scale})`,
           transformOrigin: "top left",
         }}
@@ -241,7 +243,7 @@ export function DesignThumbnail({
             <div
               ref={liveRef}
               className="design-thumb-content"
-              style={{ width: RENDER_WIDTH }}
+              style={{ width: viewportWidth }}
             >
               <Render
                 config={puckConfig}

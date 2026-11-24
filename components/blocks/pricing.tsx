@@ -23,6 +23,7 @@ export type PricingPlan = {
   features: string;
   buttonText: string;
   buttonLink: LinkValue;
+  reassurance?: string;
   highlighted: boolean;
 };
 
@@ -78,11 +79,18 @@ function PlanFeatures({ features }: { features: string[] }) {
 }
 
 function PlanAction({ plan }: { plan: PricingPlan }) {
-  return plan.buttonText ? (
-    <Button href={plan.buttonLink} variant={plan.highlighted ? "primary" : "secondary"} className="w-full">
-      {plan.buttonText}
-    </Button>
-  ) : null;
+  return (
+    <div className="flex flex-col gap-2">
+      {plan.buttonText ? (
+        <Button href={plan.buttonLink} variant={plan.highlighted ? "primary" : "secondary"} className="w-full">
+          {plan.buttonText}
+        </Button>
+      ) : null}
+      {plan.reassurance ? (
+        <p className="text-center text-xs leading-5" style={{ color: "var(--color-muted)" }}>{plan.reassurance}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function PlanBody({ plan, yearly, highlightLabel }: { plan: PricingPlan; yearly: boolean; highlightLabel: string }) {
@@ -212,6 +220,7 @@ export const Pricing: ComponentConfig<PricingProps> = {
         features: "Project guidance\nAgreed scope of work\nWritten estimate",
         buttonText: "Ask about this plan",
         buttonLink: "/contact",
+        reassurance: "",
         highlighted: false,
       },
       arrayFields: {
@@ -224,6 +233,7 @@ export const Pricing: ComponentConfig<PricingProps> = {
         features: { type: "textarea", label: "Features (one per line; identical names share a comparison row)" },
         buttonText: { type: "text", label: "Button text", contentEditable: true },
         buttonLink: linkField("Button link"),
+        reassurance: { type: "text", label: "Reassurance under button", contentEditable: true },
         highlighted: {
           type: "radio",
           label: "Highlighted (also selects the single plan)",
@@ -251,8 +261,8 @@ export const Pricing: ComponentConfig<PricingProps> = {
     note: "",
     highlightLabel: "Featured plan",
     plans: [
-      { name: "Essential", price: "$[49]", period: "per month", features: "Project guidance\nWritten estimate", buttonText: "Choose plan", buttonLink: "/contact", highlighted: false },
-      { name: "Complete", price: "$[99]", period: "per month", features: "Project guidance\nWritten estimate\nOngoing care", buttonText: "Choose plan", buttonLink: "/contact", highlighted: true },
+      { name: "Essential", price: "$[49]", period: "per month", features: "Project guidance\nWritten estimate", buttonText: "Choose plan", buttonLink: "/contact", reassurance: "", highlighted: false },
+      { name: "Complete", price: "$[99]", period: "per month", features: "Project guidance\nWritten estimate\nOngoing care", buttonText: "Choose plan", buttonLink: "/contact", reassurance: "", highlighted: true },
     ],
     variant: "cards",
   },

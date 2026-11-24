@@ -114,7 +114,14 @@ with checks (
     ('0026', 'authenticated EXECUTE on finish_ai_page_retry', 'function_privilege', null, 'public.finish_ai_page_retry(uuid,uuid)', 'authenticated', 'EXECUTE', true),
 
     ('0027', 'function public.list_site_files(uuid,text,integer)', 'function', null, 'public.list_site_files(uuid,text,integer)', null, null, true),
-    ('0027', 'authenticated EXECUTE on list_site_files', 'function_privilege', null, 'public.list_site_files(uuid,text,integer)', 'authenticated', 'EXECUTE', true)
+    ('0027', 'authenticated EXECUTE on list_site_files', 'function_privilege', null, 'public.list_site_files(uuid,text,integer)', 'authenticated', 'EXECUTE', true),
+
+    ('0051', 'table public.conversion_events', 'table', 'public.conversion_events', null, null, null, true),
+    ('0051', 'RLS enabled on public.conversion_events', 'rls', 'public.conversion_events', null, null, null, true),
+    ('0051', 'policy public.conversion_events: owners read conversion events', 'policy', 'public.conversion_events', 'owners read conversion events', null, null, true),
+    ('0051', 'authenticated SELECT on public.conversion_events', 'table_privilege', 'public.conversion_events', null, 'authenticated', 'SELECT', true),
+    ('0051', 'authenticated INSERT on public.conversion_events', 'table_privilege', 'public.conversion_events', null, 'authenticated', 'INSERT', false),
+    ('0051', 'service_role INSERT on public.conversion_events', 'table_privilege', 'public.conversion_events', null, 'service_role', 'INSERT', true)
 )
 select
   c.migration,

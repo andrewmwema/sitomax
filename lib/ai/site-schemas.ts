@@ -128,21 +128,31 @@ export type PlannedPage = {
   seo?: { title: string; description: string };
 };
 
+const DEFAULTED_CONVERSION_FIELDS = new Set([
+  "buttonAction", "buttonFormName", "secondaryButtonAction", "secondaryButtonFormName",
+  "secondaryButtonText", "secondaryButtonLink", "trustLine",
+]);
 const fillPropsByType = new Map(blockTypes.map((blockType) => {
   const imageField = Object.entries(blockFields(blockType)).find(([, field]) => isImageField(field))?.[0];
-  const props = Object.entries(blockSchemas[blockType].shape).filter(([key]) => key !== "variant");
-  // Keep optional grammar branches bounded: only the primary image query can
-  // be omitted. Other fields with no content can be returned empty.
-  const schema = z.strictObject(Object.fromEntries(props.map(([key, field]) =>
-    [key, key === imageField ? field.optional() : field]))).superRefine((value, ctx) => {
-    if (blockType !== "Testimonials" || !Array.isArray(value.testimonials)) return;
-    if (value.testimonials.some((review) => review && typeof review === "object" && Object.values(review).some(
-      (field) => typeof field === "string" && field !== "" && !/^\[.+\]$/.test(field),
-    ))) {
-      ctx.addIssue({ code: "custom", path: ["testimonials"], message: "Use clearly marked review placeholders." });
-    }
-  });
-  return [blockType, { schema, imageField }] as const;
+  const makeSchema = (includeDefaultedConversionFields: boolean) => {
+    const props = Object.entries(blockSchemas[blockType].shape).filter(([key]) =>
+      key !== "variant" && (includeDefaultedConversionFields || !DEFAULTED_CONVERSION_FIELDS.has(key)));
+    const schema = z.strictObject(Object.fromEntries(props.map(([key, field]) => [
+      key,
+      key === imageField || (includeDefaultedConversionFields && DEFAULTED_CONVERSION_FIELDS.has(key))
+        ? field.optional()
+        : field,
+    ])));
+    return schema.superRefine((value, ctx) => {
+      if (blockType !== "Testimonials" || !Array.isArray(value.testimonials)) return;
+      if (value.testimonials.some((review) => review && typeof review === "object" && Object.values(review).some(
+        (field) => typeof field === "string" && field !== "" && !/^\[.+\]$/.test(field),
+      ))) {
+        ctx.addIssue({ code: "custom", path: ["testimonials"], message: "Use clearly marked review placeholders." });
+      }
+    });
+  };
+  return [blockType, { schema: makeSchema(true), toolSchema: makeSchema(false), imageField }] as const;
 }));
 
 export function pageFillContract(page: PlannedPage) {
@@ -154,13 +164,15 @@ export function pageFillContract(page: PlannedPage) {
     return { key: `section_${index + 1}`, designId, blockType, ...props };
   });
   const sections = z.strictObject(Object.fromEntries(slots.map(({ key, schema }) => [key, schema])));
+  const toolSections = z.strictObject(Object.fromEntries(slots.map(({ key, toolSchema }) => [key, toolSchema])));
   const schema = z.strictObject({ slug: z.literal(page.slug), sections });
+  const inputSchema = z.strictObject({ slug: z.literal(page.slug), sections: toolSections });
   const task = `Write only the props for the named section slots in this page plan. Layout variants are set by the application:\n${JSON.stringify({
     slug: page.slug, title: page.title,
     sections: Object.fromEntries(slots.map(({ key, designId, blockType }) => [key, { blockType, designId }])),
   })}\nSECTION BRIEFS:\n${[...new Set(slots.map(({ blockType }) => blockType))]
     .filter((type) => SECTION_COPY_BRIEFS[type]).map((type) => `- ${type}: ${SECTION_COPY_BRIEFS[type]}`).join("\n")}`;
-  const tool = { ...strictTool("fill_page", "Return props for the planned page's section slots.", schema), strict: false };
+  const tool = { ...strictTool("fill_page", "Return props for the planned page's section slots.", inputSchema), strict: false };
   return { slots, schema, task, tool };
 }
 

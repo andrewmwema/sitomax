@@ -151,8 +151,11 @@ function shellDesign(
     textColor = "auto",
   } = options;
   return {
+    designVersion: 2,
     settings: {
       fullBleed: true,
+      sectionPadding: "normal",
+      dividerStyle: "none",
       ...(anchorId ? { anchorId } : null),
       hideOnDesktop: false,
       hideOnTablet: false,

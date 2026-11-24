@@ -304,9 +304,45 @@ function SettingsTab({ design, patch }: TabProps) {
   const settings = design.settings ?? {};
   const patchSettings = (next: Partial<NonNullable<BlockDesign["settings"]>>) =>
     patch({ settings: { ...settings, ...next } });
+  const designVersion = design.designVersion === 2 ? 2 : 1;
 
   return (
     <>
+      <div className="flex flex-col gap-1">
+        <Toggle
+          label="Use section design v2"
+          checked={designVersion === 2}
+          onChange={(checked) => patch({ designVersion: checked ? 2 : 1 })}
+        />
+        <p className="text-[10px] leading-snug text-zinc-500">
+          Existing sections keep their current look until you enable this standard.
+        </p>
+      </div>
+      {designVersion === 2 ? (
+        <>
+          <SegmentedRow
+            label="Section padding"
+            value={settings.sectionPadding ?? "normal"}
+            options={[
+              { value: "compact", label: "Compact" },
+              { value: "normal", label: "Normal" },
+              { value: "spacious", label: "Spacious" },
+            ]}
+            onChange={(sectionPadding) => patchSettings({ sectionPadding })}
+          />
+          <SegmentedRow
+            label="Top divider"
+            value={settings.dividerStyle ?? "none"}
+            options={[
+              { value: "none", label: "None" },
+              { value: "subtle", label: "Subtle" },
+              { value: "line", label: "Line" },
+              { value: "accent", label: "Accent" },
+            ]}
+            onChange={(dividerStyle) => patchSettings({ dividerStyle })}
+          />
+        </>
+      ) : null}
       <FieldRow label="Content width">
         <select aria-label="Content width" value={settings.contentWidth ?? ""}
           onChange={(event) => patchSettings({ contentWidth: event.target.value ? event.target.value as "narrow" | "normal" | "wide" : undefined })}>
@@ -362,6 +398,9 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
     patch({ border: { ...border, ...next } });
 
   const backgroundType = background.type ?? "none";
+  const autoMediaContrast = design.designVersion === 2 &&
+    (design.textColor === undefined || design.textColor === "auto") &&
+    (backgroundType === "image" || backgroundType === "video");
   const images = background.images ?? [];
   const video = background.video ?? {};
   const embedInvalid =
@@ -387,11 +426,13 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
           { value: "none" as const, label: "None" },
           { value: "color" as const, label: "Color" },
           { value: "gradient" as const, label: "Gradient" },
+          ...(level !== "element" ? [{ value: "pattern" as const, label: "Pattern" }] : []),
           ...(level !== "element" ? [{ value: "image" as const, label: "Image" }] : []),
           ...(level === "section" ? [{ value: "video" as const, label: "Video" }] : []),
         ]}
         onChange={(type) => patchBackground(type === "gradient"
-          ? { type, from: background.from ?? "#ffffff", to: background.to ?? "#e4e9f0", angle: background.angle ?? 135 } : { type })}
+          ? { type, from: background.from ?? "#ffffff", to: background.to ?? "#e4e9f0", angle: background.angle ?? 135 }
+          : type === "pattern" ? { type, pattern: background.pattern ?? "dots" } : { type })}
       />
 
       {backgroundType === "color" ? (
@@ -406,6 +447,18 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
         <ColorControl label="Gradient end" value={background.to} onChange={(to) => patchBackground({ to })} />
         <SliderRow label="Gradient angle" value={background.angle ?? 135} min={0} max={360} onChange={(angle) => patchBackground({ angle })} />
       </> : null}
+      {backgroundType === "pattern" ? (
+        <SegmentedRow
+          label="Pattern"
+          value={background.pattern ?? "dots"}
+          options={[
+            { value: "dots", label: "Dots" },
+            { value: "grid", label: "Grid" },
+            { value: "lines", label: "Lines" },
+          ]}
+          onChange={(pattern) => patchBackground({ pattern })}
+        />
+      ) : null}
 
       {backgroundType === "image" ? (
         <>
@@ -504,15 +557,21 @@ function StyleTab({ design, patch, level }: TabProps & { level: DesignLevel }) {
 
       {backgroundType === "image" || backgroundType === "video" ? (
         <>
-          <ColorControl
-            label="Overlay color"
-            value={background.overlayColor}
-            onChange={(overlayColor) => patchBackground({ overlayColor })}
-          />
+          {autoMediaContrast ? (
+            <p className="text-[10px] leading-snug text-zinc-500">
+              Auto contrast uses a dark overlay for readable text. Choose Light or Dark text to customize it.
+            </p>
+          ) : (
+            <ColorControl
+              label="Overlay color"
+              value={background.overlayColor}
+              onChange={(overlayColor) => patchBackground({ overlayColor })}
+            />
+          )}
           <SliderRow
             label="Overlay opacity"
-            value={background.overlayOpacity ?? 40}
-            min={0}
+            value={autoMediaContrast ? Math.max(60, background.overlayOpacity ?? 60) : background.overlayOpacity ?? 40}
+            min={autoMediaContrast ? 60 : 0}
             max={80}
             unit="%"
             onChange={(overlayOpacity) => patchBackground({ overlayOpacity })}

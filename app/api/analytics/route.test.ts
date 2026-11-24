@@ -35,6 +35,20 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
 describe("analytics beacon", () => {
+  it("records CTA clicks as aggregate events without visitor identifiers", async () => {
+    vi.stubEnv("ANALYTICS_HASH_SALT", "");
+    const body = { path: "/contact", referrer: "", event: "cta_click" };
+    expect((await POST(request(body, { "x-forwarded-for": "" }))).status).toBe(204);
+    expect(mocks.insert).toHaveBeenCalledWith({
+      site_id: "site-1",
+      event_type: "cta_click",
+      path: "/contact",
+    });
+    expect(JSON.stringify(mocks.insert.mock.calls[0][0])).not.toContain("visitor_hash");
+    expect((await POST(request({ ...body, event: "form_submit" }))).status).toBe(400);
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+  });
+
   it("attributes a blog view only to a published post on the resolved site", async () => {
     const blogPostId = "00000000-0000-4000-8000-000000000001";
     const body = { path: "/articles/example", referrer: "", blogPostId };

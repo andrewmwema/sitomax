@@ -8,18 +8,18 @@ const VARIANTS: Record<Variant, CSSProperties> = {
   // light text scheme (photo/video backgrounds), so primary buttons use
   // the accent (or white). Outlines follow the readable foreground.
   primary: {
-    backgroundColor: "var(--btn-bg, var(--color-primary))",
-    color: "var(--btn-fg, var(--color-on-primary))",
+    backgroundColor: "var(--btn-bg, var(--btn-primary-bg, var(--color-primary)))",
+    color: "var(--btn-fg, var(--btn-primary-fg, var(--color-on-primary)))",
     border: "1px solid transparent",
   },
   secondary: {
-    backgroundColor: "transparent",
-    color: "inherit",
-    border: "1px solid currentColor",
+    backgroundColor: "var(--btn-secondary-bg, transparent)",
+    color: "var(--btn-secondary-fg, inherit)",
+    border: "1px solid var(--btn-secondary-border, currentColor)",
   },
   ghost: {
-    backgroundColor: "transparent",
-    color: "inherit",
+    backgroundColor: "var(--btn-ghost-bg, transparent)",
+    color: "var(--btn-ghost-fg, inherit)",
     border: "1px solid transparent",
   },
 };
@@ -55,6 +55,7 @@ export function Button({
       onClick={onClick}
       {...(link.newTab || newTab ? { target: "_blank" } : null)}
       {...(rel ? { rel } : null)}
+      data-analytics-event="cta_click"
       className={`site-button inline-flex min-h-12 items-center justify-center gap-2 px-6 py-3 text-center text-base font-semibold whitespace-normal no-underline transition hover:-translate-y-px hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 ${className}`}
       style={{
         borderRadius: "var(--button-radius, var(--radius-sm))",

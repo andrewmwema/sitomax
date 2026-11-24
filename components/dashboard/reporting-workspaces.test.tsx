@@ -7,7 +7,7 @@ import type { SiteAnalyticsReport } from "@/lib/analytics";
 import type { MonthlyAiReport } from "@/lib/ai/reporting";
 
 const emptyAnalytics: SiteAnalyticsReport = {
-  visits: 0, unique_visitors: 0, form_submissions: 0,
+  visits: 0, unique_visitors: 0, form_submissions: 0, cta_clicks: 0,
   daily: [{ day: "2026-11-18", visits: 0 }, { day: "2026-11-19", visits: 0 }],
   pages: [], referrers: [], devices: [],
 };
@@ -27,6 +27,7 @@ describe("Phase 4 reporting workspaces", () => {
   it("keeps daily values accessible and does not invent a conversion rate", () => {
     const report: SiteAnalyticsReport = {
       ...emptyAnalytics, visits: 10, unique_visitors: 7, form_submissions: 2,
+      cta_clicks: 5,
       daily: [{ day: "2026-11-18", visits: 3 }, { day: "2026-11-19", visits: 7 }],
       pages: [{ label: "/services", count: 8 }], devices: [{ label: "mobile", count: 6 }],
     };
@@ -36,6 +37,8 @@ describe("Phase 4 reporting workspaces", () => {
     expect(html).toContain("/services");
     expect(html).toContain("/dashboard/forms?site=site");
     expect(html).toContain("does not attribute submissions to visits");
+    expect(html).toContain("CTA clicks");
+    expect(html).toContain("Tracked section buttons");
     expect(html).not.toContain("20%");
   });
 

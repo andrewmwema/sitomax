@@ -54,6 +54,10 @@ export async function proxy(request: NextRequest) {
   const root = getRootDomain().toLowerCase();
   const rootHost = hostname(root);
 
+  if (process.env.NODE_ENV === "development" && matchesPathPrefix(pathname, "/dev/sections")) {
+    return NextResponse.next();
+  }
+
   if (pathname === "/api/email/inbound" || pathname === "/api/email/events") {
     return host === new URL(brand.appUrl).host.toLowerCase() ? NextResponse.next() : new NextResponse("Not found", { status: 404 });
   }

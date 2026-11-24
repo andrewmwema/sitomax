@@ -784,13 +784,18 @@ Apply `0014_analytics_reporting.sql` after the preceding migrations and set
 server. Rotate it if compromised; doing so changes visitor identifiers.
 The beacon requires the client IP in `x-forwarded-for` as supplied by Vercel;
 other deployments must ensure their trusted proxy overwrites this header.
-Without a valid IP or salt, the endpoint fails closed. It stores paths without
+Without a valid IP or salt, page-view collection fails closed. It stores paths without
 query strings, referrer origins only, device, country, and a site-specific
 hash that rotates daily; it never stores the IP. Date ranges use UTC calendar
 days including today. Unique visitors are daily uniques summed over the range,
 not deduplicated across days.
 An invalid salt is logged once per server instance at startup and shown to
 super admins on the Analytics page; visitors' data is not collected until fixed.
+
+Apply `0051_cta_conversion_analytics.sql` after the preceding migrations to
+record CTA clicks. Click events store only the site, page path and event type;
+they are aggregated for account owners and are not tied to visitor identifiers.
+Form submissions continue to be counted separately.
 
 Draft previews and signed-in site members are excluded when their session is
 available on the tenant host. Dashboard cookies cannot be sent to unrelated
