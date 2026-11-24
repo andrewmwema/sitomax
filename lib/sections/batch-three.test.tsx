@@ -11,7 +11,7 @@ import { findUnreplacedPlaceholders } from "./placeholders";
 
 const designs = sectionCatalog.filter((design) => design.category === "Pricing" || design.category === "FAQ");
 
-function dataFor(type: "Pricing" | "Faq", props: Record<string, unknown>): PuckPageData {
+function dataFor(type: keyof typeof puckConfig.components, props: Record<string, unknown>): PuckPageData {
   return {
     root: { props: {} },
     content: [{ type, props: { ...puckConfig.components[type].defaultProps, ...props, id: "batch-three-test" } }],
@@ -28,10 +28,10 @@ function render(data: PuckPageData, style = "classic") {
 }
 
 describe("Batch 3 designs", () => {
-  it("renders seven layouts in both styles with complete shell controls and sample assets", () => {
-    expect(designs.filter((design) => design.category === "Pricing")).toHaveLength(4);
-    expect(designs.filter((design) => design.category === "FAQ")).toHaveLength(3);
-    expect(new Set(designs.map((design) => `${design.blockType}:${design.props.variant}`)).size).toBe(7);
+  it("renders pricing and FAQ layouts in both styles with complete shell controls and sample assets", () => {
+    expect(designs.filter((design) => design.category === "Pricing")).toHaveLength(5);
+    expect(designs.filter((design) => design.category === "FAQ")).toHaveLength(5);
+    expect(new Set(designs.map((design) => `${design.blockType}:${design.props.variant}`)).size).toBe(10);
     for (const design of designs) {
       for (const style of ["classic", "modern"]) {
         const html = render(dataFor(design.blockType as "Pricing" | "Faq", design.props), style);
@@ -71,6 +71,15 @@ describe("Batch 3 designs", () => {
     expect(table).toContain("Included");
     expect(table).toContain("<caption");
     expect(table.match(/scope="col"/g)).toHaveLength(3);
+  });
+
+  it("renders pricing comparison rows as a desktop table and mobile cards", () => {
+    const design = sectionCatalog.find((entry) => entry.id === "pricing-approach-comparison")!;
+    const html = render(dataFor("ComparisonTable", design.props));
+    expect(html).toContain("<table");
+    expect(html).toContain("Agreed in writing before work starts");
+    expect(html).toContain("A typical experience");
+    expect(html).toContain("md:hidden");
   });
 
   it("shows the highlighted single plan without discarding other plans or changing the input", () => {

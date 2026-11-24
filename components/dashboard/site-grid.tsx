@@ -44,13 +44,14 @@ function saveView(view: ViewMode) {
 }
 
 export function SiteGrid({
-  sites, marketingSubdomain, initialFilter = "all",
-}: { sites: SiteCardSite[]; marketingSubdomain: string; initialFilter?: StatusFilter }) {
+  sites, marketingSubdomain, initialFilter = "all", canCreateSite = false, isSuperAdmin = false,
+}: { sites: SiteCardSite[]; marketingSubdomain: string; initialFilter?: StatusFilter; canCreateSite?: boolean; isSuperAdmin?: boolean }) {
   const [filter, setFilter] = useState<StatusFilter>(initialFilter);
   const [search, setSearch] = useState("");
   const [client, setClient] = useState("all");
   const [sort, setSort] = useState<SortOrder>("recent");
   const view = useSyncExternalStore(subscribeToView, getViewSnapshot, () => "grid");
+  const newSiteHref = isSuperAdmin ? "/dashboard/sites/new" : "/dashboard/sites/new?method=template";
 
   const clients = useMemo(() => [...new Map(sites.flatMap((site) => site.accountName
     ? [[site.accountId ?? site.accountName, site.accountName] as const]
@@ -68,7 +69,7 @@ export function SiteGrid({
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div><p className="platform-eyebrow">Workspace</p><h1 className="mt-1 text-[28px] font-semibold tracking-tight">Sites</h1>
         <p className="mt-1 text-sm text-[#6B6A66]">Create, manage, and publish websites across your workspace.</p></div>
-      <Link href="/dashboard/sites/new" className="platform-button platform-button-primary"><Plus size={15} />New site</Link>
+      {canCreateSite ? <Link href={newSiteHref} className="platform-button platform-button-primary"><Plus size={15} />New site</Link> : null}
     </header>
 
     <div className="platform-panel flex flex-col gap-4 p-4">
@@ -130,7 +131,7 @@ export function SiteGrid({
       : <div className="platform-panel border-dashed p-10 text-center">
         <h2 className="font-semibold">{sites.length ? "No websites match these filters" : "Your workspace is ready for its first website"}</h2>
         <p className="mt-2 text-sm text-[#6B6A66]">{sites.length ? "Try a different search or filter." : "Create a site to start building your online presence."}</p>
-        {!sites.length ? <Link href="/dashboard/sites/new" className="platform-button platform-button-primary mt-5"><Plus size={15} />New site</Link> : null}
+        {!sites.length && canCreateSite ? <Link href={newSiteHref} className="platform-button platform-button-primary mt-5"><Plus size={15} />New site</Link> : null}
       </div>}
   </section>;
 }

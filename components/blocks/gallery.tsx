@@ -1,11 +1,13 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import { designField, imageField, linkField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { RichHeading } from "./ui/heading";
 import { SiteImage } from "./ui/site-image";
 import { RichTextContent } from "./ui/rich-text";
+import { Button } from "./ui/button";
 
 export type GalleryProps = {
   design?: BlockDesign;
@@ -13,8 +15,14 @@ export type GalleryProps = {
   heading: string;
   images: { url: string; alt: string; caption?: string }[];
   columns: "2" | "3" | "4";
-  variant: "grid" | "masonry" | "featured" | "portfolio-rows" | "portfolio-cards" | "portfolio-feature";
+  variant: "grid" | "masonry" | "featured" | "portfolio-rows" | "portfolio-cards" | "portfolio-feature" | "portfolio-asymmetric" | "case-study";
   text?: RichText;
+  caseStudyChallenge?: RichText;
+  caseStudyApproach?: RichText;
+  caseStudyResults?: RichText;
+  caseStudyMetrics?: { value: string; label: string }[];
+  nextProjectText?: string;
+  nextProjectLink?: LinkValue;
 };
 
 const COLUMN_CLASSES: Record<GalleryProps["columns"], string> = {
@@ -39,6 +47,21 @@ export const Gallery: ComponentConfig<GalleryProps> = {
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
+    caseStudyChallenge: richTextField("Case study challenge"),
+    caseStudyApproach: richTextField("Case study approach"),
+    caseStudyResults: richTextField("Case study results"),
+    caseStudyMetrics: {
+      type: "array",
+      label: "Case study results",
+      getItemSummary: (item) => `${item.value || ""} ${item.label || "Result"}`.trim(),
+      defaultItemProps: { value: "[32]%", label: "Improvement" },
+      arrayFields: {
+        value: { type: "text", label: "Value", contentEditable: true },
+        label: { type: "text", label: "Label", contentEditable: true },
+      },
+    },
+    nextProjectText: { type: "text", label: "Next project button", contentEditable: true },
+    nextProjectLink: linkField("Next project link"),
     images: {
       type: "array",
       label: "Images",
@@ -69,6 +92,8 @@ export const Gallery: ComponentConfig<GalleryProps> = {
         { label: "Portfolio rows", value: "portfolio-rows" },
         { label: "Portfolio cards", value: "portfolio-cards" },
         { label: "Portfolio feature", value: "portfolio-feature" },
+        { label: "Asymmetric portfolio", value: "portfolio-asymmetric" },
+        { label: "Case study", value: "case-study" },
       ],
     },
   },
@@ -81,14 +106,77 @@ export const Gallery: ComponentConfig<GalleryProps> = {
     variant: "grid",
     text: "",
   },
-  render: ({ eyebrow, heading, images, columns, variant, text }) => (
+  render: ({
+    eyebrow, heading, images, columns, variant, text, caseStudyChallenge,
+    caseStudyApproach, caseStudyResults, caseStudyMetrics = [], nextProjectText, nextProjectLink,
+  }) => (
     <Section>
       <div className="section-intro flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
         {text ? <RichTextContent value={text} className="max-w-[55ch]" style={{ color: "var(--color-muted)" }} /> : null}
       </div>
-      {variant === "portfolio-rows" ? (
+      {variant === "case-study" ? (
+        <article className="mt-[var(--section-gap)]">
+          {images[0] ? (
+            <figure className="relative left-1/2 w-screen max-w-none -translate-x-1/2 overflow-hidden">
+              {images[0].url ? (
+                <SiteImage src={images[0].url} alt={images[0].alt} className="aspect-[16/8] max-h-[42rem] w-full object-cover" />
+              ) : <div className="aspect-[16/8] max-h-[42rem] w-full" style={{ background: "var(--color-soft-bg)" }} />}
+              {images[0].caption ? (
+                <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-6 pt-16 pb-6 text-lg font-semibold text-white sm:px-12 sm:pb-10">
+                  {images[0].caption}
+                </figcaption>
+              ) : null}
+            </figure>
+          ) : null}
+          <div className="mt-[var(--section-gap)] grid gap-8 md:grid-cols-3">
+            {[
+              { label: "Challenge", content: caseStudyChallenge },
+              { label: "Approach", content: caseStudyApproach },
+              { label: "Results", content: caseStudyResults },
+            ].map(({ label, content }) => (
+              <section key={String(label)} className="border-t pt-5" style={{ borderColor: "var(--color-border)" }}>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--color-secondary)" }}>{label}</h3>
+                {content ? <RichTextContent value={content} className="w-full text-sm" /> : null}
+              </section>
+            ))}
+          </div>
+          {caseStudyMetrics.length ? (
+            <dl className="mt-10 grid grid-cols-2 gap-5 border-y py-7 sm:grid-cols-4" style={{ borderColor: "var(--color-border)" }}>
+              {caseStudyMetrics.map((metric, i) => (
+                <div key={i} className="flex flex-col gap-1">
+                  <dt className="text-sm" style={{ color: "var(--color-muted)" }}>{metric.label}</dt>
+                  <dd className="text-3xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-heading)" }}>{metric.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {nextProjectText ? <div className="mt-8"><Button href={nextProjectLink}>{nextProjectText}</Button></div> : null}
+        </article>
+      ) : variant === "portfolio-asymmetric" ? (
+        <div className="mt-[var(--section-gap)] grid auto-rows-[minmax(12rem,auto)] grid-cols-2 gap-3 md:auto-rows-[minmax(14rem,auto)] md:grid-cols-12 md:gap-5">
+          {images.map((image, i) => {
+            const tileClass = i === 0
+              ? "col-span-2 row-span-2 md:col-span-7 md:row-span-2"
+              : i === 1
+                ? "col-span-1 row-span-2 md:col-span-5"
+                : i % 3 === 2
+                  ? "col-span-2 md:col-span-5"
+                  : "col-span-1 md:col-span-7";
+            return (
+              <figure key={i} className={`group relative isolate min-w-0 overflow-hidden rounded-[var(--radius-lg)] ${tileClass}`}>
+                {image.url ? (
+                  <SiteImage src={image.url} alt={image.alt} className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                ) : <div className="absolute inset-0" style={{ background: "var(--color-soft-bg)" }} />}
+                <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-4 pt-12 pb-4 text-sm font-semibold text-white sm:px-6 sm:pb-6">
+                  {image.caption || image.alt}
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      ) : variant === "portfolio-rows" ? (
         <div className="mt-[var(--section-gap)] flex flex-col gap-10 md:gap-16">
           {images.map((image, i) => <figure key={i} className="grid items-center gap-6 md:grid-cols-2 md:gap-12">
             {image.url ? (

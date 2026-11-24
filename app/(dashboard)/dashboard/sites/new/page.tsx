@@ -1,27 +1,19 @@
 import Link from "next/link";
 import { getSiteAccountOptions } from "@/lib/accounts";
-import { instantiateTemplate } from "@/templates/instantiate";
-import { templates } from "@/templates";
-import { NewSiteWizard } from "@/components/dashboard/new-site-wizard";
-import type { SectionDesign } from "@/lib/sections/catalog";
 import { brand } from "@/lib/brand";
 import { ArrowLeft, ArrowRight, Check, LayoutTemplate, MousePointer2, Sparkles } from "lucide-react";
+import { getPremiumTemplateGalleryOptions } from "@/lib/templates/catalog";
+import { PremiumTemplateGallery } from "@/components/dashboard/premium-template-gallery";
 
 export default async function NewSitePage({ searchParams }: {
   searchParams: Promise<{ method?: string | string[] }>;
 }) {
-  const accounts = await getSiteAccountOptions();
   const templateMode = (await searchParams).method === "template";
-  const sample = { businessName: "Your business", city: "Your city", phone: "0123 456 789", email: "hello@example.com", address: "Your address", services: "your services" };
-  const choices = templateMode ? Object.values(templates).map((template) => {
-    const hero = instantiateTemplate(template, sample)[0].data.content.find((item) => item.type === "Hero");
-    if (!hero) throw new Error(`Missing preview for ${template.key}`);
-    return {
-      key: template.key, name: template.name, theme: template.theme,
-      design: { id: `preview-${template.key}`, name: template.name, blockType: hero.type, category: "Hero",
-        props: hero.props, thumbnail: null, styles: ["classic", "modern"] } satisfies SectionDesign,
-    };
-  }) : [];
+  if (templateMode) {
+    const options = await getPremiumTemplateGalleryOptions();
+    return <PremiumTemplateGallery {...options} rootDomain={brand.rootDomain} />;
+  }
+  await getSiteAccountOptions();
   return <section className="site-creation mx-auto flex w-full max-w-6xl flex-col gap-8">
     <header className="creation-page-header">
       <Link href={templateMode ? "/dashboard/sites/new" : "/dashboard/sites"} className="creation-back-link">
@@ -32,7 +24,7 @@ export default async function NewSitePage({ searchParams }: {
       <p>{templateMode ? "A curated foundation, personalized with your business details. Make it your own in the editor."
         : "Two great ways to bring a business online. Choose your starting point; make every detail your own."}</p>
     </header>
-    {!templateMode ? <>
+    <>
       <div className="creation-paths">
         <Link href="/dashboard/sites/new/ai" className="creation-path creation-path-ai">
           <span className="creation-path-top"><span className="creation-path-icon"><Sparkles size={23} aria-hidden="true" /></span>
@@ -65,8 +57,6 @@ export default async function NewSitePage({ searchParams }: {
         </Link>
       </div>
       <p className="creation-choice-note"><MousePointer2 size={16} aria-hidden="true" />Both paths lead to your visual editor. You stay in control of the final result.</p>
-    </> : accounts?.length ? <NewSiteWizard accounts={accounts} choices={choices} rootDomain={brand.rootDomain}
-      marketingSubdomain={brand.marketingSiteSubdomain} /> :
-      <p className="platform-panel p-6 text-sm">Create a <Link className="underline" href="/dashboard/clients">client account</Link> first.</p>}
+    </>
   </section>;
 }

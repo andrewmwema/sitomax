@@ -24,6 +24,12 @@ export { assessContrast, bestContrastingTextColor, contrastRatio, contrastWarnin
 
 export type StyleId = "classic" | "modern";
 
+export type MobileStickyCtaSettings = {
+  enabled: boolean;
+  label: string;
+  href: string;
+};
+
 export type SiteTheme = {
   style?: StyleId;
   headingFont?: CuratedFont;
@@ -41,6 +47,7 @@ export type SiteTheme = {
   logoUrl?: string;
   logoAlt?: string;
   faviconUrl?: string;
+  mobileStickyCta?: MobileStickyCtaSettings;
 };
 
 export type CuratedThemePreset = {
@@ -268,6 +275,48 @@ export const THEME_PRESETS: readonly CuratedThemePreset[] = [
       buttonStyle: "pill",
       spacing: "comfortable",
       colors: { primary: "#555477", secondary: "#80685c", accent: "#80685c", background: "#faf9f6", text: "#2b2a34" },
+    },
+  },
+  {
+    id: "showcase-inspections",
+    label: "Showcase · Northline",
+    description: "Deep inspection navy, clear sky tones and a confident brass accent.",
+    theme: {
+      style: "modern",
+      headingFont: "Plus Jakarta Sans",
+      bodyFont: "Inter",
+      radius: 12,
+      buttonStyle: "rounded",
+      spacing: "comfortable",
+      colors: { primary: "#173650", secondary: "#b78342", accent: "#b78342", background: "#f6f8fa", text: "#1d2b37" },
+    },
+  },
+  {
+    id: "clarity-advisors",
+    label: "Clarity · Harbor & Pine",
+    description: "Warm paper, grounded green and an editorial serif and sans pairing.",
+    theme: {
+      style: "classic",
+      headingFont: "Fraunces",
+      bodyFont: "Lato",
+      radius: 8,
+      buttonStyle: "rounded",
+      spacing: "spacious",
+      colors: { primary: "#43584b", secondary: "#a27656", accent: "#8a5638", background: "#fbf8f2", text: "#302d28" },
+    },
+  },
+  {
+    id: "studio-forma",
+    label: "Studio · Forma",
+    description: "Expressive black and white, sharp corners and a vivid lime accent.",
+    theme: {
+      style: "modern",
+      headingFont: "Archivo Black",
+      bodyFont: "Inter",
+      radius: 0,
+      buttonStyle: "square",
+      spacing: "compact",
+      colors: { primary: "#171717", secondary: "#5b5b5b", accent: "#d9f36a", background: "#ffffff", text: "#171717" },
     },
   },
 ] as const;

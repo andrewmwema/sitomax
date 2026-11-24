@@ -40,7 +40,7 @@ export function SectionsShowcase() {
       <header className="border-b border-zinc-200 bg-white px-5 py-6 sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-5">
           <div>
-            <p className="text-xs font-semibold tracking-[0.16em] text-zinc-500 uppercase">SitoMax · Development</p>
+            <p className="text-xs font-semibold tracking-[0.16em] text-zinc-500 uppercase">SitoMax · Section preview</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Section library showcase</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
               Preview every catalog design with a curated theme and a real responsive iframe viewport.
@@ -141,7 +141,14 @@ export function SectionsShowcase() {
                     />
                   </div>
                 </div>
-                <p className="px-4 py-2.5 text-xs leading-5 text-zinc-600">{design.name}</p>
+                <div className="px-4 py-3">
+                  <p className="text-xs leading-5 text-zinc-600">{design.description}</p>
+                  <ul className="mt-2 flex flex-wrap gap-1.5">
+                    {design.bestFor.map((tag) => (
+                      <li key={tag} className="rounded-full bg-zinc-100 px-2 py-1 text-[10px] text-zinc-600">{tag}</li>
+                    ))}
+                  </ul>
+                </div>
               </article>
             ))}
           </div>

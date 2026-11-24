@@ -7,6 +7,7 @@ import { Eyebrow } from "./ui/eyebrow";
 import { RichHeading } from "./ui/heading";
 import { Card } from "./ui/card";
 import { EnquiryForm, enquiryFieldsField } from "./ui/enquiry-form";
+import type { EnquiryField } from "./ui/enquiry-form";
 import { RichTextContent } from "./ui/rich-text";
 import { BlockIcon } from "./ui/icon";
 import { businessContactDetails, type SiteMenu } from "@/lib/page-navigation";
@@ -18,12 +19,8 @@ export type ContactFormProps = {
   heading: string;
   formName: string;
   submitText: string;
-  formFields: {
-    label: string;
-    fieldType: "text" | "email" | "tel" | "textarea";
-    required: boolean;
-  }[];
-  variant: "centered" | "split" | "visit";
+  formFields: EnquiryField[];
+  variant: "centered" | "split" | "visit" | "form-first" | "stacked";
   text?: RichText;
   details?: { icon: IconValue; label: string; value: string }[];
   image: string;
@@ -56,6 +53,8 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
         { label: "Centered", value: "centered" },
         { label: "Split", value: "split" },
         { label: "Visit & enquire", value: "visit" },
+        { label: "Form first", value: "form-first" },
+        { label: "Wide enquiry", value: "stacked" },
       ],
     },
   },
@@ -78,7 +77,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     note: "",
   },
   render: ({ eyebrow, heading, formName, submitText, formFields, variant, text, details, image, imageAlt, note, puck }) => {
-    const split = variant === "split" || variant === "visit";
+    const split = variant === "split" || variant === "visit" || variant === "form-first";
     const menu = puck.metadata?.siteMenu as SiteMenu | undefined;
     const info = menu ? businessContactDetails(menu.contacts) : (details ?? []).map((detail) => ({ ...detail, href: "" }));
     const contactDetails = info.length ? <dl className="mt-[var(--content-gap)] grid gap-5 border-t pt-6 sm:grid-cols-2" style={{ borderColor: "var(--color-border)" }}>
@@ -97,11 +96,29 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
       </Card>
     );
 
+    if (variant === "stacked") {
+      return (
+        <Section background="soft">
+          <div id="contact" className="grid gap-8">
+            <div className="grid gap-6 md:grid-cols-2 md:items-end">
+              <div className="section-intro flex flex-col gap-3">
+                {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+                <RichHeading level={2}>{heading}</RichHeading>
+                {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}
+              </div>
+              {contactDetails}
+            </div>
+            {form}
+          </div>
+        </Section>
+      );
+    }
+
     if (split) {
       return (
         <Section background={variant === "visit" ? "default" : "soft"}>
           <div id="contact" className="grid items-start gap-10 md:grid-cols-2 md:gap-16">
-            <div className="section-intro flex flex-col gap-3">
+            <div className={`section-intro flex flex-col gap-3 ${variant === "form-first" ? "md:order-2" : ""}`}>
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <RichHeading level={2}>{heading}</RichHeading>
               {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}

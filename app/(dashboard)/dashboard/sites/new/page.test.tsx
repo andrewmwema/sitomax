@@ -1,29 +1,29 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ accounts: vi.fn(), instantiate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ accounts: vi.fn(), gallery: vi.fn() }));
 vi.mock("@/lib/accounts", () => ({ getSiteAccountOptions: mocks.accounts }));
-vi.mock("@/templates/instantiate", () => ({ instantiateTemplate: mocks.instantiate }));
-vi.mock("@/templates", () => ({ templates: { plumber: { key: "plumber", name: "Plumber", theme: {} } } }));
-vi.mock("@/components/dashboard/new-site-wizard", () => ({ NewSiteWizard: () => <div data-testid="template-wizard" /> }));
+vi.mock("@/lib/templates/catalog", () => ({ getPremiumTemplateGalleryOptions: mocks.gallery }));
+vi.mock("@/components/dashboard/premium-template-gallery", () => ({ PremiumTemplateGallery: () => <div data-testid="premium-template-gallery" /> }));
 import NewSitePage from "./page";
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.accounts.mockResolvedValue([{ id: "agency", name: "Agency", is_internal: true }]);
-  mocks.instantiate.mockReturnValue([{ data: { content: [{ type: "Hero", props: {} }] } }]);
+  mocks.gallery.mockResolvedValue({ isSuperAdmin: false, accounts: [], templates: [] });
 });
 describe("New site entry", () => {
-  it("offers AI and template paths before loading a template wizard or preparing its previews", async () => {
+  it("offers the AI and premium design paths from the admin creation page", async () => {
     const markup = renderToStaticMarkup(await NewSitePage({ searchParams: Promise.resolve({}) }));
     expect(markup).toContain('href="/dashboard/sites/new/ai"');
     expect(markup).toContain('href="/dashboard/sites/new?method=template"');
-    expect(markup).not.toContain('data-testid="template-wizard"');
-    expect(mocks.instantiate).not.toHaveBeenCalled();
+    expect(markup).not.toContain('data-testid="premium-template-gallery"');
+    expect(mocks.gallery).not.toHaveBeenCalled();
   });
-  it("opens the template wizard only when that creation path is selected", async () => {
+  it("opens the persisted premium design gallery when the template path is selected", async () => {
     const markup = renderToStaticMarkup(await NewSitePage({ searchParams: Promise.resolve({ method: "template" }) }));
-    expect(markup).toContain('data-testid="template-wizard"');
-    expect(mocks.instantiate).toHaveBeenCalledOnce();
+    expect(markup).toContain('data-testid="premium-template-gallery"');
+    expect(mocks.gallery).toHaveBeenCalledOnce();
+    expect(mocks.accounts).not.toHaveBeenCalled();
   });
 });

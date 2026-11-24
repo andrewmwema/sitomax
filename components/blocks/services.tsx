@@ -38,7 +38,7 @@ export type ServicesProps = {
   secondaryButtonAction?: "link" | "form-popup";
   secondaryButtonFormName?: string;
   trustLine?: string;
-  variant: "grid" | "bordered" | "image-cards" | "image-rows" | "list" | "tabs" | "tabs-vertical" | "tabs-simple";
+  variant: "grid" | "bordered" | "image-cards" | "image-rows" | "list" | "tabs" | "tabs-vertical" | "tabs-simple" | "audience-paths" | "feature-showcase";
 };
 
 function ServiceImage({ service, className = "" }: { service: ServiceItem; className?: string }) {
@@ -113,6 +113,8 @@ export const Services: ComponentConfig<ServicesProps> = {
         { label: "Tabs", value: "tabs" },
         { label: "Vertical tabs", value: "tabs-vertical" },
         { label: "Text tabs", value: "tabs-simple" },
+        { label: "Audience paths", value: "audience-paths" },
+        { label: "Feature showcase", value: "feature-showcase" },
       ],
     },
   },
@@ -145,16 +147,41 @@ export const Services: ComponentConfig<ServicesProps> = {
         primary={buttonText ? { label: buttonText, mode: buttonAction, link: buttonLink, formName: buttonFormName } : undefined}
         secondary={secondaryButtonText ? { label: secondaryButtonText, mode: secondaryButtonAction, link: secondaryButtonLink, formName: secondaryButtonFormName } : undefined}
         trustLine={trustLine}
-        center={variant === "grid" || variant === "image-cards"}
+        center={variant === "grid" || variant === "image-cards" || variant === "audience-paths"}
       />
     );
     const intro = (
-      <div className={`section-intro flex min-w-0 flex-col gap-4 ${variant === "grid" || variant === "image-cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
+      <div className={`section-intro flex min-w-0 flex-col gap-4 ${variant === "grid" || variant === "image-cards" || variant === "audience-paths" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} className="w-full text-base" />
       </div>
     );
+
+    if (variant === "audience-paths") {
+      return (
+        <Section background="soft">
+          {intro}
+          <div className="mt-[var(--section-gap)] grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {services.map((service, i) => (
+              <article key={i} className="site-card flex min-w-0 flex-col items-start gap-5 rounded-[var(--radius-lg)] border p-6 sm:p-8"
+                style={{ background: "var(--color-bg)", borderColor: "var(--color-border)" }}>
+                <div className="flex w-full items-center justify-between gap-4">
+                  <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
+                  <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--color-muted)" }}>{String(i + 1).padStart(2, "0")}</span>
+                </div>
+                <div className="flex flex-1 flex-col gap-3">
+                  <Heading level={3}>{service.title}</Heading>
+                  <RichTextContent value={service.text} className="w-full text-sm" />
+                </div>
+                {service.actionText ? <Button href={service.actionLink} variant="secondary">{service.actionText}</Button> : null}
+              </article>
+            ))}
+          </div>
+          {actions}
+        </Section>
+      );
+    }
 
     if (variant === "list") {
       return (
@@ -200,6 +227,32 @@ export const Services: ComponentConfig<ServicesProps> = {
                   {service.actionText ? <Button href={service.actionLink} variant="secondary" className="self-start">{service.actionText}</Button> : null}
                 </div>
               </div>
+            ))}
+          </div>
+          {actions}
+        </Section>
+      );
+    }
+
+    if (variant === "feature-showcase") {
+      return (
+        <Section>
+          {intro}
+          <div className="mt-[var(--section-gap)] flex flex-col gap-10 lg:gap-16">
+            {services.map((service, i) => (
+              <article key={i} className="grid items-center gap-8 border-t pt-8 first:border-t-0 first:pt-0 md:grid-cols-2 md:gap-12 lg:gap-20"
+                style={{ borderColor: "var(--color-border)" }}>
+                <div className={i % 2 === 1 ? "md:order-2" : ""}>
+                  <ServiceImage service={service} className="aspect-[5/4]" />
+                </div>
+                <div className="flex min-w-0 flex-col items-start gap-4">
+                  <p className="text-sm font-semibold tabular-nums" style={{ color: "var(--color-secondary)" }}>Benefit / {String(i + 1).padStart(2, "0")}</p>
+                  <IconTile name={service.icon} editPath={puck.isEditing ? `services.${i}.icon` : undefined} />
+                  <Heading level={3} style={{ fontSize: "clamp(1.6rem, 3vw, 2.4rem)" }}>{service.title}</Heading>
+                  <RichTextContent value={service.text} className="w-full text-base" />
+                  {service.actionText ? <Button href={service.actionLink} variant="secondary">{service.actionText}</Button> : null}
+                </div>
+              </article>
             ))}
           </div>
           {actions}

@@ -47,6 +47,20 @@ undoes them and checks the originals are back. It is skipped unless
 TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm test
 ```
 
+## Premium website designs
+
+Apply migrations only to a local or staging Supabase project, then run
+`npm run seed:premium-templates` with `NEXT_PUBLIC_SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` explicitly set in the process environment for that
+same local project. The seed does not load environment files and refuses
+non-local Supabase URLs. It uploads template artwork to the read-only
+`template-assets` bucket and upserts the Showcase, Clarity and Studio masters.
+See [docs/MIGRATIONS.md](./docs/MIGRATIONS.md) for the production migration
+record and the review-only Phase 1 test-fixture and cleanup procedures.
+The three gallery thumbnails are screenshots of the source-rendered home pages.
+For an existing catalog, the separately reviewed `npm run sync:premium-thumbnails`
+updates only those preview images; see the migration record before use.
+
 ## Platform appearance
 
 The dashboard, authentication screens and editor share the warm neutral,
@@ -131,6 +145,17 @@ with no AI request and no credits; they preview at once and are kept with
 to them. `sites.theme.spacing` (`compact`, `comfortable`, `spacious`) sets
 `--section-pad`; an unset value keeps the style's own spacing. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
+
+The section library hides empty categories, while still showing Blank layouts
+and categories containing saved designs. Its thumbnails fit the full rendered
+design into each card; the enlarge control shows it in more detail. The editor
+drawer uses compact previews for elements and placeholders for empty media and
+layout blocks. Blog thumbnails use sample posts, while inserted blog feeds
+show the site's published posts. Sample partner wordmarks are illustrative and
+should be replaced with actual partners before publishing.
+
+`/dev/sections` showcases the built-in designs with theme and viewport controls
+in development and Vercel Preview deployments; it is unavailable in production.
 
 Dashboard Edit/Open editor links (including blog post edits), previews and live-site
 links open in a new tab; the editor's **Dashboard** link stays in the same tab.

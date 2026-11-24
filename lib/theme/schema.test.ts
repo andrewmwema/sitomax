@@ -8,4 +8,15 @@ describe("site theme schema", () => {
     });
     expect(themeSchema.parse({ faviconUrl: "" })).toEqual({ faviconUrl: "" });
   });
+
+  it("validates the site-wide mobile sticky CTA destination", () => {
+    expect(themeSchema.parse({ mobileStickyCta: { enabled: true } }).mobileStickyCta).toEqual({
+      enabled: true,
+      label: "Get a quote",
+      href: "/contact",
+    });
+    expect(themeSchema.safeParse({ mobileStickyCta: { enabled: true, href: "//example.com" } }).success).toBe(false);
+    expect(themeSchema.safeParse({ mobileStickyCta: { enabled: true, href: "javascript:alert(1)" } }).success).toBe(false);
+    expect(themeSchema.safeParse({ mobileStickyCta: { enabled: true, href: "tel:+15551234567" } }).success).toBe(true);
+  });
 });

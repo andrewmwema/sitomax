@@ -115,7 +115,9 @@ export function EditorInteractions() {
     }
     const cloned = buildDesignItem({
       id: item.props.id, name: item.type, blockType: item.type, category: "Blank",
-      props: item.props, thumbnail: null, styles: ["classic", "modern"],
+      props: item.props, description: `Copied ${item.type} section.`, bestFor: ["Custom section"],
+      metadata: { editableFields: [], repeatableFields: [], limits: {}, imageSlots: [] },
+      thumbnail: null, styles: ["classic", "modern"],
     });
     const clean = sanitizePuckData({ content: [{ ...cloned, props: { ...cloned.props, id: String(cloned.props.id) } }] }).content[0];
     const { dispatch } = getPuck();
