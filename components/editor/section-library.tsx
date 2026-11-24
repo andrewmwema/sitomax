@@ -7,7 +7,7 @@ import { useGetPuck, type Data } from "@puckeditor/core";
 import { Grid2X2, List, Search, Sparkles, X, ZoomIn } from "lucide-react";
 import type { SiteTheme } from "@/lib/theme/presets";
 import {
-  SECTION_CATEGORIES, designsForCategory, sectionCatalog, searchSectionDesigns,
+  designsForCategory, sectionCatalog, searchSectionDesigns, visibleSectionCategories,
   type SectionCategory, type SectionDesign,
 } from "@/lib/sections/catalog";
 import { listSavedDesigns, setDesignGlobal } from "@/lib/sections/actions";
@@ -110,9 +110,11 @@ function LibraryContent() {
   const source = tab === "saved"
     ? (savedDesigns ?? []).filter((design) => design.saved?.isOwner)
     : allDesigns;
+  const availableCategories = visibleSectionCategories(source);
+  const activeCategory = availableCategories.includes(category) ? category : availableCategories[0];
   const searching = query.trim().length > 0;
-  const blank = category === "Blank" && !searching;
-  const designs = searching ? searchSectionDesigns(source, query) : designsForCategory(source, category);
+  const blank = activeCategory === "Blank" && !searching;
+  const designs = searching ? searchSectionDesigns(source, query) : designsForCategory(source, activeCategory);
 
   const insertItem = useCallback((item: { type: string; props: Record<string, unknown> }) => {
     const { dispatch, appState } = getPuck();
@@ -207,10 +209,10 @@ function LibraryContent() {
         </div>
       ) : null}
       <nav aria-label="Section categories" className="flex max-h-36 shrink-0 flex-wrap gap-1.5 overflow-y-auto border-b border-[#E8E7E3] p-3">
-          {SECTION_CATEGORIES.map((entry) => (
-            <button key={entry} type="button" aria-current={!searching && category === entry ? "true" : undefined}
+          {availableCategories.map((entry) => (
+            <button key={entry} type="button" aria-current={!searching && activeCategory === entry ? "true" : undefined}
               onClick={() => { setCategory(entry); setQuery(""); clearPreview(); }}
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] ${!searching && category === entry ? "border-[#D9D3FF] bg-[#F1EFFF] font-medium text-[#4B3FE0]" : "border-[#E8E7E3] text-zinc-600 hover:bg-[#F7F7F5]"}`}>
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] ${!searching && activeCategory === entry ? "border-[#D9D3FF] bg-[#F1EFFF] font-medium text-[#4B3FE0]" : "border-[#E8E7E3] text-zinc-600 hover:bg-[#F7F7F5]"}`}>
               <span>{entry}</span>
               <span className="tabular-nums opacity-60">{entry === "Blank" ? ROW_LAYOUT_IDS.length : designsForCategory(source, entry).length}</span>
             </button>
@@ -242,6 +244,12 @@ function LibraryContent() {
                 </div>
                 <div className="min-w-0 flex-1 p-2">
                   <p className="truncate text-xs font-medium text-zinc-700">{design.name}</p>
+                  <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-zinc-500">{design.description}</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {design.bestFor.slice(0, 2).map((tag) => (
+                      <span key={tag} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] leading-4 text-zinc-600">{tag}</span>
+                    ))}
+                  </div>
                   {design.saved ? <p className="mt-1 text-[10px] text-zinc-500">{design.saved.isGlobal ? "Global" : "Private"}</p> : null}
                 </div>
                 <button type="button" aria-label={`Insert ${design.name}`}

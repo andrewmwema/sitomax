@@ -6,14 +6,13 @@ import { Render } from "@puckeditor/core";
 import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import { buildThemeStyle, type SiteTheme } from "@/lib/theme/presets";
 import type { SectionDesign } from "@/lib/sections/catalog";
+import type { BlogFeedPost } from "@/components/blocks/blog-posts";
 
 /**
  * Gallery thumbnail for a section design. The design renders live at a
- * fixed 1280px viewport inside a sandboxed <iframe> (no scripts), scaled
- * down with transform: scale(cardWidth / 1280) from the top-left — the
- * full width is always visible (nothing cropped horizontally) and tall
- * sections are cropped from the top of a fixed 16:10 card. Short
- * sections leave a fill matching their own background.
+ * fixed 1280px viewport inside a sandboxed <iframe> (no scripts). Cards
+ * fit the complete rendered section into the card; expanded previews
+ * retain the complete section at the selected viewport width.
  *
  * The iframe document receives everything the real page has: the app's
  * compiled stylesheets (kept in sync with a MutationObserver, since dev
@@ -26,6 +25,15 @@ import type { SectionDesign } from "@/lib/sections/catalog";
 const DEFAULT_RENDER_WIDTH = 1280;
 
 const COPY_MARK = "data-design-thumb-style";
+
+const SAMPLE_POSTS: BlogFeedPost[] = [
+  { id: "sample-1", slug: "making-room-for-good-ideas", published_at: "2025-01-15T12:00:00Z", featured: true,
+    publication: { metadata: { title: "Making room for good ideas", excerpt: "A thoughtful starting point for your next project.", thumbnail_image: "/samples/home-interior.jpg", cover_image: "", reading_minutes: 4, category: null, author: null } } },
+  { id: "sample-2", slug: "a-closer-look-at-the-details", published_at: "2025-01-08T12:00:00Z", featured: false,
+    publication: { metadata: { title: "A closer look at the details", excerpt: "Small choices that make a lasting difference.", thumbnail_image: "/samples/kitchen.jpg", cover_image: "", reading_minutes: 3, category: null, author: null } } },
+  { id: "sample-3", slug: "planning-the-next-step", published_at: "2025-01-01T12:00:00Z", featured: false,
+    publication: { metadata: { title: "Planning the next step", excerpt: "Simple questions to help bring a good plan together.", thumbnail_image: "/samples/team-at-work.jpg", cover_image: "", reading_minutes: 5, category: null, author: null } } },
+];
 
 /** Mirrors the parent page's styles and fonts into the iframe document. */
 function syncFrameStyles(doc: Document) {
@@ -91,12 +99,14 @@ export function DesignThumbnail({
   theme,
   expanded = false,
   viewportWidth = DEFAULT_RENDER_WIDTH,
+  compact = false,
 }: {
   design: SectionDesign;
   theme: SiteTheme;
   expanded?: boolean;
   /** Actual iframe viewport width; scaling changes only its display size. */
   viewportWidth?: number;
+  compact?: boolean;
 }) {
   const [cardWidth, setCardWidth] = useState(0);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
@@ -213,7 +223,12 @@ export function DesignThumbnail({
     [design],
   );
 
-  const scale = cardWidth > 0 ? cardWidth / viewportWidth : 0.2;
+  const widthScale = cardWidth > 0 ? cardWidth / viewportWidth : 0.2;
+  const scale = expanded || contentHeight <= 0
+    ? widthScale
+    : Math.min(widthScale, cardWidth * 10 / 16 / contentHeight);
+  const offsetX = expanded ? 0 : (cardWidth - viewportWidth * scale) / 2;
+  const offsetY = expanded ? 0 : (cardWidth * 10 / 16 - contentHeight * scale) / 2;
 
   return (
     <div
@@ -232,8 +247,8 @@ export function DesignThumbnail({
         className="pointer-events-none absolute left-0 top-0 select-none border-0"
         style={{
           width: viewportWidth,
-          height: expanded ? contentHeight : viewportWidth * 10 / 16,
-          transform: `scale(${scale})`,
+          height: contentHeight,
+          transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
           transformOrigin: "top left",
         }}
       />
@@ -243,13 +258,20 @@ export function DesignThumbnail({
             <div
               ref={liveRef}
               className="design-thumb-content"
-              style={{ width: viewportWidth }}
+              style={compact ? {
+                width: viewportWidth,
+                minHeight: viewportWidth * 10 / 16,
+                boxSizing: "border-box",
+                padding: 32,
+                display: "grid",
+                alignContent: "center",
+              } : { width: viewportWidth }}
             >
               <Render
                 config={puckConfig}
                 // Cast: a single-block preview fragment, not a full page.
                 data={data as PuckPageData}
-                metadata={{ theme }}
+                metadata={{ theme, siteBlogPosts: SAMPLE_POSTS }}
                 // Same as the public renderer: RichTextContent sanitizes.
                 fieldTransforms={{ richtext: ({ value }) => value }}
               />

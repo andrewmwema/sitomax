@@ -11,8 +11,8 @@ import { findUnreplacedPlaceholders } from "./placeholders";
 
 type Block = keyof typeof puckConfig.components;
 const counts: Partial<Record<SectionCategory, number>> = {
-  Testimonials: 4, Logos: 2, Team: 3, "Call to action": 4,
-  Contact: 3, Footer: 3, About: 3, Gallery: 3,
+  Testimonials: 5, Logos: 3, Team: 5, "Call to action": 4,
+  Contact: 5, Footer: 3, About: 5, Gallery: 5, Portfolio: 5,
 };
 const designs = sectionCatalog.filter((design) => design.category in counts || design.blockType === "Process");
 
@@ -31,8 +31,8 @@ function render(type: Block, props: Record<string, unknown>, style = "classic") 
 }
 
 describe("Batches 4 and 5", () => {
-  it("renders all 28 distinct designs through SectionShell in both styles with complete sample assets", () => {
-    expect(designs.filter((design) => design.blockType === "Process")).toHaveLength(3);
+  it("renders catalog designs through SectionShell in both styles with complete sample assets", () => {
+    expect(designs.filter((design) => design.blockType === "Process")).toHaveLength(5);
     for (const [category, count] of Object.entries(counts)) {
       const entries = designs.filter((design) => design.category === category);
       expect(entries, category).toHaveLength(count);
@@ -47,7 +47,10 @@ describe("Batches 4 and 5", () => {
         for (const image of html.matchAll(/src="(\/samples\/[^"]+)"/g)) {
           expect(existsSync(path.join(process.cwd(), "public", image[1])), image[1]).toBe(true);
         }
-        if (["Team", "About", "Gallery"].includes(design.category)) expect(html, design.id).toMatch(/<img/);
+        if (["Team", "Gallery"].includes(design.category) ||
+          (design.category === "About" && design.props.variant !== "report-preview")) {
+          expect(html, design.id).toMatch(/<img/);
+        }
       }
     }
   });
@@ -114,8 +117,8 @@ describe("Batches 4 and 5", () => {
 
   it("preserves all existing people, steps and reviews across layout changes", () => {
     const cases: { block: Block; id: string; key: string; name: string; variants: string[] }[] = [
-      { block: "Team", id: "team-photo-cards", key: "members", name: "name", variants: ["cards", "profiles", "featured"] },
-      { block: "Process", id: "process-step-cards", key: "steps", name: "title", variants: ["steps", "timeline", "checklist"] },
+      { block: "Team", id: "team-photo-cards", key: "members", name: "name", variants: ["cards", "profiles", "featured", "compact", "spotlight"] },
+      { block: "Process", id: "process-step-cards", key: "steps", name: "title", variants: ["steps", "timeline", "checklist", "horizontal", "vertical"] },
       { block: "Testimonials", id: "testimonials-cards", key: "testimonials", name: "name", variants: ["cards", "quotes", "carousel", "rating"] },
     ];
     for (const item of cases) {
@@ -147,7 +150,7 @@ describe("Batches 4 and 5", () => {
 
   it("shares labelled enquiry forms with native validation and the existing submission contract", () => {
     const forms = designs.filter((design) => design.blockType === "ContactForm" || design.props.variant === "form");
-    expect(forms).toHaveLength(4);
+    expect(forms).toHaveLength(6);
     for (const design of forms) {
       const html = render(design.blockType as Block, design.props);
       expect(html).toMatch(/<form[^>]*action="\/api\/forms\/submit"/);

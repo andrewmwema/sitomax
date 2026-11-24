@@ -3,6 +3,13 @@ import { describe, expect, it } from "vitest";
 import { SectionShell } from "./SectionShell";
 
 describe("SectionShell contrast", () => {
+  it("keeps saved designs on the legacy visual version unless explicitly upgraded", () => {
+    const legacy = renderToStaticMarkup(<SectionShell><p>Legacy</p></SectionShell>);
+    const refreshed = renderToStaticMarkup(<SectionShell design={{ visualVersion: 2 }}><p>Refreshed</p></SectionShell>);
+    expect(legacy).toContain('data-section-visual-version="1"');
+    expect(refreshed).toContain('data-section-visual-version="2"');
+  });
+
   it("uses readable text when an appearance text color misses contrast on its solid background", () => {
     const html = renderToStaticMarkup(
       <SectionShell

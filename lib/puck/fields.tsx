@@ -24,6 +24,17 @@ export function imageField(label: string): CustomField<string> & { aiKind: "imag
   };
 }
 
+export function optionalImageField(label: string): CustomField<string | undefined> & { aiKind: "image" } {
+  return {
+    type: "custom",
+    aiKind: "image",
+    label,
+    render: ({ name, value, onChange, readOnly }) => (
+      <PuckImageField name={name} value={value ?? ""} onChange={onChange} readOnly={readOnly} />
+    ),
+  };
+}
+
 /**
  * Shared link field (buttons, menus, cards, images). Stores a typed
  * SiteLink; page links keep the page id and resolve to the current slug at

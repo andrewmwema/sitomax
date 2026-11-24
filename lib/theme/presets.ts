@@ -24,6 +24,12 @@ export { assessContrast, bestContrastingTextColor, contrastRatio, contrastWarnin
 
 export type StyleId = "classic" | "modern";
 
+export type MobileStickyCtaSettings = {
+  enabled: boolean;
+  label: string;
+  href: string;
+};
+
 export type SiteTheme = {
   style?: StyleId;
   headingFont?: CuratedFont;
@@ -41,6 +47,7 @@ export type SiteTheme = {
   logoUrl?: string;
   logoAlt?: string;
   faviconUrl?: string;
+  mobileStickyCta?: MobileStickyCtaSettings;
 };
 
 export type CuratedThemePreset = {

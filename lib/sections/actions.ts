@@ -7,6 +7,7 @@ import { puckConfig } from "@/lib/puck/config";
 import {
   SECTION_CATEGORIES,
   sectionCategory,
+  sectionContentMetadata,
   type SectionDesign,
 } from "@/lib/sections/catalog";
 import type { ActionState } from "@/lib/form-state";
@@ -50,6 +51,9 @@ export async function listSavedDesigns(): Promise<SectionDesign[]> {
       blockType: row.block_type,
       category: sectionCategory(row.category)!,
       name: row.name,
+      description: `${row.name} is a saved, editable section design.`,
+      bestFor: ["Saved design", "Custom content"],
+      metadata: sectionContentMetadata(row.block_type),
       thumbnail: row.thumbnail_url,
       props: row.props ?? {},
       styles: ["classic", "modern"],

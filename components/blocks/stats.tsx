@@ -20,7 +20,7 @@ export type StatsProps = {
   stats: StatItem[];
   image: string;
   imageAlt: string;
-  variant: "row" | "cards" | "split";
+  variant: "row" | "cards" | "split" | "spotlight" | "band";
 };
 
 function StatNumber({ value }: { value: string }) {
@@ -66,6 +66,8 @@ export const Stats: ComponentConfig<StatsProps> = {
         { label: "Editorial row", value: "row" },
         { label: "Metric cards", value: "cards" },
         { label: "Photo & numbers", value: "split" },
+        { label: "Spotlight metric", value: "spotlight" },
+        { label: "Milestone band", value: "band" },
       ],
     },
   },
@@ -92,6 +94,43 @@ export const Stats: ComponentConfig<StatsProps> = {
         <RichTextContent value={text} className="w-full text-base" />
       </div>
     );
+
+    if (variant === "spotlight") {
+      return (
+        <Section background="soft">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            {intro}
+            <dl className="grid gap-4 sm:grid-cols-2">
+              {stats.map((stat, i) => (
+                <div key={i} className={`site-card min-w-0 rounded-[var(--radius-lg)] border p-6 ${i === 0 ? "sm:col-span-2" : ""}`}
+                  style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}>
+                  <dt className="text-sm font-semibold">{stat.label}</dt>
+                  <StatNumber value={stat.value} />
+                  {stat.detail ? <dd className="mt-[var(--detail-gap)] text-sm" style={{ color: "var(--color-muted)" }}>{stat.detail}</dd> : null}
+                </div>
+              ))}
+            </dl>
+          </div>
+        </Section>
+      );
+    }
+
+    if (variant === "band") {
+      return (
+        <Section background="dark" style={{ "--eyebrow-color": "var(--color-bg)" } as CSSProperties}>
+          {intro}
+          <dl className="mt-[var(--section-gap)] grid gap-6 border-y py-8 sm:grid-cols-2 lg:grid-cols-4" style={{ borderColor: "var(--color-border)" }}>
+            {stats.map((stat, i) => (
+              <div key={i} className="min-w-0">
+                <dt className="text-sm font-medium">{stat.label}</dt>
+                <StatNumber value={stat.value} />
+                {stat.detail ? <dd className="mt-[var(--detail-gap)] text-sm" style={{ color: "var(--color-muted)" }}>{stat.detail}</dd> : null}
+              </div>
+            ))}
+          </dl>
+        </Section>
+      );
+    }
 
     if (variant === "split") {
       return (
