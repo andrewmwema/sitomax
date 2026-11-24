@@ -307,6 +307,15 @@ function SettingsTab({ design, patch }: TabProps) {
 
   return (
     <>
+      <FieldRow label="Content width">
+        <select aria-label="Content width" value={settings.contentWidth ?? ""}
+          onChange={(event) => patchSettings({ contentWidth: event.target.value ? event.target.value as "narrow" | "normal" | "wide" : undefined })}>
+          <option value="">Design default</option>
+          <option value="narrow">Narrow</option>
+          <option value="normal">Normal</option>
+          <option value="wide">Wide</option>
+        </select>
+      </FieldRow>
       <Toggle
         label="Full width background"
         checked={settings.fullBleed !== false}

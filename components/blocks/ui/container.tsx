@@ -13,7 +13,7 @@ export function Container({
   return (
     <div
       className={`mx-auto w-full px-5 sm:px-8 ${className}`}
-      style={{ maxWidth: "var(--container)", ...style }}
+      style={{ maxWidth: "var(--section-content-width, var(--container))", ...style }}
     >
       {children}
     </div>

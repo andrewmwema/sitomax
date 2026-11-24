@@ -110,8 +110,9 @@ export function EditorInspector({ fields, isLoading }: { fields: Partial<Record<
         </div>)}
         <label>Corner radius {overrideIndicator("borderRadius")} <input aria-label="Corner radius" type="range" min={0} max={48} value={appearance.borderRadius ?? base.borderRadius ?? 0}
           onChange={(event) => patchAppearance({ borderRadius: Number(event.target.value) })} /></label>
-        <label>Alignment {overrideIndicator("align")} <select aria-label="Block alignment" value={appearance.align ?? base.align ?? "left"}
-          onChange={(event) => patchAppearance({ align: event.target.value as "left" | "center" | "right" })}>
+        <label>Alignment {overrideIndicator("align")} <select aria-label="Block alignment" value={appearance.align ?? base.align ?? ""}
+          onChange={(event) => patchAppearance({ align: event.target.value ? event.target.value as "left" | "center" | "right" : undefined })}>
+          <option value="">Design default</option>
           <option>left</option><option>center</option><option>right</option>
         </select></label>
         <button type="button" className="text-left underline" onClick={() => {

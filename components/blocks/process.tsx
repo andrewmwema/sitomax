@@ -49,7 +49,7 @@ export const Process: ComponentConfig<ProcessProps> = {
     <Section background={variant === "steps" ? "soft" : "default"}>
       <div className={`grid gap-12 ${variant === "checklist" ? "items-center lg:grid-cols-2" : ""}`}>
         <div className="flex flex-col gap-4">
-          <div className="flex max-w-2xl flex-col gap-4">
+          <div className="section-intro flex max-w-2xl flex-col gap-4">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
             <RichHeading level={2}>{heading}</RichHeading>
             <RichTextContent value={text} />

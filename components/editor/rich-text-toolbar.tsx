@@ -17,6 +17,7 @@ import { SectionLibraryContext } from "./section-library";
 import { appPoint, InteractionContext } from "./interaction-context";
 import { useOptionalEditorAi } from "./editor-ai-context";
 import { HexColorInput } from "./hex-color-input";
+import { MAX_NEW_TEXT_INDENT } from "@/lib/sections/indent-qa";
 
 const icons = {
   Bold, Italic, Underline, Strike: Strikethrough, Link: LinkIcon, Bullets: List,
@@ -383,11 +384,14 @@ export function RichTextToolbar({ editor, readOnly, floating = false, initialHea
       {button("Numbers", () => { editor.chain().focus().toggleOrderedList().run(); }, editor.isActive("orderedList"))}
       {button("Indent", () => {
         if (editor.isActive("listItem")) editor.chain().focus().sinkListItem("listItem").run();
-        else editor.chain().focus().updateAttributes(block, { indent: Math.min(128, Number(editor.getAttributes(block).indent ?? 0) + 16) }).run();
+        else {
+          const current = Number(editor.getAttributes(block).indent ?? 0);
+          if (current < MAX_NEW_TEXT_INDENT) editor.chain().focus().updateAttributes(block, { indent: Math.min(MAX_NEW_TEXT_INDENT, current + 16) }).run();
+        }
       })}
       {button("Outdent", () => {
         if (editor.isActive("listItem")) editor.chain().focus().liftListItem("listItem").run();
-        else editor.chain().focus().updateAttributes(block, { indent: Math.max(0, Number(editor.getAttributes(block).indent ?? 0) - 16) }).run();
+        else editor.chain().focus().updateAttributes(block, { indent: 0 }).run();
       })}
       </div>
       <div role="group" aria-label="History and cleanup" className={groupClass}>

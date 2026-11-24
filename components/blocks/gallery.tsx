@@ -83,7 +83,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
   },
   render: ({ eyebrow, heading, images, columns, variant, text }) => (
     <Section>
-      <div className="flex flex-col items-center gap-3 text-center">
+      <div className="section-intro flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
         {text ? <RichTextContent value={text} className="max-w-[55ch]" style={{ color: "var(--color-muted)" }} /> : null}
@@ -113,7 +113,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
       ) : variant === "featured" ? (
         <div className="mt-[var(--section-gap)] grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {images.map((image, i) => (
-            <figure key={i} className={`relative isolate min-h-52 overflow-hidden rounded-[var(--radius-lg)] ${i === 0 ? "sm:col-span-2 lg:row-span-2" : "aspect-[4/3]"}`}>
+            <figure key={i} className={`relative isolate min-w-0 overflow-hidden rounded-[var(--radius-lg)] ${i === 0 ? "min-h-52 sm:col-span-2 lg:row-span-2" : "aspect-[4/3]"}`}>
               {image.url ? (
                 <SiteImage src={image.url} alt={image.alt} className="h-full w-full object-cover" style={{ height: "100%" }} />
               ) : <div className="h-full min-h-64 bg-[var(--color-soft-bg)]" />}

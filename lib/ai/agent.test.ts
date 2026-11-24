@@ -158,6 +158,24 @@ describe("AI agent tool guardrails", () => {
     expect(JSON.stringify(changeset.working)).toContain("<secret>");
   });
 
+  it("can identify and remove a centered paragraph's indent without rewriting its text", async () => {
+    const changeset = staged();
+    const column = ((sections(changeset.working)[1].props.rows as Section[])[0].props.columns as Section[])[0];
+    (column.props.content as Section[]).push({ type: "Text", props: {
+      ...defaults("Text"), id: "intro", align: "center",
+      text: '<p style="text-align: center; margin-left: 128px">Hello <strong>there</strong>.</p>',
+    } });
+    changeset.baseline = structuredClone(changeset.working);
+    expect(await run(changeset, "get_section", { pageId, sectionId: "intro" }))
+      .toMatchObject({ warnings: [expect.stringContaining("margin-left")] });
+    await run(changeset, "update_section_props", { pageId, sectionId: "intro", props: {
+      text: '<p style="text-align: center">Hello <strong>there</strong>.</p>',
+    } });
+    expect(nested(changeset.working, "intro").props.text).toBe('<p style="text-align: center">Hello <strong>there</strong>.</p>');
+    expect(nested(changeset.baseline, "intro").props.text).toContain("128px");
+    expectReplays(changeset);
+  });
+
   it("edits, restyles and sets images on elements nested in a custom layout", async () => {
     const changeset = staged();
     const column = ((sections(changeset.working)[1].props.rows as Section[])[0].props.columns as Section[])[0];

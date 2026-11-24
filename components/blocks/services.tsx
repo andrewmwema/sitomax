@@ -95,7 +95,7 @@ export const Services: ComponentConfig<ServicesProps> = {
   },
   render: ({ eyebrow, heading, text, services, variant = "grid", puck }) => {
     const intro = (
-      <div className={`flex min-w-0 flex-col gap-4 ${variant === "grid" || variant === "image-cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
+      <div className={`section-intro flex min-w-0 flex-col gap-4 ${variant === "grid" || variant === "image-cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} className="w-full text-base" />

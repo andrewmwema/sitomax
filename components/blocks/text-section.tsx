@@ -187,7 +187,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
         <Section background="soft">
           <div className="mx-auto max-w-[52rem] border p-7 sm:p-12 lg:p-16"
             style={{ borderColor: "var(--color-border)", borderRadius: "var(--radius-lg)", backgroundColor: "var(--color-bg)" }}>
-            <div className="flex flex-col gap-5">
+            <div className="section-intro flex flex-col gap-5">
               <SectionHeader eyebrow={eyebrow} heading={heading} />
               <RichTextContent value={text} className="w-full" />
             </div>
@@ -201,8 +201,8 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
         <Section>
           <div className="grid gap-8 border-t pt-8 md:grid-cols-[1fr_1.25fr] md:gap-16"
             style={{ borderColor: "var(--color-border)" }}>
-            <div className="flex flex-col gap-4"><SectionHeader eyebrow={eyebrow} heading={heading} /></div>
-            <RichTextContent value={text} className="w-full !max-w-none" />
+            <div className="section-intro flex flex-col gap-4"><SectionHeader eyebrow={eyebrow} heading={heading} /></div>
+            <RichTextContent value={text} className="section-intro w-full !max-w-none" />
           </div>
         </Section>
       );
@@ -213,7 +213,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
         <Section background="soft">
           <div className="mx-auto max-w-[55rem] border-l-4 pl-6 sm:pl-10"
             style={{ borderColor: "var(--color-primary)" }}>
-            <div className="flex flex-col gap-5">
+            <div className="section-intro flex flex-col gap-5">
               <SectionHeader eyebrow={eyebrow} heading={heading} />
               <RichTextContent value={text} className="w-full" />
             </div>
@@ -226,7 +226,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     if (layout === "intro") {
       return (
         <Section>
-          <div className="mx-auto flex max-w-[680px] flex-col items-center gap-4 text-center">
+          <div className="section-intro mx-auto flex max-w-[680px] flex-col items-center gap-4 text-center">
             <SectionHeader eyebrow={eyebrow} heading={heading} />
             {/* Lead paragraph: larger, relaxed line height. */}
             <RichTextContent
@@ -247,10 +247,10 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
       return (
         <Section>
           <div className="grid gap-10 md:grid-cols-[1fr_1.4fr] md:gap-16">
-            <div className="flex flex-col gap-4">
+            <div className="section-intro flex flex-col gap-4">
               <SectionHeader eyebrow={eyebrow} heading={heading} />
             </div>
-            <RichTextContent value={text} className="w-full max-w-[65ch]" />
+            <RichTextContent value={text} className="section-intro w-full max-w-[65ch]" />
           </div>
         </Section>
       );
@@ -260,7 +260,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     if (layout === "mission") {
       return (
         <Section>
-          <div className="mx-auto flex max-w-[56rem] flex-col items-center gap-6 text-center">
+          <div className="section-intro mx-auto flex max-w-[56rem] flex-col items-center gap-6 text-center">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
             <RichTextContent
               value={text}
@@ -292,12 +292,12 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
       return (
         <Section>
           <div className="flex flex-col gap-8">
-            <div className="flex max-w-[46rem] flex-col gap-4">
+            <div className="section-intro flex max-w-[46rem] flex-col gap-4">
               <SectionHeader eyebrow={eyebrow} heading={heading} />
             </div>
             <RichTextContent
               value={text}
-              className="w-full !max-w-none md:columns-2 md:gap-14"
+              className="section-intro w-full !max-w-none md:columns-2 md:gap-14"
             />
           </div>
         </Section>
@@ -309,7 +309,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
       return (
         <Section>
           <div className="grid items-start gap-10 md:grid-cols-[1.5fr_1fr] md:gap-14">
-            <div className="flex flex-col gap-4">
+            <div className="section-intro flex flex-col gap-4">
               <SectionHeader eyebrow={eyebrow} heading={heading} />
               <RichTextContent value={text} className="w-full max-w-[65ch]" />
             </div>
@@ -338,7 +338,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     if (layout === "pull-quote") {
       return (
         <Section>
-          <div className="mx-auto max-w-[48rem]">
+          <div className="section-intro mx-auto max-w-[48rem]">
             <div className="mb-[var(--content-gap)] flex flex-col gap-4">
               <SectionHeader eyebrow={eyebrow} heading={heading} />
             </div>
@@ -372,7 +372,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     if (layout === "article") {
       return (
         <Section>
-          <div className="mx-auto flex max-w-[65ch] flex-col gap-5">
+          <div className="section-intro mx-auto flex max-w-[65ch] flex-col gap-5">
             <SectionHeader eyebrow={eyebrow} heading={heading} />
             <RichTextContent value={text} className="w-full rich-text-drop-cap" />
           </div>
@@ -386,7 +386,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
       return (
         <Section>
           <div
-            className={`flex max-w-[46rem] flex-col gap-5 ${
+            className={`section-intro flex max-w-[46rem] flex-col gap-5 ${
               centered ? "mx-auto items-center text-center" : "items-start"
             }`}
           >
@@ -415,7 +415,7 @@ export const TextSection: ComponentConfig<TextSectionProps> = {
     return (
       <Section>
         <div
-          className={`flex max-w-[46rem] flex-col gap-4 ${
+          className={`section-intro flex max-w-[46rem] flex-col gap-4 ${
             layout === "centered" ? "mx-auto items-center text-center" : ""
           }`}
         >

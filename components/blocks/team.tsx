@@ -44,7 +44,7 @@ export const Team: ComponentConfig<TeamProps> = {
   },
   render: ({ eyebrow, heading, text, members, variant }) => (
     <Section background={variant === "featured" ? "soft" : "default"}>
-      <div className="mb-[var(--section-gap)] flex max-w-2xl flex-col gap-4">
+      <div className="section-intro mb-[var(--section-gap)] flex max-w-2xl flex-col gap-4">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} />

@@ -79,7 +79,7 @@ export const LayoutSection: ComponentConfig<LayoutSectionProps> = {
       >
         <div
           className={`mx-auto w-full ${safeWidth === "full" ? "" : "px-5 sm:px-8"}`}
-          style={{ maxWidth: WIDTHS[safeWidth] }}
+          style={{ maxWidth: `var(--section-content-width, ${WIDTHS[safeWidth] ?? "100%"})` }}
         >
           <Rows
             className="layout-section-rows"

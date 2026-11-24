@@ -86,7 +86,7 @@ export const Stats: ComponentConfig<StatsProps> = {
   },
   render: ({ eyebrow, heading, text, stats, image, imageAlt, variant = "row", puck }) => {
     const intro = (
-      <div className={`flex min-w-0 flex-col gap-4 ${variant === "cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
+      <div className={`section-intro flex min-w-0 flex-col gap-4 ${variant === "cards" ? "mx-auto max-w-[43rem] items-center text-center" : "max-w-[43rem]"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} className="w-full text-base" />

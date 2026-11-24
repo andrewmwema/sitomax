@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Render, type Data } from "@puckeditor/core";
 import { Check, Eye, RotateCcw, Sparkles } from "lucide-react";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/ai/agent-review";
 import { editorHeader, headerSchema } from "@/lib/header";
 import { puckConfig } from "@/lib/puck/config";
+import { hasTextOverflow } from "@/lib/sections/text-overflow";
 
 export type AgentReviewState = AgentReviewPayload & {
   decisions: Record<string, AgentReviewDecision>;
@@ -257,28 +258,32 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
   metadata?: Record<string, unknown>;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const [overflowCount, setOverflowCount] = useState(0);
   const selectedIndex = review.changes.findIndex((change) => change.id === review.activeChangeId);
   const selectedChange = selectedIndex >= 0 ? review.changes[selectedIndex] : null;
   const activeChange = selectedChange && !isBlogChange(selectedChange.kind) ? selectedChange : null;
   const activeIndex = activeChange ? selectedIndex : -1;
   const targetPageId = activeChange?.pageId ?? pageId;
-  const before = activeChange
-    ? previewAgentReview(review, review.decisions, activeIndex - 1)
-    : previewAgentReview(review, {}, -1);
-  const after = activeChange
-    ? previewAgentReview(review, review.decisions, activeIndex)
-    : previewAgentReview(review, review.decisions);
-  const selected = review.comparison === "before" ? before : after;
-  const selectedPage = selected.snapshot ? pageFor(selected.snapshot, targetPageId) : null;
-  const sharedFooter = review.changes.some((change) => change.kind === "footer" && !footerPatchGroups(change))
-    ? { before: review.baseline.footer } : undefined;
-  const preview = selected.snapshot ? reviewData(selected.snapshot, targetPageId, sharedFooter) : null;
-  const beforePage = before.snapshot ? reviewData(before.snapshot, targetPageId, sharedFooter) : null;
-  const afterPage = after.snapshot ? reviewData(after.snapshot, targetPageId, sharedFooter) : null;
-  const changedIds = changedSectionIds(beforePage, afterPage);
-  if (activeChange?.kind === "theme" || (!activeChange && JSON.stringify(review.baseline.theme) !== JSON.stringify(review.working.theme))) {
-    for (const id of sectionIds(preview)) changedIds.add(id);
-  }
+  const { selected, selectedPage, preview, changedIds } = useMemo(() => {
+    const before = activeChange
+      ? previewAgentReview(review, review.decisions, activeIndex - 1)
+      : previewAgentReview(review, {}, -1);
+    const after = activeChange
+      ? previewAgentReview(review, review.decisions, activeIndex)
+      : previewAgentReview(review, review.decisions);
+    const selected = review.comparison === "before" ? before : after;
+    const selectedPage = selected.snapshot ? pageFor(selected.snapshot, targetPageId) : null;
+    const sharedFooter = review.changes.some((change) => change.kind === "footer" && !footerPatchGroups(change))
+      ? { before: review.baseline.footer } : undefined;
+    const preview = selected.snapshot ? reviewData(selected.snapshot, targetPageId, sharedFooter) : null;
+    const beforePage = before.snapshot ? reviewData(before.snapshot, targetPageId, sharedFooter) : null;
+    const afterPage = after.snapshot ? reviewData(after.snapshot, targetPageId, sharedFooter) : null;
+    const changedIds = changedSectionIds(beforePage, afterPage);
+    if (activeChange?.kind === "theme" || (!activeChange && JSON.stringify(review.baseline.theme) !== JSON.stringify(review.working.theme))) {
+      for (const id of sectionIds(preview)) changedIds.add(id);
+    }
+    return { selected, selectedPage, preview, changedIds };
+  }, [activeChange, activeIndex, review, targetPageId]);
   const changedKey = [...changedIds].sort().join("|");
   const title = pageName(selectedPage);
 
@@ -298,7 +303,31 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
     target?.element.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [activeChange, changedKey, changedIds, preview, targetPageId]);
 
-  return <div ref={container} data-ai-review-preview inert className="agent-review-canvas-preview">
+  useEffect(() => {
+    const root = container.current;
+    if (!root || !preview) { setOverflowCount(0); return; }
+    let frame = 0;
+    let active = true;
+    const measure = () => {
+      if (!active) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (active) setOverflowCount(renderedSections(root, preview).filter(({ element }) => hasTextOverflow(element)).length);
+      });
+    };
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(root);
+    window.addEventListener("resize", measure);
+    void document.fonts?.ready.then(measure);
+    measure();
+    return () => { active = false; cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener("resize", measure); };
+  }, [preview]);
+
+  return <>
+  {overflowCount ? <p role="status" className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+    Text may overflow in {overflowCount} {overflowCount === 1 ? "section" : "sections"} at this preview size. Check the layout before keeping the changes.
+  </p> : null}
+  <div ref={container} data-ai-review-preview inert className="agent-review-canvas-preview">
     <div className="agent-review-canvas-label" aria-live="polite">
       <Sparkles size={13} />Previewing {title} · not saved
       {activeChange ? <span className="ml-auto">{review.comparison === "before" ? "Before" : "After"}</span> : null}
@@ -309,5 +338,5 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
         : <p className="agent-review-canvas-error">{selectedPage
           ? "This page contains invalid preview data and cannot be displayed."
           : "This page does not exist in this comparison."}</p>}
-  </div>;
+  </div></>;
 }

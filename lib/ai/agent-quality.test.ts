@@ -36,6 +36,21 @@ const elementsOf = (value: QualitySite, sectionIndex = 0) => {
 const heading = element("Heading", "heading", { text: "Welcome" });
 
 describe("AI agent changeset quality check", () => {
+  it("reports a newly introduced large indent in centered text without changing it", () => {
+    const before = site([layout("main", [element("Text", "intro", { align: "center", text: "<p>Introduction</p>" })])]);
+    const after = structuredClone(before);
+    elementsOf(after)[0].props.text = '<p style="text-align: center; margin-left: 128px">Introduction</p>';
+    const { site: checked, report } = checkQuality(before, after);
+    expect(report.notes).toContain("Home › Text: centered text has a large indent that may shift it. Remove the indent if it is not intentional.");
+    expect(elementsOf(checked)[0].props.text).toBe(elementsOf(after)[0].props.text);
+    expect(checkQuality(after, after).report.notes).toEqual([]);
+    const changed = structuredClone(after);
+    elementsOf(changed).push(element("Heading", "another-heading", { text: "More" }));
+    expect(checkQuality(after, changed).report.notes).toContain(
+      "Home › Text: centered text has a large indent that may shift it. Remove the indent if it is not intentional.",
+    );
+  });
+
   it("repairs problems the changes introduced and leaves earlier ones alone", () => {
     const before = site([
       layout("old", [element("Text", "old-empty", { text: "<p> </p>" }), heading]),

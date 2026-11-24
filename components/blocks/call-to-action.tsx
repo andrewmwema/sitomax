@@ -78,7 +78,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
       return (
         <Section background="soft">
           <div className="grid items-center gap-10 md:grid-cols-2 lg:gap-20">
-            <div className="flex flex-col gap-5">
+            <div className="section-intro flex flex-col gap-5">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <RichHeading level={2}>{heading}</RichHeading>
               <RichTextContent value={text} className="max-w-[48ch] text-lg" style={{ color: "var(--color-muted)" }} />
@@ -96,7 +96,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
       return (
         <Section background="soft">
           <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
-            <div className="flex max-w-2xl flex-col gap-4">
+            <div className="section-intro flex max-w-2xl flex-col gap-4">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <RichHeading level={2}>{heading}</RichHeading>
               <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />
@@ -120,7 +120,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
             <div className="absolute inset-0 -z-10" style={{ backgroundColor: "rgba(0,0,0,0.58)" }} />
           </>
         ) : null}
-        <div className={`mx-auto flex flex-col gap-6 ${layout === "image" ? "min-h-80 max-w-3xl items-start justify-center" : layout === "primary" ? "max-w-4xl items-center text-center" : "max-w-3xl items-center text-center"}`}>
+        <div className={`section-intro mx-auto flex flex-col gap-6 ${layout === "image" ? "min-h-80 max-w-3xl items-start justify-center" : layout === "primary" ? "max-w-4xl items-center text-center" : "max-w-3xl items-center text-center"}`}>
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
           <RichHeading level={2}>{heading}</RichHeading>
           <RichTextContent value={text} className="max-w-[55ch] text-lg" style={{ color: "var(--color-muted)", lineHeight: 1.6 }} />

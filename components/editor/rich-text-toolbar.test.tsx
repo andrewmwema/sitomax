@@ -23,6 +23,37 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 // pending refocus can land after a later step and reopen the toolbar.
 const nextFrame = () => act(async () => { vi.advanceTimersToNextFrame(); });
 
+it("clears legacy indents in one action and caps newly added indents", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+  const host = document.createElement("div");
+  const canvas = document.createElement("div");
+  document.body.append(host);
+  document.body.append(canvas);
+  const editor = new Editor({
+    element: canvas,
+    extensions: [Document, Paragraph, Text, Heading, Blockquote, ...editorTextExtensions],
+    content: '<p style="margin-left: 128px">Example</p>',
+    editorProps: { handleScrollToSelection: () => true },
+  });
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<RichTextToolbar editor={editor} readOnly={false} />));
+    await act(async () => editor.view.dom.focus());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Outdent"]')!.click());
+    expect(editor.getHTML()).toBe("<p>Example</p>");
+    for (let i = 0; i < 6; i++) {
+      await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Indent"]')!.click());
+    }
+    expect(editor.getHTML()).toContain("margin-left: 64px");
+  } finally {
+    await act(async () => root.unmount());
+    editor.destroy();
+    host.remove();
+    canvas.remove();
+  }
+});
+
 it.each([false, true])("keeps dropdowns usable across canvas focus changes (iframe: %s)", async (inFrame) => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });

@@ -49,7 +49,7 @@ export const Spacer: ComponentConfig<SpacerProps> = {
         <div
           className="mx-auto w-full"
           style={{
-            maxWidth: "var(--container)",
+            maxWidth: "var(--section-content-width, var(--container))",
             borderTop: "1px solid var(--color-border)",
           }}
         />

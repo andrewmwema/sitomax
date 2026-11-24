@@ -5,6 +5,7 @@ import { defaultMenuLabel, menuLabelSchema } from "@/lib/page-navigation";
 import { assessContrast, bestContrastingTextColor, nearestContrast, resolveContrastBackgrounds } from "@/lib/theme/contrast";
 import { buildThemeStyle, DEFAULT_COLORS } from "@/lib/theme/presets";
 import { themeSchema } from "@/lib/theme/schema";
+import { hasCenteredIndent } from "@/lib/sections/indent-qa";
 
 type Item = { type: string; props: Record<string, unknown> };
 type QualityPage = {
@@ -19,7 +20,7 @@ export type QualitySite = {
 /** What the check changed for the user, and what it leaves for them to look at. */
 export type QualityReport = { fixed: string[]; notes: string[] };
 
-type Kind = "contrast" | "empty_text" | "broken_link" | "nav_label" | "placeholder";
+type Kind = "contrast" | "empty_text" | "broken_link" | "nav_label" | "placeholder" | "indent";
 type Finding = {
   /** Stable identity, so problems that were already on the site are not blamed on the changes. */
   key: string; kind: Kind; pageId?: string; where: string; detail: string;
@@ -201,6 +202,14 @@ function inspect(site: QualitySite): Finding[] {
 
         const found = { links: [] as [string, unknown][], text: [] as string[] };
         scanProps(fieldsOf(type), props, found);
+        if (hasCenteredIndent({ type, props: { ...props, ...Object.fromEntries(
+          Object.entries(fieldsOf(type)).filter(([, field]) => field.type === "slot").map(([key]) => [key, undefined]),
+        ) } })) {
+          findings.push({
+            key: `${page.id}:${id}:indent`, kind: "indent", pageId: page.id, where,
+            detail: `${name}: centered text has a large indent that may shift it. Remove the indent if it is not intentional.`,
+          });
+        }
         for (const [path, value] of found.links) {
           let problem = linkProblem(value, page);
           const label = type === "Button" && path === "href" ? props.label : props[path.replace(/Link$/, "Text")];
@@ -291,7 +300,12 @@ export function checkQuality<T extends QualitySite>(baseline: QualitySite, worki
     ].filter(Boolean).join(", ")}.`);
   }
 
-  const left = inspect(site).filter((finding) => !known.has(finding.key));
+  const changedPages = new Set(site.pages.filter((page) => {
+    const previous = baseline.pages.find((entry) => entry.id === page.id);
+    return !previous || JSON.stringify(previous.draft_data) !== JSON.stringify(page.draft_data);
+  }).map((page) => page.id));
+  const left = inspect(site).filter((finding) => !known.has(finding.key) ||
+    (finding.kind === "indent" && finding.pageId !== undefined && changedPages.has(finding.pageId)));
   const notes = left.filter((finding) => finding.kind !== "placeholder").map((finding) => finding.detail);
   const menu = menuLabels(site).length;
   if (menu > MENU_ITEMS && menu > menuLabels(baseline).length) {

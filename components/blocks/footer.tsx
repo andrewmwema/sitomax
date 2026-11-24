@@ -128,7 +128,7 @@ export const Footer: ComponentConfig<FooterProps> = {
       ) : null;
 
     const brand = (
-      <div className={`flex flex-col gap-2 ${centered ? "items-center text-center" : ""}`}>
+      <div className={`section-intro flex flex-col gap-2 ${centered ? "items-center text-center" : ""}`}>
         <p
           className="text-xl"
           style={{

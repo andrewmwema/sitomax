@@ -91,7 +91,7 @@ export const Faq: ComponentConfig<FaqProps> = {
     contactHeading, contactText, contactButtonText, contactButtonLink, contactImage, contactImageAlt,
   }) => {
     const intro = (
-      <div className={`flex flex-col gap-4 ${variant === "sidebar" ? "max-w-[43rem]" : "mx-auto max-w-[43rem] items-center text-center"}`}>
+      <div className={`section-intro flex flex-col gap-4 ${variant === "sidebar" ? "max-w-[43rem]" : "mx-auto max-w-[43rem] items-center text-center"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} className="w-full text-base" />

@@ -101,7 +101,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
       return (
         <Section background={variant === "visit" ? "default" : "soft"}>
           <div id="contact" className="grid items-start gap-10 md:grid-cols-2 md:gap-16">
-            <div className="flex flex-col gap-3">
+            <div className="section-intro flex flex-col gap-3">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <RichHeading level={2}>{heading}</RichHeading>
               {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}
@@ -120,7 +120,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     return (
       <Section background="soft">
         <div id="contact" className="mx-auto flex w-full max-w-xl flex-col gap-10">
-          <div className="flex flex-col items-center gap-3 text-center">
+          <div className="section-intro flex flex-col items-center gap-3 text-center">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
             <RichHeading level={2}>{heading}</RichHeading>
             {text ? <RichTextContent value={text} className="max-w-[50ch]" /> : null}

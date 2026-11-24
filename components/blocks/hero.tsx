@@ -292,7 +292,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       return (
         <Section container={false}>
           <Container className="grid items-center gap-12 md:grid-cols-2 lg:gap-16">
-            <div className="flex flex-col items-start gap-5">
+            <div className="section-intro flex flex-col items-start gap-5">
               <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
               <RichHeading level={1}>{heading}</RichHeading>
               <Subheading>{subheading}</Subheading>
@@ -364,7 +364,7 @@ export const Hero: ComponentConfig<HeroProps> = {
             />
           ) : null}
           <Container className="relative flex min-h-[380px] flex-col justify-center gap-6 sm:min-h-[460px]">
-            <div className="flex max-w-2xl flex-col items-start gap-5">
+            <div className="section-intro flex max-w-2xl flex-col items-start gap-5">
               <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
               <RichHeading
                 level={1}
@@ -392,7 +392,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       return (
         <Section background="dark" container={false}>
           <Container className="grid items-center gap-12 lg:grid-cols-[1.05fr_minmax(0,30rem)] lg:gap-16">
-            <div className="flex flex-col items-start gap-5">
+            <div className="section-intro flex flex-col items-start gap-5">
               <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
               <RichHeading level={1}>{heading}</RichHeading>
               <Subheading>{subheading}</Subheading>
@@ -464,7 +464,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     if (resolved === "stats") {
       const items = stats ?? [];
       const content = (
-        <div className="flex max-w-2xl flex-col items-start gap-5">
+        <div className="section-intro flex max-w-2xl flex-col items-start gap-5">
           <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
           <RichHeading level={1}>{heading}</RichHeading>
           <Subheading>{subheading}</Subheading>
@@ -563,7 +563,8 @@ export const Hero: ComponentConfig<HeroProps> = {
             style={{ backgroundColor: "rgba(10, 14, 20, 0.62)" }}
           />
         ) : null}
-        <Container className="relative flex max-w-3xl flex-col items-center gap-6 text-center">
+        <Container className="section-intro relative flex flex-col items-center gap-6 text-center"
+          style={{ maxWidth: "var(--section-content-width, 48rem)" }}>
           <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
           <RichHeading level={1} style={backgroundImage ? { color: "#ffffff" } : undefined}>
             {heading}

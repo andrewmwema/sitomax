@@ -112,6 +112,22 @@ body {
   -webkit-user-select: text;
 }
 
+.ProseMirror[contenteditable="true"] :is(p, h1, h2, h3, h4, h5, h6, blockquote)[style*="margin-left"]:hover {
+  position: relative;
+  outline: 1px dashed #4b3fe0;
+}
+.ProseMirror[contenteditable="true"] :is(p, h1, h2, h3, h4, h5, h6, blockquote)[style*="margin-left"]:hover::before {
+  content: "Indent";
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding: 2px 4px;
+  background: #4b3fe0;
+  color: white;
+  font: 11px/1.2 sans-serif;
+  pointer-events: none;
+}
+
 /* Already-injected writing-assistant layers can intercept canvas text clicks. */
 .site-content [data-puck-overlay-portal] grammarly-extension {
   display: none !important;
@@ -443,6 +459,32 @@ body {
   color: var(--color-text);
   text-align: var(--appearance-align-d);
 }
+
+.section-shell[data-content-width] .section-intro {
+  max-width: var(--section-content-width);
+}
+
+@media (min-width: 1024px) {
+  .section-shell[data-section-align-d] {
+    --intro-align: var(--appearance-align-d);
+    --intro-justify: var(--appearance-justify-d);
+    & .section-intro {
+      width: 100%;
+      min-width: 0;
+      align-items: var(--intro-justify);
+      text-align: var(--intro-align);
+    }
+    & :is(.section-intro, .layout-shell-element) :is(h1, h2, h3, h4, h5, h6, p) {
+      text-align: var(--intro-align) !important;
+    }
+    & .layout-shell-element > .shell-body > :is(h1, h2, h3, h4, h5, h6, .rich-text) {
+      text-align: var(--intro-align) !important;
+    }
+  }
+  .section-shell[data-section-align-d="center"] .section-intro { margin-inline: auto; }
+  .section-shell[data-section-align-d="left"] .section-intro { margin-inline: 0 auto; }
+  .section-shell[data-section-align-d="right"] .section-intro { margin-inline: auto 0; }
+}
 @media (min-width: 768px) and (max-width: 1023.98px) {
   .shell-responsive { --shell-radius: var(--appearance-radius-t, var(--appearance-radius-d)); }
   .shell-responsive-background { background-color: var(--appearance-bg-t, var(--appearance-bg-d)); }
@@ -456,6 +498,25 @@ body {
     --shell-justify: var(--appearance-justify-t, var(--appearance-justify-d));
     text-align: var(--appearance-align-t, var(--appearance-align-d));
   }
+  .section-shell[data-section-align-t] {
+    --intro-align: var(--appearance-align-t, var(--appearance-align-d));
+    --intro-justify: var(--appearance-justify-t, var(--appearance-justify-d));
+    & .section-intro {
+      width: 100%;
+      min-width: 0;
+      align-items: var(--intro-justify);
+      text-align: var(--intro-align);
+    }
+    & :is(.section-intro, .layout-shell-element) :is(h1, h2, h3, h4, h5, h6, p) {
+      text-align: var(--intro-align) !important;
+    }
+    & .layout-shell-element > .shell-body > :is(h1, h2, h3, h4, h5, h6, .rich-text) {
+      text-align: var(--intro-align) !important;
+    }
+  }
+  .section-shell[data-section-align-t="center"] .section-intro { margin-inline: auto; }
+  .section-shell[data-section-align-t="left"] .section-intro { margin-inline: 0 auto; }
+  .section-shell[data-section-align-t="right"] .section-intro { margin-inline: auto 0; }
 }
 @media (max-width: 767.98px) {
   .shell-responsive { --shell-radius: var(--appearance-radius-m, var(--appearance-radius-d)); }
@@ -470,6 +531,25 @@ body {
     --shell-justify: var(--appearance-justify-m, var(--appearance-justify-d));
     text-align: var(--appearance-align-m, var(--appearance-align-d));
   }
+  .section-shell[data-section-align-m] {
+    --intro-align: var(--appearance-align-m, var(--appearance-align-d));
+    --intro-justify: var(--appearance-justify-m, var(--appearance-justify-d));
+    & .section-intro {
+      width: 100%;
+      min-width: 0;
+      align-items: var(--intro-justify);
+      text-align: var(--intro-align);
+    }
+    & :is(.section-intro, .layout-shell-element) :is(h1, h2, h3, h4, h5, h6, p) {
+      text-align: var(--intro-align) !important;
+    }
+    & .layout-shell-element > .shell-body > :is(h1, h2, h3, h4, h5, h6, .rich-text) {
+      text-align: var(--intro-align) !important;
+    }
+  }
+  .section-shell[data-section-align-m="center"] .section-intro { margin-inline: auto; }
+  .section-shell[data-section-align-m="left"] .section-intro { margin-inline: 0 auto; }
+  .section-shell[data-section-align-m="right"] .section-intro { margin-inline: auto 0; }
 }
 
 @keyframes library-slide-in {

@@ -161,6 +161,11 @@ export function SectionShell({
         }
       : null),
   } as CSSProperties;
+  const contentWidth = level === "section" ? design?.settings?.contentWidth : undefined;
+  if (contentWidth === "narrow" || contentWidth === "normal" || contentWidth === "wide") {
+    (style as Record<string, string | number | undefined>)["--section-content-width"] =
+      { narrow: "720px", normal: "var(--container, 1200px)", wide: "1440px" }[contentWidth];
+  }
   for (const [device, suffix] of Object.entries({ desktop: "d", tablet: "t", mobile: "m" }) as [keyof NonNullable<BlockDesign["appearance"]>, string][]) {
     const appearance = design?.appearance?.[device];
     if (!appearance) continue;
@@ -207,7 +212,12 @@ export function SectionShell({
     .join(" ");
 
   return (
-    <div ref={setRef} id={anchorId ?? undefined} data-editor-block={isEditing ? blockId : undefined} className={`${classes} shell-responsive`} style={style}>
+    <div ref={setRef} id={anchorId ?? undefined} data-editor-block={isEditing ? blockId : undefined}
+      data-content-width={contentWidth === "narrow" || contentWidth === "normal" || contentWidth === "wide" ? contentWidth : undefined}
+      data-section-align-d={level === "section" ? design?.appearance?.desktop?.align : undefined}
+      data-section-align-t={level === "section" ? design?.appearance?.tablet?.align ?? design?.appearance?.desktop?.align : undefined}
+      data-section-align-m={level === "section" ? design?.appearance?.mobile?.align ?? design?.appearance?.desktop?.align : undefined}
+      className={`${classes} shell-responsive`} style={style}>
       {hasBackground ? (
         <SectionBackground background={background} isEditing={isEditing} />
       ) : null}

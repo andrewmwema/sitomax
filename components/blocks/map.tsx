@@ -64,7 +64,7 @@ export const Map: ComponentConfig<MapProps> = {
       return (
         <Section>
           <div className="grid items-center gap-10 md:grid-cols-[1fr_1.4fr] md:gap-16">
-            <div className="flex flex-col gap-3">
+            <div className="section-intro flex flex-col gap-3">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
               {address ? (
@@ -81,7 +81,7 @@ export const Map: ComponentConfig<MapProps> = {
 
     return (
       <Section>
-        <div className="flex flex-col items-center gap-3 text-center">
+        <div className="section-intro flex flex-col items-center gap-3 text-center">
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
           {heading ? <RichHeading level={2}>{heading}</RichHeading> : null}
         </div>

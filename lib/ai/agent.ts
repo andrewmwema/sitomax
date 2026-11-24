@@ -20,6 +20,7 @@ import { themeSchema } from "@/lib/theme/schema";
 import { nearestContrast, bestContrastingTextColor } from "@/lib/theme/contrast";
 import type { BlockDesign } from "@/lib/sections/design";
 import { sanitizePuckData } from "@/lib/richtext";
+import { hasCenteredIndent } from "@/lib/sections/indent-qa";
 import { blogContentSchema, sanitizeBlogContent } from "@/lib/blog";
 import { puckConfig } from "@/lib/puck/config";
 import { DEFAULT_COLORS } from "@/lib/theme/presets";
@@ -872,7 +873,9 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       const key = `${page.id}/${sectionId}`;
       if (context.reads?.[key]?.full === digest(section)) return { sectionId, unchanged: true, note: ALREADY_READ };
       if (context.reads) context.reads[key] = { ...context.reads[key], full: digest(section) };
-      return { sectionId, ...section };
+      return { sectionId, ...section, ...(hasCenteredIndent(item) ? {
+        warnings: ["Centered text has a large margin-left indent. To remove it, edit the affected Text element's text HTML with update_section_props, preserving its wording and other formatting."],
+      } : {}) };
     }
     case "search_site": {
       const query = String(args.query).toLowerCase();

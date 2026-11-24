@@ -40,7 +40,7 @@ export const Logos: ComponentConfig<LogosProps> = {
   render: ({ eyebrow, heading, text, logos, variant }) => (
     <Section background={variant === "grid" ? "soft" : "default"}>
       <div className={variant === "grid" ? "grid items-center gap-10 lg:grid-cols-[1fr_2fr]" : ""}>
-        <div className={`flex flex-col gap-3 ${variant === "grid" ? "items-start" : "items-center text-center"}`}>
+        <div className={`section-intro flex flex-col gap-3 ${variant === "grid" ? "items-start" : "items-center text-center"}`}>
           {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
           <RichHeading level={2}>{heading}</RichHeading>
           {text ? <RichTextContent value={text} className="max-w-[50ch]" style={{ color: "var(--color-muted)" }} /> : null}

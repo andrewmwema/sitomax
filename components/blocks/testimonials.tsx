@@ -65,7 +65,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
   },
   render: ({ eyebrow, heading, testimonials, variant, rating, reviewCount, ratingLabel }) => (
     <Section background="soft">
-      <div className="flex flex-col items-center gap-3 text-center">
+      <div className="section-intro flex flex-col items-center gap-3 text-center">
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <RichHeading level={2}>{heading}</RichHeading>
       </div>

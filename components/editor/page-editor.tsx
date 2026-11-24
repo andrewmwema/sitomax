@@ -5,6 +5,8 @@ import { linkContext } from "@/lib/links";
 import { PagesManager } from "./pages-panel";
 import { EditorIconPicker } from "./editor-icon-picker";
 import { findBrokenLinks, type LinkIssue } from "@/lib/link-qa";
+import { findCenteredIndentIssues, type IndentIssue } from "@/lib/sections/indent-qa";
+import { hasTextOverflow } from "@/lib/sections/text-overflow";
 import {
   createContext,
   useCallback,
@@ -484,6 +486,9 @@ function HeaderActions() {
   const { pages, pageId, updatePagePublishState } = useInteractions();
   const [placeholderHits, setPlaceholderHits] = useState<PlaceholderHit[] | null>(null);
   const [linkIssues, setLinkIssues] = useState<LinkIssue[]>([]);
+  const [indentIssues, setIndentIssues] = useState<IndentIssue[]>([]);
+  const [overflowIssues, setOverflowIssues] = useState<IndentIssue[]>([]);
+  const [previewUnavailable, setPreviewUnavailable] = useState(false);
   const [publishDialog, setPublishDialog] = useState<PublishDialogState | null>(null);
   const [preparingPublish, setPreparingPublish] = useState(false);
   const [publishError, setPublishError] = useState("");
@@ -531,9 +536,22 @@ function HeaderActions() {
     const { appState } = getPuck();
     const hits = findUnreplacedPlaceholders(appState.data, BLOCK_LABELS);
     const broken = findBrokenLinks(appState.data, { pages, currentPageId: pageId, labels: BLOCK_LABELS });
-    if (hits.length > 0 || broken.length > 0) {
+    const indented = findCenteredIndentIssues(appState.data, BLOCK_LABELS);
+    const frame = document.querySelector<HTMLIFrameElement>("#preview-frame");
+    const preview = frame ? frame.contentDocument : document.querySelector(".platform-editor");
+    const blocks = preview ? [...preview.querySelectorAll<HTMLElement>("[data-editor-block]")] : [];
+    const unavailable = !preview || appState.data.content.some((item) =>
+      !blocks.some((element) => element.dataset.editorBlock === item.props.id));
+    const overflowing = appState.data.content.flatMap((item, index) => {
+      const block = blocks.find((element) => element.dataset.editorBlock === item.props.id);
+      return block && hasTextOverflow(block) ? [{ index, label: BLOCK_LABELS[item.type] ?? item.type }] : [];
+    });
+    if (hits.length > 0 || broken.length > 0 || indented.length > 0 || overflowing.length > 0 || unavailable) {
       setPlaceholderHits(hits);
       setLinkIssues(broken);
+      setIndentIssues(indented);
+      setOverflowIssues(overflowing);
+      setPreviewUnavailable(unavailable);
       return;
     }
     void openPublishDialog();
@@ -619,10 +637,10 @@ function HeaderActions() {
               <TriangleAlert size={20} className="mt-0.5 shrink-0 text-amber-500" />
               <div>
                 <h2 className="text-sm font-semibold text-zinc-900">
-                  {placeholderHits.length ? "Some placeholder text hasn\u2019t been replaced yet" : "Some links need attention"}
+                  {placeholderHits.length ? "Some placeholder text hasn\u2019t been replaced yet" : linkIssues.length ? "Some links need attention" : "Some text needs attention"}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {placeholderHits.length ? "Text in [brackets] or template placeholders is sample content \u2014 replace it with this business\u2019s real details before publishing." : "Visitors would reach a missing page or section. Pick a new link target before publishing."}
+                  {placeholderHits.length ? "Text in [brackets] or template placeholders is sample content \u2014 replace it with this business\u2019s real details before publishing." : linkIssues.length ? "Visitors would reach a missing page or section. Pick a new link target before publishing." : "Review these layout warnings before publishing."}
                 </p>
               </div>
             </div>
@@ -638,6 +656,31 @@ function HeaderActions() {
                 </li>)}
               </ul>
             </div> : null}
+            {indentIssues.length ? <div className="mt-4">
+              <h3 className="text-xs font-semibold text-zinc-700">Large indents in centered text</h3>
+              <ul className="mt-1.5 max-h-40 space-y-1.5 overflow-y-auto">
+                {indentIssues.map((issue) => <li key={issue.index}>
+                  <button type="button" onClick={() => selectSection(issue.index)}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50">
+                    <span className="block text-sm font-medium text-zinc-800">{issue.label}<span className="font-normal text-zinc-400"> · section {issue.index + 1}</span></span>
+                    <span className="mt-0.5 block text-xs text-amber-700">Select the text and use Outdent to clear its indent.</span>
+                  </button>
+                </li>)}
+              </ul>
+            </div> : null}
+            {overflowIssues.length ? <div className="mt-4">
+              <h3 className="text-xs font-semibold text-zinc-700">Text overflowing in the current preview</h3>
+              <ul className="mt-1.5 max-h-40 space-y-1.5 overflow-y-auto">
+                {overflowIssues.map((issue) => <li key={issue.index}>
+                  <button type="button" onClick={() => selectSection(issue.index)}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50">
+                    <span className="block text-sm font-medium text-zinc-800">{issue.label}<span className="font-normal text-zinc-400"> · section {issue.index + 1}</span></span>
+                    <span className="mt-0.5 block text-xs text-amber-700">Check the text and its container at this screen size.</span>
+                  </button>
+                </li>)}
+              </ul>
+            </div> : null}
+            {previewUnavailable ? <p className="mt-4 text-xs text-amber-700">The preview was unavailable, so text overflow could not be checked. Reload the editor and try again.</p> : null}
             {placeholderHits.length && linkIssues.length ? <h3 className="mt-4 text-xs font-semibold text-zinc-700">Placeholder text</h3> : null}
             <ul className="mt-4 max-h-56 space-y-1.5 overflow-y-auto">
               {placeholderHits.map((hit) => (

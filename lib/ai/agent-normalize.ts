@@ -55,12 +55,12 @@ export function normalizeColor(value: unknown): unknown {
 const DEVICES = ["desktop", "tablet", "mobile"];
 const SIDES = ["Top", "Right", "Bottom", "Left"];
 const BOX_KEYS = ["margin", "padding"].flatMap((box) => SIDES.map((side) => `${box}${side}`));
-const SETTINGS = ["hideOnDesktop", "hideOnTablet", "hideOnMobile", "fullBleed"];
+const SETTINGS = ["hideOnDesktop", "hideOnTablet", "hideOnMobile", "fullBleed", "contentWidth"];
 const SHADOWS: Record<string, string> = { true: "soft", false: "none", sm: "soft", small: "soft", light: "soft", subtle: "soft", md: "medium", lg: "strong", large: "strong", xl: "strong", heavy: "strong" };
 /** Keys that say how a block looks. Sent among content props, they are meant as design. */
 export const DESIGN_KEYS = new Set([
   "background", "backgroundColor", "textColor", "color", "fontColor", "spacing", "appearance", "border", "borderRadius", "shadow",
-  "animation", "settings", "padding", "paddingX", "paddingY", "margin", "marginX", "marginY", "textAlign", ...BOX_KEYS,
+  "animation", "settings", "contentWidth", "padding", "paddingX", "paddingY", "margin", "marginX", "marginY", "textAlign", ...BOX_KEYS,
 ]);
 
 /** padding: 64 as its four sides, paddingY: 64 as top and bottom. */

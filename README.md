@@ -728,6 +728,16 @@ highlight affect the next typed text. Select text and use **Link** or
 Ctrl/Cmd+K to open the picker. Without a selection, a hint explains what to do.
 Click a linked word to view its destination and Edit, Open or Remove it.
 **Rewrite with AI** remains a separate accent action for selected text.
+New paragraph indents are capped at 64px; **Outdent** clears the current
+paragraph's indent. Indented text shows a marker on hover while editing.
+Before publishing, large indents on centered text are flagged for review;
+existing formatting is not changed automatically.
+In a section's inspector, **Alignment** sets its introductory text per device
+and **Content width** selects narrow, normal, or wide; leaving either at its
+design default preserves the original layout. Publish QA checks rendered text
+for overflow at the current preview size. The AI review preview also warns
+about overflow on the page and viewport currently shown; check other pages and
+screen sizes separately.
 
 Click a configurable content icon (hero badges, service cards, process steps,
 statistics, callouts, icon lists or standalone icons) to open the searchable

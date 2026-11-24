@@ -2,11 +2,13 @@ import type { ComponentConfig, PuckContext } from "@puckeditor/core";
 import { BlogPostCard, type BlogCardPost } from "@/components/blocks/blog-post-card";
 import { BlogArchive, type BlogArchiveProps } from "@/components/blocks/blog-archive";
 import { blogHref } from "@/lib/blog-navigation";
-import { richHeadingField } from "@/lib/puck/fields";
+import { designField, richHeadingField } from "@/lib/puck/fields";
+import type { BlockDesign } from "@/lib/sections/design";
 import { RichHeading } from "./ui/heading";
 import { isRichHeading } from "@/lib/richtext";
 
 export type BlogPostsProps = {
+  design?: BlockDesign;
   heading?: string;
   source: "latest" | "featured" | "category";
   category: string;
@@ -49,8 +51,8 @@ function renderBlogPosts(props: BlogPostsProps & { puck: PuckContext }) {
   const featured = props.variant === "featured-list" ? posts[0] : null;
   const remaining = featured ? posts.slice(1) : posts;
   const layout = props.variant === "list" ? "list" : "grid";
-  return <section className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8" aria-label={typeof heading === "string" && heading && !isRichHeading(heading) ? heading : "Blog posts"}>
-    {heading ? <RichHeading level={2} customSize className="mb-7 text-3xl font-semibold tracking-tight sm:text-4xl" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, letterSpacing: "-0.025em" }}>{heading}</RichHeading> : null}
+  return <section className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8" style={{ maxWidth: "var(--section-content-width, 80rem)" }} aria-label={typeof heading === "string" && heading && !isRichHeading(heading) ? heading : "Blog posts"}>
+    {heading ? <div className="section-intro"><RichHeading level={2} customSize className="mb-7 text-3xl font-semibold tracking-tight sm:text-4xl" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, letterSpacing: "-0.025em" }}>{heading}</RichHeading></div> : null}
     {!posts.length ? <p role="status" className="rounded-2xl border border-dashed border-[var(--color-border)] p-8 text-center text-sm text-[var(--color-muted)]">{emptyMessage}</p> : null}
     {featured ? <div className={`grid gap-6 ${remaining.length ? "lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]" : "max-w-3xl"}`}>
       <BlogPostCard feed post={featured} blogPath={path} preview={preview} showExcerpt={props.showExcerpt} showDate={props.showDate}
@@ -75,6 +77,7 @@ function renderBlogPosts(props: BlogPostsProps & { puck: PuckContext }) {
 export const BlogPosts: ComponentConfig<BlogPostsProps> = {
   label: "Blog posts",
   fields: {
+    design: designField(),
     heading: richHeadingField("Section heading", 2),
     source: { type: "select", label: "Posts", options: [
       { label: "Latest", value: "latest" }, { label: "Featured", value: "featured" }, { label: "By category", value: "category" },

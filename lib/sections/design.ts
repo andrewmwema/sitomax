@@ -37,6 +37,7 @@ export type BlockDesign = {
     align?: "left" | "center" | "right";
   }>>;
   settings?: {
+    contentWidth?: "narrow" | "normal" | "wide";
     /** true (default) = background edge-to-edge; false = 1200px box. */
     fullBleed?: boolean;
     /** Anchor id for menu links, e.g. "pricing" → #pricing. */

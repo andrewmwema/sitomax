@@ -10,6 +10,19 @@ describe("AI design edits", () => {
     expect(designPatchSchema.safeParse({ background: { type: "image", images: ["/samples/tools.jpg"] }, shadow: "soft" }).success).toBe(true);
   });
 
+  it("allows targeted width and alignment edits without replacing other settings", () => {
+    const patch = designPatchSchema.parse({
+      settings: { contentWidth: "wide" },
+      appearance: { desktop: { align: "center" } },
+    });
+    const design = editDesign({ settings: { fullBleed: false }, appearance: { mobile: { align: "left" } } },
+      patch, {}, new Set());
+    expect(design.settings).toEqual({ fullBleed: false, contentWidth: "wide" });
+    expect(design.appearance?.desktop?.align).toBe("center");
+    expect(design.appearance?.mobile?.align).toBe("left");
+    expect(designPatchSchema.safeParse({ settings: { contentWidth: "unlimited" } }).success).toBe(false);
+  });
+
   it("preserves readable colors and picks an AA alternative for every grayscale backdrop", () => {
     expect(readableText("#123", "#fff")).toBe("#123");
     for (let value = 0; value < 256; value++) {

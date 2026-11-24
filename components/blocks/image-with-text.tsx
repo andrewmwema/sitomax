@@ -74,7 +74,7 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
       return (
         <Section container={false}>
           <Container className="flex flex-col gap-10">
-            <div className="mx-auto flex max-w-[46rem] flex-col items-center gap-4 text-center">
+            <div className="section-intro mx-auto flex max-w-[46rem] flex-col items-center gap-4 text-center">
               {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
               <RichHeading level={2}>{heading}</RichHeading>
               <RichTextContent value={text} className="w-full max-w-[65ch]" />
@@ -89,7 +89,7 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
       <Section container={false}>
         <Container className="grid items-center gap-12 md:grid-cols-2">
           <div className={layout === "image-right" ? "md:order-2" : ""}>{imageElement}</div>
-          <div className="flex flex-col gap-4">
+          <div className="section-intro flex flex-col gap-4">
             {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
             <RichHeading level={2}>{heading}</RichHeading>
             <RichTextContent value={text} className="w-full max-w-[65ch]" />
