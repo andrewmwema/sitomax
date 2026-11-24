@@ -30,6 +30,8 @@ export type SpacingBox = {
 };
 
 export type BlockDesign = {
+  /** Missing means v1; only newly authored catalog entries opt into v2. */
+  designVersion?: 1 | 2;
   appearance?: Partial<Record<DeviceId, {
     backgroundColor?: string;
     textColor?: string;
@@ -38,6 +40,8 @@ export type BlockDesign = {
   }>>;
   settings?: {
     contentWidth?: "narrow" | "normal" | "wide";
+    sectionPadding?: "compact" | "normal" | "spacious";
+    dividerStyle?: "none" | "subtle" | "line" | "accent";
     /** true (default) = background edge-to-edge; false = 1200px box. */
     fullBleed?: boolean;
     /** Anchor id for menu links, e.g. "pricing" → #pricing. */
@@ -47,8 +51,9 @@ export type BlockDesign = {
     hideOnMobile?: boolean;
   };
   background?: {
-    type?: "none" | "color" | "gradient" | "image" | "video";
+    type?: "none" | "color" | "gradient" | "pattern" | "image" | "video";
     color?: string;
+    pattern?: "dots" | "grid" | "lines";
     from?: string;
     to?: string;
     angle?: number;
@@ -258,6 +263,7 @@ export type NormalizedBackground =
   | { kind: "none" }
   | { kind: "color"; color: string }
   | { kind: "gradient"; from: string; to: string; angle: number }
+  | { kind: "pattern"; pattern: "dots" | "grid" | "lines" }
   | {
       kind: "image";
       images: string[];
@@ -274,8 +280,11 @@ export type NormalizedBackground =
     };
 
 export type NormalizedDesign = {
+  designVersion: 1 | 2;
   fullBleed: boolean;
   anchorId: string | null;
+  sectionPadding: "compact" | "normal" | "spacious";
+  dividerStyle: "none" | "subtle" | "line" | "accent";
   hide: Record<DeviceId, boolean>;
   background: NormalizedBackground;
   border: { width: number; color: string; radius: number } | null;
@@ -314,10 +323,14 @@ export function autoTextScheme(backgroundColor: string): "light" | "dark" {
 
 function normalizeOverlay(
   background: NonNullable<BlockDesign["background"]>,
+  enforceContrast: boolean,
 ): NormalizedOverlay {
+  const opacity = clamp(background.overlayOpacity, 0, 80) ?? 0;
+  if (enforceContrast) {
+    return { color: "#0a0e14", opacity: Math.max(60, opacity) };
+  }
   const color = safeHexColor(background.overlayColor) ?? "#0a0e14";
-  const opacity = clamp(background.overlayOpacity, 0, 80);
-  if (opacity === null || opacity === 0) return null;
+  if (opacity === 0) return null;
   return { color, opacity };
 }
 
@@ -345,6 +358,15 @@ function normalizeSpacingBox(box: unknown): SpacingBox | undefined {
 /** Validates and clamps a stored design object into safe render values. */
 export function normalizeDesign(design: BlockDesign | null | undefined): NormalizedDesign {
   const settings = design?.settings ?? {};
+  const designVersion: 1 | 2 = design?.designVersion === 2 ? 2 : 1;
+  const sectionPadding = ["compact", "normal", "spacious"].includes(settings.sectionPadding ?? "")
+    ? settings.sectionPadding as "compact" | "normal" | "spacious"
+    : "normal";
+  const dividerStyle = ["none", "subtle", "line", "accent"].includes(settings.dividerStyle ?? "")
+    ? settings.dividerStyle as "none" | "subtle" | "line" | "accent"
+    : "none";
+  const autoText = design?.textColor === undefined || design.textColor === "auto";
+  const enforceMediaContrast = designVersion === 2 && autoText;
   const rawAnchor =
     typeof settings.anchorId === "string"
       ? settings.anchorId.trim().toLowerCase().replace(/^#/, "").replace(/[^a-z0-9_-]/g, "").slice(0, 60)
@@ -359,6 +381,10 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
     } else if (rawBackground.type === "gradient") {
       const from = safeHexColor(rawBackground.from), to = safeHexColor(rawBackground.to);
       if (from && to) background = { kind: "gradient", from, to, angle: clamp(rawBackground.angle, 0, 360) ?? 135 };
+    } else if (rawBackground.type === "pattern") {
+      if (rawBackground.pattern === "dots" || rawBackground.pattern === "grid" || rawBackground.pattern === "lines") {
+        background = { kind: "pattern", pattern: rawBackground.pattern };
+      }
     } else if (rawBackground.type === "image") {
       const images = (Array.isArray(rawBackground.images) ? rawBackground.images : [])
         .map(safeMediaUrl)
@@ -370,7 +396,7 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
           images,
           focalX: clamp(rawBackground.focalX, 0, 100) ?? 50,
           focalY: clamp(rawBackground.focalY, 0, 100) ?? 50,
-          overlay: normalizeOverlay(rawBackground),
+          overlay: normalizeOverlay(rawBackground, enforceMediaContrast),
         };
       }
     } else if (rawBackground.type === "video") {
@@ -388,7 +414,7 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
           embedUrl,
           fileUrl,
           poster,
-          overlay: normalizeOverlay(rawBackground),
+          overlay: normalizeOverlay(rawBackground, enforceMediaContrast),
         };
       }
     }
@@ -423,10 +449,9 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
         ["#f8fafc", DARK_INK],
       ) === "#f8fafc" ? "light" : "dark";
     } else if (background.kind === "image" || background.kind === "video") {
-      // Media backgrounds read through the overlay when it is strong
-      // enough; otherwise assume light text (media is usually dark).
-      textScheme =
-        background.overlay && background.overlay.opacity >= 30
+      textScheme = enforceMediaContrast
+        ? "light"
+        : background.overlay && background.overlay.opacity >= 30
           ? autoTextScheme(background.overlay.color)
           : "light";
     }
@@ -454,8 +479,11 @@ export function normalizeDesign(design: BlockDesign | null | undefined): Normali
   }
 
   return {
+    designVersion,
     fullBleed: settings.fullBleed !== false,
     anchorId: rawAnchor.length > 0 ? rawAnchor : null,
+    sectionPadding,
+    dividerStyle,
     hide: {
       desktop: settings.hideOnDesktop === true,
       tablet: settings.hideOnTablet === true,

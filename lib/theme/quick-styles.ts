@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CuratedFont } from "./fonts";
-import { COLOR_PALETTES, type SiteTheme } from "./presets";
+import { COLOR_PALETTES, THEME_PRESETS, type SiteTheme } from "./presets";
 
 /**
  * Ready-made theme choices that need no AI: one click in the Theme panel, or
@@ -47,6 +47,27 @@ export const quickStyleSchema = z.strictObject({
   spacing: z.enum(SPACING_IDS).optional(),
 });
 export type QuickStyle = z.infer<typeof quickStyleSchema>;
+
+/** Applies a curated full theme while retaining site-specific logo assets. */
+export function applyThemePreset<T extends SiteTheme>(theme: T, presetId: string): T {
+  const preset = THEME_PRESETS.find((entry) => entry.id === presetId);
+  if (!preset) return theme;
+  return {
+    ...theme,
+    ...preset.theme,
+    colors: { ...preset.theme.colors },
+  };
+}
+
+export function matchesThemePreset(theme: SiteTheme, presetId: string): boolean {
+  const preset = THEME_PRESETS.find((entry) => entry.id === presetId);
+  if (!preset) return false;
+  const fields = ["style", "headingFont", "bodyFont", "radius", "buttonStyle", "spacing"] as const;
+  return fields.every((field) => theme[field] === preset.theme[field]) &&
+    Object.entries(preset.theme.colors ?? {}).every(([key, value]) =>
+      theme.colors?.[key as keyof NonNullable<SiteTheme["colors"]>] === value,
+    );
+}
 
 /** The theme with the chosen presets applied. Everything not named is kept. */
 export function applyQuickStyle<T extends SiteTheme>(theme: T, choice: QuickStyle): T {

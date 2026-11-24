@@ -167,9 +167,64 @@ describe("normalizeDesign", () => {
     }).textScheme).toBe("dark");
   });
 
+  it("uses a contrast-safe media overlay only for v2 auto text", () => {
+    const design = {
+    designVersion: 2 as const,
+    background: {
+      type: "image" as const,
+      images: ["https://cdn.example/hero.jpg"],
+      overlayColor: "#ffffff",
+      overlayOpacity: 20,
+    },
+    };
+    const v2 = normalizeDesign(design);
+    expect(v2.textScheme).toBe("light");
+    expect(v2.background).toMatchObject({
+    kind: "image",
+    overlay: { color: "#0a0e14", opacity: 60 },
+    });
+
+    const explicit = normalizeDesign({ ...design, textColor: "dark" });
+    expect(explicit.textScheme).toBe("dark");
+    expect(explicit.background).toMatchObject({
+    kind: "image",
+    overlay: { color: "#ffffff", opacity: 20 },
+    });
+
+    const legacy = normalizeDesign({ ...design, designVersion: 1 });
+    expect(legacy.background).toMatchObject({
+    kind: "image",
+    overlay: { color: "#ffffff", opacity: 20 },
+    });
+  });
+
+  it("validates v2 patterns and section-level options", () => {
+    expect(normalizeDesign({
+    designVersion: 2,
+    settings: { sectionPadding: "spacious", dividerStyle: "accent" },
+    background: { type: "pattern", pattern: "grid" },
+    })).toMatchObject({
+    designVersion: 2,
+    sectionPadding: "spacious",
+    dividerStyle: "accent",
+    background: { kind: "pattern", pattern: "grid" },
+    });
+
+    expect(normalizeDesign({
+    designVersion: 2,
+    settings: { sectionPadding: "invalid" as "normal", dividerStyle: "script" as "none" },
+    background: { type: "pattern", pattern: "invalid" as "dots" },
+    })).toMatchObject({
+    sectionPadding: "normal",
+    dividerStyle: "none",
+    background: { kind: "none" },
+    });
+  });
+
   it("defaults cleanly for an empty design", () => {
     const normalized = normalizeDesign({});
     expect(normalized).toMatchObject({
+      designVersion: 1,
       fullBleed: true,
       anchorId: null,
       background: { kind: "none" },

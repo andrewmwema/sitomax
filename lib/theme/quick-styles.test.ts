@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildThemeStyle, type SiteTheme } from "./presets";
-import { applyQuickStyle, quickStyleSchema } from "./quick-styles";
+import { buildThemeStyle, THEME_PRESETS, type SiteTheme } from "./presets";
+import { contrastRatio } from "./contrast";
+import { applyQuickStyle, applyThemePreset, matchesThemePreset, quickStyleSchema } from "./quick-styles";
 import { themeSchema } from "./schema";
 
 describe("instant theme presets", () => {
@@ -17,6 +18,25 @@ describe("instant theme presets", () => {
     expect(theme).not.toHaveProperty("buttonStyle");
     expect(quickStyleSchema.safeParse({ corners: "huge" }).success).toBe(false);
     expect(quickStyleSchema.safeParse({ radius: 4 }).success).toBe(false);
+  });
+
+  it("applies curated themes without replacing site assets and keeps their colors readable", () => {
+    for (const preset of THEME_PRESETS) {
+      const next = applyThemePreset(theme, preset.id);
+      const colors = preset.theme.colors!;
+      const vars = buildThemeStyle(next) as Record<string, string>;
+
+      expect(matchesThemePreset(next, preset.id)).toBe(true);
+      expect(next.logoUrl).toBe(theme.logoUrl);
+      expect(themeSchema.safeParse(next).success).toBe(true);
+      expect(contrastRatio(colors.primary!, colors.background!)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(colors.text!, colors.background!)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(vars["--color-on-primary"], colors.primary!)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(vars["--color-on-cta-dark"], vars["--color-cta-dark"])).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(vars["--color-on-cta-primary"], vars["--color-cta-primary"])).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(applyThemePreset(theme, "missing")).toEqual(theme);
+    expect(matchesThemePreset(theme, "missing")).toBe(false);
   });
 
   it("turns the spacing preset into the space every section uses", () => {

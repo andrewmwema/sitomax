@@ -87,6 +87,9 @@ export function SectionShell({
   const {
     fullBleed,
     anchorId,
+    designVersion,
+    sectionPadding,
+    dividerStyle,
     hide,
     background,
     border,
@@ -230,6 +233,9 @@ export function SectionShell({
 
   return (
     <div ref={setRef} id={anchorId ?? undefined} data-editor-block={isEditing ? blockId : undefined}
+      data-design-version={designVersion}
+      data-section-padding={sectionPadding}
+      data-divider-style={dividerStyle}
       data-content-width={contentWidth === "narrow" || contentWidth === "normal" || contentWidth === "wide" ? contentWidth : undefined}
       data-section-align-d={level === "section" ? design?.appearance?.desktop?.align : undefined}
       data-section-align-t={level === "section" ? design?.appearance?.tablet?.align ?? design?.appearance?.desktop?.align : undefined}
@@ -296,6 +302,12 @@ function SectionBackground({
       {background.kind === "gradient" ? (
         <div className="absolute inset-0" style={{ backgroundImage: `linear-gradient(${background.angle}deg, ${background.from}, ${background.to})` }} />
       ) : null}
+      {background.kind === "pattern" ? (
+        <div
+          className="absolute inset-0"
+          style={patternStyle(background.pattern)}
+        />
+      ) : null}
       {background.kind === "image" ? (
         <ImageSlider
           images={background.images}
@@ -317,6 +329,25 @@ function SectionBackground({
       ) : null}
     </div>
   );
+}
+
+function patternStyle(pattern: "dots" | "grid" | "lines"): CSSProperties {
+  if (pattern === "dots") {
+    return {
+      backgroundImage: "radial-gradient(circle, color-mix(in srgb, var(--color-primary) 22%, transparent) 1px, transparent 1.5px)",
+      backgroundSize: "18px 18px",
+    };
+  }
+  if (pattern === "grid") {
+    return {
+      backgroundImage: "linear-gradient(color-mix(in srgb, var(--color-primary) 8%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 8%, transparent) 1px, transparent 1px)",
+      backgroundSize: "24px 24px",
+    };
+  }
+  return {
+    backgroundImage: "linear-gradient(color-mix(in srgb, var(--color-primary) 10%, transparent) 1px, transparent 1px)",
+    backgroundSize: "100% 24px",
+  };
 }
 
 /** One image, or an auto-rotating crossfade slider for several. */
