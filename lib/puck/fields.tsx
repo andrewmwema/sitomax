@@ -31,10 +31,14 @@ export function imageField(
   };
 }
 
-export function optionalImageField(label: string): CustomField<string | undefined> & { aiKind: "image" } {
+export function optionalImageField(
+  label: string,
+  aiAspectRatio: ImageAspectMetadata = "auto",
+): CustomField<string | undefined> & { aiKind: "image"; aiAspectRatio: ImageAspectMetadata } {
   return {
     type: "custom",
     aiKind: "image",
+    aiAspectRatio,
     label,
     render: ({ name, value, onChange, readOnly }) => (
       <PuckImageField name={name} value={value ?? ""} onChange={onChange} readOnly={readOnly} />

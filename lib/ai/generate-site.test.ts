@@ -19,7 +19,7 @@ vi.mock("./usage", () => ({ beginSiteGeneration: mocks.begin, finishSiteGenerati
   startDraftCheckpoints: mocks.start, checkpointDraft: mocks.checkpoint, completeDraftCheckpoints: mocks.complete,
   claimPageRetry: mocks.claim, finishPageRetry: mocks.finishRetry }));
 import { buildGeneratedSite, retryGeneratedPage } from "./generate-site";
-import { aiCatalog, blockFields, blockSchemas, pageFillContract, type PlannedPage } from "./site-schemas";
+import { aiBlockCatalog, aiCatalog, blockFields, blockSchemas, pageFillContract, type PlannedPage } from "./site-schemas";
 import { curatedPlanContract } from "./curated-plan";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
 import { brand } from "@/lib/brand";
@@ -114,6 +114,16 @@ beforeEach(() => {
 });
 
 describe("catalog site generation", () => {
+  it("uses section limits and optional image aspect ratios in the AI catalog", () => {
+    const process = aiBlockCatalog.find(({ blockType }) => blockType === "Process");
+    const testimonials = aiBlockCatalog.find(({ blockType }) => blockType === "Testimonials");
+    expect(process?.fields.heading).toMatchObject({ type: "richtext", maxLength: 100 });
+    expect(process?.fields.steps).toMatchObject({ maxItems: 5, fields: { image: { aspectRatio: "4/3" } } });
+    expect(testimonials?.fields.testimonials).toMatchObject({ maxItems: 6, fields: { image: { aspectRatio: "1/1" } } });
+    expect(blockSchemas.Process.shape.heading.safeParse("x".repeat(100)).success).toBe(true);
+    expect(blockSchemas.Process.shape.heading.safeParse("x".repeat(101)).success).toBe(false);
+  });
+
   it("rejects unknown AI icon names instead of silently rendering the fallback star", () => {
     const design = aiCatalog.find((entry) => entry.blockType === "TextSection")!;
     const props = section(design.id);

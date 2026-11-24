@@ -66,7 +66,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
         quote: { type: "textarea", label: "Quote" },
         name: { type: "text", label: "Name" },
         role: { type: "text", label: "Role / company" },
-        image: optionalImageField("Customer photo (optional)"),
+        image: optionalImageField("Customer photo (optional)", "1/1"),
         imageAlt: { type: "text", label: "Photo alt text" },
         rating: {
           type: "select",

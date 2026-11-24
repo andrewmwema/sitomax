@@ -280,7 +280,7 @@ describe("AI agent tool guardrails", () => {
       catalog: {
         blockType: "Services",
         fields: {
-          services: { type: "array", maxItems: 40, fields: {
+          services: { type: "array", maxItems: 6, fields: {
             image: { type: "image", maxLength: 2000, aspectRatio: "4/3" },
           } },
         },

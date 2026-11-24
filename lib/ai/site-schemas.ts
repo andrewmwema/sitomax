@@ -5,7 +5,7 @@ import type { Field } from "@puckeditor/core";
 import { strictTool } from "./strict-tool";
 import { SECTION_COPY_BRIEFS } from "./site-prompt-briefs";
 import { puckConfig } from "@/lib/puck/config";
-import { sectionCatalog } from "@/lib/sections/catalog";
+import { sectionCatalog, sectionContentMetadata, type SectionContentMetadata } from "@/lib/sections/catalog";
 import { buildDesignItem } from "@/lib/sections/library";
 import { iconNameSchema } from "@/lib/icons";
 import { siteLinkSchema } from "@/lib/links";
@@ -23,7 +23,7 @@ export function blockFields(type: string): Fields {
 }
 
 export function validateBlockProps(type: string, value: unknown) {
-  return fieldsSchema(blockFields(type)).parse(value);
+  return fieldsSchema(blockFields(type), false, sectionContentMetadata(type)).parse(value);
 }
 
 type AiImageField = Field & { aiKind: "image"; aiAspectRatio: ImageAspectMetadata };
@@ -42,13 +42,14 @@ const link = z.string().max(500).refine(
  * links the link picker stores, images are the stored URLs (changed only through
  * set_image) and lists may be as long as the editor allows.
  */
-function fieldSchema(field: Field, key: string, agent = false): z.ZodType {
+function fieldSchema(field: Field, key: string, agent = false, metadata?: SectionContentMetadata, path = key): z.ZodType {
+  const limit = agent ? undefined : metadata?.limits[path];
   switch (field.type) {
     case "text":
     case "textarea":
     case "richtext":
-      return /(?:href|link)$/i.test(key) ? link : z.string().max(field.type === "richtext" ? 8000 : 2000);
-    case "number": return z.number().finite();
+      return /(?:href|link)$/i.test(key) ? link : z.string().max(limit?.maxLength ?? (field.type === "richtext" ? 8000 : 2000));
+    case "number": return limit?.maxValue === undefined ? z.number().finite() : z.number().finite().max(limit.maxValue);
     case "radio":
     case "select": {
       const values = field.options.map(({ value }) => {
@@ -61,9 +62,9 @@ function fieldSchema(field: Field, key: string, agent = false): z.ZodType {
       return z.literal(values);
     }
     case "array":
-      return z.array(fieldsSchema(field.arrayFields as Fields, agent)).max(agent ? 40 : 12);
+      return z.array(fieldsSchema(field.arrayFields as Fields, agent, metadata, `${path}[].`)).max(limit?.maxItems ?? (agent ? 40 : 12));
     case "object":
-      return fieldsSchema(field.objectFields as Fields, agent);
+      return fieldsSchema(field.objectFields as Fields, agent, metadata, `${path}.`);
     case "custom":
       if (isImageField(field)) return agent ? z.string().max(2000)
         : z.string().max(160).describe("Photo search query, NOT a URL; empty for no photo.");
@@ -74,9 +75,9 @@ function fieldSchema(field: Field, key: string, agent = false): z.ZodType {
   }
 }
 
-function fieldsSchema(fields: Fields, agent = false) {
+function fieldsSchema(fields: Fields, agent = false, metadata?: SectionContentMetadata, prefix = "") {
   return z.strictObject(Object.fromEntries(
-    Object.entries(fields).filter(([key]) => key !== "design").map(([key, field]) => [key, fieldSchema(field, key, agent)]),
+    Object.entries(fields).filter(([key]) => key !== "design").map(([key, field]) => [key, fieldSchema(field, key, agent, metadata, `${prefix}${key}`)]),
   ));
 }
 
@@ -119,24 +120,26 @@ export function describeAgentFields(type: string): Record<string, unknown> {
   return describe(blockFields(type), true);
 }
 
-export const blockSchemas = Object.fromEntries(blockTypes.map((type) => [type, fieldsSchema(blockFields(type))]));
+export const blockSchemas = Object.fromEntries(blockTypes.map((type) => [type, fieldsSchema(blockFields(type), false, sectionContentMetadata(type))]));
 
 type AiBlockField = {
   type: "text" | "textarea" | "richtext" | "number" | "choice" | "array" | "object" | "image" | "link" | "icon";
   maxLength?: number;
   options?: { label: string; value: string | number | boolean | null }[];
   maxItems?: number;
+  maxValue?: number;
   fields?: Record<string, AiBlockField>;
   aspectRatio?: ImageAspectMetadata;
 };
 
-function aiBlockField(field: Field, key: string): AiBlockField | null {
+function aiBlockField(field: Field, key: string, metadata: SectionContentMetadata, path: string): AiBlockField | null {
+  const limit = metadata.limits[path];
   switch (field.type) {
     case "text":
-      return { type: /(?:href|link)$/i.test(key) ? "link" : "text", maxLength: /(?:href|link)$/i.test(key) ? 500 : 2000 };
-    case "textarea": return { type: "textarea", maxLength: 2000 };
-    case "richtext": return { type: "richtext", maxLength: 8000 };
-    case "number": return { type: "number" };
+      return { type: /(?:href|link)$/i.test(key) ? "link" : "text", maxLength: /(?:href|link)$/i.test(key) ? 500 : limit?.maxLength ?? 2000 };
+    case "textarea": return { type: "textarea", maxLength: limit?.maxLength ?? 2000 };
+    case "richtext": return { type: "richtext", maxLength: limit?.maxLength ?? 8000 };
+    case "number": return { type: "number", ...(limit?.maxValue !== undefined ? { maxValue: limit.maxValue } : {}) };
     case "radio":
     case "select": {
       const options = field.options.map(({ label, value }) => {
@@ -151,9 +154,9 @@ function aiBlockField(field: Field, key: string): AiBlockField | null {
       };
     }
     case "array":
-      return { type: "array", maxItems: 40, fields: aiBlockFields(field.arrayFields as Fields) };
+      return { type: "array", maxItems: limit?.maxItems ?? 40, fields: aiBlockFields(field.arrayFields as Fields, metadata, `${path}[].`) };
     case "object":
-      return { type: "object", fields: aiBlockFields(field.objectFields as Fields) };
+      return { type: "object", fields: aiBlockFields(field.objectFields as Fields, metadata, `${path}.`) };
     case "custom":
       if (isImageField(field)) return { type: "image", maxLength: 2000, aspectRatio: field.aiAspectRatio };
       if ("aiKind" in field && field.aiKind === "link") return { type: "link", maxLength: 500 };
@@ -163,11 +166,11 @@ function aiBlockField(field: Field, key: string): AiBlockField | null {
   }
 }
 
-function aiBlockFields(fields: Fields): Record<string, AiBlockField> {
+function aiBlockFields(fields: Fields, metadata: SectionContentMetadata, prefix = ""): Record<string, AiBlockField> {
   return Object.fromEntries(Object.entries(fields).flatMap(([key, field]) => {
     if (key === "design" || key === "id") return [];
-    const metadata = aiBlockField(field, key);
-    return metadata ? [[key, metadata]] : [];
+    const info = aiBlockField(field, key, metadata, `${prefix}${key}`);
+    return info ? [[key, info]] : [];
   }));
 }
 
@@ -180,7 +183,7 @@ export const aiBlockCatalog = blockTypes.map((blockType) => {
     variants: variant && (variant.type === "select" || variant.type === "radio")
       ? variant.options.map(({ label, value }) => ({ label, value }))
       : [],
-    fields: Object.fromEntries(Object.entries(aiBlockFields(fields))
+    fields: Object.fromEntries(Object.entries(aiBlockFields(fields, sectionContentMetadata(blockType)))
       .filter(([key]) => key in agentFieldSchemas(blockType))),
   };
 });

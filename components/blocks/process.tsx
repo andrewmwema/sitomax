@@ -70,7 +70,7 @@ export const Process: ComponentConfig<ProcessProps> = {
         title: { type: "text", label: "Title" },
         text: richTextField("Description"),
         icon: iconField("Icon"),
-        image: optionalImageField("Step visual (optional)"),
+        image: optionalImageField("Step visual (optional)", "4/3"),
         imageAlt: { type: "text", label: "Step visual alt text" },
       },
     },
