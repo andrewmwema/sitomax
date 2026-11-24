@@ -27,6 +27,12 @@ export const businessIntakeSchema = businessSchema.omit({ socialLinks: true }).e
   description: businessSchema.shape.description.unwrap().default(""),
 });
 
+export const templateBusinessIntakeSchema = businessIntakeSchema.extend({
+  businessName: businessSchema.shape.businessName.min(1, "Enter a business name."),
+  businessType: businessSchema.shape.businessType.min(1, "Describe what the business does."),
+  city: businessSchema.shape.city.min(1, "Enter a location or service area."),
+});
+
 export type Business = z.infer<typeof businessSchema>;
 
 export const emptyBusiness: Business = {

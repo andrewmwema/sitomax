@@ -36,6 +36,8 @@ describe("template page fill contract", () => {
     expect(() => contract.apply({ fields: { ...values, [review!.key]: "A real customer loved it" } })).toThrow();
     const limited = contract.fields.find((field) => field.maxLength < 1000)!;
     expect(() => contract.apply({ fields: { ...values, [limited.key]: "x".repeat(limited.maxLength + 1) } })).toThrow();
+    const seo = contract.fields.find((field) => field.label === "seoTitle")!;
+    expect(() => contract.apply({ fields: { ...values, [seo.key]: " " } })).toThrow();
   });
 
   it("preserves nested images and links while replacing text", () => {
@@ -66,6 +68,20 @@ describe("template page fill contract", () => {
       { title: page.title, slug: page.slug });
     expect(result).not.toBe(page.data);
     expect(result.content.find((item) => item.type === "Hero")?.props.heading).toBe("Replacement");
+    expect(result.root.props).toMatchObject({ seoTitle: "Replacement", description: "Replacement" });
     expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires a reviewed legal placeholder and refuses generated rich-text links", () => {
+    const page = premiumTemplates.showcase.pages.find(({ slug }) => slug === "privacy")!;
+    const contract = templateFillContract(page.data, "privacy");
+    const fields = Object.fromEntries(contract.fields.map(({ key, requiredText, sampleReview }) =>
+      [key, requiredText ?? (sampleReview ? "[Add a real review]" : "Replacement")]));
+    const legal = contract.fields.find(({ requiredText }) => requiredText)!;
+    expect(legal.requiredText).toContain("[Add your reviewed privacy policy]");
+    expect(() => contract.apply({ fields: { ...fields, [legal.key]: "<p>We never share your information.</p>" } })).toThrow();
+    const rich = contract.fields.find(({ richText, requiredText }) => richText && !requiredText)!;
+    expect(() => contract.apply({ fields: { ...fields, [rich.key]: '<a href="https://example.com">Link</a>' } })).toThrow();
+    expect(contract.apply({ fields }).content).toHaveLength(page.data.content.length);
   });
 });

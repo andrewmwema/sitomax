@@ -38,4 +38,10 @@ describe("template recommendation", () => {
     await expect(recommendTemplate(call as SiteToolCall, business, templates.slice(0, 1))).rejects.toThrow();
     expect(call).not.toHaveBeenCalled();
   });
+
+  it("requires the core business details before making a recommendation", async () => {
+    const call = vi.fn();
+    await expect(recommendTemplate(call as SiteToolCall, { ...business, city: " " }, templates)).rejects.toThrow();
+    expect(call).not.toHaveBeenCalled();
+  });
 });

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { businessIntakeSchema } from "@/lib/business";
+import { templateBusinessIntakeSchema } from "@/lib/business";
 import { strictTool } from "./strict-tool";
 import { fillSiteTool, type SiteToolCall } from "./site-tool";
 
@@ -13,7 +13,7 @@ const templateSchema = z.strictObject({
 });
 
 export async function recommendTemplate(call: SiteToolCall, rawBusiness: unknown, rawTemplates: unknown) {
-  const business = businessIntakeSchema.parse(rawBusiness);
+  const business = templateBusinessIntakeSchema.parse(rawBusiness);
   const templates = z.array(templateSchema).min(2).max(30).parse(rawTemplates);
   const ids = templates.map(({ id }) => id);
   if (new Set(ids).size !== ids.length) throw new Error("The available designs have duplicate IDs.");
