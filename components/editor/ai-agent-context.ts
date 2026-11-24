@@ -16,6 +16,8 @@ export type AgentEditorBridge = {
   /** Shows the stored draft in the editor as one undoable step; null means nothing changed here. */
   adopt: (state: AgentEditorState | null) => Promise<boolean>;
   previewMetadata: Record<string, unknown>;
+  /** Opens the Theme panel, where colours, fonts, buttons, corners and spacing change in one click without AI. */
+  openTheme?: () => void;
 };
 /** A request routed to the agent from elsewhere in the editor. */
 export type AgentRequest = { prompt?: string; sectionId?: string; header?: boolean; insertAt?: number };

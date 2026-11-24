@@ -30,6 +30,7 @@ export type SiteTheme = {
   bodyFont?: CuratedFont;
   radius?: number;
   buttonStyle?: "rounded" | "square" | "pill";
+  spacing?: "compact" | "comfortable" | "spacious";
   colors?: {
     primary?: string;
     secondary?: string;
@@ -122,6 +123,12 @@ export const COLOR_PALETTES = [
   },
 ] as const;
 
+/** Section spacing presets; "comfortable" keeps the style preset's own. */
+const SECTION_PAD: Record<string, string | undefined> = {
+  compact: "clamp(40px, 5vw, 64px)",
+  spacious: "clamp(88px, 11vw, 152px)",
+};
+
 const DARK_INK = "#17202b";
 
 /** White or dark ink for text on the primary color — WCAG 4.5:1 first. */
@@ -207,6 +214,7 @@ export function buildThemeStyle(theme: SiteTheme | null | undefined): CSSPropert
     "--color-on-cta-primary": onPrimaryColor(ctaPrimary),
     ...preset.vars,
     ...(radius === undefined ? {} : { "--radius-sm": `${radius}px`, "--radius-lg": `${radius}px` }),
+    ...(theme?.spacing && SECTION_PAD[theme.spacing] ? { "--section-pad": SECTION_PAD[theme.spacing] } : {}),
     "--button-radius": buttonRadius,
     "--section-gap": "calc(var(--section-pad) / 2)",
     "--content-gap": "calc(var(--section-pad) / 4)",

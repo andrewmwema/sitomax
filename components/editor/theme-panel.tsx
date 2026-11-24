@@ -15,6 +15,13 @@ import {
   googleFontsUrl,
   type CuratedFont,
 } from "@/lib/theme/fonts";
+import {
+  applyQuickStyle,
+  BUTTON_STYLES,
+  CORNER_PRESETS,
+  FONT_PAIRINGS,
+  SPACING_PRESETS,
+} from "@/lib/theme/quick-styles";
 import { saveSiteTheme } from "@/app/editor/[pageId]/actions";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { WorkspaceDialog } from "@/components/dashboard/workspace-dialog";
@@ -27,14 +34,32 @@ const COLOR_LABELS = [
   ["text", "Text"],
 ] as const;
 
-const FONT_PAIRINGS: { label: string; heading: CuratedFont; body: CuratedFont }[] = [
-  { label: "Elegant", heading: "Playfair Display", body: "Lato" },
-  { label: "Modern", heading: "Plus Jakarta Sans", body: "Inter" },
-  { label: "Friendly", heading: "Nunito", body: "Nunito" },
-  { label: "Bold", heading: "Bebas Neue", body: "Open Sans" },
-  { label: "Editorial", heading: "Lora", body: "Source Sans 3" },
-  { label: "Warm", heading: "Fraunces", body: "DM Sans" },
-];
+/** One-click choices: each applies a ready-made preset to the theme at once, with no AI involved. */
+function QuickChoices<T extends string>({ label, options, active, onChoose }: {
+  label: string;
+  options: readonly { id: T; label: string; description?: string }[];
+  active: T | undefined;
+  onChoose: (id: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          title={option.description}
+          aria-pressed={active === option.id}
+          onClick={() => onChoose(option.id)}
+          className={`rounded-lg border px-2 py-2 text-xs font-medium transition ${
+            active === option.id ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function FontPicker({
   label,
@@ -111,8 +136,10 @@ function FontPicker({
 
 /**
  * Slide-over panel for the site-wide theme: style preset (Classic or
- * Modern), color palette, logo and favicon. Theme changes preview live (via
- * Puck metadata) and persist to sites.theme on save.
+ * Modern), fonts, color palette, button shape, corners, section spacing,
+ * logo and favicon. Theme changes preview live (via Puck metadata) and
+ * persist to sites.theme on save. The presets here are the same ones the AI
+ * agent applies with apply_theme_preset, so a simple request needs no AI.
  */
 export function ThemePanel({
   siteId,
@@ -223,9 +250,10 @@ export function ThemePanel({
           <div className="grid gap-2">
             {FONT_PAIRINGS.map((pairing) => (
               <button
-                key={pairing.label}
+                key={pairing.id}
                 type="button"
-                onClick={() => onChange({ ...theme, headingFont: pairing.heading, bodyFont: pairing.body })}
+                aria-pressed={theme.headingFont === pairing.heading && theme.bodyFont === pairing.body}
+                onClick={() => onChange(applyQuickStyle(theme, { fonts: pairing.id }))}
                 className="rounded-lg border border-zinc-200 px-3 py-2 text-left text-xs text-zinc-700 hover:border-zinc-400"
               >
                 <span className="font-semibold">{pairing.label}:</span> {pairing.heading} + {pairing.body}
@@ -245,7 +273,7 @@ export function ThemePanel({
                 <button
                   key={palette.id}
                   type="button"
-                  onClick={() => onChange({ ...theme, colors: { ...palette.colors } })}
+                  onClick={() => onChange(applyQuickStyle(theme, { palette: palette.id }))}
                   className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition ${
                     active
                       ? "border-zinc-900 ring-1 ring-zinc-900"
@@ -268,6 +296,22 @@ export function ThemePanel({
               );
             })}
           </div>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+            Buttons, corners and spacing
+          </h3>
+          <p className="text-xs text-zinc-500">One click changes the whole site. No AI credits are used.</p>
+          <span className="text-sm text-zinc-700">Button shape</span>
+          <QuickChoices label="Button shape" options={BUTTON_STYLES} active={theme.buttonStyle}
+            onChoose={(buttons) => onChange(applyQuickStyle(theme, { buttons }))} />
+          <span className="text-sm text-zinc-700">Corners</span>
+          <QuickChoices label="Corners" options={CORNER_PRESETS} active={CORNER_PRESETS.find((preset) => preset.radius === theme.radius)?.id}
+            onChoose={(corners) => onChange(applyQuickStyle(theme, { corners }))} />
+          <span className="text-sm text-zinc-700">Space between sections</span>
+          <QuickChoices label="Space between sections" options={SPACING_PRESETS} active={theme.spacing ?? "comfortable"}
+            onChoose={(spacing) => onChange(applyQuickStyle(theme, { spacing }))} />
         </section>
 
         <section className="flex flex-col gap-3">

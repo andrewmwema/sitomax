@@ -90,8 +90,16 @@ describe("AI agent request", () => {
     expect(JSON.stringify(events)).not.toMatch(/costUsd|tokenUsage|inputTokens/);
     expect(lastSave()).toMatchObject({ status: "completed", changeset: { quality: { fixed: [] } }, finished_at: expect.any(String) });
     expect(mocks.usage.recordUsage).toHaveBeenCalledWith({ id: reservation, model: expect.any(String) },
-      expect.objectContaining({ inputTokens: 2000, outputTokens: 200 }), expect.closeTo(0.006, 6));
+      // An edit to one section is the small model's, and is charged at its prices.
+      expect.objectContaining({ inputTokens: 2000, outputTokens: 200 }), expect.closeTo(0.0003, 8));
     expect(mocks.usage.releaseFailedRequest).not.toHaveBeenCalled();
+    expect(mocks.usage.createAiAgentRun.mock.calls[0][2]).toMatchObject({ run_state: { route: "small", threadTurns: 1 } });
+
+    // Work across the site is the main model's.
+    vi.clearAllMocks();
+    await request({ ...start, message: "Improve every page" }, script(edit, done));
+    expect(mocks.usage.createAiAgentRun.mock.calls[0][2]).toMatchObject({ run_state: { route: "main" } });
+    expect(mocks.usage.recordUsage).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.closeTo(0.006, 8));
   });
 
   it("refuses a request over the account limit before any credit is reserved or run created", async () => {
@@ -147,7 +155,7 @@ describe("AI agent request", () => {
     expect(mocks.usage.createAiAgentThread).toHaveBeenCalledWith(expect.anything(), "user-1", fixtureIds.site, "Improve the hero");
 
     // A plan step that still names an id is shown without it.
-    const planned = await request(start, script(reply([{ type: "tool_use", id: "plan-0", name: "plan", input: { steps: [
+    const planned = await request({ ...start, message: "Improve every page" }, script(reply([{ type: "tool_use", id: "plan-0", name: "plan", input: { steps: [
       `Home (pageId ${fixtureIds.home}): rewrite the hero "Hero-${fixtureIds.post}" heading`, "About: add our story, founded 2004-2010 (sectionId about-text-2)",
     ] } }])));
     expect(planned.find((event) => event.type === "plan")).toMatchObject({ steps: ["Home: rewrite the hero heading", "About: add our story, founded 2004-2010"] });
@@ -211,5 +219,33 @@ describe("AI agent request", () => {
     expect(mocks.usage.recordUsage).not.toHaveBeenCalled();
     expect(mocks.usage.releaseFailedRequest).toHaveBeenCalledTimes(1);
     log.mockRestore();
+  });
+
+  it("carries a short conversation forward whole, and one of more than six requests as a short note", async () => {
+    savedRun.status = "completed";
+    const earlier = (turns: number) => ({
+      ...newAgentState([
+        { role: "user", content: "Make the hero warmer" },
+        { role: "assistant", content: [{ type: "tool_use", id: "c1", name: "update_section_props", input: { props: { heading: "Welcome in" } } }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "c1", content: '{"ok":true,"changed":["heading"]}' }] },
+        { role: "assistant", content: [{ type: "text", text: "The hero heading is warmer now." }] },
+      ], reservation), threadTurns: turns,
+    });
+    const messagesOf = () => (mocks.usage.createAiAgentRun.mock.calls.at(-1)![2] as { run_state: { messages: { content: unknown }[]; threadTurns: number } }).run_state;
+
+    mocks.usage.loadAiAgentRunState.mockResolvedValue(earlier(2));
+    await request({ ...start, threadId, message: "Now shorten it" }, script(edit, done));
+    // The earlier exchange is sent as it was, followed by the new request.
+    expect(messagesOf().messages[4].content).toBe("Now shorten it");
+    expect(JSON.stringify(messagesOf().messages.slice(0, 4))).toContain("tool_result");
+    expect(messagesOf().threadTurns).toBe(3);
+
+    mocks.usage.loadAiAgentRunState.mockResolvedValue(earlier(7));
+    await request({ ...start, threadId, message: "Now shorten it" }, script(edit, done));
+    const { messages, threadTurns } = messagesOf();
+    expect(threadTurns).toBe(8);
+    expect(messages[0].content).toMatch(/^EARLIER IN THIS CONVERSATION \(summary\):\nUser: Make the hero warmer\nAgent steps: update_section_props\nAgent: The hero heading is warmer now\./);
+    expect(JSON.stringify(messages[0])).not.toContain("tool_result");
+    expect(messages[1].content).toBe("Now shorten it");
   });
 });

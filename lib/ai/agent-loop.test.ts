@@ -5,7 +5,9 @@ import {
   AGENT_LIMITS, answerAwaiting, newAgentState, reviewChangesetQuality, runAgentLoop, startAgentSegment,
   type AgentEvent, type AgentModel, type AgentState, type AgentToolContext,
 } from "./agent";
-import { unfinishedPlanSteps } from "./agent-plan";
+import { newAgentPlan, unfinishedPlanSteps } from "./agent-plan";
+import { SITE_GENERATION_MODEL, SMALL_EDIT_MODEL } from "./models";
+import { agentTools, smallAgentTools } from "./agent-tools";
 import { createAgentReviewPayload, previewAgentReview } from "./agent-review";
 
 type Params = Parameters<AgentModel>[0];
@@ -36,8 +38,11 @@ function scripted(reply: (params: Params, call: number) => Reply): AgentModel & 
 }
 function start(model: AgentModel, state: AgentState = newAgentState([{ role: "user", content: "Improve the site" }], reservation), changeset = fixtureChangeset()) {
   const events: AgentEvent[] = [];
-  const run = () => runAgentLoop({ model, changeset, state, context, emit: (event) => events.push(event), threadId: "thread", runId: "run" });
-  return { state, changeset, events, run };
+  const escalations: string[] = [];
+  const run = () => runAgentLoop({
+    model, changeset, state, context, emit: (event) => events.push(event), threadId: "thread", runId: "run", onEscalate: (reason) => escalations.push(reason),
+  });
+  return { state, changeset, events, run, escalations };
 }
 /** The provider rejects a conversation unless every tool call is followed by its result. */
 function expectAnswered(messages: Anthropic.MessageParam[]) {
@@ -50,17 +55,20 @@ function expectAnswered(messages: Anthropic.MessageParam[]) {
     expect(results).toEqual(calls);
   });
 }
-/** What a call was sent, as the provider reads it: the cached conversation, then this call's site overview. */
+/** What a call was sent, as the provider reads it: the site overview first, then the conversation, marked up to its end. */
 function sent(params: Params) {
-  const last = params.messages.at(-1)!.content as Anthropic.ContentBlockParam[];
-  const overview = last.at(-1) as Anthropic.TextBlockParam;
-  const cached = last.at(-2) as { cache_control?: unknown };
-  const conversation = [...params.messages.slice(0, -1), { role: "user" as const, content: last.slice(0, -1).map((block) => {
-    const { cache_control: _breakpoint, ...rest } = block as Anthropic.TextBlockParam;
+  const [first, ...rest] = params.messages;
+  const [overview, ...opening] = first.content as Anthropic.TextBlockParam[];
+  const unmarked = (message: Anthropic.MessageParam) => ({ role: message.role, content: (message.content as Anthropic.ContentBlockParam[]).map((block) => {
+    const { cache_control: _breakpoint, ...plain } = block as Anthropic.TextBlockParam;
     void _breakpoint;
-    return rest;
-  }) }];
-  return { overview: overview.text, cached, conversation, chars: JSON.stringify(params.messages).length };
+    return plain;
+  }) });
+  const last = (params.messages.at(-1)!.content as { cache_control?: unknown }[]).at(-1)!;
+  return {
+    overview: overview.text, overviewMark: overview.cache_control, cached: last,
+    conversation: [{ role: first.role, content: opening }, ...rest].map(unmarked), chars: JSON.stringify(params.messages).length,
+  };
 }
 /** Approves the plan the run is waiting on, the way the request handler does. */
 function approve(state: AgentState) {
@@ -86,21 +94,28 @@ describe("AI agent run loop", () => {
     expect(state.messages.at(-1)).toMatchObject({ role: "user", content: [{ is_error: true, content: expect.stringContaining("Run limit reached") }] });
     expect(heading(changeset)).toBe("Reliable plumbers");
     expectAnswered(state.messages);
-    // The rules never change, so they and the tools before them stay cached across a change.
+    // The prompt is ordered as it is cached: the tools and the rules, which never change, then the site
+    // overview, both kept for an hour; then the conversation, which only grows.
+    expect(model.calls.every((params) => params.model === SITE_GENERATION_MODEL)).toBe(true);
     expect(model.calls[3].system).toEqual(model.calls[2].system);
-    expect(model.calls[2].system).toEqual([expect.objectContaining({ cache_control: { type: "ephemeral", ttl: "5m" } })]);
+    expect(model.calls[3].tools).toEqual(model.calls[2].tools);
+    expect(model.calls[2].system).toEqual([expect.objectContaining({ cache_control: { type: "ephemeral", ttl: "1h" } })]);
     expect(JSON.stringify(model.calls[2].system)).not.toContain("home-hero");
-    // So does the conversation: each call repeats the previous one exactly and adds to its end.
     for (const index of [1, 2, 3, 4]) {
       const [before, after] = [sent(model.calls[index - 1]), sent(model.calls[index])];
+      // The overview stays as it was first sent, changes or not, so it is read from the cache on every step.
+      expect(after.overview, `call ${index + 1}`).toBe(before.overview);
+      expect(after.overviewMark).toEqual({ type: "ephemeral", ttl: "1h" });
+      // Each call repeats the previous conversation exactly and adds to its end.
       expect(after.conversation.slice(0, before.conversation.length), `call ${index + 1}`).toEqual(before.conversation);
       expect(after.cached.cache_control).toEqual({ type: "ephemeral", ttl: "5m" });
     }
-    // Only the overview after it is new, and it shows the site as it is now.
-    expect(sent(model.calls[2]).overview).not.toContain("Reliable plumbers");
-    expect(sent(model.calls[3]).overview).toContain("Reliable plumbers");
-    expect(JSON.stringify(sent(model.calls[3]).conversation)).not.toContain("CURRENT SITE OVERVIEW");
-    expect(JSON.stringify(state.messages)).not.toContain("CURRENT SITE OVERVIEW");
+    expect(sent(model.calls[0]).overview).toMatch(/^SITE OVERVIEW/);
+    expect(sent(model.calls[4]).overview).toContain("Plumbing done properly");
+    // What changed since is in the tool results, and a fresh overview is one call away.
+    const results = JSON.stringify(sent(model.calls[4]).conversation.at(-1));
+    expect(results).toContain("Reliable plumbers");
+    expect(JSON.stringify(state.messages)).not.toContain("SITE OVERVIEW (");
 
     startAgentSegment(state);
     expect(await run()).toBe("completed");
@@ -141,8 +156,10 @@ describe("AI agent run loop", () => {
     const sections = ["home-hero", "about-text", "pricing-plans", "contact-form"];
     const model = scripted((_params, call) => call <= 8
       ? (call % 2 ? { tool: ["get_page", { pageId: pages[(call - 1) / 2] }] } : editOn(pages[call / 2 - 1], sections[call / 2 - 1], `Heading ${call}`))
-      : { text: "Done." });
+      : call === 9 ? progress([1, "done"]) : { text: "Done." });
     const { state, run } = start(model, undefined, big);
+    // Work across four pages runs under an approved plan.
+    state.plan = newAgentPlan(["Rewrite the heading of every page"]);
     expect(await run()).toBe("completed");
     expect(state.runChanges).toBe(4);
 
@@ -155,11 +172,18 @@ describe("AI agent run loop", () => {
     expect(history).toContain("removed to save context");
     // Every call still knows every page and section through the overview.
     for (const id of sections) expect(last.overview).toContain(`"sectionId":"${id}"`);
-    expect(last.overview.length).toBeLessThan(8_000);
+    expect(last.overview.length).toBeLessThan(3_000);
+    // Shortening the conversation gave up its cached copy, so the overview caught up with the changes then.
+    expect(last.overview).not.toBe(sent(model.calls[0]).overview);
+    expect(last.overview).toContain("Heading 2");
+    // What was dropped may be read again: the first page comes back in full when asked for.
+    expect(Object.keys(state.reads ?? {})).not.toContain(`${fixtureIds.home}/home-hero`);
     // A change is confirmed in a few words, not by echoing the section back.
     const results = state.messages.flatMap((message) => typeof message.content === "string" ? []
       : message.content.flatMap((block) => block.type === "tool_result" ? [String(block.content)] : []));
-    expect(results.filter((result) => result.includes('"staged":true')).every((result) => result.length < 400)).toBe(true);
+    const written = results.filter((result) => result.startsWith('{"ok":true'));
+    expect(written).toHaveLength(4);
+    expect(written.every((result) => result.length < 100)).toBe(true);
     expect(Math.max(...model.calls.map((params) => sent(params).chars))).toBeLessThan(100_000);
     expectAnswered(state.messages);
   });
@@ -190,14 +214,14 @@ describe("AI agent run loop", () => {
       expect.stringContaining("Unsupported section property: notAProp."),
     ]);
     // An edit that changes nothing is answered as such, without an error and without asking for credits.
-    expect(events.filter((event) => event.type === "tool").at(-1)).toMatchObject({ result: { staged: false } });
+    expect(events.filter((event) => event.type === "tool").at(-1)).toMatchObject({ result: { nothingChanged: true } });
     expect(state.awaiting).toBeUndefined();
     expect(state.runChanges).toBe(10);
     expect(changeset.changes).toHaveLength(10);
     expectAnswered(state.messages);
   });
 
-  it("waits for the user on a plan or a question, and gives the model one chance to repair bad input", async () => {
+  it("waits for the user on a plan or a question, and has bad input repaired by the small model before the main model's last try", async () => {
     const plan = start(scripted(() => ({ tool: ["plan", { steps: ["Rewrite the hero", "Add an FAQ"] }] })));
     expect(await plan.run()).toBe("awaiting_approval");
     expect(plan.state.awaiting).toMatchObject({ kind: "plan", payload: { steps: ["Rewrite the hero", "Add an FAQ"] } });
@@ -210,12 +234,20 @@ describe("AI agent run loop", () => {
     const invalid = scripted(() => ({ tool: ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: { variant: "nope" } }] }));
     const repair = start(invalid);
     expect(await repair.run()).toBe("paused");
-    expect(invalid.calls).toHaveLength(2);
+    // Putting right one tool call's input needs no planning: the small model repairs it, reading the same
+    // rules and tools. If its repair is refused too, the main model has the last try.
+    expect(invalid.calls.map((params) => params.model)).toEqual([SITE_GENERATION_MODEL, SMALL_EDIT_MODEL, SITE_GENERATION_MODEL]);
+    expect(invalid.calls[1].tools).toEqual(invalid.calls[0].tools);
+    expect(invalid.calls[1].system).toEqual([{ type: "text", text: (invalid.calls[0].system as Anthropic.TextBlockParam[])[0].text }]);
+    expect(JSON.stringify(invalid.calls[1])).not.toContain("cache_control");
     const errors = repair.events.filter((event) => event.type === "tool_error").map((event) => String(event.message));
     expect(errors[0]).toMatch(/^Invalid tool input: variant: .*Repair the input and retry once\.$/);
-    expect(errors[1]).toContain("still invalid after one repair attempt");
-    // Only the first slip is something the model is asked to repair; the chat folds that one into its repair.
-    expect(repair.events.filter((event) => event.type === "tool_error").map((event) => event.repairable)).toEqual([true, false]);
+    expect(errors[1]).toMatch(/still invalid after one repair attempt: .*Repair the input and retry\.$/);
+    expect(errors[2]).toContain("still invalid after 2 repair attempts");
+    expect(repair.state.pauseReason).toContain("after trying again");
+    // The chat folds a slip the model is asked to repair into its repair; only the last refusal shows as failed.
+    expect(repair.events.filter((event) => event.type === "tool_error").map((event) => event.repairable)).toEqual([true, true, false]);
+    expect(repair.state.cost?.models[SMALL_EDIT_MODEL]).toMatchObject({ calls: 1 });
 
     // A plan or question written loosely is read as what it means instead of being refused.
     const loose = start(scripted(() => ({ tool: ["plan", { steps: "1. Rewrite the hero\n2. Add an FAQ" }] })));
@@ -396,5 +428,162 @@ describe("AI agent run loop", () => {
     // Checking again finds nothing new to repair.
     expect(reviewChangesetQuality(changeset).fixed).toEqual([]);
     expect(changeset.changes.filter((change) => change.kind === "quality_fix")).toHaveLength(1);
+  });
+});
+
+describe("AI agent model routing", () => {
+  const smallRun = (model: AgentModel) => start(model, newAgentState([{ role: "user", content: "Make the hero heading punchier" }], reservation, false, { route: "small" }));
+  const models = (model: { calls: Params[] }) => model.calls.map((params) => params.model === SMALL_EDIT_MODEL ? "small" : "main");
+  const texts = (events: AgentEvent[]) => events.filter((event) => event.type === "text").map((event) => event.text);
+
+  it("gives an edit to one section to the small model, with a short prompt of its own", async () => {
+    const model = scripted((_params, call) => call === 1 ? { tool: ["get_section", { pageId: fixtureIds.home, sectionId: "home-hero" }] }
+      : call === 2 ? edit("Plumbing, sorted") : { text: "The hero heading is punchier now." });
+    const { state, changeset, events, run } = smallRun(model);
+    expect(await run()).toBe("completed");
+    expect(models(model)).toEqual(["small", "small", "small"]);
+    expect(heading(changeset)).toBe("Plumbing, sorted");
+    expect(texts(events)).toEqual(["The hero heading is punchier now."]);
+    // Its tools are the ones for small edits, and a way to hand anything else off.
+    expect(model.calls[0].tools).toEqual(smallAgentTools);
+    expect(JSON.stringify(model.calls[0].tools).length).toBeLessThan(JSON.stringify(agentTools).length / 3);
+    const rules = (model.calls[0].system as Anthropic.TextBlockParam[])[0].text;
+    expect(rules).toContain("hand_off");
+    expect(rules).not.toContain("PLANS.");
+    expect(sent(model.calls[0]).overview).toMatch(/^SITE OVERVIEW/);
+    // Its requests are short and its cache is not priced, so nothing is marked for caching.
+    expect(JSON.stringify(model.calls)).not.toContain("cache_control");
+    expect(Object.keys(state.cost!.models)).toEqual([SMALL_EDIT_MODEL]);
+    expect(state.route).toBe("small");
+    expectAnswered(state.messages);
+  });
+
+  it("hands a request the small model cannot take to the main model, and keeps nothing of the small model's reply", async () => {
+    const model = scripted((_params, call) => call === 1 ? { text: "Passing this on.", tool: ["hand_off", { reason: "Adds a section" }] }
+      : call === 2 ? edit("Reliable plumbers") : { text: "Done." });
+    const { state, events, run, escalations } = smallRun(model);
+    expect(await run()).toBe("completed");
+    expect(models(model)).toEqual(["small", "main", "main"]);
+    expect(escalations).toEqual(["it handed the request off"]);
+    // The main model answers the same conversation with its own rules and tools; the hand-off is not part of it.
+    expect(sent(model.calls[1]).conversation).toEqual(sent(model.calls[0]).conversation);
+    expect(model.calls[1].tools).toEqual(agentTools);
+    expect((model.calls[1].system as Anthropic.TextBlockParam[])[0]).toMatchObject({ text: expect.stringContaining("PLANS."), cache_control: { type: "ephemeral", ttl: "1h" } });
+    expect(JSON.stringify(state.messages)).not.toContain("hand_off");
+    expect(texts(events)).toEqual(["Done."]);
+    expect(events.filter((event) => event.type === "step").map((event) => event.name)).toEqual(["update_section_props"]);
+    expect(state.route).toBe("main");
+    // Both models' requests are counted, each at its own price.
+    expect(state.cost!.models[SMALL_EDIT_MODEL].calls).toBe(1);
+    expect(state.cost!.models[SITE_GENERATION_MODEL].calls).toBe(2);
+    expectAnswered(state.messages);
+  });
+
+  it("takes the small model off a run that goes beyond one page, and has the main model plan the rest before changing it", async () => {
+    const element = (sectionId: string, text: string): Reply => ({ tool: ["update_section_props", { pageId: fixtureIds.home, sectionId, props: { text } }] });
+    const model = scripted((params, call) => {
+      const script: Reply[] = [
+        edit("Reliable plumbers"), editOn(fixtureIds.home, "home-services", "Our services"),
+        // Elements of one layout count as the section they are in, so this is still three sections.
+        element("home-why-0", "Why us"), element("home-why-1", "<p>We turn up on time.</p>"),
+        // A second page: the small model's reply is dropped, and the main model's own attempt is sent back for a plan.
+        editOn(fixtureIds.about, "about-text", "From the small model"), editOn(fixtureIds.about, "about-text", "Unplanned"),
+        plan("About: rewrite the heading"), editOn(fixtureIds.about, "about-text", "From the main model"), progress([1, "done"]),
+      ];
+      if (call === 7) {
+        const refused = (params.messages.at(-1)!.content as Anthropic.ToolResultBlockParam[])[0];
+        expect(refused).toMatchObject({ is_error: true, content: expect.stringMatching(/not run: it changes a second page.*Call plan now/) });
+      }
+      return script[call - 1] ?? { text: "Done." };
+    });
+    const { state, changeset, events, run, escalations } = smallRun(model);
+    const about = () => (changeset.working.pages[1].draft_data as { content: { props: Record<string, unknown> }[] }).content[0].props.heading;
+    expect(await run()).toBe("awaiting_approval");
+    expect(models(model)).toEqual(["small", "small", "small", "small", "small", "main", "main"]);
+    expect(escalations).toEqual(["changes a second page"]);
+    expect(state.scope).toEqual({ pageId: fixtureIds.home, sections: ["home-hero", "home-services", "home-why-section"] });
+    // Neither attempt at the second page was run, and neither shows as a step: the user sees the plan.
+    expect(about()).toBe("About us");
+    expect(state.runChanges).toBe(4);
+    expect(JSON.stringify(state.messages)).not.toContain("From the small model");
+    expect(events.filter((event) => event.type === "tool_error")).toEqual([]);
+    expect(events.filter((event) => event.type === "step")).toHaveLength(5);
+    expect(events.at(-1)).toMatchObject({ type: "plan", steps: ["About: rewrite the heading"] });
+
+    approve(state);
+    expect(await run()).toBe("completed");
+    expect(about()).toBe("From the main model");
+    expect(state.runChanges).toBe(5);
+    expect(unfinishedPlanSteps(state.plan)).toEqual([]);
+    expectAnswered(state.messages);
+  });
+
+  it("sends the main model back to plan when its work outgrows one page or three sections, and never blocks it for good", async () => {
+    const faq = { tool: ["insert_section", { pageId: fixtureIds.home, customSection: { background: "default", width: "contained", rowGap: 16,
+      rows: [{ layout: "1", gap: 16, columns: [{ surface: "none", verticalAlign: "top", gap: 8, elements: [{ type: "Heading", text: "Questions", level: "h2", align: "left" }] }] }] } }] } as Reply;
+    // Three sections of one page need no plan; a fourth section, here a new one, does.
+    const model = scripted((_params, call) => [
+      edit("Reliable plumbers"), editOn(fixtureIds.home, "home-services", "Our services"), faq, faq, plan("Home: add a questions section"),
+    ][call - 1] ?? { text: "Done." });
+    const planned = start(model);
+    expect(await planned.run()).toBe("awaiting_approval");
+    expect(planned.state).toMatchObject({ runChanges: 3, planDemands: 1, awaiting: { kind: "plan" } });
+    expect(planned.events.filter((event) => event.type === "step").map((event) => event.name))
+      .toEqual(["update_section_props", "update_section_props", "insert_section", "plan"]);
+
+    // The theme, header and footer count as one part each, however often they are changed.
+    const shared = scripted((_params, call) => [
+      edit("Reliable plumbers"), { tool: ["update_theme", { patch: { radius: 8 } }] }, { tool: ["apply_theme_preset", { buttons: "pill" }] },
+      { tool: ["update_footer", { props: { tagline: "Here to help" } }] }, { tool: ["update_header", { header: { desktop: { sticky: true } } }] },
+      plan("Header: make it sticky"),
+    ][call - 1] as Reply ?? { text: "Done." });
+    const restyle = start(shared);
+    expect(await restyle.run()).toBe("awaiting_approval");
+    expect(restyle.state).toMatchObject({ runChanges: 4, planDemands: 1, scope: { pageId: fixtureIds.home, sections: ["home-hero", "@theme", "@footer"] } });
+
+    // A model that will not plan is told twice, then let through: the run never hangs on the rule.
+    const stubborn = scripted((_params, call) => call <= 4 ? (call === 1 ? edit("Reliable plumbers") : editOn(fixtureIds.about, "about-text", "About Harbour")) : { text: "Done." });
+    const through = start(stubborn);
+    expect(await through.run()).toBe("completed");
+    expect(through.state).toMatchObject({ runChanges: 2, planDemands: 2 });
+    expect(stubborn.calls).toHaveLength(5);
+    expectAnswered(through.state.messages);
+  });
+
+  it("has the main model answer when the small model ends without changing anything", async () => {
+    const model = scripted((_params, call) => call === 1 ? { text: "Your site looks fine to me." } : { text: "Three things would help most." });
+    const { state, events, run } = smallRun(model);
+    expect(await run()).toBe("completed");
+    expect(models(model)).toEqual(["small", "main"]);
+    // A question, or a request it could not carry out, is not the small model's to answer.
+    expect(texts(events)).toEqual(["Three things would help most."]);
+    expect(state.messages.at(-1)).toEqual({ role: "assistant", content: [expect.objectContaining({ text: "Three things would help most." })] });
+  });
+
+  it("moves a run to the main model when the small model's input is refused twice, or it is still going after eight steps", async () => {
+    const invalid: Reply = { tool: ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: { variant: "nope" } }] };
+    const model = scripted((_params, call) => call <= 2 ? invalid : call === 3 ? edit("Reliable plumbers") : { text: "Done." });
+    const { state, changeset, events, run } = smallRun(model);
+    expect(await run()).toBe("completed");
+    expect(models(model)).toEqual(["small", "small", "main", "main"]);
+    expect(heading(changeset)).toBe("Reliable plumbers");
+    expect(events.filter((event) => event.type === "tool_error").map((event) => event.repairable)).toEqual([true, true]);
+    expect(state.route).toBe("main");
+
+    // On the main model's run the small model only repairs: a reply that is not the same tool again is dropped.
+    const wandering = scripted((params, call) => call === 1 ? invalid
+      : params.model === SMALL_EDIT_MODEL ? { text: "All done!" } : call === 3 ? edit("Reliable plumbers") : { text: "Done." });
+    const mainRun = start(wandering);
+    expect(await mainRun.run()).toBe("completed");
+    expect(models(wandering)).toEqual(["main", "small", "main", "main"]);
+    expect(texts(mainRun.events)).toEqual(["Done."]);
+    expect(heading(mainRun.changeset)).toBe("Reliable plumbers");
+    expect(JSON.stringify(mainRun.state.messages)).not.toContain("All done!");
+    expectAnswered(mainRun.state.messages);
+
+    const looping = scripted((params) => params.model === SMALL_EDIT_MODEL ? { tool: ["search_site", { query: "plumbing" }] } : { text: "Here is what I found." });
+    const stuck = smallRun(looping);
+    expect(await stuck.run()).toBe("completed");
+    expect(models(looping)).toEqual([...Array.from({ length: 8 }, () => "small"), "main"]);
   });
 });

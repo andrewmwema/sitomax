@@ -81,6 +81,7 @@ try {
     console.log(`  ${result.passed ? "PASS" : "FAIL"} · ${result.steps} steps, ${result.toolErrors} tool errors (${result.firstAttemptFailures} first attempts), ${result.changes} changes`
       + (dryRun ? "" : ` · ${tokens.toLocaleString("en-US")} tokens · ${formatAiCost(result.costUsd, true)}`));
     if (!dryRun && (costs || verbose)) {
+      console.log(`    Started with the ${result.startedWith} model${result.takenOver ? `; the main model took over because ${result.takenOver}` : ""}.`);
       for (const line of describeAgentCost(result.cost)) console.log(`    ${line}`);
     }
     if (!dryRun && verbose) {
@@ -110,7 +111,7 @@ try {
   }
   if (out) {
     writeFileSync(out, `${JSON.stringify({ recordedAt: new Date().toISOString(), dryRun, totalUsd: spent, results: results.map((result) => ({
-      id: result.id, kind: result.kind, passed: result.passed, failures: result.failures.map(redact), steps: result.steps, toolErrors: result.toolErrors,
+      id: result.id, kind: result.kind, startedWith: result.startedWith, takenOver: result.takenOver ?? null, passed: result.passed, failures: result.failures.map(redact), steps: result.steps, toolErrors: result.toolErrors,
       firstAttemptFailures: result.firstAttemptFailures, changes: result.changes, costUsd: result.costUsd, cost: result.cost, calls: result.calls,
     })) }, null, 2)}\n`);
     console.log(`Results saved to ${out}.`);

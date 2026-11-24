@@ -130,7 +130,7 @@ describe("AI agent tool guardrails", () => {
     await expect(run(changeset, "update_header", { header: { ...header, mobile: { ...header.mobile, layout: "split" } } })).rejects.toThrow();
     // A setting the header does not have is left out and noted; with nothing else to change, nothing is staged.
     expect(await run(changeset, "update_header", { header: { ...header, desktop: { ...header.desktop, css: "anything" } } }))
-      .toEqual({ staged: false, message: expect.stringContaining("Nothing changed"), notes: ["header.desktop.css is not a setting here and was ignored."] });
+      .toEqual({ ok: true, nothingChanged: true, message: expect.stringContaining("Nothing changed"), notes: ["header.desktop.css is not a setting here and was ignored."] });
     expect(changeset.changes).toHaveLength(0);
     expect(changeset.working).toEqual(changeset.baseline);
   });
@@ -146,8 +146,9 @@ describe("AI agent tool guardrails", () => {
 
   it("reads custom layouts and searches the site without exposing embed code", async () => {
     const changeset = staged();
-    const page = await run(changeset, "get_page", { pageId }) as { sections: Section[] };
-    expect(page.sections.map((item) => item.props.id)).toEqual(["hero", "custom"]);
+    const page = await run(changeset, "get_page", { pageId }) as { sections: { sectionId: string }[] };
+    expect(page.sections.map((item) => item.sectionId)).toEqual(["hero", "custom"]);
+    expect(JSON.stringify(await run(changeset, "get_section", { pageId, sectionId: "custom" }))).not.toContain("<secret>");
     const text = JSON.stringify(page);
     expect(text).toContain("Original");
     expect(text).not.toContain("<secret>");
@@ -181,7 +182,7 @@ describe("AI agent tool guardrails", () => {
     // Design settings sent with the content are applied as design, not refused.
     await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { text: "Trusted locally", design: { shadow: "medium" }, textColor: "#111111" } });
     expect(nested(changeset.working, "heading").props).toMatchObject({ text: "Trusted locally", design: { shadow: "medium", appearance: { desktop: { textColor: "#111111" } } } });
-    expect(await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { design: {} } })).toMatchObject({ staged: false });
+    expect(await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { design: {} } })).toMatchObject({ nothingChanged: true });
   });
 
   it("keeps links from the link picker and stored images when editing other content", async () => {
@@ -297,7 +298,7 @@ describe("AI agent tool guardrails", () => {
     expect(changeset.working.theme).toMatchObject({ colors: { primary: "#0055aa", secondary: "#aa5500", text: "#111111" }, radius: 12, headingFont: "Inter" });
     // The logo is not the agent's to change.
     expect(await run(changeset, "update_theme", { patch: { logoUrl: "https://example.com/logo.png" } }))
-      .toEqual({ staged: false, message: expect.stringContaining("Nothing changed"), notes: ["patch.logoUrl is not a setting here and was ignored."] });
+      .toEqual({ ok: true, nothingChanged: true, message: expect.stringContaining("Nothing changed"), notes: ["patch.logoUrl is not a setting here and was ignored."] });
     expect(changeset.working.theme).not.toHaveProperty("logoUrl");
 
     await run(changeset, "update_header", { header: { desktop: { sticky: true } } });
@@ -322,12 +323,12 @@ describe("AI agent tool guardrails", () => {
 
     const result = await run(changeset, "update_footer", {
       props: { tagline: "Here to help", variant: "centered" }, design: { background: { type: "color", color: "#0b2545" } },
-    }) as { footers: unknown[]; pagesWithoutFooter: unknown[] };
-    expect(result.footers).toEqual([
-      { pageId: fixtureIds.home, sectionId: "footer-home" }, { pageId: fixtureIds.about, sectionId: "footer-about" },
-      { pageId: fixtureIds.pricing, sectionId: "footer-pricing" },
-    ]);
-    expect(result.pagesWithoutFooter).toEqual([expect.objectContaining({ pageId: fixtureIds.contact })]);
+    });
+    // The answer is short: how many pages, what changed, and the page that has no footer to change.
+    expect(result).toEqual({
+      ok: true, pages: 3, changed: ["variant", "tagline", "design.background"], pagesWithoutFooter: ["Contact"],
+      warnings: [expect.stringContaining("contrast")],
+    });
     for (const id of [fixtureIds.home, fixtureIds.about, fixtureIds.pricing]) {
       expect(footer(changeset.working, id).props, id).toMatchObject({
         tagline: "Here to help", variant: "centered", design: { background: { type: "color", color: "#0b2545" } },
@@ -461,12 +462,12 @@ describe("AI agent tool guardrails", () => {
       return error as ToolInputError;
     };
     // The overview names every section by the page it is on.
-    const overview = await run(changeset, "get_site_overview", {}) as { pages: { pageId: string; sections: { sectionId: string }[]; footerSectionId: string }[] };
-    expect(overview.pages.map((page) => [page.pageId, page.sections.map((entry) => entry.sectionId), page.footerSectionId])).toEqual([
-      [fixtureIds.home, ["home-hero", "home-services", "home-why-section"], "footer-home"],
-      [fixtureIds.about, ["about-text"], "footer-about"],
-      [fixtureIds.pricing, ["pricing-plans"], "footer-pricing"],
-      [fixtureIds.contact, ["contact-form"], "footer-contact"],
+    const overview = await run(changeset, "get_site_overview", {}) as { pages: { pageId: string; sections: { sectionId: string }[] }[] };
+    expect(overview.pages.map((page) => [page.pageId, page.sections.map((entry) => entry.sectionId)])).toEqual([
+      [fixtureIds.home, ["home-hero", "home-services", "home-why-section"]],
+      [fixtureIds.about, ["about-text"]],
+      [fixtureIds.pricing, ["pricing-plans"]],
+      [fixtureIds.contact, ["contact-form"]],
     ]);
 
     // Right section, wrong page: the answer is the pair that exists.
@@ -477,14 +478,14 @@ describe("AI agent tool guardrails", () => {
 
     // Unknown section: this page's sections. Unknown page: the site's pages, or the page the section is on.
     const unknown = await choices("delete_section", { pageId: fixtureIds.about, sectionId: "about-txt" });
-    expect(unknown.choices).toEqual([expect.objectContaining({ pageId: fixtureIds.about, sectionId: "about-text", blockType: "TextSection" })]);
+    expect(unknown.choices).toEqual([expect.objectContaining({ pageId: fixtureIds.about, sectionId: "about-text", type: "TextSection" })]);
     const noPage = "00000000-0000-4000-8000-0000000000ff";
     expect((await choices("get_page", { pageId: noPage })).choices).toHaveLength(4);
     expect((await choices("move_section", { pageId: noPage, sectionId: "pricing-plans", position: 0 })).choices)
       .toEqual([expect.objectContaining({ pageId: fixtureIds.pricing, sectionId: "pricing-plans" })]);
     // A nested element where a whole section is needed: the section that holds it.
     expect((await choices("duplicate_section", { pageId: fixtureIds.home, sectionId: "home-why-0" })).choices)
-      .toEqual([{ pageId: fixtureIds.home, sectionId: "home-why-section", blockType: "Section" }]);
+      .toEqual([{ pageId: fixtureIds.home, sectionId: "home-why-section", type: "Section" }]);
 
     // The same sectionId on two pages is told apart by its page.
     sections(changeset.working, 1)[0].props.id = "home-hero";
@@ -499,9 +500,9 @@ describe("AI agent tool guardrails", () => {
   it("reads only the sections asked for, and never cuts a long page off in the middle of a section", async () => {
     const changeset = fixtureChangeset();
     const read = async (input: Record<string, unknown>) => await run(changeset, "get_page", { pageId: fixtureIds.home, ...input }) as
-      { pageId: string; sections: { sectionId: string }[]; notShown?: { sectionId: string }[] };
+      { sections: { sectionId: string }[]; notShown?: { sectionId: string }[] };
     const whole = await read({});
-    expect(whole).toMatchObject({ pageId: fixtureIds.home, title: "Home", status: "draft" });
+    expect(whole).toMatchObject({ title: "Home", status: "draft" });
     expect(whole.sections.map((entry) => entry.sectionId)).toEqual(["home-hero", "home-services", "home-why-section"]);
     const some = await read({ sectionIds: ["home-services", "home-why-1"] });
     expect(some.sections.map((entry) => entry.sectionId)).toEqual(["home-services", "home-why-1"]);
@@ -585,7 +586,7 @@ describe("AI agent tool guardrails", () => {
       ["update_page_settings", { pageId, hidden: false }],
     ] as const) {
       // Asking for what is already there is not an error: the model is told, and nothing is added to the review.
-      expect(await run(changeset, name, input), name).toEqual({ staged: false, message: "Nothing changed: the site already matches this request." });
+      expect(await run(changeset, name, input), name).toEqual({ ok: true, nothingChanged: true, message: "Nothing changed: the site already matches this request." });
     }
     expect(changeset.changes).toHaveLength(1);
     expect(changeset.working.pages).toEqual(expect.arrayContaining([expect.objectContaining({ id: pageId })]));
@@ -634,5 +635,127 @@ describe("AI agent tool guardrails", () => {
       ["update_section_design", { pageId, sectionId: "hero", design: { spacing: { desktop: { paddingTop: "large" } } } }],
     ] as const) await expect(run(changeset, name, input), JSON.stringify(input)).rejects.toThrow();
     expect(changeset.changes).toHaveLength(4);
+  });
+});
+
+describe("AI agent context diet", () => {
+  const reading = (reads = {}) => {
+    const changeset = fixtureChangeset();
+    const choosePhoto = async (query: string, alt?: string) => ({ url: `/samples/${query}.jpg`, alt: alt ?? query });
+    const tool = (name: string, input: unknown) => makeToolResult(name, input, changeset, { ...context, reads, choosePhoto } as Context);
+    return { changeset, tool, reads };
+  };
+
+  it("gives the overview as a compact map: pages, menu labels and each section's id, type, design and first words", async () => {
+    const changeset = fixtureChangeset();
+    changeset.working.pages[1].nav_label = "Our story";
+    changeset.working.pages[2].seo = { title: "Plumbing prices", description: "d".repeat(300) };
+    const overview = await run(changeset, "get_site_overview", {}) as {
+      pages: { pageId: string; title: string; navLabel?: string; seo?: Record<string, string>; sections: Record<string, string>[] }[];
+      header: unknown; footer: unknown; business: unknown; theme: unknown;
+    };
+    const home = overview.pages[0];
+    expect(home.sections[0]).toEqual({ sectionId: "home-hero", type: "Hero", designId: expect.any(String), text: expect.stringContaining("Plumbing done properly") });
+    for (const section of overview.pages.flatMap((page) => page.sections)) {
+      expect(Object.keys(section)).toEqual(["sectionId", "type", "designId", "text"]);
+      expect(section.text.split(" ").length).toBeLessThanOrEqual(15);
+    }
+    // The words are what a visitor reads, not the names of layout options.
+    expect(home.sections[2].text).toBe("Why Harbour Plumbing We turn up on time and tidy up after ourselves. About us");
+    expect(overview.pages[1]).toMatchObject({ title: "About", navLabel: "Our story" });
+    expect(overview.pages[2].seo).toEqual({ title: "Plumbing prices", description: expect.stringMatching(/^d{69}…$/) });
+    // No section's properties, and only a summary of the header and footer; the read tools have the rest.
+    const text = JSON.stringify(overview);
+    expect(text).not.toMatch(/"props"|buttonText|formFields|"design"|fontSize|letterSpacing|socialLinks/);
+    expect(overview.header).toEqual({ logo: "Harbour Plumbing", menu: "the site's pages", cta: "Get in touch", desktop: expect.objectContaining({ sticky: expect.any(Boolean) }) });
+    expect(overview.footer).toEqual({ businessName: "Harbour Plumbing", tagline: "Local plumbers you can rely on.", variant: expect.any(String) });
+    expect(overview.business).toEqual(changeset.working.site.business);
+    expect(text.length).toBeLessThan(2_600);
+    expect(await run(changeset, "get_site_settings", { part: "header" })).toEqual({ header: changeset.working.header });
+    expect(await run(changeset, "get_site_settings", { part: "footer" })).toEqual({ footer: expect.objectContaining({ tagline: "Local plumbers you can rely on." }) });
+  });
+
+  it("reads a page as content and one section in full, and does not send again what was read and has not changed", async () => {
+    const { changeset, tool, reads } = reading();
+    type PageRead = { sections: { sectionId: string; props: Record<string, unknown>; empty?: string[] }[]; unchanged?: string[] };
+    const page = await tool("get_page", { pageId: fixtureIds.home }) as PageRead;
+    const hero = page.sections[0];
+    // Content: text, links, images and whole lists. Layout options and design are get_section's.
+    expect(hero.props).toMatchObject({ heading: "Plumbing done properly", buttonText: "Get a quote", buttonLink: "/contact" });
+    expect(hero.props).not.toHaveProperty("design");
+    expect(hero.props).not.toHaveProperty("variant");
+    expect(hero.props).not.toHaveProperty("id");
+    expect(hero.props.formFields).toEqual(sections(changeset.working, 0)[0].props.formFields);
+    // What is empty is only named, so the model still knows it can be filled in.
+    expect(hero.empty).toEqual(expect.arrayContaining(["backgroundImageAlt", "badgeText"]));
+    // Elements nested in a layout keep their ids, which is how they are edited.
+    expect(JSON.stringify(page.sections[2])).toContain('"id":"home-why-0"');
+
+    const full = await tool("get_section", { pageId: fixtureIds.home, sectionId: "home-hero" }) as { sectionId: string; props: Record<string, unknown> };
+    expect(full).toMatchObject({ sectionId: "home-hero", type: "Hero", props: { variant: expect.any(String), design: expect.any(Object), heading: "Plumbing done properly" } });
+    expect(JSON.stringify(hero).length).toBeLessThan(JSON.stringify(full).length * 0.8);
+
+    // Asked again, nothing is resent; the earlier result still stands.
+    expect(await tool("get_section", { pageId: fixtureIds.home, sectionId: "home-hero" })).toEqual({ sectionId: "home-hero", unchanged: true, note: expect.stringContaining("earlier") });
+    const again = await tool("get_page", { pageId: fixtureIds.home }) as PageRead;
+    expect(again).toMatchObject({ sections: [], unchanged: ["home-hero", "home-services", "home-why-section"] });
+    expect(JSON.stringify(again).length).toBeLessThan(400);
+    // A section that changed since is sent again, and only that one.
+    await tool("update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: { heading: "Reliable plumbers" } });
+    const after = await tool("get_page", { pageId: fixtureIds.home }) as PageRead;
+    expect(after.sections.map((section) => section.sectionId)).toEqual(["home-hero"]);
+    expect(after.unchanged).toEqual(["home-services", "home-why-section"]);
+    // A read that fails records nothing as read.
+    const before = structuredClone(reads);
+    await expect(tool("get_page", { pageId: fixtureIds.about, sectionIds: ["about-text", "nope"] })).rejects.toThrow();
+    expect(reads).toEqual(before);
+    // Without a read log, as outside a run, everything is returned every time.
+    const plain = fixtureChangeset();
+    await run(plain, "get_page", { pageId: fixtureIds.home });
+    expect((await run(plain, "get_page", { pageId: fixtureIds.home }) as PageRead).sections).toHaveLength(3);
+  });
+
+  it("answers a change with ok, new ids and what changed, never with the page", async () => {
+    const { changeset, tool } = reading();
+    const home = { pageId: fixtureIds.home };
+    expect(await tool("update_section_props", { ...home, sectionId: "home-hero", props: { heading: "Reliable plumbers", buttonText: "Call us" } }))
+      .toEqual({ ok: true, changed: ["heading", "buttonText"] });
+    expect(await tool("update_section_design", { ...home, sectionId: "home-hero", design: { shadow: "soft", border: { radius: 12 } } }))
+      .toEqual({ ok: true, changed: ["border", "shadow"] });
+    expect(await tool("update_theme", { patch: { colors: { primary: "#0b2545" }, radius: 8 } })).toEqual({ ok: true, changed: ["colors.primary", "radius"] });
+    expect(await tool("update_page_settings", { ...home, seoTitle: "Plumber in Example City" })).toEqual({ ok: true, changed: ["seo.title"] });
+    expect(await tool("move_section", { ...home, sectionId: "home-services", position: 0 })).toEqual({ ok: true, position: 0 });
+    expect(await tool("delete_section", { ...home, sectionId: "home-services" })).toEqual({ ok: true });
+    expect(await tool("set_image", { ...home, sectionId: "home-hero", field: "backgroundImage", query: "plumber", alt: "A plumber at work" }))
+      .toEqual({ ok: true, field: "backgroundImage", alt: "A plumber at work" });
+
+    // A curated design arrives with sample content; only what the call did not supply comes back, to be replaced.
+    const faq = aiCatalog.find((design) => design.blockType === "Faq")!;
+    const bare = await tool("insert_section", { pageId: fixtureIds.pricing, designId: faq.id }) as { sectionId: string; sampleContent: Record<string, unknown> };
+    expect(bare).toMatchObject({ ok: true, type: "Faq", sectionId: expect.any(String), sampleContent: { heading: expect.any(String) } });
+    const supplied = Object.fromEntries(Object.entries(bare.sampleContent).filter(([, value]) => typeof value === "string" || Array.isArray(value)));
+    const filled = await tool("insert_section", { pageId: fixtureIds.pricing, designId: faq.id, props: supplied }) as { sampleContent?: Record<string, unknown> };
+    expect(Object.keys(filled.sampleContent ?? {})).toEqual(Object.keys(bare.sampleContent).filter((key) => !(key in supplied)));
+    // A custom layout holds nothing the model did not write, so it is answered with its id and the images to choose.
+    const custom = await tool("insert_section", { pageId: fixtureIds.pricing, customSection });
+    expect(custom).toEqual({ ok: true, sectionId: expect.any(String), type: "Section", imagesToSet: [expect.objectContaining({ field: "src" })] });
+    const created = await tool("create_page", { title: "Careers", slug: "careers", navLabel: "Careers", sections: [{ customSection }] }) as { pageId: string };
+    expect(created).toEqual({ ok: true, pageId: expect.any(String), slug: "careers", sections: [{ sectionId: expect.any(String), type: "Section" }], imagesToSet: expect.any(Array) });
+    for (const change of changeset.changes) expect(change.patches?.length).toBeGreaterThan(0);
+    expectReplays(changeset);
+  });
+
+  it("applies ready-made theme presets in one short call, keeping what was not named", async () => {
+    const changeset = fixtureChangeset();
+    expect(await run(changeset, "apply_theme_preset", { buttons: "pill", corners: "soft", spacing: "spacious" }))
+      .toEqual({ ok: true, changed: ["radius", "buttonStyle", "spacing"] });
+    expect(changeset.working.theme).toMatchObject({ buttonStyle: "pill", radius: 24, spacing: "spacious", headingFont: "Inter", colors: { primary: "#0b5cab" } });
+    await run(changeset, "apply_theme_preset", { palette: "forest-green", fonts: "elegant" });
+    expect(changeset.working.theme).toMatchObject({ headingFont: "Playfair Display", bodyFont: "Lato", colors: { primary: "#1d6a43" }, buttonStyle: "pill" });
+    expect(changeset.changes.map((change) => change.kind)).toEqual(["theme", "theme"]);
+    await expect(run(changeset, "apply_theme_preset", {})).rejects.toThrow();
+    await expect(run(changeset, "apply_theme_preset", { palette: "neon" })).rejects.toThrow();
+    expect(await run(changeset, "apply_theme_preset", { buttons: "pill" })).toMatchObject({ nothingChanged: true });
+    expectReplays(changeset);
   });
 });

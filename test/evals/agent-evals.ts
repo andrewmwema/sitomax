@@ -5,6 +5,7 @@ import {
 } from "@/lib/ai/agent";
 import { planAgentApply, type ApplyMeta } from "@/lib/ai/agent-apply-plan";
 import { unfinishedPlanSteps } from "@/lib/ai/agent-plan";
+import { routeAgentRequest } from "@/lib/ai/agent-route";
 import { createAgentReviewPayload, jsonEqual, previewAgentReview } from "@/lib/ai/agent-review";
 import { emptyAgentCost, type AgentCost } from "@/lib/ai/agent-cost";
 import type { TokenUsage } from "@/lib/ai/pricing";
@@ -25,6 +26,8 @@ export type EvalCase = {
   id: string;
   kind: EvalKind;
   request: string;
+  /** What the editor adds about the selection, as the AI panel writes it. It travels apart from the user's words. */
+  context?: string;
   /** Whether the request was carried out, beyond the rules every run must keep. Returns a problem or null. */
   verify: (changeset: AgentChangeset) => string | null;
 };
@@ -33,6 +36,8 @@ export type EvalResult = {
   terminal: string; steps: number; toolErrors: number; changes: number; tokens: TokenUsage; costUsd: number;
   /** Where the money went: by part of the prompt, by model, and how much came from the cache. */
   cost: AgentCost;
+  /** The model the request started with, and why the main model took it over if it did. */
+  startedWith: string; takenOver?: string;
   /** Each model request in order, to see what the cache did. */
   calls: { model: string; usage: TokenUsage; costUsd: number }[];
   /** Tool calls refused on their first attempt. A repeat refusal of the same tool, before it works, is the same failure. */
@@ -180,6 +185,7 @@ const added = (changeset: AgentChangeset, pageId: string, type: string) => {
   return content(changeset.working, pageId).some((item) => item.type === type && !before.has(item.props.id));
 };
 
+const HERO_SELECTED = `Focus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`;
 /** Requests of the kinds the brief names, each with a check that it was carried out. */
 export const EVAL_CASES: EvalCase[] = [
   { id: "premium", kind: "site", request: "Make the site feel more premium.",
@@ -204,7 +210,7 @@ export const EVAL_CASES: EvalCase[] = [
       ? null : "No reviews section was added to the home page." },
   { id: "careers", kind: "page", request: "Create a Careers page and add it to the menu. We are hiring a plumber and an apprentice.",
     verify: (changeset) => changeset.working.pages.some((page) => page.slug === "careers" && !page.hide_from_menu) ? null : "No Careers page in the menu." },
-  { id: "hero-button", kind: "section", request: `Change the hero button on the home page to say "Book a visit" and link it to the contact page.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
+  { id: "hero-button", kind: "section", request: `Change the hero button on the home page to say "Book a visit" and link it to the contact page.`, context: HERO_SELECTED,
     verify: (changeset) => {
       const props = content(changeset.working, fixtureIds.home).find((item) => item.props.id === "home-hero")?.props ?? {};
       const link = props.buttonLink;
@@ -212,13 +218,13 @@ export const EVAL_CASES: EvalCase[] = [
       return props.buttonText === "Book a visit" && toContact && changedPages(changeset).length === 1 ? null
         : "The hero button was not changed as asked, or other pages were touched.";
     } },
-  { id: "rewrite", kind: "section", request: `Rewrite the hero heading and the line under it to be warmer and more inviting. Keep them short.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
+  { id: "rewrite", kind: "section", request: `Rewrite the hero heading and the line under it to be warmer and more inviting. Keep them short.`, context: HERO_SELECTED,
     verify: (changeset) => {
       const [before, after] = [changeset.baseline, changeset.working].map((snapshot) => content(snapshot, fixtureIds.home).find((item) => item.props.id === "home-hero")?.props ?? {});
       return after.heading !== before.heading && after.subheading !== before.subheading && String(after.heading).length <= 80 && changedPages(changeset).length === 1
         ? null : "The hero heading and subheading were not both rewritten, or other pages were touched.";
     } },
-  { id: "alt-text", kind: "section", request: `Write alt text for the image in this section.\n\nFocus on this context: selected section "Hero" (pageId ${fixtureIds.home}, sectionId home-hero).`,
+  { id: "alt-text", kind: "section", request: `Write alt text for the image in this section.`, context: HERO_SELECTED,
     verify: (changeset) => {
       const props = content(changeset.working, fixtureIds.home).find((item) => item.props.id === "home-hero")?.props ?? {};
       return typeof props.backgroundImageAlt === "string" && props.backgroundImageAlt.trim().length >= 10 && changedPages(changeset).length === 1
@@ -283,7 +289,12 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
 } = {}): Promise<EvalResult> {
   const changeset = fixtureChangeset();
   // Large runs are approved up front: the credit prompt belongs to the app, not the model.
-  const state = newAgentState([{ role: "user", content: testCase.request }], "00000000-0000-4000-8000-0000000000e0", true);
+  // As the request handler does it: the editor's context follows the user's words, and the words decide which model starts.
+  const { request, context: selection } = testCase;
+  const state = newAgentState([{ role: "user", content: [request, selection].filter(Boolean).join("\n\n") }], "00000000-0000-4000-8000-0000000000e0", true, {
+    route: routeAgentRequest({ message: request, context: selection }),
+  });
+  let takenOver: string | undefined;
   const events: AgentEvent[] = [];
   const emit = (event: AgentEvent) => { events.push(event); options.onEvent?.(event); };
   const failures: string[] = [];
@@ -294,7 +305,7 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
   try {
     for (let round = 0; round < 8; round++) {
       terminal = await runAgentLoop({
-        changeset, state, context, emit, threadId: "eval", runId: testCase.id, onModelCall: (call) => calls.push(call),
+        changeset, state, context, emit, threadId: "eval", runId: testCase.id, onModelCall: (call) => calls.push(call), onEscalate: (reason) => { takenOver = reason; },
         model: (params, call) => {
           if (options.maxCostUsd !== undefined && spent() >= options.maxCostUsd) throw new CostLimitReached();
           return model(params, call);
@@ -330,6 +341,7 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
     terminal, steps: events.filter((event) => event.type === "step").length,
     toolErrors: events.filter((event) => event.type === "tool_error").length, firstAttemptFailures: firstAttemptFailures(events),
     changes: changeset.changes.length, tokens: state.tokenUsage, costUsd: spent(), cost: state.cost ?? emptyAgentCost(), calls,
+    startedWith: routeAgentRequest({ message: request, context: selection }), ...(takenOver ? { takenOver } : {}),
   };
 }
 

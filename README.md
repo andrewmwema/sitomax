@@ -115,7 +115,13 @@ saves changes before returning to the workspace. Phones offer a saved-draft prev
 instead of squeezing in the desktop workspace. Empty pages can use the existing
 AI builder or section library, including saved designs. Theme editing uses the
 shared detail drawer; the media picker is a native modal so it also works above
-other dialogs. These changes do not alter tenant rendering, AI requests, credits,
+other dialogs. In the Theme panel, colour palettes, font pairings, button shape,
+corners and the space between sections each change the whole site in one click,
+with no AI request and no credits; they preview at once and are kept with
+**Save theme**. The presets live in
+[lib/theme/quick-styles.ts](./lib/theme/quick-styles.ts), and the AI chat points
+to them. `sites.theme.spacing` (`compact`, `comfortable`, `spacious`) sets
+`--section-pad`; an unset value keeps the style's own spacing. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
 
 Dashboard Edit/Open editor links (including blog post edits), previews and live-site
@@ -334,8 +340,12 @@ count is refreshed, and a confirmation such as "16 changes applied" is shown.
 retry. Three things keep first attempts from being refused:
 
 - *The model is shown exact shapes.* Each tool's description lists its keys,
-  allowed values and an example, and the schema sent for theme, header, footer
-  and design input is the real one rather than an open object.
+  allowed values and an example, and the schema sent for theme, header and
+  design input is the real one rather than an open object. A shape is spelled
+  out once: the footer's design points to `update_section_design`, a new
+  page's custom layouts to `insert_section`, and a blog edit's blocks to
+  `create_blog_post_draft`. Schemas are sent without what only a validator
+  reads (`compactSchema` in [agent-tools.ts](./lib/ai/agent-tools.ts)).
 - *Common slips are read as what they mean*, before validation
   ([lenient-input.ts](./lib/ai/lenient-input.ts),
   [agent-normalize.ts](./lib/ai/agent-normalize.ts)): numbers written as text
@@ -359,9 +369,10 @@ An edit that changes nothing is answered as such and is not an error.
 **Steps in the chat.** Clients never see a tool's error text or ids. When a
 call is refused for the way its input was written, the agent is asked to
 repair it, and the attempt and its repair are shown as one step that worked.
-A step turns red, with "This step could not be completed.", when it was
-refused for any other reason, when the repair was refused too, or when the run
-ended without a repair. Agency staff also get **Details** on such steps, with
+The repair is made by the small model; if that is refused too, the main model
+has one last try. A step turns red, with "This step could not be completed.",
+when it was refused for any other reason, when the last try was refused too,
+or when the run ended without a repair. Agency staff also get **Details** on such steps, with
 the technical message the model was given. The editor's context
 for a message (the selected section, an insert position) is sent to the model
 apart from the user's words and is not stored or shown as part of them, and
@@ -386,7 +397,12 @@ start from the changed footer. Section tools refuse a footer id and point to
 `update_footer`. Runs staged before this, which changed only a shared copy,
 still apply as before.
 
-**Plans.** Once a plan is approved it is tracked in the run until every step is
+**Plans.** A request that goes beyond one page, or beyond three sections (the
+theme, header and footer count as one each), needs an approved plan. The agent
+is told so, and the rule is also kept for it: a change that would cross that
+line without a plan is not run, and the agent is sent back to plan what is
+left. It is told twice at most, so a run never hangs on the rule.
+Once a plan is approved it is tracked in the run until every step is
 done. The agent reports progress with `report_progress`, and a step it cannot
 do must be reported as skipped with the reason. If the agent ends its turn with
 steps still open it is told to carry on; if it still does not, or a run limit is
@@ -420,7 +436,17 @@ block, is never recoloured.
 **Cost and limits.** A run costs one included edit, or 1 credit beyond the
 monthly allowance, and 3 credits once it makes more than 10 changes (the app
 asks first). After a run the panel shows clients what it cost in credits; the
-agency also sees token counts and the provider cost. Provider cost, token
+agency also sees token counts, the provider cost and, under **Cost details**,
+where the money went: system prompt, tool definitions, site overview, page
+reads, tool results, conversation and output, each in tokens and dollars, with
+how much of the input was read from the cache, written to it or sent uncached,
+and what each model was used for. The same numbers are logged for every run
+as `AI agent run cost` (no site content). The provider reports tokens per
+request, so each request's prompt tokens are divided over its parts by size
+and priced in the order the provider reads them; per part the figures are
+estimates, and their total is the run's exact cost
+([agent-cost.ts](./lib/ai/agent-cost.ts)). Every request is priced on its own
+at its own model's prices. Provider cost, token
 counts and the saved model conversation cannot be read with a client session;
 `0048` also closes the per-request usage ledger (`ai_usage`) to account owners,
 who keep seeing their allowance and credits.
@@ -432,30 +458,94 @@ service is busy or does not respond, the run is paused with its progress saved
 and **Continue** retries it without a new charge; the agency also sees the
 Anthropic error type.
 
-**Memory and input size.** A long conversation is carried into the next request
-as a summary of what was asked, answered and done, including plan steps left
-unfinished. The model's reasoning is never sent back to it.
-Each step sends the model three things. The rules and tools never change. The
-conversation so far only grows, so both are read from the provider's prompt
-cache at a tenth of the input price. Only a compact site overview is new on
-every step: it follows the cached part, is rebuilt after each change and is
-never saved into the conversation. Page content is sent only for the pages the
-agent reads (`get_page`, optionally just the sections it needs), and a change
-is confirmed with its ids instead of echoing the content back. When the
+**Models.** Edits to what is already there go to the small model
+(`SMALL_EDIT_MODEL`): rewriting text, restyling, alt text, moving or removing a
+section, a page's title, menu label and SEO fields, on one page and up to three
+of its sections. Planning, new sections and pages, the theme, header, footer
+and blog, and anything across pages go to the main model
+(`SITE_GENERATION_MODEL`). The words of a request, and whether a section is
+selected, only decide where a run starts
+([agent-route.ts](./lib/ai/agent-route.ts)). What keeps quality is what the run
+turns out to be. The small model gets only the tools for small edits and a
+`hand_off` tool for everything else, and its reply is dropped and the main
+model answers instead when it hands off, reaches beyond one page or three
+sections, has its input refused twice, is still going after eight steps, or
+ends without changing anything (a question, or a request it could not carry
+out). A run never moves back to the small model, except for the one request
+that repairs a refused tool input. Its text is shown only once its reply is
+kept. The run log names the model a run started with and why it was taken over.
+
+**Memory and input size.** Each request to the main model is sent in the order
+the provider caches it. The tools and the rules come first and never change, so
+they are shared by every site and kept for an hour. The site overview opens the
+conversation and stays as it was first sent for the whole run, also for an
+hour, so a run that waits for a plan approval and the next request in the
+session still read it from the cache. The conversation follows and only grows;
+it is marked up to its end with the five-minute cache, so each step reads the
+previous one's and adds its own. Cached input costs a twentieth of fresh input
+at the configured prices. The small model's requests are not cached: they are
+short, and no cache prices are configured for it.
+
+The overview is a compact map: every page with its menu label and status, and
+each section's id, type, design and first fifteen words, plus the theme, the
+business facts and a summary of the header, footer and blog. It holds no
+section's properties. What the agent changes afterwards is in its own tool
+results; `get_site_overview` returns the site as it is now, and the overview is
+refreshed whenever the conversation is shortened. `get_site_settings` reads the
+header, footer, site SEO or blog settings in full. `get_page` returns a page's
+content (text, links, images and whole lists; empty properties are only named)
+and `get_section` one section in full, with its layout options, design and
+nested element ids. Content that was read in the run and has not changed since
+is not sent again. A change is answered with `ok`, the ids of anything new and
+the names of what changed, never with the content; a new curated section
+returns only the sample content the call did not replace.
+
+A conversation is carried into the next request whole while it is short. Once
+it holds more than six requests, or is longer than about 12,000 characters, it
+is replaced by a short note (at most about 2,400 characters) of what was asked,
+answered and done, the changes still staged with their pages, and plan steps
+left unfinished. The model's reasoning is never sent back to it. When a run's
 conversation grows past about 60,000 characters it is shortened once: older
 tool results go, the page being worked on stays. The per-run token allowance
-counts cached input at a tenth.
+counts cached input at a tenth. Closing summaries are limited to about 120
+words unless the user asks for more.
 
 **Evals.** `node scripts/agent-evals.mjs --dry-run` checks the eval harness
 with a scripted model and sends nothing to the provider.
-`node scripts/agent-evals.mjs` runs thirteen sample requests against a fixture
-site with the configured API key (about $1 of provider credits, more when the
+`node scripts/agent-evals.mjs` runs sixteen sample requests against a fixture
+site with the configured API key (about $0.50 of provider credits, more when the
 model plans a larger job; `--budget` caps the total, 3 USD by default, and one
 request may use a quarter of it) and checks that each staged changeset validates,
 invents no facts and keeps AA contrast. It ends with the number of tool calls
-that were refused on their first attempt, which is the number to keep down. `--only faq,blog` runs selected
-requests and `--verbose` prints each step. Evals run in the agent's sandbox:
+that were refused on their first attempt, which is the number to keep down, and
+the cost of each kind of request: `section` (edits to what is in a section or
+two), `page` (adds to or rewrites one page), `site` (across pages or shared by
+them) and `blog`. `--only faq,blog` runs selected requests, `--costs` prints
+each request's cost breakdown, `--verbose` adds each step and each model
+request with what the cache read and wrote, and `--out run.json` saves the
+results to compare one run with another. Evals run in the agent's sandbox:
 they read and write no database and fetch no images.
+
+What a request costs, measured with the evals on the fixture site before and
+after the agent's input was cut down and small edits were given to the small
+model (November 2026, at the prices in [pricing.ts](./lib/ai/pricing.ts); all
+sixteen requests passed their checks in both runs, with no refused tool call):
+
+| Request type | Requests | Before: average (highest) | After: average (highest) |
+| --- | --- | --- | --- |
+| `section` | 5 | $0.028 ($0.039) | $0.003 ($0.005) |
+| `page` | 6 | $0.063 ($0.138) | $0.032 ($0.044) |
+| `site` | 4 | $0.075 ($0.168) | $0.056 ($0.140) |
+| `blog` | 1 | $0.034 | $0.026 |
+| All sixteen | 16 | $0.85 in total | $0.46 in total |
+
+The "after" run started with an empty cache, so its first main-model request
+also wrote the tools and rules to the one-hour cache: $0.09, once an hour for
+all sites together, which fell on the most expensive `site` request. Without
+it the `site` figures are $0.032 ($0.068). The "before" run started with a warm
+cache and paid no such write. The targets are $0.02 for a `section` request and
+$0.20 for a `site` request. Costs vary from run to run with how much the model
+decides to change; compare several runs before drawing conclusions from one.
 
 ### Stock photos
 

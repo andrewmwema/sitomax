@@ -19,7 +19,7 @@ export const COST_PART_LABELS: Record<CostPart, string> = {
   toolResults: "Tool results", history: "Conversation", output: "Output",
 };
 /** Every site overview sent to the model starts with this, which is how it is told apart from the conversation. */
-export const SITE_OVERVIEW_MARK = "CURRENT SITE OVERVIEW";
+export const SITE_OVERVIEW_MARK = "SITE OVERVIEW";
 const PAGE_READ_TOOLS = new Set(["get_page", "get_section", "get_post"]);
 const OVERVIEW_TOOLS = new Set(["get_site_overview", "get_site_settings"]);
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { fixtureIds } from "@/test/fixtures/agent-site";
 import { DRY_RUN_SCRIPT, EVAL_CASES, runEval, scriptedModel, type EvalCase } from "./agent-evals";
 
-const anything: EvalCase = { id: "harness", kind: "section", request: "Anything", verify: () => null };
+// Worded as work across the site, so the scripted model stands in for the main model throughout.
+const anything: EvalCase = { id: "harness", kind: "site", request: "Anything across the site", verify: () => null };
 const hero = (props: Record<string, unknown>): [string, unknown] =>
   ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props }];
 

@@ -128,7 +128,7 @@ function usePersistence() {
 }
 
 function EditorRuntime({ children }: { children: React.ReactNode }) {
-  const { pageId, siteId, siteName, draftVersion, theme, initialHeader, publishedData, business, headersReady } = useEditorUi();
+  const { pageId, siteId, siteName, draftVersion, theme, initialHeader, publishedData, business, headersReady, openThemePanel } = useEditorUi();
   const { pages, updatePagePublishState } = useInteractions();
   const getPuck = useGetPuck();
   const markDraftSaved = useCallback((draft: Data, kind: "save" | "publish") => {
@@ -157,7 +157,8 @@ function EditorRuntime({ children }: { children: React.ReactNode }) {
       siteMenu: { links: pageMenuLinks(pages.filter(page => !page.hide_from_menu && !page.ai_pending_build)), contacts: siteContacts(business) },
       siteLinks: linkContext(pages), pagePath: `/${pages.find(page => page.id === pageId)?.slug ?? ""}`, headersReady,
     },
-  }), [adopt, business, dirty, getPuck, headersReady, pageId, pages, save, siteName, theme.logoUrl]);
+    openTheme: openThemePanel,
+  }), [adopt, business, dirty, getPuck, headersReady, openThemePanel, pageId, pages, save, siteName, theme.logoUrl]);
   return <PersistenceContext.Provider value={persistence}><AiAgentPanelProvider siteId={siteId} pageId={pageId} editor={agentEditor}>
     <EditorPanelLayout />
     {children}
@@ -854,6 +855,7 @@ export function PageEditor({
     setLibrary((previous) => ({ ...previous, open: false }));
   }, []);
 
+  const openThemePanel = useCallback(() => setThemePanelOpen(true), []);
   const editorUi = useMemo<EditorUi>(
     () => ({
       pageId: page.id,
@@ -864,7 +866,7 @@ export function PageEditor({
         subdomain: site.subdomain, custom_domain: site.custom_domain, domain_verified: site.domain_verified,
       }, page.slug),
       previewUrl,
-      openThemePanel: () => setThemePanelOpen(true),
+      openThemePanel,
       closeThemePanel: () => setThemePanelOpen(false),
       themePanelOpen, updateTheme: setTheme,
       siteId: site.id,
@@ -874,7 +876,7 @@ export function PageEditor({
       business, updateBusiness: setBusiness, theme, initialHeader: site.draft_header, headersReady,
       pendingSiteChanges, publishedData,
     }),
-    [page.id, page.draftVersion, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady, canManageDomains, pendingSiteChanges, publishedData],
+    [openThemePanel, page.id, page.draftVersion, page.title, page.slug, previewUrl, site.id, site.name, site.subdomain, site.custom_domain, site.domain_verified, site.draft_header, siteSeo, seoPages, business, theme, themePanelOpen, headersReady, canManageDomains, pendingSiteChanges, publishedData],
   );
 
   const sectionLibraryUi = useMemo<SectionLibraryUi>(

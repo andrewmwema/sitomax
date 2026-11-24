@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { planNudge } from "./agent-plan";
 import {
-  appendUserContent, closeOpenToolCalls, compactToolResults, dropThinking, MEMORY_LIMITS, summarizeHistory, withTurnContext,
+  appendUserContent, closeOpenToolCalls, compactToolResults, countUserTurns, dropThinking, MEMORY_LIMITS, summarizeHistory, withSiteOverview,
 } from "./agent-memory";
 
 type Message = Anthropic.MessageParam;
@@ -76,21 +76,29 @@ describe("AI agent thread memory", () => {
     expect(label(compactToolResults(grown, heavy.compactedChars).messages)).toEqual(["page", "removed", "staged", "staged", "post"]);
   });
 
-  it("marks the saved conversation as cacheable and adds the per-call context after it, without saving it", () => {
+  it("opens each request with the overview, cached for an hour, and marks the conversation after it up to its end", () => {
     const messages: Message[] = [{ role: "user", content: "Improve the home page" }, call("a", "get_page"), result("a", "page")];
-    const sent = withTurnContext(messages, "OVERVIEW 1");
+    const sent = withSiteOverview(messages, "OVERVIEW");
     expect(sent).toEqual([
-      { role: "user", content: [{ type: "text", text: "Improve the home page" }] }, messages[1],
       { role: "user", content: [
-        { type: "tool_result", tool_use_id: "a", content: "page", cache_control: { type: "ephemeral", ttl: "5m" } },
-        { type: "text", text: "OVERVIEW 1" },
+        { type: "text", text: "OVERVIEW", cache_control: { type: "ephemeral", ttl: "1h" } },
+        { type: "text", text: "Improve the home page" },
       ] },
+      messages[1],
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "page", cache_control: { type: "ephemeral", ttl: "5m" } }] },
     ]);
     expect(JSON.stringify(messages)).not.toContain("OVERVIEW");
-    // The first message is sent in the same form on every call.
-    expect(withTurnContext([messages[0]], "OVERVIEW 0")[0].content).toEqual([
-      { type: "text", text: "Improve the home page", cache_control: { type: "ephemeral", ttl: "5m" } }, { type: "text", text: "OVERVIEW 0" },
+    // The next request repeats this one up to its marked end and adds to it, so all of it is read from the cache.
+    const next = withSiteOverview([...messages, call("b", "update_theme"), result("b", "ok")], "OVERVIEW");
+    const unmarked = (message: Message) => JSON.stringify(message).replace(',"cache_control":{"type":"ephemeral","ttl":"5m"}', "");
+    expect(next.slice(0, sent.length).map(unmarked)).toEqual(sent.map(unmarked));
+    // A request of one message carries both marks, the longer-lived first.
+    expect(withSiteOverview([messages[0]], "OVERVIEW")[0].content).toEqual([
+      { type: "text", text: "OVERVIEW", cache_control: { type: "ephemeral", ttl: "1h" } },
+      { type: "text", text: "Improve the home page", cache_control: { type: "ephemeral", ttl: "5m" } },
     ]);
+    // The small model's requests are not cached, so nothing is marked.
+    expect(JSON.stringify(withSiteOverview(messages, "OVERVIEW", false))).not.toContain("cache_control");
 
     // Text for the model joins the tool results it follows, so the user's turn is never doubled.
     const nudged = appendUserContent(messages, [{ type: "text", text: "Carry on." }]);
@@ -134,5 +142,33 @@ describe("AI agent thread memory", () => {
     expect(again.match(/EARLIER IN THIS CONVERSATION/g)).toHaveLength(1);
     expect(again).toContain("User: Never use blue.");
     expect(again).toContain("User: Now the About page");
+  });
+
+  it("summarises a conversation of more than six requests into a short note, however short each was", () => {
+    const exchange = (index: number): Message[] => [
+      { role: "user", content: `Request ${index}` }, call(`c${index}`, "update_section_props"), result(`c${index}`, '{"ok":true}'),
+      { role: "assistant", content: [{ type: "text", text: `Reply ${index}` }] },
+    ];
+    const six = Array.from({ length: 6 }, (_, index) => exchange(index + 1)).flat();
+    expect(countUserTurns(six)).toBe(6);
+    expect(summarizeHistory(six)).toEqual(six);
+
+    const seven = [...six, ...exchange(7)];
+    const [note, ...rest] = summarizeHistory(seven);
+    expect(rest).toEqual([]);
+    expect(note.content).toContain("User: Request 1");
+    expect(note.content).toContain("Agent: Reply 7");
+    expect((note.content as string).length).toBeLessThan(JSON.stringify(seven).length / 2);
+    // Once a conversation has been summarised it stays a note: the count of requests is kept by the caller.
+    const later = [note, ...exchange(8)];
+    expect(countUserTurns(later)).toBe(1);
+    expect(summarizeHistory(later)).toEqual(later);
+    expect(summarizeHistory(later, { turns: 8 })).toHaveLength(1);
+    // The note stays short however long the conversation gets; the oldest lines go first.
+    const long = Array.from({ length: 40 }, (_, index) => exchange(index + 1)).flat();
+    const memory = summarizeHistory(long)[0].content as string;
+    expect(memory.length).toBeLessThanOrEqual(MEMORY_LIMITS.summaryChars + 200);
+    expect(memory).toContain("Reply 40");
+    expect(memory).not.toContain("Request 1\n");
   });
 });

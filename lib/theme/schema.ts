@@ -12,6 +12,8 @@ export const themeSchema = z.object({
   bodyFont: z.enum(CURATED_FONT_NAMES).optional(),
   radius: z.number().int().min(0).max(48).optional(),
   buttonStyle: z.enum(["rounded", "square", "pill"]).optional(),
+  /** Space above and below sections; the style preset's own when unset. */
+  spacing: z.enum(["compact", "comfortable", "spacious"]).optional(),
   colors: z
     .object({
       primary: colorSchema,

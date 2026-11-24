@@ -279,9 +279,12 @@ function toolLabel(name: unknown, rawInput: unknown, pages: Page[]) {
   const pageName = page?.title?.trim() || (page?.slug ? page.slug.replaceAll("/", " / ") : "Home");
   switch (name) {
     case "get_site_overview": return "Reading the site overview";
-    case "get_page": return `Reading ${pageName}`;
+    case "get_site_settings": return "Reading the site settings";
+    case "get_page":
+    case "get_section": return `Reading ${pageName}`;
     case "search_site": return "Searching site content";
     case "list_section_designs": return "Checking section designs";
+    case "apply_theme_preset":
     case "update_theme": return "Updating the site theme";
     case "update_header": return "Updating the header";
     case "update_footer": return "Updating the footer on every page";
@@ -757,6 +760,10 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
             onClick={() => void sendPrompt(suggestion)}
             className="rounded-lg border border-zinc-200 px-3 py-2.5 text-left text-xs text-zinc-700 hover:border-violet-200 hover:bg-violet-50">{suggestion}</button>)}
         </div>
+        {editor.openTheme ? <p className="mt-4 text-center text-[11px] text-zinc-500">
+          Colours, fonts, button shape, corners and spacing change in one click, without AI, in{" "}
+          <button type="button" onClick={editor.openTheme} className="font-medium text-violet-700 underline underline-offset-2">Site theme</button>.
+        </p> : null}
       </section> : messages.map((message) => <article key={message.id}
         className={`max-w-[94%] rounded-xl px-3 py-2.5 text-xs leading-relaxed ${message.role === "user" ? "ml-auto bg-zinc-900 text-white" : "mr-auto border border-zinc-200 bg-zinc-50 text-zinc-800"}`}>
         <p className="whitespace-pre-wrap">{message.content || (message.streaming ? " " : "")}</p>
