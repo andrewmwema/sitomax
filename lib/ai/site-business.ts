@@ -5,7 +5,9 @@ export function generationBusiness(input: Omit<Business, "socialLinks">, saved?:
     primaryAction, audiences, description } = input;
   return businessSchema.parse({
     businessName, businessType, city, services, difference, tone, phone, email, address, openingHours,
-    primaryAction, audiences, description,
+    ...((primaryAction ?? saved?.primaryAction) !== undefined ? { primaryAction: primaryAction ?? saved?.primaryAction } : {}),
+    ...((audiences ?? saved?.audiences) !== undefined ? { audiences: audiences ?? saved?.audiences } : {}),
+    ...((description ?? saved?.description) !== undefined ? { description: description ?? saved?.description } : {}),
     ...(saved?.socialLinks ? { socialLinks: saved.socialLinks } : {}),
   });
 }

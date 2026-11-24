@@ -333,6 +333,8 @@ settings or the editor's Theme panel. AI site generation saves the supplied
 business details, including the primary action, audiences and description,
 alongside its drafts. Editor AI sends that information and
 the requested content to the configured AI provider; each attempt is metered.
+Optional saved intake fields are accepted and preserved without adding them to
+older business records.
 Review generated content and placeholders before accepting or publishing it.
 AI-created sections use stock photos when configured, otherwise image placeholders.
 
