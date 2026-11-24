@@ -210,7 +210,7 @@ const showcase = createPremiumTemplate({
       slug: "",
       description: "Understand the property before you decide. Book a clear, practical inspection with Northline.",
       content: [
-        designed("Hero", "hero-split-image", "showcase-home-hero", {
+        designed("Hero", "hero-product-demo", "showcase-home-hero", {
           eyebrow: "Property inspections, made clearer",
           heading: "Know what you're buying. Move forward with a clear picture.",
           subheading: "<p>Northline turns a careful inspection into a practical digital report, with findings explained and next steps easy to understand.</p>",
@@ -221,7 +221,7 @@ const showcase = createPremiumTemplate({
           secondaryButtonText: "See a sample report",
           secondaryButtonLink: "/sample-report",
           trustLine: "Clear findings · Digital report · Practical next steps",
-          variant: "split",
+          variant: "product-demo",
         }),
         designed("Logos", "logos-wordmark-strip", "showcase-home-trust", {
           eyebrow: "Built around your decision",
@@ -235,16 +235,16 @@ const showcase = createPremiumTemplate({
           ],
           variant: "strip",
         }),
-        designed("Process", "process-step-cards", "showcase-home-process", {
+        designed("Process", "process-horizontal-visual", "showcase-home-process", {
           eyebrow: "How it works",
           heading: "A clear process from visit to report",
           text: "<p>Know what to expect before the inspection begins and what to do when the report arrives.</p>",
           steps: [
-            { title: "Tell us about the property", text: "<p>Share the address, your timing and the questions you want the inspection to answer.</p>", icon: "message-circle" },
-            { title: "We inspect with care", text: "<p>Northline reviews the accessible areas and records findings with clear supporting notes and photos.</p>", icon: "search" },
-            { title: "Use your report", text: "<p>Receive a digital report organized by priority, with a summary and practical next steps.</p>", icon: "file-text" },
+            { title: "Tell us about the property", text: "<p>Share the address, your timing and the questions you want the inspection to answer.</p>", icon: "message-circle", image: "/samples/home-exterior.jpg", imageAlt: "Home exterior" },
+            { title: "We inspect with care", text: "<p>Northline reviews the accessible areas and records findings with clear supporting notes and photos.</p>", icon: "search", image: "/samples/tools.jpg", imageAlt: "Inspection tools" },
+            { title: "Use your report", text: "<p>Receive a digital report organized by priority, with a summary and practical next steps.</p>", icon: "file-text", image: "/template-assets/report-preview.svg", imageAlt: "Illustrated inspection report" },
           ],
-          variant: "steps",
+          variant: "horizontal",
           buttonText: "Book an inspection",
           buttonLink: "/contact",
           trustLine: "A straightforward appointment, with time for your questions.",
@@ -260,13 +260,23 @@ const showcase = createPremiumTemplate({
           ],
           variant: "image-cards",
         }),
-        designed("ImageWithText", "about-image-right", "showcase-home-report", {
+        designed("ImageWithText", "about-report-preview", "showcase-home-report", {
           eyebrow: "The Northline report",
           heading: "A useful report is easy to return to",
           text: "<p>See the overall picture, find the details behind each observation, and keep your next questions in one organized place.</p><ul><li>Summary written in plain language</li><li>Findings grouped by priority</li><li>Photos and practical follow-up notes</li></ul>",
           image: "/template-assets/report-preview.svg",
           imageAlt: "Original digital report mockup with a property summary and findings",
-          variant: "image-left",
+          reportLabel: "Inspection report",
+          reportTitle: "Property inspection summary",
+          reportReference: "ILLUSTRATIVE SAMPLE",
+          reportHighlights: [
+            { label: "Overview", value: "Plain-language summary" },
+            { label: "Findings", value: "Grouped by priority" },
+            { label: "Evidence", value: "Photos and notes" },
+          ],
+          buttonText: "See a sample report",
+          buttonLink: "/sample-report",
+          variant: "report-preview",
         }),
         designed("Faq", "faq-accordion", "showcase-home-faq", {
           eyebrow: "Before you book",
@@ -340,13 +350,23 @@ const showcase = createPremiumTemplate({
           secondaryButtonLink: "/services",
           variant: "centered",
         }),
-        designed("ImageWithText", "about-image-right", "showcase-report-preview", {
+        designed("ImageWithText", "about-report-preview", "showcase-report-preview", {
           eyebrow: "Report overview",
           heading: "Start with the summary. Find the detail when you need it.",
           text: "<p>A concise overview helps you understand the inspection at a glance. Each finding then includes a location, observation, photo and suggested next step.</p><ul><li><strong>Summary:</strong> the main themes in plain language</li><li><strong>Findings:</strong> observations grouped by priority</li><li><strong>Photos:</strong> visual context attached to the relevant note</li></ul>",
           image: "/template-assets/report-preview.svg",
           imageAlt: "Illustration of the report summary and photo findings on a laptop and phone",
-          variant: "image-right",
+          reportLabel: "Sample inspection report",
+          reportTitle: "Property condition overview",
+          reportReference: "ILLUSTRATIVE SAMPLE",
+          reportHighlights: [
+            { label: "Exterior", value: "Review drainage" },
+            { label: "Interior", value: "Monitor sealant" },
+            { label: "Next step", value: "Discuss findings" },
+          ],
+          buttonText: "Book an inspection",
+          buttonLink: "/contact",
+          variant: "report-preview",
         }),
         designed("Stats", "stats-editorial-row", "showcase-report-structure", {
           eyebrow: "A consistent format",
@@ -464,7 +484,7 @@ const clarity = createPremiumTemplate({
       slug: "",
       description: "Financial and bookkeeping guidance for individuals, families and small businesses.",
       content: [
-        designed("Hero", "hero-centered-badge", "clarity-home-hero", {
+        designed("Hero", "hero-editorial-centered", "clarity-home-hero", {
           eyebrow: "A steadier view of your finances",
           heading: "Make room for clearer financial decisions",
           subheading: "<p>Harbor & Pine helps individuals, families and small businesses organize the details and see a more useful way forward.</p>",
@@ -474,9 +494,9 @@ const clarity = createPremiumTemplate({
           secondaryButtonText: "Explore services",
           secondaryButtonLink: "/services",
           trustLine: "Clear conversations · Thoughtful organization · Practical next steps",
-          variant: "centered",
+          variant: "editorial",
         }),
-        designed("Services", "services-bordered-grid", "clarity-home-paths", {
+        designed("Services", "services-audience-paths", "clarity-home-paths", {
           eyebrow: "Find your path",
           heading: "The right support starts with what matters to you",
           text: "<p>Choose the conversation that feels closest to your situation. We can shape the details together.</p>",
@@ -485,9 +505,9 @@ const clarity = createPremiumTemplate({
             { icon: "house", title: "For families", text: "<p>Bring day-to-day finances, shared plans and important documents into a clearer view.</p>", image: "/samples/home-interior.jpg", imageAlt: "Warm family home interior", actionText: "Explore family support", actionLink: "/families" },
             { icon: "user-round", title: "For individuals", text: "<p>Get organized, understand the moving parts and decide what to focus on next.</p>", image: "/samples/happy-customer.jpg", imageAlt: "Person considering their next steps", actionText: "Talk with an advisor", actionLink: "/contact" },
           ],
-          variant: "bordered",
+          variant: "audience-paths",
         }),
-        designed("ImageWithText", "text-editorial-split", "clarity-home-approach", {
+        designed("ImageWithText", "about-image-right", "clarity-home-approach", {
           eyebrow: "A thoughtful approach",
           heading: "Clarity comes from understanding the whole picture",
           text: "<p>We start with your questions, organize the information you already have and make the options easier to discuss.</p><ul><li>Plain-language explanations</li><li>Steady, organized follow-through</li><li>Advice shaped around your priorities</li></ul>",
@@ -757,7 +777,7 @@ const studio = createPremiumTemplate({
       slug: "",
       description: "Forma Studio creates distinctive brand identities and useful digital experiences.",
       content: [
-        designed("Hero", "hero-centered-badge", "studio-home-hero", {
+        designed("Hero", "hero-oversized-statement", "studio-home-hero", {
           eyebrow: "Independent brand and web studio",
           heading: "Make your next move unmistakable.",
           subheading: "<p>Forma builds identities and digital experiences for teams ready to grow into what comes next.</p>",
@@ -767,9 +787,9 @@ const studio = createPremiumTemplate({
           secondaryButtonText: "See selected work",
           secondaryButtonLink: "/work",
           trustLine: "Independent studio · Clear scope · Made to work in the real world",
-          variant: "centered",
+          variant: "oversized",
         }),
-        designed("Gallery", "gallery-featured-project", "studio-home-work", {
+        designed("Gallery", "portfolio-asymmetric-grid", "studio-home-work", {
           eyebrow: "Selected work",
           heading: "Different challenges. Distinctive outcomes.",
           text: "<p>A selection of identity and digital concepts from the Forma portfolio.</p>",
@@ -781,7 +801,7 @@ const studio = createPremiumTemplate({
             { url: "/samples/kitchen.jpg", alt: "Kitchen scene used as visual direction for a home brand", caption: "Room to Gather · Campaign imagery" },
           ],
           columns: "3",
-          variant: "featured",
+          variant: "portfolio-asymmetric",
         }),
         designed("Services", "services-icon-grid", "studio-home-capabilities", {
           eyebrow: "Capabilities",
