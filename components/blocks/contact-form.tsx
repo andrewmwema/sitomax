@@ -7,6 +7,7 @@ import { Eyebrow } from "./ui/eyebrow";
 import { RichHeading } from "./ui/heading";
 import { Card } from "./ui/card";
 import { EnquiryForm, enquiryFieldsField } from "./ui/enquiry-form";
+import type { EnquiryField } from "./ui/enquiry-form";
 import { RichTextContent } from "./ui/rich-text";
 import { BlockIcon } from "./ui/icon";
 import { businessContactDetails, type SiteMenu } from "@/lib/page-navigation";
@@ -18,11 +19,7 @@ export type ContactFormProps = {
   heading: string;
   formName: string;
   submitText: string;
-  formFields: {
-    label: string;
-    fieldType: "text" | "email" | "tel" | "textarea";
-    required: boolean;
-  }[];
+  formFields: EnquiryField[];
   variant: "centered" | "split" | "visit" | "form-first" | "stacked";
   text?: RichText;
   details?: { icon: IconValue; label: string; value: string }[];

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" fill="none">
+  <rect width="960" height="660" rx="28" fill="#F1EFEA"/>
+  <rect x="62" y="64" width="390" height="532" rx="18" fill="#E3D0B7"/>
+  <rect x="510" y="64" width="388" height="532" rx="18" fill="#D9F36A"/>
+  <path d="M119 196h276M119 216h199" stroke="#6F6254" stroke-width="2"/>
+  <text x="119" y="167" fill="#4B4035" font-family="Arial,sans-serif" font-size="16" letter-spacing="5">COMMON TABLE</text>
+  <rect x="136" y="258" width="242" height="246" rx="8" fill="#FCF8F0"/>
+  <path d="M136 314h242" stroke="#C8B89F" stroke-width="2"/>
+  <text x="166" y="371" fill="#43584B" font-family="Georgia,serif" font-size="39">PANTRY</text>
+  <text x="166" y="407" fill="#6F6254" font-family="Arial,sans-serif" font-size="14" letter-spacing="2">SMALL BATCH / NO. 04</text>
+  <circle cx="257" cy="460" r="23" fill="#D9F36A"/>
+  <path d="M247 462c6-18 17-23 32-17-2 15-12 22-32 17Z" fill="#43584B"/>
+  <rect x="562" y="122" width="282" height="405" rx="7" fill="#F7F5EF"/>
+  <rect x="562" y="122" width="282" height="111" rx="7" fill="#171717"/>
+  <text x="598" y="169" fill="#D9F36A" font-family="Arial,sans-serif" font-size="13" letter-spacing="4">COMMON TABLE</text>
+  <text x="598" y="204" fill="#fff" font-family="Georgia,serif" font-size="28">Made to share.</text>
+  <path d="M598 282c46-50 91-50 136 0 39 44 72 43 90-3" stroke="#9D6B4E" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="656" cy="313" r="28" fill="#C9855D"/>
+  <circle cx="765" cy="313" r="28" fill="#78916C"/>
+  <rect x="598" y="377" width="206" height="9" rx="4.5" fill="#A7A49B"/>
+  <rect x="598" y="397" width="173" height="9" rx="4.5" fill="#CCC9C0"/>
+  <rect x="598" y="449" width="138" height="37" rx="18.5" fill="#171717"/>
+</svg>

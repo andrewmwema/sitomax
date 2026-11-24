@@ -4,9 +4,9 @@ import { sectionCatalog } from "@/lib/sections/catalog";
 import type { SiteTheme } from "@/lib/theme/presets";
 import type { ServicesProps } from "@/components/blocks/services";
 
-type Block = keyof typeof puckConfig.components;
-type BlockProps<T extends Block> = Partial<NonNullable<(typeof puckConfig.components)[T]["defaultProps"]>>;
-type TemplateData = Data<Record<string, Record<string, unknown>>, RootProps>;
+export type Block = keyof typeof puckConfig.components;
+export type BlockProps<T extends Block> = Partial<NonNullable<(typeof puckConfig.components)[T]["defaultProps"]>>;
+export type TemplateData = Data<Record<string, Record<string, unknown>>, RootProps>;
 
 export type WebsiteTemplate = {
   key: string;
@@ -26,14 +26,14 @@ type TemplateOptions = {
   contact: string;
 };
 
-function block<T extends Block>(type: T, id: string, props: BlockProps<T>): TemplateData["content"][number] {
+export function block<T extends Block>(type: T, id: string, props: BlockProps<T>): TemplateData["content"][number] {
   return {
     type,
     props: { ...structuredClone(puckConfig.components[type].defaultProps), ...structuredClone(props), id },
   };
 }
 
-function designed<T extends Block>(type: T, designId: string, id: string, props: BlockProps<T> = {}): TemplateData["content"][number] {
+export function designed<T extends Block>(type: T, designId: string, id: string, props: BlockProps<T> = {}): TemplateData["content"][number] {
   const design = sectionCatalog.find((entry) => entry.id === designId && entry.blockType === type);
   if (!design) throw new Error(`Unknown ${type} template design: ${designId}`);
   return block(type, id, { ...structuredClone(design.props), ...props });

@@ -42,6 +42,7 @@ export async function getDashboardSites() {
     profile,
     sites: visibleSites,
     isAdmin,
+    canCreateSite: isAdmin || ownerAccounts.size > 0,
     canSeeReporting: isAdmin || ownerAccounts.size > 0,
     ownerSite: visibleSites.find((site) => site.id === firstOwnedSite?.id),
   };
