@@ -33,6 +33,37 @@ would require database writes to create and populate its history table and
 cannot represent both different 0052 files as one unique version without a
 separately reviewed reconciliation. The manual log requires no database write.
 
+## Premium master comparison
+
+On 2026-11-24, a read-only comparison against main commit
+`1e4b7bf324ca420c77847f2b659ec0174d8a19bb` found no differences in the
+seeded content fields of the Showcase, Clarity and Studio `site_templates`
+rows. The ten referenced `template-assets` objects matched the corresponding
+source files by SHA-256, with the expected MIME types and cache settings; no
+extra objects were found in that bucket. Database and storage timestamps were
+not compared to source files.
+
+The gallery thumbnails in that matching source used generic artwork rather
+than home-page screenshots. On 2026-11-24, after user approval,
+`scripts/sync-premium-thumbnails.ts` uploaded three new content-addressed PNGs
+and updated only `preview_image` and `updated_at` on those master rows. A
+subsequent read-only check verified all three rows and assets, including
+public PNG responses matching the source bytes. No client sites, pages or
+existing assets were changed. Existing site copies may reference older assets,
+so those assets must not be overwritten or deleted. The images were captured
+from the main-commit home-page source at a 1280 × 800 desktop viewport and
+placed in matching 1280 × 800 browser frames.
+
+Review the script and thumbnails before any future production run. It does not load
+environment files. Explicitly set `NEXT_PUBLIC_SUPABASE_URL` and
+`PREMIUM_THUMBNAIL_EXPECTED_PROJECT_URL` to the intended project's URL, and
+set `SUPABASE_SERVICE_ROLE_KEY` for that project. The command
+`npm run sync:premium-thumbnails` is a read-only dry run. After separate
+approval, set `PREMIUM_THUMBNAIL_SYNC_APPROVED=YES` and run
+`npm run sync:premium-thumbnails -- --apply`. The Storage uploads and three
+row updates are not one transaction: an error can leave uploaded assets or
+earlier row updates in place. Review the error and rerun after resolving it.
+
 ## Phase 1 test fixtures
 
 The user reported that the fixture seed and subsequent cleanup both succeeded
