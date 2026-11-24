@@ -33,6 +33,33 @@ would require database writes to create and populate its history table and
 cannot represent both different 0052 files as one unique version without a
 separately reviewed reconciliation. The manual log requires no database write.
 
+## Phase 2 test fixtures (review only)
+
+`supabase/seeds/phase2_test_fixtures.sql` creates six isolated TEST accounts,
+two per master design, with Starter, Growth and Premium represented. It
+requires the two existing test users to have matching Auth and profile emails
+and exactly one to already be a super admin. It makes the other user the
+owner of each fixture account; it never changes either user's privileges.
+The script references the existing masters and does not change or copy them.
+It refuses to reuse an existing fixture ID or name.
+
+Use only these fixture accounts, `TEST-` site names, `test-` subdomains and
+the Showcase, Clarity or Studio masters. Do not connect custom domains.
+All test uploads must have filenames beginning `TEST-`; an unmarked stock
+image requires manual review rather than automatic deletion. Stop other test
+activity before cleanup.
+
+Cleanup needs separate approval. Set `PHASE2_TEST_EXPECTED_PROJECT_URL` to the
+intended project URL and configure `NEXT_PUBLIC_SUPABASE_URL` and the
+service-role key. `npx tsx scripts/cleanup-phase2-test-uploads.ts` is a
+read-only listing of marked uploads. After approval, set
+`PHASE2_TEST_CLEANUP_APPROVED=YES` and add `--apply` to remove those objects
+using the Storage API. Then review and run
+`supabase/seeds/phase2_test_cleanup.sql`. It refuses unexpected members, site
+identities, custom domains or remaining uploads. Deleting the accounts also
+deletes their test AI usage and cost records. Neither cleanup step alters the
+test users or the master templates.
+
 ## Premium master comparison
 
 On 2026-11-24, a read-only comparison against main commit
