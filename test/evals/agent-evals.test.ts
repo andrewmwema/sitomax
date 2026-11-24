@@ -8,9 +8,9 @@ const hero = (props: Record<string, unknown>): [string, unknown] =>
   ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props }];
 
 describe("AI agent evals harness", () => {
-  it("has sixteen requests, and passes a run that keeps the rules", async () => {
-    expect(EVAL_CASES).toHaveLength(16);
-    expect(new Set(EVAL_CASES.map((entry) => entry.id)).size).toBe(16);
+  it("has eighteen requests, and passes a run that keeps the rules", async () => {
+    expect(EVAL_CASES).toHaveLength(18);
+    expect(new Set(EVAL_CASES.map((entry) => entry.id)).size).toBe(18);
     const result = await runEval(anything, scriptedModel(DRY_RUN_SCRIPT));
     expect(result).toMatchObject({ passed: true, failures: [], terminal: "completed", steps: 2, toolErrors: 0, changes: 1 });
     expect(result.notes).toEqual(["Home: 1 placeholder to fill in before publishing: [service area]."]);

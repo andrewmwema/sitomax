@@ -113,7 +113,7 @@ export const Testimonials: ComponentConfig<TestimonialsProps> = {
       ) : (
         <div className={variant === "rating" ? "mt-[var(--section-gap)] grid items-start gap-[var(--section-gap)] lg:grid-cols-[1fr_2fr]" : "mt-[var(--section-gap)]"}>
           {variant === "rating" ? (
-            <div className="flex flex-col items-start gap-4 border-t-2 pt-6" style={{ borderColor: "var(--color-secondary)" }}>
+            <div className="follow-align flex flex-col items-start gap-4 border-t-2 pt-6" style={{ borderColor: "var(--color-secondary)" }}>
               <BlockIcon name="star" size={32} />
               <p className="text-5xl sm:text-6xl" style={{ fontFamily: "var(--font-heading)" }}>{rating}</p>
               <p className="font-semibold">{reviewCount}</p>

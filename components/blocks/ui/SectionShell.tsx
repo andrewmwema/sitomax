@@ -20,6 +20,7 @@ import {
   type NormalizedBackground,
   type NormalizedDesign,
 } from "@/lib/sections/design";
+import { BOX_MARGINS } from "@/lib/layout/guardrails";
 
 /**
  * SectionShell wraps EVERY block and applies the shared "design"
@@ -188,7 +189,23 @@ export function SectionShell({
     if (appearance.align && ["left", "center", "right"].includes(appearance.align)) {
       vars[`--appearance-align-${suffix}`] = appearance.align;
       vars[`--appearance-justify-${suffix}`] = { left: "flex-start", center: "center", right: "flex-end" }[appearance.align];
+      // A width-capped box sits where its text is aligned (see boxAlignStyle).
+      const [left, right] = BOX_MARGINS[appearance.align];
+      vars[`--appearance-ml-${suffix}`] = left;
+      vars[`--appearance-mr-${suffix}`] = right;
     }
+  }
+  // Unlike the --appearance values, these are not reset by nested shells: an
+  // element with no alignment of its own takes its nearest container's.
+  const ownAlign = (device: "desktop" | "tablet" | "mobile") => {
+    const align = design?.appearance?.[device]?.align;
+    return align === "left" || align === "center" || align === "right" ? align : undefined;
+  };
+  for (const [device, suffix] of [["desktop", "d"], ["tablet", "t"], ["mobile", "m"]] as const) {
+    const align = ownAlign(device) ?? ownAlign("desktop");
+    if (!align) continue;
+    const vars = style as Record<string, string | number | undefined>;
+    [vars[`--inherit-ml-${suffix}`], vars[`--inherit-mr-${suffix}`]] = BOX_MARGINS[align];
   }
 
   // Backgrounds/overlays need clipping even without a radius.

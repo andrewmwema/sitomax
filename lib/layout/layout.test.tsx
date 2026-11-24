@@ -117,6 +117,26 @@ describe("rows and columns", () => {
     expect(html).toContain("--spacer-height:64px");
   });
 
+  it("gives text elements the margins of their alignment, so a narrower box sits where its text is aligned", () => {
+    const html = render([sectionWith([
+      el("Heading", { text: "Centered heading", align: "center" }),
+      el("Text", { text: "<p>Centered paragraph</p>", align: "center" }),
+      el("Text", { text: "<p>Right paragraph</p>", align: "right" }),
+      el("Text", { text: "<p>Left paragraph</p>", align: "left" }),
+      el("Text", { text: "<p>Inherited paragraph</p>", align: undefined }),
+    ])]);
+    const style = (text: string) => new RegExp(`style="([^"]*)"[^>]*>(?:<p>)?${text}`).exec(html)![1];
+    // Center: both margins auto. Right: margin-left auto. Left: margin-right auto. The element's own
+    // per-device alignment comes first; with no alignment at all, the nearest container's is used.
+    for (const text of ["Centered heading", "Centered paragraph"]) {
+      expect(style(text)).toContain("text-align:var(--shell-align, center);margin-left:var(--shell-ml, auto);margin-right:var(--shell-mr, auto)");
+    }
+    expect(style("Right paragraph")).toContain("margin-left:var(--shell-ml, auto);margin-right:var(--shell-mr, 0px)");
+    expect(style("Left paragraph")).toContain("margin-left:var(--shell-ml, 0px);margin-right:var(--shell-mr, auto)");
+    expect(style("Inherited paragraph")).toContain("margin-left:var(--near-ml, 0px);margin-right:var(--near-mr, 0px)");
+    expect(style("Inherited paragraph")).not.toContain("text-align");
+  });
+
   it("uses theme-contrast text on custom card surfaces", () => {
     const section = sectionWith([el("Heading", { text: "Readable card" })]);
     const row = (section.props.rows as LayoutItem[])[0];

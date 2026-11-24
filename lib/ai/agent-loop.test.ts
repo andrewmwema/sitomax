@@ -597,6 +597,90 @@ describe("AI agent model routing", () => {
     expect(models(looping)).toEqual([...Array.from({ length: 8 }, () => "small"), "main"]);
   });
 
+  describe("layout check before the closing message", () => {
+    type Element = { props: Record<string, unknown> };
+    const paragraph = (changeset: ReturnType<typeof fixtureChangeset>, snapshot: "working" | "baseline" = "working") => {
+      const section = (changeset[snapshot].pages[0].draft_data as { content: Element[] }).content[2];
+      const column = ((section.props.rows as Element[])[0].props.columns as Element[])[0];
+      return (column.props.content as Element[])[1];
+    };
+    /** The fixture with a centered paragraph pushed off-center by a left margin, as it was before the request. */
+    function lopsided() {
+      const changeset = fixtureChangeset();
+      for (const snapshot of ["working", "baseline"] as const) {
+        Object.assign(paragraph(changeset, snapshot).props, { align: "center", design: { spacing: { desktop: { marginLeft: 128 } } } });
+      }
+      return changeset;
+    }
+    const report = () => newAgentState([{ role: "user", content: "The paragraph under Why Harbour Plumbing is off-center" }], reservation, false, { layoutReport: true });
+    const design = (value: unknown): Reply => ({ tool: ["update_section_design", { pageId: fixtureIds.home, sectionId: "home-why-1", design: value }] });
+    const said = (events: AgentEvent[]) => events.flatMap((event) => event.type === "text" ? [String(event.text)] : []);
+    const lastNote = (params: Params) => JSON.stringify(params.messages.at(-1)!.content);
+
+    it("sends back a claim that misalignment is fixed while the box is still off-center, and passes it on once it is not", async () => {
+      // Setting the text alignment again leaves the margin that moves the box.
+      const model = scripted((_params, call) => call === 1 ? design({ appearance: { desktop: { align: "center" } } })
+        : call === 2 ? { text: "I've fixed the alignment." }
+          : call === 3 ? design({ spacing: { desktop: { marginLeft: 0 } } }) : { text: "The paragraph is centered now." });
+      const { state, changeset, events, run } = start(model, report(), lopsided());
+      expect(await run()).toBe("completed");
+      expect(lastNote(model.calls[2])).toMatch(/Layout check: not passed\. Text home-why-1 .*128px .* left and 0px .* right/);
+      expect(said(events)).toHaveLength(1);
+      expect(said(events)[0]).toContain("No off-center spacing or indent problems were found");
+      expect(said(events)[0]).toContain("Review the layout preview");
+      expect(said(events)[0]).not.toContain("The paragraph is centered now.");
+      expect(paragraph(changeset).props.design).toMatchObject({ spacing: { desktop: { marginLeft: 0 } } });
+      expect(state.layoutChecks).toBe(1);
+      expectAnswered(state.messages);
+    });
+
+    it("ends with the check's own report when the box is still off-center, whatever the model says", async () => {
+      const model = scripted((_params, call) => call === 1 ? design({ appearance: { desktop: { align: "center" } } }) : { text: "All fixed: it is centered now." });
+      const { state, events, run } = start(model, report(), lopsided());
+      expect(await run()).toBe("completed");
+      // Told once, then the run ends: it does not go on asking.
+      expect(model.calls).toHaveLength(3);
+      const [reply] = said(events);
+      expect(said(events)).toHaveLength(1);
+      expect(reply).toMatch(/^Changes staged for review:\n- Update Text design \(Home page\)\n\nThe layout check has not passed, so this is not fixed yet:\n- Home, Text “We turn up on time and tidy up after ourselves\.”: centered text is pushed off-center on desktop, tablet, mobile/);
+      expect(reply).not.toMatch(/All fixed|home-why/);
+      expect(JSON.stringify(state.messages.at(-1))).not.toContain("All fixed");
+    });
+
+    it("also checks a section the run only read, and what an unrelated request itself breaks, but not what was already there", async () => {
+      // A report: reading the section in full is enough for the check to apply to it.
+      const reading = scripted((_params, call) => call === 1 ? { tool: ["get_section", { pageId: fixtureIds.home, sectionId: "home-why-section" }] } : { text: "It looks centered to me." });
+      const read = start(reading, report(), lopsided());
+      await read.run();
+      expect(said(read.events)[0]).toMatch(/^No changes were staged in this request\.\n\nThe layout check has not passed/);
+
+      // So is being named by the editor with the report, whatever the run did instead.
+      const elsewhere = scripted((_params, call) => call === 1 ? edit("Reliable plumbers") : { text: "Fixed it." });
+      const named = start(elsewhere, newAgentState([{ role: "user", content: "This looks off-center" }], reservation, false, {
+        layoutReport: true, layoutTargets: [{ pageId: fixtureIds.home, sectionId: "home-why-section" }],
+      }), lopsided());
+      await named.run();
+      expect(said(named.events)[0]).toMatch(/^Changes staged for review:\n- Update Hero section \(Home page\)\n\nThe layout check has not passed, so this is not fixed yet/);
+
+      // Another kind of request that pushes centered text off-center is sent back for it too.
+      const breaking = scripted((_params, call) => call === 1
+        ? design({ appearance: { desktop: { align: "center" } }, spacing: { desktop: { paddingLeft: 96 } } }) : { text: "Done." });
+      const broke = start(breaking);
+      await broke.run();
+      expect(lastNote(breaking.calls[2])).toContain("Layout check: not passed");
+      // Nobody asked for a fix here, so the summary stands and the finding is added to it.
+      expect(said(broke.events)[0]).toMatch(/^Done\.\n\nLayout check: centered text is now off-center:\n- Home, Text “We turn up/);
+
+      // What was off-center before a request about something else is left for the review card.
+      const renaming = scripted((_params, call) => call === 1
+        ? { tool: ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-why-0", props: { text: "Why us" } }] } : { text: "Renamed the heading." });
+      const renamed = start(renaming, undefined, lopsided());
+      await renamed.run();
+      expect(renaming.calls).toHaveLength(2);
+      expect(said(renamed.events)).toEqual(["Renamed the heading."]);
+    });
+  });
+
   it("allows five repairs in a run, then fails the step and stops, and Continue does not bring them back", async () => {
     const good = (index: number) => edit(`Heading ${index}`);
     const bad: Reply = { tool: ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: { variant: "nope" } }] };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeAgentRequest, scopeExceeded, widenScope } from "./agent-route";
+import { contextSections, reportsMisalignment, routeAgentRequest, scopeExceeded, widenScope } from "./agent-route";
 
 const selected = 'Focus on this context: selected section "Hero" (pageId 00000000-0000-4000-8000-000000000010, sectionId home-hero).';
 
@@ -30,6 +30,24 @@ describe("AI agent model routing by request", () => {
     expect(routeAgentRequest({ message: "A pricing table", context: "Insert the new section on the page with pageId x at position 2 (0 is the top of the page)." })).toBe("main");
     expect(routeAgentRequest({ message: "Make it sticky", context: "Focus on this context: the global site header." })).toBe("main");
     expect(routeAgentRequest({ message: "Carry on", openPlan: true })).toBe("main");
+  });
+
+  it("recognises a report of misalignment and the sections the editor names with it", () => {
+    for (const message of [
+      "This section is misaligned", "The paragraph looks off-center", "Why is the heading not centred?", "Center the text under the heading",
+      "The text is shifted to the right", "Fix the alignment here", "It looks lopsided on mobile",
+    ]) expect(reportsMisalignment(message), message).toBe(true);
+    for (const message of ["Make the heading shorter", "Add more padding at the top", "Use our brand colours", "Write alt text for this image"]) {
+      expect(reportsMisalignment(message), message).toBe(false);
+    }
+    const measured = 'Layout check, measured in the editor at 1280px wide: in section id home-why-section on the page with pageId 00000000-0000-4000-8000-000000000010, the box of the centered text "We turn up" has 0px free on its left and 486px on its right, so it is off-center.';
+    expect(contextSections(`${selected}\n\n${measured}`)).toEqual([
+      { pageId: "00000000-0000-4000-8000-000000000010", sectionId: "home-hero" },
+      { pageId: "00000000-0000-4000-8000-000000000010", sectionId: "home-why-section" },
+    ]);
+    expect(contextSections(undefined)).toEqual([]);
+    // What the editor measured names its section without the word that marks a selection.
+    expect(routeAgentRequest({ message: "Add a pricing page", context: measured })).toBe("main");
   });
 
   it("bounds what may be changed without a plan, and by the small model, to one page and three sections", () => {

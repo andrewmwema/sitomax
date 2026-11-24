@@ -445,6 +445,21 @@ the site are left alone. Text colours are only judged where the background
 behind them is known, so text over an image or video, or inside a curated
 block, is never recoloured.
 
+For alignment reports, `get_section` and section edits also check saved
+indents and unequal left/right margins and padding on the element and its
+containers, including device overrides. A failed check sends the agent back
+once to repair it; if it still fails, the closing reply explicitly says the
+alignment is not fixed. Passing this settings check is not browser
+verification: the reply asks users to review desktop, tablet and mobile
+previews rather than claiming a visual fix. The preview and publish QA
+measure actual text boxes and flag centered text whose box is narrower than
+its container but not centered.
+
+New standard sections (services/features, testimonials, FAQ, pricing, CTA,
+team and gallery) use curated designs by preference. Their IDs are listed in
+`insert_section`; custom layouts are reserved for requested arrangements the
+curated designs cannot provide. Existing custom content is not converted.
+
 **Cost and limits.** A run costs one included edit, or 1 credit beyond the
 monthly allowance, and 3 credits once it makes more than 10 changes (the app
 asks first). After a run the panel shows clients what it cost in credits; the
@@ -539,7 +554,7 @@ words unless the user asks for more.
 
 **Evals.** `node scripts/agent-evals.mjs --dry-run` checks the eval harness
 with a scripted model and sends nothing to the provider.
-`npm run agency-token -- agent-evals` runs sixteen sample requests against a fixture
+`npm run agency-token -- agent-evals` runs eighteen sample requests against a fixture
 site with the configured API key (about $0.50 of provider credits, more when the
 model plans a larger job; `--budget` caps the total, 3 USD by default, and one
 request may use a quarter of it) and checks that each staged changeset validates,
@@ -551,6 +566,9 @@ them) and `blog`. `--only faq,blog` runs selected requests, `--costs` prints
 each request's cost breakdown, `--verbose` adds each step and each model
 request with what the cache read and wrote, and `--out run.json` saves the
 results to compare one run with another. Evals use a fixture and fetch no images.
+The FAQ, reviews and services cases require curated sections; `off-center`
+starts with an already centered paragraph whose left margin shifts its box,
+and checks both the spacing fix and the closing reply.
 Each successful live provider response is recorded as `source='eval'`, without
 client quota or site changes. Live scripts require an agency login: the helper
 prompts for email and password in the terminal, hides the password, passes the
@@ -736,8 +754,17 @@ In a section's inspector, **Alignment** sets its introductory text per device
 and **Content width** selects narrow, normal, or wide; leaving either at its
 design default preserves the original layout. Publish QA checks rendered text
 for overflow at the current preview size. The AI review preview also warns
-about overflow on the page and viewport currently shown; check other pages and
-screen sizes separately.
+about overflow and off-center text boxes on the page and viewport currently
+shown; check other pages and screen sizes separately. Width-capped custom
+heading and paragraph boxes use auto margins matching their alignment,
+including inherited alignment and device overrides. Nested editor rich-text
+wrappers do not apply a second width cap.
+
+The browser regression tests in `lib/layout/centered-box.test.tsx` compile the
+site stylesheet and measure real heading/paragraph geometry. Set `CHROME_BIN`
+to a Chromium executable, or use a system Chromium or Playwright's cached
+Chromium. These tests skip when no browser is available; ordinary layout and
+QA tests still run.
 
 Click a configurable content icon (hero badges, service cards, process steps,
 statistics, callouts, icon lists or standalone icons) to open the searchable

@@ -88,7 +88,7 @@ function PlanAction({ plan }: { plan: PricingPlan }) {
 function PlanBody({ plan, yearly, highlightLabel }: { plan: PricingPlan; yearly: boolean; highlightLabel: string }) {
   return (
     <>
-      <div className="flex min-w-0 flex-col items-start gap-3">
+      <div className="follow-align flex min-w-0 flex-col items-start gap-3">
         <div className="min-h-7">{plan.highlighted && highlightLabel ? <Badge>{highlightLabel}</Badge> : null}</div>
         <Heading level={3}>{plan.name}</Heading>
         <RichTextContent value={plan.description} className="w-full text-sm" />

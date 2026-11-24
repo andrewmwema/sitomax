@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { googleFontsUrl } from "@/lib/theme/fonts";
 import {
+  BOX_MARGINS,
   FONT_WEIGHTS,
   colorCss,
   customFont,
@@ -60,7 +61,21 @@ export function textStyle({
     ...(fontFallback ? { fontFamily: fontFamilyCss(font, fontFallback) } : null),
     color: colorCss(color, colorFallback),
     textAlign: align === undefined ? undefined : `var(--shell-align, ${safeAlign(align)})` as CSSProperties["textAlign"],
+    ...boxAlignStyle(align),
   };
+}
+
+/**
+ * Margins that keep a text box where its text is aligned whenever something
+ * makes the box narrower than its container: center → both auto, right →
+ * margin-left auto, left → margin-right auto. A box that fills its container
+ * is unaffected. Resolved like text-align: the element's own per-device
+ * override, then its own alignment, and with neither, its nearest container's.
+ */
+export function boxAlignStyle(align: unknown): CSSProperties {
+  if (align === undefined) return { marginLeft: "var(--near-ml, 0px)", marginRight: "var(--near-mr, 0px)" };
+  const [left, right] = BOX_MARGINS[safeAlign(align)];
+  return { marginLeft: `var(--shell-ml, ${left})`, marginRight: `var(--shell-mr, ${right})` };
 }
 
 /** Empty-state box shown in the editor (and nowhere else). */

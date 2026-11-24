@@ -40,6 +40,26 @@ export function routeAgentRequest(input: { message: string; context?: string; op
   return BROAD.some((pattern) => pattern.test(message)) ? "main" : "small";
 }
 
+const MISALIGNED = /\b(?:mis-?align\w*|align(?:ed|ment|s|ing)?|(?:off|un)-?cent(?:er|re)d?|cent(?:er|re)(?:d|ing|s)?|lop-?sided|crooked|uneven|shifted|skewed)\b/i;
+/**
+ * Whether a request is about where something sits: a report that it is
+ * misaligned or off-center, or a request to align or center it. Such a run
+ * may only call the problem fixed once the layout check has passed.
+ */
+export function reportsMisalignment(message: string): boolean {
+  return MISALIGNED.test(message);
+}
+/** The sections the editor names with a request: the selected one, and those its layout check measured. */
+export function contextSections(context: string | undefined): { pageId: string; sectionId: string }[] {
+  const found = [
+    ...[...(context ?? "").matchAll(/\(pageId ([0-9a-f-]{36}), sectionId ([^\s)]+)\)/g)]
+      .map((match) => ({ pageId: match[1], sectionId: match[2] })),
+    ...[...(context ?? "").matchAll(/section id ([^\s)]+) on the page with pageId ([0-9a-f-]{36})/g)]
+      .map((match) => ({ pageId: match[2], sectionId: match[1] })),
+  ];
+  return found.filter((entry, index) => found.findIndex((other) => other.pageId === entry.pageId && other.sectionId === entry.sectionId) === index);
+}
+
 export type ChangeScope = { pageId?: string; sections: string[] };
 type ChangeTarget = { pageId?: string; sectionId?: string; adds?: boolean };
 /**

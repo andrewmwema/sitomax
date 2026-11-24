@@ -13,7 +13,7 @@ import {
 } from "@/lib/ai/agent-review";
 import { editorHeader, headerSchema } from "@/lib/header";
 import { puckConfig } from "@/lib/puck/config";
-import { hasTextOverflow } from "@/lib/sections/text-overflow";
+import { measureLayout } from "./layout-check";
 
 export type AgentReviewState = AgentReviewPayload & {
   decisions: Record<string, AgentReviewDecision>;
@@ -258,7 +258,7 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
   metadata?: Record<string, unknown>;
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const [overflowCount, setOverflowCount] = useState(0);
+  const [layout, setLayout] = useState({ overflow: 0, offCenter: 0 });
   const selectedIndex = review.changes.findIndex((change) => change.id === review.activeChangeId);
   const selectedChange = selectedIndex >= 0 ? review.changes[selectedIndex] : null;
   const activeChange = selectedChange && !isBlogChange(selectedChange.kind) ? selectedChange : null;
@@ -305,14 +305,20 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
 
   useEffect(() => {
     const root = container.current;
-    if (!root || !preview) { setOverflowCount(0); return; }
+    if (!root || !preview) { setLayout({ overflow: 0, offCenter: 0 }); return; }
     let frame = 0;
     let active = true;
     const measure = () => {
       if (!active) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        if (active) setOverflowCount(renderedSections(root, preview).filter(({ element }) => hasTextOverflow(element)).length);
+        if (!active) return;
+        const measured = renderedSections(root, preview).map(({ element }) => measureLayout(element));
+        const next = {
+          overflow: measured.filter((entry) => entry.overflow).length,
+          offCenter: measured.filter((entry) => entry.offCenter.length).length,
+        };
+        setLayout((previous) => previous.overflow === next.overflow && previous.offCenter === next.offCenter ? previous : next);
       });
     };
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
@@ -324,8 +330,11 @@ export function AgentReviewCanvas({ review, pageId, metadata }: {
   }, [preview]);
 
   return <>
-  {overflowCount ? <p role="status" className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-    Text may overflow in {overflowCount} {overflowCount === 1 ? "section" : "sections"} at this preview size. Check the layout before keeping the changes.
+  {layout.overflow || layout.offCenter ? <p role="status" className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+    Layout check, at this preview size:
+    {layout.offCenter ? ` centered text is off-center in ${layout.offCenter} ${layout.offCenter === 1 ? "section" : "sections"}, so its alignment is not fixed yet.` : ""}
+    {layout.overflow ? ` Text may overflow in ${layout.overflow} ${layout.overflow === 1 ? "section" : "sections"}.` : ""}
+    {" "}Check the layout before keeping the changes.
   </p> : null}
   <div ref={container} data-ai-review-preview inert className="agent-review-canvas-preview">
     <div className="agent-review-canvas-label" aria-live="polite">

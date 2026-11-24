@@ -7,7 +7,7 @@ import { themeSchema } from "@/lib/theme/schema";
 import { QUICK_STYLE_GUIDE, quickStyleSchema } from "@/lib/theme/quick-styles";
 import { customSectionSchema } from "./custom-layout";
 import { designPatchSchema } from "./edit-design";
-import { agentFieldSchemas } from "./site-schemas";
+import { agentFieldSchemas, aiCatalog } from "./site-schemas";
 
 /**
  * Everything get_site_settings may return, part by part. These are settings a
@@ -55,6 +55,13 @@ const pageSections = z.array(z.object({
 const BLOG_BLOCKS = 'Write the post as a list of blocks, each an object with a type: {"type":"paragraph","html":"<p>…</p>"} (p, strong, em and a tags), {"type":"heading","level":2,"text":"…"} (level is the number 2, 3 or 4), {"type":"list","ordered":false,"items":["…"]}, {"type":"quote","text":"…","attribution":"…"}, {"type":"callout","title":"…","text":"…"}, {"type":"divider"} or {"type":"table","rows":[["…","…"]]}. Images and videos cannot be added.';
 const blogBlocks = z.array(blogBlockSchema).min(1).max(200);
 const CUSTOM_LAYOUT = `A custom layout is rows of columns of elements, written as an object (never a JSON string). Text elements take plain text with blank lines between paragraphs and optional **bold** or *emphasis*, not HTML. An Image element's query is only a search hint: the image is inserted empty, then chosen with set_image. Gaps and spacing are numbers from this scale: 0, 4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 128. Options that look like numbers are strings: Icon size "24"|"32"|"48"|"64", Divider thickness "1"|"2"|"4", Image and Divider width "25"|"50"|"75"|"100"; Heading level is "h1" to "h4". A row's layout has one part per column: "1", "1-1", "1-2", "2-1", "1-1-1" or "1-1-1-1". Example customSection: {"background":"soft","width":"contained","rowGap":32,"rows":[{"layout":"1-1","gap":32,"columns":[{"surface":"none","verticalAlign":"center","gap":16,"elements":[{"type":"Heading","text":"Why choose us","level":"h2","align":"left"},{"type":"IconList","items":[{"icon":"clock","text":"On time"},{"icon":"sparkles","text":"Tidy"}],"iconColor":"primary","size":"base","gap":12},{"type":"Button","label":"Contact us","href":"/contact","variant":"primary","size":"md","align":"left"}]},{"surface":"card","verticalAlign":"center","gap":16,"elements":[{"type":"Icon","icon":"shield-check","size":"48","style":"soft","color":"primary","align":"center"},{"type":"Text","text":"Fully insured.","align":"center"}]}]}]}`;
+/**
+ * The curated designs by kind of section, listed where a section is added so
+ * that choosing one takes no extra step: with only the custom layout written
+ * out there, a hand-built layout was the easier thing to reach for.
+ */
+const CURATED_DESIGNS = Object.entries(Object.groupBy(aiCatalog.filter((design) => design.category !== "Footer"), (design) => design.category))
+  .map(([category, designs]) => `${category}: ${(designs ?? []).map((design) => design.id).join(", ")}`).join("; ");
 const DESIGN = `design keys, all optional, send only what changes: background {"type":"none"} | {"type":"color","color":"#rrggbb"} | {"type":"gradient","from":"#rrggbb","to":"#rrggbb","angle":0-360}; spacing per device (desktop, tablet, mobile) with paddingTop, paddingBottom, paddingLeft, paddingRight, marginTop, marginBottom, marginLeft, marginRight as numbers 0-240; appearance per device with textColor and backgroundColor ("#rrggbb"), borderRadius (0-48) and align ("left"|"center"|"right"); border {width 0-8, color, radius 0-48}; shadow "none"|"soft"|"medium"|"strong"; animation {trigger "none"|"entrance"|"scroll", type "fade"|"fade-up"|"fade-down"|"slide-left"|"slide-right"|"zoom-in", duration, delay}; settings {hideOnDesktop, hideOnTablet, hideOnMobile, fullBleed, contentWidth ("narrow"|"normal"|"wide")}. Use appearance.desktop.align for the section introduction and settings.contentWidth for its content. Text colour is appearance.desktop.textColor; there is no textColor or padding at the top. Example design: {"background":{"type":"color","color":"#0b2545"},"appearance":{"desktop":{"textColor":"#ffffff","align":"center"}},"settings":{"contentWidth":"narrow"},"spacing":{"desktop":{"paddingTop":96,"paddingBottom":96}},"shadow":"soft","border":{"radius":16}}`;
 
 /** The theme settings the agent may change. Logo and favicon are set in the editor. */
@@ -85,7 +92,7 @@ const specs = [
   { name: "get_page", description: 'Read a page: its title, menu label and SEO fields, and the content of its sections (text, links, images and lists). Layout options and design are left out; get_section has them. Pass sectionIds, a list, to read only some sections. A section you have already read in this run, and that has not changed since, is listed under unchanged instead of being sent again. Example: {"pageId":"<pageId>","sectionIds":["<sectionId>"]}', schema: z.object({
     pageId: z.uuid(), sectionIds: z.array(z.string().min(1).max(200)).min(1).max(30).optional(),
   }) },
-  { name: "get_section", description: 'Read one section, or one layout element nested in a section, in full: every property with its layout options, its design, and the ids of the elements nested in it. Use it for the section the editor names, and before changing a design, a layout option or a nested element. Example: {"pageId":"<pageId>","sectionId":"<sectionId>"}', schema: sectionRef },
+  { name: "get_section", description: 'Read one section, or a nested layout element, in full: props, layout, design and nested ids. Read before changing design, layout or nested elements. Off-center indent/spacing is reported in layoutCheck with affected elements, devices and fixes. Example: {"pageId":"<pageId>","sectionId":"<sectionId>"}', schema: sectionRef },
   { name: "search_site", description: "Search text across pages and blog posts.", schema: z.object({ query: z.string().trim().min(1).max(200) }) },
   { name: "list_section_designs", description: "List curated section designs. With a blockType, also returns that block's editable props.", schema: z.object({ blockType: z.string().max(80).optional() }) },
   { name: "get_blog_posts", description: "List blog draft and published post summaries.", schema: z.object({
@@ -126,7 +133,7 @@ const specs = [
   { name: "switch_section_design", description: 'Switch a section to a curated design while preserving compatible content. designId comes from list_section_designs. Example: {"pageId":"<pageId>","sectionId":"<sectionId>","designId":"<designId>"}', schema: sectionRef.extend({
     designId: z.string().min(1).max(100),
   }) },
-  { name: "insert_section", description: `Insert a section into a page: either a curated designId from list_section_designs (optionally with props for its content, as in update_section_props) or a customSection, never both. position is a number, 0 for the top; leave it out to add at the end. Example with a curated design: {"pageId":"<pageId>","designId":"<designId>","position":2,"props":{"heading":"Questions we hear often"}}. ${CUSTOM_LAYOUT}`, schema: z.object({
+  { name: "insert_section", description: `Insert a section into a page: either a curated designId (optionally with props for its content, as in update_section_props) or a customSection, never both. Choose a curated design whenever one of these kinds fits, which covers every standard section. Curated designIds by kind: ${CURATED_DESIGNS}. list_section_designs with a blockType lists a design's props. position is a number, 0 for the top; leave it out to add at the end. Example with a curated design: {"pageId":"<pageId>","designId":"<designId>","position":2,"props":{"heading":"Questions we hear often"}}. Use a customSection only for a layout the user asks for that no curated design can make. ${CUSTOM_LAYOUT}`, schema: z.object({
     pageId: z.uuid(), designId: z.string().min(1).max(100).optional(), customSection: customSectionSchema.optional(),
     position: z.number().int().min(0).optional(), props: jsonObject.optional(),
   }) },
@@ -137,7 +144,7 @@ const specs = [
     position: z.number().int().min(0).optional(),
   }) },
   { name: "delete_section", description: "Remove a section from a page.", schema: sectionRef },
-  { name: "create_page", description: 'Stage a new page. slug is the address without slashes (lowercase letters, digits and hyphens); navLabel is the menu label, at most three words. Each section is an object with either a curated designId (optionally with props for its content) or a customSection as in insert_section. The shared footer is added automatically. Example: {"title":"Careers","slug":"careers","navLabel":"Careers","sections":[{"designId":"<designId from list_section_designs>","props":{"heading":"Join our team"}}]}', schema: z.object({
+  { name: "create_page", description: 'Stage a new page. slug is the address without slashes (lowercase letters, digits and hyphens); navLabel is the menu label, at most three words. Each section is an object with either a curated designId from the kinds insert_section lists (optionally with props for its content) or, only when no curated design can make it, a customSection as in insert_section. The shared footer is added automatically. Example: {"title":"Careers","slug":"careers","navLabel":"Careers","sections":[{"designId":"<designId from list_section_designs>","props":{"heading":"Join our team"}}]}', schema: z.object({
     title: z.string().trim().min(1).max(200),
     slug: pageSlug,
     navLabel,

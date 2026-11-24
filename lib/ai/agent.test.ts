@@ -167,12 +167,33 @@ describe("AI agent tool guardrails", () => {
     } });
     changeset.baseline = structuredClone(changeset.working);
     expect(await run(changeset, "get_section", { pageId, sectionId: "intro" }))
-      .toMatchObject({ warnings: [expect.stringContaining("margin-left")] });
-    await run(changeset, "update_section_props", { pageId, sectionId: "intro", props: {
+      .toMatchObject({ layoutCheck: { passed: false, problems: [expect.stringContaining("margin-left")] } });
+    // The change is answered with the check, so "fixed" has something to stand on.
+    expect(await run(changeset, "update_section_props", { pageId, sectionId: "intro", props: {
       text: '<p style="text-align: center">Hello <strong>there</strong>.</p>',
-    } });
+    } })).toMatchObject({ layoutCheck: { passed: true } });
     expect(nested(changeset.working, "intro").props.text).toBe('<p style="text-align: center">Hello <strong>there</strong>.</p>');
     expect(nested(changeset.baseline, "intro").props.text).toContain("128px");
+    expectReplays(changeset);
+  });
+
+  it("checks the margins behind a centered box, not only its text alignment", async () => {
+    const changeset = staged();
+    const column = ((sections(changeset.working)[1].props.rows as Section[])[0].props.columns as Section[])[0];
+    (column.props.content as Section[]).push({ type: "Text", props: {
+      ...defaults("Text"), id: "intro", align: "center", text: "<p>Our services at a glance.</p>",
+      design: { spacing: { desktop: { marginLeft: 128 } } },
+    } });
+    changeset.baseline = structuredClone(changeset.working);
+    const read = await run(changeset, "get_section", { pageId, sectionId: "custom" }) as { layoutCheck: { problems: string[] } };
+    expect(read.layoutCheck.problems).toEqual([expect.stringMatching(/^Text intro .*off-center on desktop, tablet, mobile, with 128px .* left and 0px .* right.*update_section_design/)]);
+    // Setting the alignment again changes nothing about the box, and the result says so.
+    expect(await run(changeset, "update_section_props", { pageId, sectionId: "intro", props: { text: "<p>Our services, at a glance.</p>" } }))
+      .toMatchObject({ layoutCheck: { passed: false } });
+    expect(await run(changeset, "update_section_design", { pageId, sectionId: "intro", design: { spacing: { desktop: { marginLeft: 0 } } } }))
+      .toMatchObject({ layoutCheck: { passed: true } });
+    // A section with nothing off-center is not given a check to read.
+    expect(await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { text: "Renamed" } })).not.toHaveProperty("layoutCheck");
     expectReplays(changeset);
   });
 

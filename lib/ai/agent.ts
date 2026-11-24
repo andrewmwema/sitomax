@@ -20,7 +20,7 @@ import { themeSchema } from "@/lib/theme/schema";
 import { nearestContrast, bestContrastingTextColor } from "@/lib/theme/contrast";
 import type { BlockDesign } from "@/lib/sections/design";
 import { sanitizePuckData } from "@/lib/richtext";
-import { hasCenteredIndent } from "@/lib/sections/indent-qa";
+import { alignmentProblemSummary, findAlignmentProblems, type AlignmentProblem } from "@/lib/sections/alignment-qa";
 import { blogContentSchema, sanitizeBlogContent } from "@/lib/blog";
 import { puckConfig } from "@/lib/puck/config";
 import { DEFAULT_COLORS } from "@/lib/theme/presets";
@@ -30,7 +30,7 @@ import { freshFooter } from "./site-footer";
 import {
   AGENT_WRITE_TOOLS, agentToolParameters, agentToolSchemas, agentTools, SITE_SETTINGS_FIELDS, SMALL_AGENT_TOOLS, smallAgentTools, themePatchSchema,
 } from "./agent-tools";
-import { routeAgentRequest, scopeExceeded, SMALL_SCOPE, widenScope, type AgentRoute, type ChangeScope } from "./agent-route";
+import { contextSections, reportsMisalignment, routeAgentRequest, scopeExceeded, SMALL_SCOPE, widenScope, type AgentRoute, type ChangeScope } from "./agent-route";
 import { applyQuickStyle, quickStyleSchema } from "@/lib/theme/quick-styles";
 import { createAgentReviewPayload, jsonEqual, reviewPatches, type ReviewPatch } from "./agent-review";
 import { appendUserContent, compactToolResults, countUserTurns, dropThinking, summarizeHistory, withSiteOverview } from "./agent-memory";
@@ -72,12 +72,13 @@ const PLANS = "PLANS. A request that touches more than 1 page, or more than 3 se
 const SCOPE = "SCOPE. You make small edits to what is already on one page: the text, links, images, alt text, look or position of up to three of its sections, or the page's title, menu label and SEO fields. Everything else belongs to the full site agent: adding a section or a page, the theme, header, footer or blog, work on more than one page or more than three sections, anything that needs a plan, a question or request for advice, and anything you are unsure how to do well. For those, call hand_off at once, before changing anything and without replying to the user.";
 const TOOL_INPUT = "TOOL INPUT. Follow each tool's description, schema and example exactly: use the key names and option values given there, and write objects and lists as objects and lists, never as JSON strings. A change is answered with a short result: ok, the ids of anything new and what changed. When a tool result has notes, part of what you sent was left out or replaced: read them, and send that part again properly if it matters.";
 const EDITING = "EDITING. Send only the properties you change. Keep the existing brand consistent. Never invent business facts, prices, reviews, statistics, credentials, or contact details; use clearly marked [placeholders] for unknown details. A placeholder names what is missing, such as [average rating] or [price], and never holds a made-up value such as [4.9]. Make accessible WCAG AA and mobile-friendly choices. You may only propose business-information edits as a note: do not modify it. Never publish, change domains, billing, accounts, or user settings. All edits are temporary changeset entries until the user keeps them.";
-const BUILDING = "BUILDING. The footer is a section repeated on every page: change it only with update_footer, which applies the same change to the footer of every page. Curated designs arrive with sample content, which the result lists as sampleContent: replace all of it with supplied facts or [placeholders], and never leave sample names, numbers, prices or reviews in place. After adding a section or page, choose its images with set_image. When the user asks for exactly what a theme preset does (a button shape, rounder or sharper corners, more or less space between sections, or a preset palette or font pairing by name), apply_theme_preset does it in one short call; a look you design yourself is made with update_theme.";
+const ALIGNMENT = "ALIGNMENT. Text looks misaligned when its box is narrower than its container and sits to one side, even if its text alignment is right: a paragraph indent, unequal left and right margin or padding on the element, its column, row or section, or different alignment on one device. When the user reports something misaligned, off-center or shifted, read the section with get_section and check all of these, on desktop, tablet and mobile, not only the align setting. get_section lists what it finds under layoutCheck, and the editor may add what the browser measured to the request. Centered text needs the same space on both sides: remove the indent, make the left and right spacing equal, or set the alignment of the device that differs. Say that an alignment problem is fixed only when the layoutCheck in your tool results has passed. If it has not, or if nothing in the section's settings explains the problem, say plainly what you changed and what is still not right; never guess.";
+const BUILDING = "BUILDING. For a standard section (services or features, testimonials, FAQ, pricing, a call to action, team, gallery, and the other kinds insert_section lists) use a curated design: it is responsive, accessible and follows the theme. Use a custom layout only when the user asks for something no curated design can make, such as an unusual arrangement of columns, and never to rebuild a standard section by hand. The footer is a section repeated on every page: change it only with update_footer, which applies the same change to the footer of every page. Curated designs arrive with sample content, which the result lists as sampleContent: replace all of it with supplied facts or [placeholders], and never leave sample names, numbers, prices or reviews in place. After adding a section or page, choose its images with set_image. When the user asks for exactly what a theme preset does (a button shape, rounder or sharper corners, more or less space between sections, or a preset palette or font pairing by name), apply_theme_preset does it in one short call; a look you design yourself is made with update_theme.";
 const REPLIES = "REPLIES. Explain changes in plain English. Whatever the user reads (replies, plan steps, questions) names pages and sections in plain words and never shows an id such as a pageId or sectionId. Your closing message, once the work is finished, is a summary of at most about 120 words unless the user asked for more detail: what changed and anything they need to fill in or check, in plain sentences or a short list. Do not narrate tool calls, rejected attempts or repairs.";
 /** The rules never change, so every request reads them, and the tools before them, from the provider's cache. */
-const SYSTEM_PROMPT = [INTRO, FINDING, PLANS, TOOL_INPUT, EDITING, BUILDING, REPLIES].join("\n\n");
+const SYSTEM_PROMPT = [INTRO, FINDING, PLANS, TOOL_INPUT, EDITING, ALIGNMENT, BUILDING, REPLIES].join("\n\n");
 /** The small model's rules: the same care, without planning or building, and a way out. */
-const SMALL_SYSTEM_PROMPT = [INTRO, SCOPE, FINDING, TOOL_INPUT, EDITING, REPLIES].join("\n\n");
+const SMALL_SYSTEM_PROMPT = [INTRO, SCOPE, FINDING, TOOL_INPUT, EDITING, ALIGNMENT, REPLIES].join("\n\n");
 
 const record = z.record(z.string(), z.unknown());
 
@@ -153,6 +154,12 @@ export type AgentState = {
   hadRejectedAttempt?: boolean;
   /** Requests in this conversation so far, which decides when its history is summarised. */
   threadTurns?: number;
+  /** The user reported something misaligned, so the closing message waits for the layout check. */
+  layoutReport?: boolean;
+  /** The sections the editor named with that report. */
+  layoutTargets?: { pageId: string; sectionId: string }[];
+  /** Times the closing message was held back because the layout check had not passed. */
+  layoutChecks?: number;
   /** Times in a row the agent was told to carry on without making progress. */
   nudges: number;
   /** The approved plan and how far the agent has got with it. */
@@ -180,6 +187,8 @@ const agentStateSchema = z.object({
   route: z.enum(["small", "main"]).optional(), scope: z.object({ pageId: z.string().optional(), sections: z.array(z.string()) }).optional(),
   planDemands: z.number().int().nonnegative().optional(),
   repair: z.string().optional(), repairs: z.number().int().nonnegative().optional(), hadRejectedAttempt: z.boolean().optional(), threadTurns: z.number().int().nonnegative().optional(),
+  layoutReport: z.boolean().optional(), layoutChecks: z.number().int().nonnegative().optional(),
+  layoutTargets: z.array(z.object({ pageId: z.string(), sectionId: z.string() })).optional(),
   plan: agentPlanSchema.optional(), pauseReason: z.string().optional(),
   tokenUsage: tokenUsageSchema, segmentUsage: tokenUsageSchema, cost: agentCostSchema.optional(),
   awaiting: z.object({ kind: z.enum(["plan", "question", "credit"]), toolUseId: z.string(), toolName: z.string(), payload: z.record(z.string(), z.unknown()) }).optional(),
@@ -803,6 +812,13 @@ export async function makeToolResult(name: string, input: unknown, changeset: Ch
       changeset.changes.length = count;
       return told({ ok: true, nothingChanged: true, message: NOTHING_CHANGED });
     }
+    // A change to a section is answered with what its settings now say about centered text.
+    const { pageId, sectionId } = changeTarget(changeset);
+    if (pageId && sectionId && isRecord(toolResult)) {
+      const left = layoutProblems(changeset.working, pageId, sectionId);
+      if (left.length) return { ...toolResult, layoutCheck: { passed: false, problems: left.map(layoutProblemForModel) } };
+      if (layoutProblems(before, pageId, sectionId).length) return { ...toolResult, layoutCheck: { passed: true } };
+    }
     return toolResult;
   }
   return withoutEmbedCode(told(result));
@@ -873,9 +889,8 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
       const key = `${page.id}/${sectionId}`;
       if (context.reads?.[key]?.full === digest(section)) return { sectionId, unchanged: true, note: ALREADY_READ };
       if (context.reads) context.reads[key] = { ...context.reads[key], full: digest(section) };
-      return { sectionId, ...section, ...(hasCenteredIndent(item) ? {
-        warnings: ["Centered text has a large margin-left indent. To remove it, edit the affected Text element's text HTML with update_section_props, preserving its wording and other formatting."],
-      } : {}) };
+      const problems = layoutProblems(changeset.working, page.id, sectionId);
+      return { sectionId, ...section, ...(problems.length ? { layoutCheck: { passed: false, problems: problems.map(layoutProblemForModel) } } : {}) };
     }
     case "search_site": {
       const query = String(args.query).toLowerCase();
@@ -1346,12 +1361,13 @@ async function getRunContext(supabase: Supabase, threadId: string, runId: string
 const NO_USAGE = { inputTokens: 0, outputTokens: 0 };
 export function newAgentState(
   messages: Anthropic.MessageParam[], reservationId: string, largeCreditConfirmed = false,
-  options: { route?: AgentRoute; threadTurns?: number } = {},
+  options: { route?: AgentRoute; threadTurns?: number; layoutReport?: boolean; layoutTargets?: AgentState["layoutTargets"] } = {},
 ): AgentState {
   return {
     messages, toolCalls: 0, changesThisRun: 0, runChanges: 0, toolRepairs: {}, nudges: 0, compactedChars: 0,
     tokenUsage: tokenUsageSchema.parse(NO_USAGE), segmentUsage: tokenUsageSchema.parse(NO_USAGE),
     reservationId, largeCreditConfirmed, route: options.route ?? "main", threadTurns: options.threadTurns ?? 1,
+    ...(options.layoutReport ? { layoutReport: true, layoutTargets: options.layoutTargets ?? [] } : {}),
   };
 }
 /**
@@ -1467,6 +1483,67 @@ function callRole(state: AgentState): "small" | "main" | "repair" {
   // Putting right the input of one tool call needs no planning, so the small model does it. A long
   // conversation stays with the main model, which reads it from its cache.
   return state.repair && state.toolRepairs[state.repair] === 1 && JSON.stringify(state.messages).length < 120_000 ? "repair" : "main";
+}
+/** What a section's saved settings say about centered text that is not centered. `sectionId` may be an element nested in it. */
+function layoutProblems(snapshot: SiteSnapshot, pageId: string, sectionId: string): AlignmentProblem[] {
+  const page = snapshot.pages.find((entry) => entry.id === pageId);
+  const found = page ? locate(puckDataSchema.parse(page.draft_data), sectionId) : null;
+  return found && (found.kind === "section" || found.kind === "element") ? findAlignmentProblems(found.parent) : [];
+}
+/** A problem as the model is told it: the element, the devices, and the tool that changes it. */
+function layoutProblemForModel(problem: AlignmentProblem) {
+  const where = `${problem.type} ${problem.id}${problem.text ? ` (“${problem.text}”)` : ""}`;
+  return problem.cause === "indent"
+    ? `${where}: centered text has a paragraph indent (margin-left in its text HTML). Remove it with update_section_props, keeping the wording and other formatting.`
+    : `${where}: centered text is off-center on ${problem.devices.join(", ")}, with ${problem.left}px of margin and padding on its left and ${problem.right}px on its right. Make the two equal, or 0, on those devices in design.spacing with update_section_design.`;
+}
+type LayoutFailure = { page: Page; problem: AlignmentProblem };
+/**
+ * Centered text this run leaves off-center. After a report of misalignment it
+ * is every such problem in the sections the editor named and those the run
+ * changed or read in full; otherwise only what the run's own changes introduced.
+ */
+function layoutFailures(changeset: Changeset, state: AgentState): LayoutFailure[] {
+  const sections = new Map<string, { pageId: string; sectionId: string }>();
+  const add = (pageId: string, sectionId: string) => {
+    const top = sectionOf(changeset, pageId, sectionId);
+    if (top) sections.set(`${pageId}/${top}`, { pageId, sectionId: top });
+  };
+  for (const change of state.runChanges ? changeset.changes.slice(-state.runChanges) : []) {
+    if (!change.pageId) continue;
+    if (change.sectionId) add(change.pageId, change.sectionId);
+    else if (change.kind === "create_page") {
+      const page = changeset.working.pages.find((entry) => entry.id === change.pageId);
+      for (const item of page ? editableSections(puckDataSchema.parse(page.draft_data)) : []) add(change.pageId, String(item.props.id));
+    }
+  }
+  if (state.layoutReport) {
+    for (const target of state.layoutTargets ?? []) add(target.pageId, target.sectionId);
+    for (const [key, read] of Object.entries(state.reads ?? {})) {
+      const split = key.indexOf("/");
+      if (read.full && split > 0) add(key.slice(0, split), key.slice(split + 1));
+    }
+  }
+  const identity = (pageId: string, problem: AlignmentProblem) => `${pageId}/${problem.id}/${problem.cause}/${problem.devices.join()}/${problem.left}/${problem.right}`;
+  return [...sections.values()].flatMap(({ pageId, sectionId }) => {
+    const page = changeset.working.pages.find((entry) => entry.id === pageId);
+    if (!page) return [];
+    const known = state.layoutReport ? new Set<string>()
+      : new Set(layoutProblems(changeset.baseline, pageId, sectionId).map((problem) => identity(pageId, problem)));
+    return layoutProblems(changeset.working, pageId, sectionId).filter((problem) => !known.has(identity(pageId, problem)))
+      .map((problem) => ({ page, problem }));
+  });
+}
+/** Times a closing message is held back for the layout check before the run ends with the check's own report. */
+const MAX_LAYOUT_CHECKS = 1;
+const LAYOUT_NOT_PASSED = (failures: LayoutFailure[]) => APP_NOTE + `Layout check: not passed. ${failures.slice(0, 6).map(({ problem }) => layoutProblemForModel(problem)).join(" ")} Centered text needs the same space on its left and right. Fix these now if you can. Then write your closing message again: say an alignment problem is fixed only if this check has passed, and otherwise say plainly what is still off.`;
+/** What the check still reports, in words for the user: the page, the kind of block and its text, never an id. */
+function layoutFailureLines(failures: LayoutFailure[]) {
+  const label = (type: string) => puckConfig.components[type as keyof typeof puckConfig.components]?.label ?? type;
+  const lines = failures.slice(0, 4).map(({ page, problem }) =>
+    `- ${pageName(page)}, ${label(problem.type)}${problem.text ? ` “${problem.text}”` : ""}: ${alignmentProblemSummary(problem)}`);
+  const more = failures.length - lines.length;
+  return `${lines.join("\n")}${more > 0 ? `\n- ${more} more` : ""}`;
 }
 /** A layout element counts as the section it is in. */
 function sectionOf(changeset: Changeset, pageId: string | undefined, sectionId: string | undefined) {
@@ -1622,14 +1699,29 @@ export async function runAgentLoop(run: {
       }
       const open = openPlanSteps(state.plan);
       if (!cutOff && !open.length) {
+        // Centered text left off-center is sent back once to be put right before the run may end.
+        const failures = layoutFailures(changeset, state);
+        if (failures.length && (state.layoutChecks ?? 0) < MAX_LAYOUT_CHECKS) {
+          state.layoutChecks = (state.layoutChecks ?? 0) + 1;
+          state.messages = appendUserContent(state.messages, [{ type: "text", text: LAYOUT_NOT_PASSED(failures) }]);
+          continue;
+        }
         const labels = stagedLabels(changeset).slice(-state.runChanges);
         const remaining = labels.length - 6;
-        const text = state.hadRejectedAttempt
-          ? state.runChanges
-            ? `Changes staged for review:\n${labels.slice(0, 6).map((label) => `- ${label}`).join("\n")}${remaining > 0 ? `\n- ${remaining} more changes` : ""}`
-            : "No changes were staged in this request."
+        const staged = state.runChanges
+          ? `Changes staged for review:\n${labels.slice(0, 6).map((label) => `- ${label}`).join("\n")}${remaining > 0 ? `\n- ${remaining} more changes` : ""}`
+          : "No changes were staged in this request.";
+        const reply = state.hadRejectedAttempt ? staged
           : response.content.filter((part) => part.type === "text").map((part) => part.text.trim()).filter(Boolean).join("\n\n");
-        if (state.hadRejectedAttempt && state.messages.at(-1)?.role === "assistant") {
+        // After a report of misalignment the model's closing words are not passed on while the check
+        // fails: they may say it is fixed. Otherwise they stand, with what the check found added.
+        const text = !failures.length
+          ? state.layoutReport
+            ? `${staged}\n\nNo off-center spacing or indent problems were found in the saved settings checked. Review the layout preview at desktop, tablet and mobile sizes before treating the alignment as fixed.`
+            : reply
+          : state.layoutReport ? `${staged}\n\nThe layout check has not passed, so this is not fixed yet:\n${layoutFailureLines(failures)}`
+            : `${reply}\n\nLayout check: centered text is now off-center:\n${layoutFailureLines(failures)}`.trim();
+        if ((state.hadRejectedAttempt || failures.length || state.layoutReport) && state.messages.at(-1)?.role === "assistant") {
           state.messages[state.messages.length - 1] = { role: "assistant", content: [{ type: "text", text }] };
         }
         if (text) emit({ type: "text", text });
@@ -1894,6 +1986,7 @@ export async function executeAgentRequest(
       threadId = input.threadId ?? await createAiAgentThread(supabase, userId, input.siteId, input.message.slice(0, 120));
       state = newAgentState(messages, reservation.id, input.largeRunConfirmed === true, {
         route: routeAgentRequest({ message: input.message, context: input.context, openPlan }), threadTurns,
+        layoutReport: reportsMisalignment(input.message), layoutTargets: contextSections(input.context),
       });
       runId = await createAiAgentRun(supabase, threadId, { request_id: reservation.id, changeset, run_state: state });
     } catch (cause) {

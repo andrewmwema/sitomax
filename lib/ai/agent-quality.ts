@@ -6,6 +6,7 @@ import { assessContrast, bestContrastingTextColor, nearestContrast, resolveContr
 import { buildThemeStyle, DEFAULT_COLORS } from "@/lib/theme/presets";
 import { themeSchema } from "@/lib/theme/schema";
 import { hasCenteredIndent } from "@/lib/sections/indent-qa";
+import { alignmentProblemSummary, findAlignmentProblems } from "@/lib/sections/alignment-qa";
 
 type Item = { type: string; props: Record<string, unknown> };
 type QualityPage = {
@@ -20,7 +21,7 @@ export type QualitySite = {
 /** What the check changed for the user, and what it leaves for them to look at. */
 export type QualityReport = { fixed: string[]; notes: string[] };
 
-type Kind = "contrast" | "empty_text" | "broken_link" | "nav_label" | "placeholder" | "indent";
+type Kind = "contrast" | "empty_text" | "broken_link" | "nav_label" | "placeholder" | "alignment";
 type Finding = {
   /** Stable identity, so problems that were already on the site are not blamed on the changes. */
   key: string; kind: Kind; pageId?: string; where: string; detail: string;
@@ -206,9 +207,18 @@ function inspect(site: QualitySite): Finding[] {
           Object.entries(fieldsOf(type)).filter(([, field]) => field.type === "slot").map(([key]) => [key, undefined]),
         ) } })) {
           findings.push({
-            key: `${page.id}:${id}:indent`, kind: "indent", pageId: page.id, where,
+            key: `${page.id}:${id}:indent`, kind: "alignment", pageId: page.id, where,
             detail: `${name}: centered text has a large indent that may shift it. Remove the indent if it is not intentional.`,
           });
+        }
+        // Unequal left and right spacing does the same; it is judged with the whole section in view.
+        if (!nested) {
+          for (const problem of findAlignmentProblems(item).filter((entry) => entry.cause === "spacing")) {
+            findings.push({
+              key: `${page.id}:${problem.id}:offset`, kind: "alignment", pageId: page.id, where,
+              detail: `${where} › ${labelOf(problem.type)}: ${alignmentProblemSummary(problem)}`,
+            });
+          }
         }
         for (const [path, value] of found.links) {
           let problem = linkProblem(value, page);
@@ -305,7 +315,7 @@ export function checkQuality<T extends QualitySite>(baseline: QualitySite, worki
     return !previous || JSON.stringify(previous.draft_data) !== JSON.stringify(page.draft_data);
   }).map((page) => page.id));
   const left = inspect(site).filter((finding) => !known.has(finding.key) ||
-    (finding.kind === "indent" && finding.pageId !== undefined && changedPages.has(finding.pageId)));
+    (finding.kind === "alignment" && finding.pageId !== undefined && changedPages.has(finding.pageId)));
   const notes = left.filter((finding) => finding.kind !== "placeholder").map((finding) => finding.detail);
   const menu = menuLabels(site).length;
   if (menu > MENU_ITEMS && menu > menuLabels(baseline).length) {

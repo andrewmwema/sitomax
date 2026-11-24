@@ -6,7 +6,7 @@ import { PagesManager } from "./pages-panel";
 import { EditorIconPicker } from "./editor-icon-picker";
 import { findBrokenLinks, type LinkIssue } from "@/lib/link-qa";
 import { findCenteredIndentIssues, type IndentIssue } from "@/lib/sections/indent-qa";
-import { hasTextOverflow } from "@/lib/sections/text-overflow";
+import { editorCanvas, measureLayout } from "./layout-check";
 import {
   createContext,
   useCallback,
@@ -488,6 +488,7 @@ function HeaderActions() {
   const [linkIssues, setLinkIssues] = useState<LinkIssue[]>([]);
   const [indentIssues, setIndentIssues] = useState<IndentIssue[]>([]);
   const [overflowIssues, setOverflowIssues] = useState<IndentIssue[]>([]);
+  const [offCenterIssues, setOffCenterIssues] = useState<IndentIssue[]>([]);
   const [previewUnavailable, setPreviewUnavailable] = useState(false);
   const [publishDialog, setPublishDialog] = useState<PublishDialogState | null>(null);
   const [preparingPublish, setPreparingPublish] = useState(false);
@@ -537,20 +538,26 @@ function HeaderActions() {
     const hits = findUnreplacedPlaceholders(appState.data, BLOCK_LABELS);
     const broken = findBrokenLinks(appState.data, { pages, currentPageId: pageId, labels: BLOCK_LABELS });
     const indented = findCenteredIndentIssues(appState.data, BLOCK_LABELS);
-    const frame = document.querySelector<HTMLIFrameElement>("#preview-frame");
-    const preview = frame ? frame.contentDocument : document.querySelector(".platform-editor");
-    const blocks = preview ? [...preview.querySelectorAll<HTMLElement>("[data-editor-block]")] : [];
-    const unavailable = !preview || appState.data.content.some((item) =>
-      !blocks.some((element) => element.dataset.editorBlock === item.props.id));
-    const overflowing = appState.data.content.flatMap((item, index) => {
-      const block = blocks.find((element) => element.dataset.editorBlock === item.props.id);
-      return block && hasTextOverflow(block) ? [{ index, label: BLOCK_LABELS[item.type] ?? item.type }] : [];
+    // Overflow and off-center boxes are measured on the canvas, at the size it is shown.
+    const canvas = editorCanvas();
+    const unavailable = !canvas || appState.data.content.some((item) => !canvas.sections.has(item.props.id));
+    const overflowing: IndentIssue[] = [];
+    const offCenter: IndentIssue[] = [];
+    appState.data.content.forEach((item, index) => {
+      const block = canvas?.sections.get(item.props.id);
+      if (!block) return;
+      const layout = measureLayout(block);
+      const issue = { index, label: BLOCK_LABELS[item.type] ?? item.type };
+      if (layout.overflow) overflowing.push(issue);
+      // A saved indent is already listed with how to remove it.
+      if (layout.offCenter.length && !indented.some((entry) => entry.index === index)) offCenter.push(issue);
     });
-    if (hits.length > 0 || broken.length > 0 || indented.length > 0 || overflowing.length > 0 || unavailable) {
+    if (hits.length > 0 || broken.length > 0 || indented.length > 0 || overflowing.length > 0 || offCenter.length > 0 || unavailable) {
       setPlaceholderHits(hits);
       setLinkIssues(broken);
       setIndentIssues(indented);
       setOverflowIssues(overflowing);
+      setOffCenterIssues(offCenter);
       setPreviewUnavailable(unavailable);
       return;
     }
@@ -680,7 +687,19 @@ function HeaderActions() {
                 </li>)}
               </ul>
             </div> : null}
-            {previewUnavailable ? <p className="mt-4 text-xs text-amber-700">The preview was unavailable, so text overflow could not be checked. Reload the editor and try again.</p> : null}
+            {offCenterIssues.length ? <div className="mt-4">
+              <h3 className="text-xs font-semibold text-zinc-700">Centered text that is off-center in the current preview</h3>
+              <ul className="mt-1.5 max-h-40 space-y-1.5 overflow-y-auto">
+                {offCenterIssues.map((issue) => <li key={issue.index}>
+                  <button type="button" onClick={() => selectSection(issue.index)}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-left transition hover:border-zinc-300 hover:bg-zinc-50">
+                    <span className="block text-sm font-medium text-zinc-800">{issue.label}<span className="font-normal text-zinc-400"> · section {issue.index + 1}</span></span>
+                    <span className="mt-0.5 block text-xs text-amber-700">The text box is narrower than its container and sits to one side. Check its indent and its left and right spacing.</span>
+                  </button>
+                </li>)}
+              </ul>
+            </div> : null}
+            {previewUnavailable ? <p className="mt-4 text-xs text-amber-700">The preview was unavailable, so text overflow and centering could not be checked. Reload the editor and try again.</p> : null}
             {placeholderHits.length && linkIssues.length ? <h3 className="mt-4 text-xs font-semibold text-zinc-700">Placeholder text</h3> : null}
             <ul className="mt-4 max-h-56 space-y-1.5 overflow-y-auto">
               {placeholderHits.map((hit) => (

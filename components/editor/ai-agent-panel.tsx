@@ -11,6 +11,9 @@ import { applyAgentStep, settleAgentSteps, type AgentStep, type AgentStepUpdate 
 import { agentReviewPayloadSchema, type AgentReviewPayload } from "@/lib/ai/agent-review";
 import { agentRunUsageSchema, describeAgentUsage, type AgentRunUsage } from "@/lib/ai/agent-usage";
 import { describeAgentCost } from "@/lib/ai/agent-cost";
+import { reportsMisalignment } from "@/lib/ai/agent-route";
+import { findOffCenterText } from "@/lib/sections/box-alignment";
+import { editorCanvas } from "./layout-check";
 import { useInteractions } from "./interaction-context";
 import { ROOT_ZONE } from "@/lib/editor/tree";
 import { AgentReviewCanvas, AgentReviewCard, newAgentReview, type AgentReviewState } from "./agent-review-card";
@@ -553,7 +556,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
   }
 
   /** What the model is told about the editor's selection. It holds ids, so it travels apart from the user's own words. */
-  function requestContext() {
+  function requestContext(message: string) {
     // The agent addresses a section by its page and its id together.
     const selected = contexts.includes("section") && section
       ? `selected section "${section.label}" (pageId ${section.pageId}, sectionId ${section.id})`
@@ -563,10 +566,23 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
       contexts.includes("header") ? "the global site header" : null,
       selected,
     ].filter(Boolean);
-    return [
+    const parts = [
       context.length ? `Focus on this context: ${context.join("; ")}.` : "",
       insert ? `Insert the new section on the page with pageId ${insert.pageId} at position ${insert.position} (0 is the top of the page).` : "",
-    ].filter(Boolean).join("\n\n");
+    ].filter(Boolean);
+    // A report of misalignment travels with what the canvas measured, which settings alone do not show.
+    const measured = reportsMisalignment(message) ? measuredLayout(selected ? section?.id : undefined) : [];
+    while (measured.length && [...parts, ...measured].join("\n\n").length > 1000) measured.pop();
+    return [...parts, ...measured].join("\n\n");
+  }
+
+  /** Centered text the canvas shows off-center, for the selected section or else the first sections that have any. */
+  function measuredLayout(sectionId?: string) {
+    const canvas = editorCanvas();
+    if (!canvas) return [];
+    return [...canvas.sections].filter(([id]) => !sectionId || id === sectionId).flatMap(([id, element]) =>
+      findOffCenterText(element).slice(0, 1).map((issue) =>
+        `Layout check, measured in the editor at ${canvas.width}px wide: in section id ${id} on the page with pageId ${pageId}, the box of the centered text "${issue.text}" has ${issue.left}px free on its left and ${issue.right}px on its right, so it is off-center.`)).slice(0, 2);
   }
 
   async function applyChanges() {
@@ -624,7 +640,7 @@ function AiAgentPanel({ siteId, pageId, pages, composer, focusRequest, reviewSes
     clearInsert();
     setSteps([]);
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: "user", content: text }]);
-    const context = requestContext();
+    const context = requestContext(text);
     await streamRequest({
       action: "start", siteId, ...(threadId ? { threadId } : {}), message: text, ...(context ? { context } : {}),
     });

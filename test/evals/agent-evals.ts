@@ -5,12 +5,13 @@ import {
 } from "@/lib/ai/agent";
 import { planAgentApply, type ApplyMeta } from "@/lib/ai/agent-apply-plan";
 import { unfinishedPlanSteps } from "@/lib/ai/agent-plan";
-import { routeAgentRequest } from "@/lib/ai/agent-route";
+import { contextSections, reportsMisalignment, routeAgentRequest } from "@/lib/ai/agent-route";
 import { createAgentReviewPayload, jsonEqual, previewAgentReview } from "@/lib/ai/agent-review";
 import { emptyAgentCost, type AgentCost } from "@/lib/ai/agent-cost";
 import type { TokenUsage } from "@/lib/ai/pricing";
 import { headerSchema } from "@/lib/header";
 import { sanitizePuckData } from "@/lib/richtext";
+import { findAlignmentProblems } from "@/lib/sections/alignment-qa";
 import { contrastRatio } from "@/lib/theme/presets";
 import { themeSchema } from "@/lib/theme/schema";
 import { fixtureBusiness, fixtureChangeset, fixtureIds } from "@/test/fixtures/agent-site";
@@ -28,8 +29,12 @@ export type EvalCase = {
   request: string;
   /** What the editor adds about the selection, as the AI panel writes it. It travels apart from the user's words. */
   context?: string;
+  /** Changes the fixture before the request, for a request about something that is wrong with the site. */
+  prepare?: (changeset: AgentChangeset) => void;
   /** Whether the request was carried out, beyond the rules every run must keep. Returns a problem or null. */
   verify: (changeset: AgentChangeset) => string | null;
+  /** Whether the closing reply says what it should. Returns a problem or null. */
+  verifyReply?: (reply: string, changeset: AgentChangeset) => string | null;
 };
 export type EvalResult = {
   id: string; kind: EvalKind; request: string; passed: boolean; failures: string[]; notes: string[];
@@ -202,12 +207,16 @@ export const EVAL_CASES: EvalCase[] = [
   { id: "seo", kind: "site", request: "Improve SEO on every page.",
     verify: (changeset) => changeset.working.pages.every((page) => isRecord(page.seo) && page.seo.title && page.seo.description)
       ? null : "Not every page has an SEO title and description." },
+  // Standard sections are made from curated designs, not rebuilt by hand as custom layouts.
   { id: "faq", kind: "page", request: "Add an FAQ to Pricing.",
-    verify: (changeset) => added(changeset, fixtureIds.pricing, "Faq") || added(changeset, fixtureIds.pricing, "Section")
-      ? null : "No FAQ section was added to Pricing." },
+    verify: (changeset) => added(changeset, fixtureIds.pricing, "Faq") ? null
+      : added(changeset, fixtureIds.pricing, "Section") ? "The FAQ was built as a custom layout instead of a curated FAQ design." : "No FAQ section was added to Pricing." },
   { id: "reviews", kind: "page", request: "Add a customer reviews section to the home page. We have not collected any reviews yet.",
-    verify: (changeset) => added(changeset, fixtureIds.home, "Testimonials") || added(changeset, fixtureIds.home, "Section")
-      ? null : "No reviews section was added to the home page." },
+    verify: (changeset) => added(changeset, fixtureIds.home, "Testimonials") ? null
+      : added(changeset, fixtureIds.home, "Section") ? "The reviews were built as a custom layout instead of a curated testimonials design." : "No reviews section was added to the home page." },
+  { id: "services", kind: "page", request: "Add a section to the About page that lists our services, with a line about each.",
+    verify: (changeset) => added(changeset, fixtureIds.about, "Services") ? null
+      : added(changeset, fixtureIds.about, "Section") ? "The services were built as a custom layout instead of a curated services design." : "No services section was added to About." },
   { id: "careers", kind: "page", request: "Create a Careers page and add it to the menu. We are hiring a plumber and an apprentice.",
     verify: (changeset) => changeset.working.pages.some((page) => page.slug === "careers" && !page.hide_from_menu) ? null : "No Careers page in the menu." },
   { id: "hero-button", kind: "section", request: `Change the hero button on the home page to say "Book a visit" and link it to the contact page.`, context: HERO_SELECTED,
@@ -264,6 +273,26 @@ export const EVAL_CASES: EvalCase[] = [
       return ["home-hero", "home-why-section"].every((id) => design(changeset.working, id) !== design(changeset.baseline, id))
         ? null : "The hero and the Why section were not both restyled.";
     } },
+  // The text is centered already: what is wrong is the left margin that moves its box.
+  { id: "off-center", kind: "section", request: "The paragraph in this section looks off-center, like it is shifted to the right. Please fix it.",
+    context: `Focus on this context: selected section "Section" (pageId ${fixtureIds.home}, sectionId home-why-section).`,
+    prepare: (changeset) => {
+      for (const snapshot of [changeset.baseline, changeset.working]) {
+        const section = content(snapshot, fixtureIds.home).find((item) => item.props.id === "home-why-section")!;
+        const column = ((section.props.rows as Item[])[0].props.columns as Item[])[0];
+        for (const element of (column.props.content as Item[]).slice(0, 2)) element.props.align = "center";
+        (column.props.content as Item[])[1].props.design = { spacing: { desktop: { marginLeft: 128 } } };
+      }
+    },
+    verify: (changeset) => {
+      const section = content(changeset.working, fixtureIds.home).find((item) => item.props.id === "home-why-section");
+      return section && !findAlignmentProblems(section).length && changedPages(changeset).length === 1 ? null
+        : "The paragraph's box is still pushed off-center, or other pages were touched.";
+    },
+    verifyReply: (reply, changeset) => {
+      const section = content(changeset.working, fixtureIds.home).find((item) => item.props.id === "home-why-section");
+      return findAlignmentProblems(section).length && !/not fixed yet/.test(reply) ? "The reply does not say that the problem is not fixed yet." : null;
+    } },
 ];
 
 class CostLimitReached extends Error {}
@@ -288,11 +317,12 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
   maxCostUsd?: number;
 } = {}): Promise<EvalResult> {
   const changeset = fixtureChangeset();
+  testCase.prepare?.(changeset);
   // Large runs are approved up front: the credit prompt belongs to the app, not the model.
   // As the request handler does it: the editor's context follows the user's words, and the words decide which model starts.
   const { request, context: selection } = testCase;
   const state = newAgentState([{ role: "user", content: [request, selection].filter(Boolean).join("\n\n") }], "00000000-0000-4000-8000-0000000000e0", true, {
-    route: routeAgentRequest({ message: request, context: selection }),
+    route: routeAgentRequest({ message: request, context: selection }), layoutReport: reportsMisalignment(request), layoutTargets: contextSections(selection),
   });
   let takenOver: string | undefined;
   const events: AgentEvent[] = [];
@@ -335,6 +365,9 @@ export async function runEval(testCase: EvalCase, model: AgentModel, options: {
     const unmet = testCase.verify(changeset);
     if (unmet) failures.push(unmet);
   }
+  const reply = events.findLast((event) => event.type === "text")?.text;
+  const misstated = testCase.verifyReply?.(typeof reply === "string" ? reply : "", changeset);
+  if (misstated) failures.push(misstated);
   return {
     id: testCase.id, kind: testCase.kind, request: testCase.request.split("\n")[0], passed: failures.length === 0, failures,
     notes: [...quality.fixed.map((item) => `Fixed: ${item}`), ...quality.notes],

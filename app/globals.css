@@ -100,6 +100,15 @@ body {
   max-width: 65ch;
 }
 
+/*
+ * The editor and previews wrap rich text in a second .rich-text of their own.
+ * Only the outer box carries the width cap: capped again, the inner box would
+ * be narrower than its container and sit at the left whatever the alignment.
+ */
+.rich-text .rich-text {
+  max-width: none;
+}
+
 /* Canvas text edits directly; sections move using their drag handles. */
 .site-content [data-puck-component] {
   cursor: default;
@@ -434,6 +443,12 @@ body {
   --appearance-justify-d: initial;
   --appearance-justify-t: initial;
   --appearance-justify-m: initial;
+  --appearance-ml-d: initial;
+  --appearance-ml-t: initial;
+  --appearance-ml-m: initial;
+  --appearance-mr-d: initial;
+  --appearance-mr-t: initial;
+  --appearance-mr-m: initial;
   --shell-design-bg: initial;
   --appearance-original-text: var(--color-text);
   --appearance-original-muted: var(--color-muted);
@@ -456,6 +471,11 @@ body {
   --shell-muted-override: var(--appearance-muted-d);
   --shell-align: var(--appearance-align-d);
   --shell-justify: var(--appearance-justify-d);
+  /* Margins for a width-capped box: this shell's own alignment, and the nearest container's. */
+  --shell-ml: var(--appearance-ml-d);
+  --shell-mr: var(--appearance-mr-d);
+  --near-ml: var(--inherit-ml-d);
+  --near-mr: var(--inherit-mr-d);
   color: var(--color-text);
   text-align: var(--appearance-align-d);
 }
@@ -464,10 +484,28 @@ body {
   max-width: var(--section-content-width);
 }
 
+/*
+ * Where a width-capped text box sits follows the nearest alignment, exactly as
+ * its text does: center → both margins auto, right → margin-left auto, left →
+ * margin-right auto. A design's own alignment classes re-declare it; a
+ * section's chosen alignment sets it below. Used only where an alignment has
+ * been chosen for the section, so untouched designs render as before.
+ */
+.site-content .text-center { --box-ml: auto; --box-mr: auto; }
+.site-content .text-left { --box-ml: 0px; --box-mr: auto; }
+.site-content .text-right { --box-ml: auto; --box-mr: 0px; }
+
 @media (min-width: 1024px) {
   .section-shell[data-section-align-d] {
     --intro-align: var(--appearance-align-d);
     --intro-justify: var(--appearance-justify-d);
+    --intro-ml: var(--appearance-ml-d);
+    --intro-mr: var(--appearance-mr-d);
+    & > .shell-body,
+    & .section-intro {
+      --box-ml: var(--intro-ml);
+      --box-mr: var(--intro-mr);
+    }
     & .section-intro {
       width: 100%;
       min-width: 0;
@@ -477,8 +515,18 @@ body {
     & :is(.section-intro, .layout-shell-element) :is(h1, h2, h3, h4, h5, h6, p) {
       text-align: var(--intro-align) !important;
     }
+    & :is(.rich-text, :is(p, dd, blockquote, h1, h2, h3, h4, h5, h6)[class*="max-w-"]) {
+      margin-left: var(--box-ml);
+      margin-right: var(--box-mr);
+    }
+    /* Stacks whose items hug their content line them up on the aligned side. */
+    & .follow-align {
+      align-items: var(--intro-justify);
+    }
     & .layout-shell-element > .shell-body > :is(h1, h2, h3, h4, h5, h6, .rich-text) {
       text-align: var(--intro-align) !important;
+      margin-left: var(--intro-ml) !important;
+      margin-right: var(--intro-mr) !important;
     }
   }
   .section-shell[data-section-align-d="center"] .section-intro { margin-inline: auto; }
@@ -496,11 +544,22 @@ body {
     --shell-muted-override: var(--appearance-muted-t, var(--appearance-muted-d));
     --shell-align: var(--appearance-align-t, var(--appearance-align-d));
     --shell-justify: var(--appearance-justify-t, var(--appearance-justify-d));
+    --shell-ml: var(--appearance-ml-t, var(--appearance-ml-d));
+    --shell-mr: var(--appearance-mr-t, var(--appearance-mr-d));
+    --near-ml: var(--inherit-ml-t);
+    --near-mr: var(--inherit-mr-t);
     text-align: var(--appearance-align-t, var(--appearance-align-d));
   }
   .section-shell[data-section-align-t] {
     --intro-align: var(--appearance-align-t, var(--appearance-align-d));
     --intro-justify: var(--appearance-justify-t, var(--appearance-justify-d));
+    --intro-ml: var(--appearance-ml-t, var(--appearance-ml-d));
+    --intro-mr: var(--appearance-mr-t, var(--appearance-mr-d));
+    & > .shell-body,
+    & .section-intro {
+      --box-ml: var(--intro-ml);
+      --box-mr: var(--intro-mr);
+    }
     & .section-intro {
       width: 100%;
       min-width: 0;
@@ -510,8 +569,18 @@ body {
     & :is(.section-intro, .layout-shell-element) :is(h1, h2, h3, h4, h5, h6, p) {
       text-align: var(--intro-align) !important;
     }
+    & :is(.rich-text, :is(p, dd, blockquote, h1, h2, h3, h4, h5, h6)[class*="max-w-"]) {
+      margin-left: var(--box-ml);
+      margin-right: var(--box-mr);
+    }
+    /* Stacks whose items hug their content line them up on the aligned side. */
+    & .follow-align {
+      align-items: var(--intro-justify);
+    }
     & .layout-shell-element > .shell-body > :is(h1, h2, h3, h4, h5, h6, .rich-text) {
       text-align: var(--intro-align) !important;
+      margin-left: var(--intro-ml) !important;
+      margin-right: var(--intro-mr) !important;
     }
   }
   .section-shell[data-section-align-t="center"] .section-intro { margin-inline: auto; }
@@ -529,11 +598,22 @@ body {
     --shell-muted-override: var(--appearance-muted-m, var(--appearance-muted-d));
     --shell-align: var(--appearance-align-m, var(--appearance-align-d));
     --shell-justify: var(--appearance-justify-m, var(--appearance-justify-d));
+    --shell-ml: var(--appearance-ml-m, var(--appearance-ml-d));
+    --shell-mr: var(--appearance-mr-m, var(--appearance-mr-d));
+    --near-ml: var(--inherit-ml-m);
+    --near-mr: var(--inherit-mr-m);
     text-align: var(--appearance-align-m, var(--appearance-align-d));
   }
   .section-shell[data-section-align-m] {
     --intro-align: var(--appearance-align-m, var(--appearance-align-d));
     --intro-justify: var(--appearance-justify-m, var(--appearance-justify-d));
+    --intro-ml: var(--appearance-ml-m, var(--appearance-ml-d));
+    --intro-mr: var(--appearance-mr-m, var(--appearance-mr-d));
+    & > .shell-body,
+    & .section-intro {
+      --box-ml: var(--intro-ml);
+      --box-mr: var(--intro-mr);
+    }
     & .section-intro {
       width: 100%;
       min-width: 0;
@@ -543,8 +623,18 @@ body {
     & :is(.section-intro, .layout-shell-element) :is(h1, h2, h3, h4, h5, h6, p) {
       text-align: var(--intro-align) !important;
     }
+    & :is(.rich-text, :is(p, dd, blockquote, h1, h2, h3, h4, h5, h6)[class*="max-w-"]) {
+      margin-left: var(--box-ml);
+      margin-right: var(--box-mr);
+    }
+    /* Stacks whose items hug their content line them up on the aligned side. */
+    & .follow-align {
+      align-items: var(--intro-justify);
+    }
     & .layout-shell-element > .shell-body > :is(h1, h2, h3, h4, h5, h6, .rich-text) {
       text-align: var(--intro-align) !important;
+      margin-left: var(--intro-ml) !important;
+      margin-right: var(--intro-mr) !important;
     }
   }
   .section-shell[data-section-align-m="center"] .section-intro { margin-inline: auto; }

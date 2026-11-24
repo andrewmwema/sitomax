@@ -159,6 +159,16 @@ export const JUSTIFY: Record<Align, "flex-start" | "center" | "flex-end"> = {
 };
 
 /**
+ * [margin-left, margin-right] that place a width-capped box where its text is
+ * aligned: center → both auto, right → margin-left auto, left → margin-right auto.
+ */
+export const BOX_MARGINS: Record<Align, readonly [string, string]> = {
+  left: ["0px", "auto"],
+  center: ["auto", "auto"],
+  right: ["auto", "0px"],
+};
+
+/**
  * Client-authored link: http(s), mailto, tel, site-relative paths and
  * #anchors only. javascript:, data: and friends become "#".
  */

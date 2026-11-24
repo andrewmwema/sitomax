@@ -36,6 +36,21 @@ const elementsOf = (value: QualitySite, sectionIndex = 0) => {
 const heading = element("Heading", "heading", { text: "Welcome" });
 
 describe("AI agent changeset quality check", () => {
+  it("reports centered text pushed off-center by unequal left and right spacing, until the spacing is even", () => {
+    const before = site([layout("main", [element("Text", "intro", { align: "center", text: "<p>Introduction</p>" })])]);
+    const after = structuredClone(before);
+    elementsOf(after)[0].props.design = { spacing: { desktop: { marginLeft: 128 } } };
+    const note = "Home › Text: centered text is pushed off-center on desktop, tablet, mobile: there is 128px of margin and padding on its left and 0px on its right.";
+    expect(checkQuality(before, after).report.notes).toEqual([note]);
+    const even = structuredClone(after);
+    elementsOf(even)[0].props.design = { spacing: { desktop: { marginLeft: 128, marginRight: 128 } } };
+    expect(checkQuality(before, even).report.notes).toEqual([]);
+    // Left-aligned text with the same spacing is a design choice.
+    const left = structuredClone(after);
+    elementsOf(left)[0].props.align = "left";
+    expect(checkQuality(before, left).report.notes).toEqual([]);
+  });
+
   it("reports a newly introduced large indent in centered text without changing it", () => {
     const before = site([layout("main", [element("Text", "intro", { align: "center", text: "<p>Introduction</p>" })])]);
     const after = structuredClone(before);
