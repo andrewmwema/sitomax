@@ -132,6 +132,17 @@ to them. `sites.theme.spacing` (`compact`, `comfortable`, `spacious`) sets
 `--section-pad`; an unset value keeps the style's own spacing. These changes do not alter tenant rendering, AI requests, credits,
 autosave, undo history, or publishing.
 
+The section library hides empty categories, while still showing Blank layouts
+and categories containing saved designs. Its thumbnails fit the full rendered
+design into each card; the enlarge control shows it in more detail. The editor
+drawer uses compact previews for elements and placeholders for empty media and
+layout blocks. Blog thumbnails use sample posts, while inserted blog feeds
+show the site's published posts. Sample partner wordmarks are illustrative and
+should be replaced with actual partners before publishing.
+
+`/dev/sections` showcases the built-in designs with theme and viewport controls
+in development and Vercel Preview deployments; it is unavailable in production.
+
 Dashboard Edit/Open editor links (including blog post edits), previews and live-site
 links open in a new tab; the editor's **Dashboard** link stays in the same tab.
 Apply `supabase/migrations/0045_editor_concurrency.sql` before deploying this editor:

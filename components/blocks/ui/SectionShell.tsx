@@ -234,6 +234,7 @@ export function SectionShell({
   return (
     <div ref={setRef} id={anchorId ?? undefined} data-editor-block={isEditing ? blockId : undefined}
       data-design-version={designVersion}
+      data-section-visual-version={design?.visualVersion === 2 ? 2 : 1}
       data-section-padding={sectionPadding}
       data-divider-style={dividerStyle}
       data-content-width={contentWidth === "narrow" || contentWidth === "normal" || contentWidth === "wide" ? contentWidth : undefined}

@@ -1,5 +1,5 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, iconField, imageField, linkField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import { designField, iconField, imageField, optionalImageField, linkField, richTextField, richHeadingField } from "@/lib/puck/fields";
 import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
@@ -16,7 +16,7 @@ export type ProcessProps = {
   eyebrow: string;
   heading: string;
   text: RichText;
-  variant: "steps" | "timeline" | "checklist";
+  variant: "steps" | "timeline" | "checklist" | "horizontal" | "vertical";
   image: string;
   imageAlt: string;
   buttonText?: string;
@@ -28,7 +28,7 @@ export type ProcessProps = {
   secondaryButtonAction?: "link" | "form-popup";
   secondaryButtonFormName?: string;
   trustLine?: string;
-  steps: { title: string; text: RichText; icon: IconValue }[];
+  steps: { title: string; text: RichText; icon: IconValue; image?: string; imageAlt?: string }[];
 };
 
 export const Process: ComponentConfig<ProcessProps> = {
@@ -55,12 +55,24 @@ export const Process: ComponentConfig<ProcessProps> = {
     secondaryButtonLink: linkField("Second button link"),
     secondaryButtonFormName: { type: "text", label: "Second popup form name" },
     trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
-    variant: { type: "select", label: "Layout", options: [{ label: "Numbered step cards", value: "steps" }, { label: "Editorial timeline", value: "timeline" }, { label: "Photo + checklist", value: "checklist" }] },
+    variant: { type: "select", label: "Layout", options: [
+      { label: "Numbered step cards", value: "steps" },
+      { label: "Editorial timeline", value: "timeline" },
+      { label: "Photo + checklist", value: "checklist" },
+      { label: "Horizontal process", value: "horizontal" },
+      { label: "Vertical process", value: "vertical" },
+    ] },
     image: imageField("Photo"), imageAlt: { type: "text", label: "Photo alt text" },
     steps: {
       type: "array", label: "Steps", getItemSummary: (step) => step.title || "Step",
       defaultItemProps: { title: "The next step", text: "<p>Explain what happens at this stage.</p>", icon: "check" },
-      arrayFields: { title: { type: "text", label: "Title" }, text: richTextField("Description"), icon: iconField("Icon") },
+      arrayFields: {
+        title: { type: "text", label: "Title" },
+        text: richTextField("Description"),
+        icon: iconField("Icon"),
+        image: optionalImageField("Step visual (optional)"),
+        imageAlt: { type: "text", label: "Step visual alt text" },
+      },
     },
   },
   defaultProps: {
@@ -81,7 +93,41 @@ export const Process: ComponentConfig<ProcessProps> = {
     buttonText, buttonLink, buttonAction, buttonFormName,
     secondaryButtonText, secondaryButtonLink, secondaryButtonAction, secondaryButtonFormName, trustLine,
   }) => (
-    <Section background={variant === "steps" ? "soft" : "default"}>
+    <Section background={variant === "steps" || variant === "horizontal" ? "soft" : "default"}>
+      {variant === "horizontal" || variant === "vertical" ? (
+        <>
+          <div className="section-intro mb-[var(--section-gap)] flex max-w-2xl flex-col gap-4">
+            {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+            <RichHeading level={2}>{heading}</RichHeading>
+            <RichTextContent value={text} />
+          </div>
+          <ol
+            className={variant === "horizontal" ? "grid gap-5" : "flex flex-col gap-5"}
+            style={variant === "horizontal" ? { gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 14rem), 1fr))" } : undefined}
+          >
+            {steps.map((step, i) => (
+              <li key={i} className={variant === "vertical" ? "grid items-center gap-5 border-t py-5 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]" : "min-w-0"}>
+                <Card className={variant === "horizontal" ? "h-full gap-5" : "grid items-center gap-5 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]"}>
+                  {step.image ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={step.image} alt={step.imageAlt ?? ""} loading="lazy"
+                      className={variant === "horizontal" ? "aspect-[4/3] w-full object-cover" : "aspect-[4/3] w-full object-cover"}
+                      style={{ borderRadius: "var(--radius-lg)" }} />
+                  ) : null}
+                  <div className="flex min-w-0 flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--color-muted)" }}>{String(i + 1).padStart(2, "0")}</span>
+                      <BlockIcon name={step.icon} size={22} editPath={puck.isEditing ? `steps.${i}.icon` : undefined} />
+                    </div>
+                    <Heading level={3}>{step.title}</Heading>
+                    <RichTextContent value={step.text} className="w-full text-sm" />
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
       <div className={`grid gap-12 ${variant === "checklist" ? "items-center lg:grid-cols-2" : ""}`}>
         <div className="flex flex-col gap-4">
           <div className="section-intro flex max-w-2xl flex-col gap-4">
@@ -111,6 +157,7 @@ export const Process: ComponentConfig<ProcessProps> = {
           })}
         </ol>
       </div>
+      )}
       <ConversionActions
         primary={buttonText ? { label: buttonText, mode: buttonAction, link: buttonLink, formName: buttonFormName } : undefined}
         secondary={secondaryButtonText ? { label: secondaryButtonText, mode: secondaryButtonAction, link: secondaryButtonLink, formName: secondaryButtonFormName } : undefined}

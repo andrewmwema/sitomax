@@ -12,7 +12,7 @@ export type LogosProps = {
   eyebrow: string;
   heading: string;
   text: RichText;
-  variant: "strip" | "grid";
+  variant: "strip" | "grid" | "marquee";
   logos: { name: string; image: string; imageAlt?: string }[];
 };
 
@@ -23,7 +23,11 @@ export const Logos: ComponentConfig<LogosProps> = {
     eyebrow: { type: "text", label: "Eyebrow", contentEditable: true },
     heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
-    variant: { type: "radio", label: "Layout", options: [{ label: "Wordmark strip", value: "strip" }, { label: "Partner grid", value: "grid" }] },
+    variant: { type: "radio", label: "Layout", options: [
+      { label: "Wordmark strip", value: "strip" },
+      { label: "Partner grid", value: "grid" },
+      { label: "Moving partner marquee", value: "marquee" },
+    ] },
     logos: {
       type: "array", label: "Partner logos", getItemSummary: (item) => item.name || "Partner",
       defaultItemProps: { name: "[Partner name]", image: "" },
@@ -45,13 +49,17 @@ export const Logos: ComponentConfig<LogosProps> = {
           <RichHeading level={2}>{heading}</RichHeading>
           {text ? <RichTextContent value={text} className="max-w-[50ch]" style={{ color: "var(--color-muted)" }} /> : null}
         </div>
-        <ul className={`grid grid-cols-2 ${variant === "grid" ? "gap-3" : "mt-[var(--section-gap)] gap-x-8 gap-y-4 md:grid-cols-4"}`}>
-          {logos.map((logo, i) => (
-            <li key={i} className={`flex min-h-28 min-w-0 items-center justify-center gap-2 px-4 py-6 text-center ${variant === "grid" ? "site-card" : ""}`}
-              style={variant === "grid" ? { background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)" } : { borderBlock: "1px solid var(--color-border)" }}>
+        <ul aria-label="Partner organizations"
+          className={variant === "marquee"
+            ? "logos-marquee-track mt-[var(--section-gap)] flex w-max gap-4"
+            : `grid grid-cols-2 ${variant === "grid" ? "gap-3" : "mt-[var(--section-gap)] gap-x-8 gap-y-4 md:grid-cols-4"}`}>
+          {(variant === "marquee" ? [...logos, ...logos] : logos).map((logo, i) => (
+            <li key={`${logo.name}-${i}`} aria-hidden={variant === "marquee" && i >= logos.length}
+              className={`flex min-h-28 min-w-0 items-center justify-center gap-2 px-4 py-6 text-center ${variant === "grid" || variant === "marquee" ? "site-card" : ""} ${variant === "marquee" ? "w-44 shrink-0 rounded-[var(--radius-lg)] border" : ""}`}
+              style={variant === "grid" || variant === "marquee" ? { background: "var(--color-bg)", borderColor: "var(--color-border)", borderRadius: "var(--radius-lg)" } : { borderBlock: "1px solid var(--color-border)" }}>
               {logo.image ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={logo.image} alt={logo.imageAlt ?? logo.name} loading="lazy" className="h-14 w-full max-w-40 object-contain" />
+                <img src={logo.image} alt={logo.imageAlt ?? logo.name} loading="lazy" className="site-partner-logo h-14 w-full max-w-40 object-contain" />
               ) : (
                 <span className="flex min-w-0 flex-wrap items-center justify-center gap-2 text-lg font-semibold sm:text-xl" style={{ fontFamily: i % 2 ? "var(--font-body)" : "var(--font-heading)" }}>
                   <BlockIcon name={["leaf", "building", "sun", "gem"][i % 4]} size={23} />

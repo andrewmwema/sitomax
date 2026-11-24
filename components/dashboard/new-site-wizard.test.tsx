@@ -16,6 +16,8 @@ const props: ComponentProps<typeof NewSiteWizard> = {
   accounts: [{ id: accountId, name: "Agency", is_internal: true }],
   choices: [{ key: "plumber", name: "Plumber", theme: {}, design: {
     id: "preview", name: "Plumber", blockType: "Hero", category: "Hero", props: {}, thumbnail: null, styles: ["classic"],
+    description: "Preview of the template hero.", bestFor: ["Template preview"],
+    metadata: { editableFields: ["heading"], repeatableFields: [], limits: {}, imageSlots: [] },
   } }],
   rootDomain: "localhost:3000", marketingSubdomain: "sitomax",
 };
