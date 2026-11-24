@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "seed:premium-templates": "tsx scripts/seed-premium-templates.ts",
     "agency-token": "node scripts/agency-token.mjs",
     "test": "vitest run"
   },
@@ -62,6 +63,7 @@
     "server-only": "^0.0.1",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
+    "tsx": "^4.20.6",
     "vitest": "^3.2.7"
   }
 }

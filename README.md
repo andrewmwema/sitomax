@@ -47,6 +47,15 @@ undoes them and checks the originals are back. It is skipped unless
 TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm test
 ```
 
+## Premium website designs
+
+Apply migrations only to a local or staging Supabase project, then run
+`npm run seed:premium-templates` with `NEXT_PUBLIC_SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` set for that same project. The idempotent seed
+uploads the template artwork to the read-only `template-assets` bucket and
+upserts the Showcase, Clarity and Studio master designs. Do not point the seed
+script at production while reviewing this feature.
+
 ## Platform appearance
 
 The dashboard, authentication screens and editor share the warm neutral,

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" fill="none">
+  <rect width="960" height="660" rx="28" fill="#F1EFEA"/>
+  <rect x="60" y="55" width="840" height="550" rx="16" fill="#171717"/>
+  <rect x="77" y="72" width="806" height="516" rx="8" fill="#F8F7F1"/>
+  <rect x="77" y="72" width="806" height="42" rx="8" fill="#E8E7E1"/>
+  <circle cx="99" cy="93" r="5" fill="#D57453"/>
+  <circle cx="117" cy="93" r="5" fill="#D2AA50"/>
+  <circle cx="135" cy="93" r="5" fill="#75A17D"/>
+  <text x="162" y="99" fill="#171717" font-family="Arial,sans-serif" font-size="13" letter-spacing="2">COMMON GROUND / DIGITAL</text>
+  <rect x="109" y="149" width="740" height="399" rx="4" fill="#D7E4DE"/>
+  <path d="M109 149h740v126H109z" fill="#43584B"/>
+  <text x="151" y="194" fill="#D9F36A" font-family="Arial,sans-serif" font-size="13" letter-spacing="3">A COMMUNITY MARKETPLACE</text>
+  <text x="151" y="239" fill="#fff" font-family="Georgia,serif" font-size="39">Good food, closer to home.</text>
+  <rect x="151" y="258" width="164" height="34" rx="17" fill="#D9F36A"/>
+  <rect x="111" y="318" width="223" height="192" rx="5" fill="#EAD6B7"/>
+  <rect x="358" y="318" width="223" height="192" rx="5" fill="#F2E9DA"/>
+  <rect x="605" y="318" width="223" height="192" rx="5" fill="#CAD8CE"/>
+  <circle cx="222" cy="382" r="37" fill="#C27B55"/>
+  <path d="M158 472c12-45 33-68 64-68 32 0 54 23 66 68" fill="#526E59"/>
+  <circle cx="469" cy="387" r="44" fill="#DFA85E"/>
+  <path d="M432 387c11-22 26-32 45-32 18 0 32 10 42 32-10 23-24 34-42 34-19 0-34-11-45-34Z" fill="#B75C43"/>
+  <path d="M679 462c4-63 25-97 62-97 38 0 59 34 63 97" fill="#516E59"/>
+  <circle cx="741" cy="354" r="31" fill="#C98D68"/>
+</svg>
