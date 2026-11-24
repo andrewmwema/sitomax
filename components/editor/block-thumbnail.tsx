@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MoveVertical } from "lucide-react";
 import { puckConfig } from "@/lib/puck/config";
-import { sectionCatalog, type SectionDesign } from "@/lib/sections/catalog";
+import { sectionCatalog, sectionContentMetadata, type SectionDesign } from "@/lib/sections/catalog";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { DesignThumbnail } from "./design-thumbnail";
 
@@ -16,6 +16,9 @@ export function BlockThumbnail({ name, theme }: { name: string; theme: SiteTheme
     blockType: name,
     category: "Text blocks",
     props: {},
+    description: `Preview of the ${name} section.`,
+    bestFor: ["Custom section"],
+    metadata: sectionContentMetadata(name),
     thumbnail: null,
     styles: ["classic", "modern"],
   }, [name]);

@@ -242,6 +242,12 @@ function LibraryContent() {
                 </div>
                 <div className="min-w-0 flex-1 p-2">
                   <p className="truncate text-xs font-medium text-zinc-700">{design.name}</p>
+                  <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-zinc-500">{design.description}</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {design.bestFor.slice(0, 2).map((tag) => (
+                      <span key={tag} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] leading-4 text-zinc-600">{tag}</span>
+                    ))}
+                  </div>
                   {design.saved ? <p className="mt-1 text-[10px] text-zinc-500">{design.saved.isGlobal ? "Global" : "Private"}</p> : null}
                 </div>
                 <button type="button" aria-label={`Insert ${design.name}`}

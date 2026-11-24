@@ -68,12 +68,23 @@ describe("host routing", () => {
     expect(mocks.lookup).not.toHaveBeenCalled();
   });
 
-  it("passes the section showcase through forwarded development hosts only in development", async () => {
+  it("passes the section showcase on development and Vercel preview hosts, but not production", async () => {
     vi.stubEnv("NODE_ENV", "development");
     const response = await proxy(request("https://client.app.github.dev/dev/sections", "client.app.github.dev"));
     expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(mocks.updateSession).not.toHaveBeenCalled();
     expect(mocks.lookup).not.toHaveBeenCalled();
+
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    const preview = await proxy(request("https://project-preview.vercel.app/dev/sections", "project-preview.vercel.app"));
+    expect(preview.headers.get("x-middleware-next")).toBe("1");
+    expect(mocks.updateSession).not.toHaveBeenCalled();
+    expect(mocks.lookup).not.toHaveBeenCalled();
+
+    vi.stubEnv("VERCEL_ENV", "production");
+    const production = await proxy(request("https://client.test/dev/sections", "client.test"));
+    expect(production.headers.get("x-middleware-rewrite")).toContain("/s/client.test/dev/sections");
   });
 
   it("rewrites nested RSS paths to the tenant feed handler despite the XML asset matcher", async () => {

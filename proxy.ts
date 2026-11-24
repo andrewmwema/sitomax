@@ -54,7 +54,8 @@ export async function proxy(request: NextRequest) {
   const root = getRootDomain().toLowerCase();
   const rootHost = hostname(root);
 
-  if (process.env.NODE_ENV === "development" && matchesPathPrefix(pathname, "/dev/sections")) {
+  if ((process.env.NODE_ENV === "development" || process.env.VERCEL_ENV === "preview") &&
+    matchesPathPrefix(pathname, "/dev/sections")) {
     return NextResponse.next();
   }
 
