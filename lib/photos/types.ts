@@ -10,6 +10,8 @@ export type StockPhoto = {
   id: number;
   previewUrl: string;
   alt: string;
+  sourceUrl: string;
+  author: string;
   width: number;
   height: number;
   downloadUrls: string[];

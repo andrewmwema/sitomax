@@ -28,7 +28,7 @@ export function createPhotoLibrary(supabase: SupabaseClient, accountId: string) 
       if (error) throw new PhotoError("Could not check the photo search limit. Apply migration 0020 and retry.");
       if (allowed !== true) throw new PhotoError("Photo search is busy. Please wait a minute and retry.");
       return provider.search(input);
-    }, ["stock-photo-search-v3", provider.name, keyHash, input.query, input.orientation, String(input.page)], { revalidate: 86400 })();
+    }, ["stock-photo-search-v4", provider.name, keyHash, input.query, input.orientation, String(input.page)], { revalidate: 86400 })();
   };
   const search = async (raw: z.input<typeof photoSearchSchema>) => (await searchPage(raw)).photos;
   return {
@@ -40,10 +40,19 @@ export function createPhotoLibrary(supabase: SupabaseClient, accountId: string) 
       if (!photo) throw new PhotoError("That photo is no longer available. Search again.");
       const file = await provider.download(photo);
       const bucket = supabase.storage.from("site-assets");
-      const path = `${siteId}/${provider.name.toLowerCase()}-${photo.id}.${file.extension}`;
+      const path = `${siteId}/${provider.name.toLowerCase()}-source-${photo.id}.${file.extension}`;
       const { error } = await bucket.upload(path, file.bytes, { contentType: file.contentType, cacheControl: "31536000",
-        metadata: { alt: alt ?? photo.alt }, upsert: false });
-      if (error && error.statusCode !== "409") throw new PhotoError("The photo could not be saved to site assets. Please retry.");
+        metadata: { alt: alt ?? photo.alt, source_provider: provider.name, source_id: photo.id,
+          source_url: photo.sourceUrl, source_author: photo.author }, upsert: false });
+      if (error?.statusCode === "409") {
+        const existing = await bucket.info(path);
+        const metadata = z.object({ source_provider: z.literal(provider.name), source_id: z.number(),
+          source_url: z.string(), source_author: z.string() }).safeParse(existing.data?.metadata);
+        if (existing.error || !metadata.success || metadata.data.source_id !== photo.id
+          || metadata.data.source_url !== photo.sourceUrl) {
+          throw new PhotoError("The existing photo source could not be verified. Please choose another photo.");
+        }
+      } else if (error) throw new PhotoError("The photo could not be saved to site assets. Please retry.");
       return { url: bucket.getPublicUrl(path).data.publicUrl, alt: alt ?? photo.alt };
     },
   };

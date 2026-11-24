@@ -10,8 +10,14 @@ const imageUrl = z.url().refine((value) => {
   return url.protocol === "https:" && ["pixabay.com", "cdn.pixabay.com"].includes(url.hostname)
     && !url.port && !url.username && !url.password;
 });
+const sourceUrl = z.url().refine((value) => {
+  const url = new URL(value);
+  return url.protocol === "https:" && url.hostname === "pixabay.com"
+    && !url.port && !url.username && !url.password;
+});
 const hitSchema = z.object({
   id: z.number().int().positive(), type: z.literal("photo"), tags: z.string(),
+  pageURL: sourceUrl, user: z.string().min(1).max(200),
   webformatURL: imageUrl, largeImageURL: imageUrl,
   fullHDURL: imageUrl.optional(), imageURL: imageUrl.optional(),
   imageWidth: z.number().positive(), imageHeight: z.number().positive(),
@@ -96,6 +102,7 @@ export const pixabay: PhotoProvider = {
     if (!parsed.success) throw new PhotoError("Photo search returned invalid results.");
     const photos = parsed.data.hits.filter((hit) => orientation !== "square" || hit.imageWidth === hit.imageHeight).map((hit) => ({
       id: hit.id, previewUrl: hit.webformatURL, alt: `Stock photograph: ${hit.tags}`,
+      sourceUrl: hit.pageURL, author: hit.user,
       width: hit.imageWidth, height: hit.imageHeight,
       downloadUrls: [...new Set([
         ...(hit.imageURL && hit.imageSize <= MAX_BYTES ? [hit.imageURL] : []),

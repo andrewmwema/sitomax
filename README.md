@@ -664,7 +664,9 @@ backgrounds, nested block images, site/agency logos and SEO images.
 Its default **Stock photos** tab searches Pixabay. Previews carry a
 **Photos from Pixabay** link; selecting a photo
 downloads the largest available suitable file (up to 20 MB) into the site's
-`site-assets` folder. AI site generation and AI-added sections use the same
+`site-assets` folder, recording the provider, photo ID, source page and author
+in the object's metadata. Existing older stock uploads are not modified.
+AI site generation and AI-added sections use the same
 provider interface in `lib/photos/`. Published pages use our Storage URLs, never
 the Pixabay preview URLs, and do not display new photo credits.
 

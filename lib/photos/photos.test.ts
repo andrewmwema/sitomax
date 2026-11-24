@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const mocks = vi.hoisted(() => ({ fetch: vi.fn(), reserve: vi.fn(), upload: vi.fn(), cache: new Map<string, unknown>() }));
+const mocks = vi.hoisted(() => ({ fetch: vi.fn(), reserve: vi.fn(), upload: vi.fn(), info: vi.fn(), cache: new Map<string, unknown>() }));
 vi.mock("next/cache", () => ({ unstable_cache: (fn: () => Promise<unknown>, keys: string[], options: { revalidate: number }) => async () => {
   expect(options.revalidate).toBe(86400);
   const key = keys.join(":");
@@ -15,6 +15,7 @@ const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
 const hit = {
   id: 42, type: "photo", tags: "tools, sink",
+  pageURL: "https://pixabay.com/photos/tools-sink-42/", user: "Photographer",
   webformatURL: "https://cdn.pixabay.com/photo/preview.jpg", largeImageURL: "https://cdn.pixabay.com/photo/1280.jpg",
   fullHDURL: "https://cdn.pixabay.com/photo/1920.jpg", imageURL: "https://cdn.pixabay.com/photo/original.jpg",
   imageWidth: 4000, imageHeight: 3000, imageSize: 4000000,
@@ -29,6 +30,7 @@ function client() {
   } }, error: null });
   const bucket = supabase.storage.from("site-assets");
   vi.spyOn(bucket, "upload").mockImplementation(mocks.upload);
+  vi.spyOn(bucket, "info").mockImplementation(mocks.info);
   vi.spyOn(supabase.storage, "from").mockReturnValue(bucket);
   return supabase;
 }
@@ -73,10 +75,11 @@ describe("stock photo provider boundary", () => {
     mocks.fetch.mockResolvedValueOnce(search()).mockResolvedValueOnce(jpeg());
     const result = await createPhotoLibrary(client(), accountId).select({ query: "tools", photoId: 42, siteId, alt: "Workshop tools" });
     expect(mocks.fetch.mock.calls[1][0]).toBe(hit.imageURL);
-    expect(mocks.upload).toHaveBeenCalledWith(`${siteId}/pixabay-42.jpg`, expect.any(Uint8Array), expect.objectContaining({
-      contentType: "image/jpeg", upsert: false, metadata: { alt: "Workshop tools" },
+    expect(mocks.upload).toHaveBeenCalledWith(`${siteId}/pixabay-source-42.jpg`, expect.any(Uint8Array), expect.objectContaining({
+      contentType: "image/jpeg", upsert: false, metadata: { alt: "Workshop tools", source_provider: "Pixabay",
+        source_id: 42, source_url: hit.pageURL, source_author: hit.user },
     }));
-    expect(result.url).toBe(`https://storage.example/storage/v1/object/public/site-assets/${siteId}/pixabay-42.jpg`);
+    expect(result.url).toBe(`https://storage.example/storage/v1/object/public/site-assets/${siteId}/pixabay-source-42.jpg`);
     expect(result.url).not.toContain("pixabay.com");
     expect(result.alt).toBe("Workshop tools");
   });
@@ -101,7 +104,8 @@ describe("stock photo provider boundary", () => {
     mocks.fetch.mockResolvedValueOnce(search([{ ...hit, imageURL: "https://example.com/steal" }]));
     await expect(pixabay.search({ query: "tools", orientation: "all" })).rejects.toThrow("invalid results");
     mocks.fetch.mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "http://127.0.0.1/private" } }));
-    const photo = { id: 42, previewUrl: "", alt: "", width: 1, height: 1, downloadUrls: [hit.largeImageURL] };
+    const photo = { id: 42, previewUrl: "", alt: "", sourceUrl: hit.pageURL, author: hit.user,
+      width: 1, height: 1, downloadUrls: [hit.largeImageURL] };
     await expect(pixabay.download(photo)).rejects.toThrow("could not be downloaded");
     mocks.fetch.mockResolvedValueOnce(new Response("<svg/>", { headers: { "content-type": "image/jpeg" } }));
     await expect(pixabay.download(photo)).rejects.toThrow("supported image");
@@ -114,5 +118,15 @@ describe("stock photo provider boundary", () => {
     mocks.fetch.mockResolvedValueOnce(search()).mockResolvedValueOnce(jpeg());
     mocks.upload.mockResolvedValueOnce({ data: null, error: { statusCode: "403" } });
     await expect(createPhotoLibrary(client(), accountId).select({ query: "tools", photoId: 42, siteId })).rejects.toThrow("could not be saved");
+  });
+  it("only reuses an existing file when its stored source matches", async () => {
+    mocks.fetch.mockResolvedValueOnce(search()).mockImplementation(async () => jpeg());
+    mocks.upload.mockResolvedValue({ data: null, error: { statusCode: "409" } });
+    const library = createPhotoLibrary(client(), accountId);
+    mocks.info.mockResolvedValueOnce({ data: { metadata: { source_provider: "Pixabay", source_id: 42,
+      source_url: hit.pageURL, source_author: hit.user } }, error: null });
+    await expect(library.select({ query: "tools", photoId: 42, siteId })).resolves.toMatchObject({ alt: "Stock photograph: tools, sink" });
+    mocks.info.mockResolvedValueOnce({ data: { metadata: {} }, error: null });
+    await expect(library.select({ query: "tools", photoId: 42, siteId })).rejects.toThrow("source could not be verified");
   });
 });
