@@ -72,6 +72,21 @@ describe("template AI build orchestration", () => {
     expect(mocks.cancel).toHaveBeenCalledWith(accountId, generationId);
   });
 
+  it("keeps a failed page checkpoint available for retry", async () => {
+    mocks.fill.mockRejectedValue(new Error("The template page failed validation. Its draft was not changed."));
+    const result = await buildTemplateSite(input);
+    expect(result.pages).toEqual([{ slug: page.slug, label: page.title, pageId, built: false, retryId }]);
+    expect(mocks.checkpoint).not.toHaveBeenCalled();
+    expect(mocks.complete).toHaveBeenCalledWith(accountId, generationId);
+  });
+
+  it("stops further generation if a provider or accounting call fails", async () => {
+    mocks.fill.mockRejectedValue(new Error("AI usage needs reconciliation"));
+    await expect(buildTemplateSite(input)).rejects.toThrow("site was copied");
+    expect(mocks.checkpoint).not.toHaveBeenCalled();
+    expect(mocks.complete).toHaveBeenCalledWith(accountId, generationId);
+  });
+
   it("releases the recommendation reservation if its proposal fails", async () => {
     mocks.requireUser.mockResolvedValue({ supabase: { from: () => ({
       select: () => ({ eq: () => ({ order: async () => ({ data: [{ id: "one" }, { id: "two" }], error: null }) }) }),

@@ -20,9 +20,9 @@ const eventSchema = z.discriminatedUnion("type", [
 ]);
 type Result = Extract<z.infer<typeof eventSchema>, { type: "result" }>;
 
-export function TemplateAiWizard({ templates, accounts, rootDomain, initialTemplateId, onClose }: {
+export function TemplateAiWizard({ templates, accounts, rootDomain, initialTemplateId, isSuperAdmin, onClose }: {
   templates: PremiumTemplate[]; accounts: TemplateAccount[]; rootDomain: string;
-  initialTemplateId?: string; onClose: () => void;
+  initialTemplateId?: string; isSuperAdmin: boolean; onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [accountId, setAccountId] = useState(accounts.length === 1 ? accounts[0].id : "");
@@ -200,7 +200,7 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
             <input required maxLength={63} pattern="[a-z0-9]+(-[a-z0-9]+)*" className="creation-input" value={subdomain}
               onChange={(event) => setSubdomain(event.target.value.toLowerCase())} />
           </label>
-          {template && extraPageCredits(template.pages.length) ? <p className="text-sm sm:col-span-2">
+          {!isSuperAdmin && template && extraPageCredits(template.pages.length) ? <p className="text-sm sm:col-span-2">
             This {template.pages.length}-page design requires {extraPageCredits(template.pages.length)} extra credits.
           </p> : null}
         </> : null}

@@ -240,6 +240,6 @@ export function PremiumTemplateGallery({ templates, accounts, isSuperAdmin, root
       </div> : null}
     </dialog>
     {aiTemplate !== null ? <TemplateAiWizard templates={templates} accounts={accounts} rootDomain={rootDomain}
-      initialTemplateId={aiTemplate || undefined} onClose={() => setAiTemplate(null)} /> : null}
+      initialTemplateId={aiTemplate || undefined} isSuperAdmin={isSuperAdmin} onClose={() => setAiTemplate(null)} /> : null}
   </>;
 }
