@@ -7,7 +7,7 @@ import { useGetPuck, type Data } from "@puckeditor/core";
 import { Grid2X2, List, Search, Sparkles, X, ZoomIn } from "lucide-react";
 import type { SiteTheme } from "@/lib/theme/presets";
 import {
-  SECTION_CATEGORIES, designsForCategory, sectionCatalog, searchSectionDesigns,
+  designsForCategory, sectionCatalog, searchSectionDesigns, visibleSectionCategories,
   type SectionCategory, type SectionDesign,
 } from "@/lib/sections/catalog";
 import { listSavedDesigns, setDesignGlobal } from "@/lib/sections/actions";
@@ -110,9 +110,11 @@ function LibraryContent() {
   const source = tab === "saved"
     ? (savedDesigns ?? []).filter((design) => design.saved?.isOwner)
     : allDesigns;
+  const availableCategories = visibleSectionCategories(source);
+  const activeCategory = availableCategories.includes(category) ? category : availableCategories[0];
   const searching = query.trim().length > 0;
-  const blank = category === "Blank" && !searching;
-  const designs = searching ? searchSectionDesigns(source, query) : designsForCategory(source, category);
+  const blank = activeCategory === "Blank" && !searching;
+  const designs = searching ? searchSectionDesigns(source, query) : designsForCategory(source, activeCategory);
 
   const insertItem = useCallback((item: { type: string; props: Record<string, unknown> }) => {
     const { dispatch, appState } = getPuck();
@@ -207,10 +209,10 @@ function LibraryContent() {
         </div>
       ) : null}
       <nav aria-label="Section categories" className="flex max-h-36 shrink-0 flex-wrap gap-1.5 overflow-y-auto border-b border-[#E8E7E3] p-3">
-          {SECTION_CATEGORIES.map((entry) => (
-            <button key={entry} type="button" aria-current={!searching && category === entry ? "true" : undefined}
+          {availableCategories.map((entry) => (
+            <button key={entry} type="button" aria-current={!searching && activeCategory === entry ? "true" : undefined}
               onClick={() => { setCategory(entry); setQuery(""); clearPreview(); }}
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] ${!searching && category === entry ? "border-[#D9D3FF] bg-[#F1EFFF] font-medium text-[#4B3FE0]" : "border-[#E8E7E3] text-zinc-600 hover:bg-[#F7F7F5]"}`}>
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] ${!searching && activeCategory === entry ? "border-[#D9D3FF] bg-[#F1EFFF] font-medium text-[#4B3FE0]" : "border-[#E8E7E3] text-zinc-600 hover:bg-[#F7F7F5]"}`}>
               <span>{entry}</span>
               <span className="tabular-nums opacity-60">{entry === "Blank" ? ROW_LAYOUT_IDS.length : designsForCategory(source, entry).length}</span>
             </button>

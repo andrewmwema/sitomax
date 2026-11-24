@@ -259,6 +259,76 @@ export function sectionContentMetadata(blockType: string): SectionContentMetadat
   return Object.entries(BLOCK_CONTENT_METADATA).find(([key]) => key === blockType)?.[1] ?? FALLBACK_METADATA;
 }
 
+const DESIGN_DESCRIPTIONS: Record<string, string> = {
+  "hero-split-image": "Pair a service promise and two actions with a prominent project image.",
+  "hero-centered-badge": "Lead with a centered offer and a compact badge for a focused landing page.",
+  "hero-overlay-photo": "Put a project photograph behind a high-contrast headline and next step.",
+  "hero-video-background": "Introduce a visual brand story with a video background and poster fallback.",
+  "hero-lead-form": "Collect short enquiries directly alongside the opening service promise.",
+  "hero-stats-row": "Introduce a business with a main action and a row of editable milestones.",
+  "services-icon-grid": "Present three core services as scannable icon cards with room for links.",
+  "services-bordered-grid": "Organize a broader service menu into a structured grid of bordered cards.",
+  "services-image-cards": "Show visitors what each service looks like with image-led cards.",
+  "services-alternating-rows": "Explain individual services in alternating photo and text rows.",
+  "services-icon-list": "Summarize service benefits beside a concise introductory heading.",
+  "services-tabs": "Let visitors explore several service details without a long page.",
+  "stats-editorial-row": "Tell a concise business story through a row of editable milestones.",
+  "stats-metric-cards": "Give individual milestones context with icon-led metric cards.",
+  "stats-photo-split": "Combine a team photograph with prominent numbers on a dark surface.",
+  "about-image-right": "Introduce a team or business with a story beside a supporting photograph.",
+  "about-centered-statement": "Frame a short brand story above a wide, immersive photograph.",
+  "about-two-column": "Pair a photograph with a values-led introduction and editable list.",
+  "process-step-cards": "Make the path from enquiry to completion clear with numbered cards.",
+  "process-editorial-timeline": "Explain a longer service journey as an ordered editorial timeline.",
+  "process-photo-checklist": "Pair a project image with a practical checklist of the next steps.",
+  "text-centered-intro": "Introduce a topic with a short, centered heading and supporting copy.",
+  "text-side-heading": "Set a clear editorial heading beside a longer explanation.",
+  "text-mission": "Give a mission or guiding belief a focused, text-first presentation.",
+  "text-two-column-article": "Break a detailed introduction into two readable text columns.",
+  "text-callout": "Highlight an important message beside the main body copy.",
+  "text-pull-quote": "Give a memorable quotation prominence within an editorial story.",
+  "text-article": "Present longer explanatory content in a comfortable reading column.",
+  "text-cta": "Connect an introduction to an immediate next step with an editable button.",
+  "text-framed-introduction": "Frame a short brand introduction for a distinctive editorial opening.",
+  "text-editorial-split": "Contrast a large heading with supporting copy in a split layout.",
+  "text-accent-statement": "Emphasize a short statement with a theme-colored accent.",
+  "tabs-vertical-explorer": "Use vertical tabs and imagery to explore several service topics.",
+  "tabs-text-explorer": "Organize related explanations into compact, text-first tabs.",
+  "portfolio-editorial-rows": "Present selected projects as alternating image and caption rows.",
+  "portfolio-project-cards": "Show a selection of projects as a tidy collection of image cards.",
+  "portfolio-featured-work": "Give a standout project a larger image above supporting work.",
+  "testimonials-cards": "Display several customer stories together in a scannable card grid.",
+  "testimonials-quotes": "Give one meaningful customer quotation room to stand out.",
+  "testimonials-carousel": "Rotate through longer customer stories without extending the page.",
+  "testimonials-rating": "Place an editable rating summary alongside individual customer stories.",
+  "logos-wordmark-strip": "Show a compact row of partner wordmarks beneath an introduction.",
+  "logos-partner-grid": "Give partner logos more space in a tiled grid beside your story.",
+  "team-photo-cards": "Introduce several team members with portraits, roles and short biographies.",
+  "team-editorial-profiles": "Give a small team longer individual introductions with wide portraits.",
+  "team-featured-lead": "Introduce a founder or lead through a prominent portrait and personal story.",
+  "pricing-three-cards": "Compare three offers side by side with a clearly highlighted option.",
+  "pricing-billing-toggle": "Compare recurring plans with an editable monthly and yearly switch.",
+  "pricing-comparison-table": "Help customers compare the features included in each plan.",
+  "pricing-single-checklist": "Explain one service package with a checklist and a single action.",
+  "gallery-grid": "Show a consistent collection of project images in a balanced grid.",
+  "gallery-masonry": "Display a varied image collection in an editorial masonry arrangement.",
+  "gallery-featured-project": "Lead a project gallery with one prominent image and supporting details.",
+  "faq-accordion": "Answer common questions in a compact, expandable list.",
+  "faq-two-column": "Keep several short answers visible in a two-column layout.",
+  "faq-contact-sidebar": "Pair expandable answers with a personal contact invitation.",
+  "blog-latest-posts": "Show the latest published articles as image-led cards; preview uses sample posts.",
+  "cta-dark-band": "Close a section with a high-contrast invitation and next step.",
+  "cta-primary-band": "Use a theme-colored banner to draw attention to a clear action.",
+  "cta-image-background": "Pair a project photo with a prominent enquiry invitation.",
+  "cta-split-form": "Invite project enquiries with a short form beside supporting copy.",
+  "contact-form-centered": "Collect straightforward enquiries with a focused, centered form.",
+  "contact-form-split": "Pair an enquiry form with practical contact information.",
+  "contact-visit-enquire": "Show a location photo and visiting details alongside an enquiry form.",
+  "footer-columns": "Organize contact details, navigation and social links into columns.",
+  "footer-centered": "Finish the site with a centered brand, navigation and contact details.",
+  "footer-light-compact": "Keep essential footer navigation and business details compact.",
+};
+
 /**
  * Typed builder so every preset is checked against its block's props.
  * Presets are Partial: inserted props always merge over the block's
@@ -277,11 +347,13 @@ function design<T extends keyof BlockPropsMap>(entry: {
   styles?: SiteStyle[];
 }): SectionDesign {
   const category = sectionCategory(entry.category)!;
+  const description = entry.description ?? DESIGN_DESCRIPTIONS[entry.id];
+  if (!description) throw new Error(`Missing description for section design ${entry.id}`);
   return {
     ...entry,
     thumbnail: entry.thumbnail ?? null,
     styles: entry.styles ?? ["classic", "modern"],
-    description: entry.description ?? `${entry.name} is a responsive, ready-to-customize ${category.toLowerCase()} section.`,
+    description,
     bestFor: entry.bestFor ?? CATEGORY_BEST_FOR[category] ?? ["Small businesses", "Lead generation"],
     metadata: sectionContentMetadata(entry.blockType),
     category,
@@ -341,8 +413,10 @@ const sampleReviews: TestimonialsProps["testimonials"] = [
 ];
 
 const samplePartners: LogosProps["logos"] = [
-  { name: "[Oak & Co.]", image: "" }, { name: "[Northline]", image: "" },
-  { name: "[FIELDWORK]", image: "" }, { name: "[Goodkind]", image: "" },
+  { name: "Vale Studio", image: "/samples/partner-vale.svg", imageAlt: "Sample Vale Studio wordmark" },
+  { name: "Morrow Design", image: "/samples/partner-morrow.svg", imageAlt: "Sample Morrow Design wordmark" },
+  { name: "Elier Works", image: "/samples/partner-elier.svg", imageAlt: "Sample Elier Works wordmark" },
+  { name: "Arden Collective", image: "/samples/partner-arden.svg", imageAlt: "Sample Arden Collective wordmark" },
 ];
 
 const sampleTeam: TeamProps["members"] = [
@@ -536,8 +610,8 @@ export const sectionCatalog: SectionDesign[] = [
       secondaryButtonText: "Explore the details",
       secondaryButtonLink: "#features",
       trustLine: "A friendly walkthrough, shaped around your questions.",
-      backgroundImage: "/samples/kitchen.jpg",
-      backgroundImageAlt: "Sample interface image used as a product demo screenshot",
+      backgroundImage: "",
+      backgroundImageAlt: "",
       secondaryImage: "",
       variant: "product-demo",
       design: shellDesign({ animation: "fade" }),
@@ -843,6 +917,46 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "our-numbers", animation: "fade" }),
     },
   }),
+  design({
+    id: "stats-spotlight",
+    blockType: "Stats",
+    category: "Stats",
+    name: "Spotlight milestone",
+    description: "Highlight one key milestone above supporting metrics in an editorial card layout.",
+    bestFor: ["Business milestones", "Featured results"],
+    props: {
+      eyebrow: "Progress with purpose",
+      heading: "The work behind the numbers",
+      text: "<p>Use a standout milestone to introduce the results that matter to your business.</p>",
+      stats: [
+        { value: "[00]+", label: "Projects completed", detail: "A milestone worth sharing.", icon: "award" },
+        { value: "[00]+", label: "Years of experience", detail: "Built one project at a time.", icon: "calendar" },
+        { value: "[00]", label: "Team members", detail: "People behind the work.", icon: "users" },
+      ],
+      variant: "spotlight",
+      design: shellDesign({ anchorId: "our-numbers" }),
+    },
+  }),
+  design({
+    id: "stats-milestone-band",
+    blockType: "Stats",
+    category: "Stats",
+    name: "Milestone band",
+    description: "Set a concise row of business milestones on a contrasting dark band.",
+    bestFor: ["Business milestones", "Compact proof points"],
+    props: {
+      eyebrow: "At a glance",
+      heading: "A little context goes a long way",
+      text: "<p>Introduce your business through the numbers that tell its story.</p>",
+      stats: [
+        { value: "[00]+", label: "Projects", detail: "Work brought to life.", icon: "award" },
+        { value: "[00]+", label: "Years", detail: "Experience to draw on.", icon: "calendar" },
+        { value: "[00]", label: "People", detail: "A team with shared values.", icon: "users" },
+      ],
+      variant: "band",
+      design: shellDesign({ anchorId: "our-numbers", animation: "fade" }),
+    },
+  }),
 
   // ------------------------------------------------------------ About
   design({
@@ -885,6 +999,36 @@ export const sectionCatalog: SectionDesign[] = [
       text: "<p>At [Business name], our values are practical. You should be able to see them in every conversation and every considered detail.</p><ul><li><strong>Listen first.</strong> Understand the person as well as the project.</li><li><strong>Keep it clear.</strong> Make room for questions and explain the options.</li><li><strong>Care about the finish.</strong> Small things make a lasting difference.</li></ul>",
       image: "/samples/tools.jpg", imageAlt: "Sample of tools arranged with care",
       variant: "image-left",
+      design: shellDesign({ anchorId: "about" }),
+    },
+  }),
+  design({
+    id: "about-framed-story",
+    blockType: "ImageWithText",
+    category: "About",
+    name: "Framed brand story",
+    description: "Introduce a business with a story and photograph inside a refined framed card.",
+    bestFor: ["Brand introductions", "Service businesses"],
+    props: {
+      eyebrow: "Our approach", heading: "Thoughtful work starts with listening",
+      text: "<p>Share the values and conversations that shape your work, and invite visitors to learn more.</p>",
+      image: "/samples/team-at-work.jpg", imageAlt: "Sample team discussing a project",
+      buttonText: "Meet the team", buttonLink: "#team", variant: "image-framed",
+      design: shellDesign({ anchorId: "about" }),
+    },
+  }),
+  design({
+    id: "about-story-banner",
+    blockType: "ImageWithText",
+    category: "About",
+    name: "Dark story and image",
+    description: "Give a short brand story visual weight with a contrasting dark surface and photograph.",
+    bestFor: ["Brand stories", "Creative businesses"],
+    props: {
+      eyebrow: "What matters to us", heading: "A thoughtful approach to the work we share",
+      text: "<p>Introduce your point of view and give visitors a reason to start a conversation.</p>",
+      image: "/samples/home-interior.jpg", imageAlt: "Sample of a considered interior",
+      buttonText: "Get to know us", buttonLink: "/contact", variant: "story-banner",
       design: shellDesign({ anchorId: "about" }),
     },
   }),
@@ -1277,7 +1421,7 @@ export const sectionCatalog: SectionDesign[] = [
     blockType: "Testimonials",
     category: "Testimonials",
     name: "Trust and rating bar",
-    description: "A verified rating beside three editable proof points for trust close to a decision.",
+    description: "Place an editable rating and three proof points close to a decision.",
     bestFor: ["Trust building", "Local businesses", "Lead generation"],
     props: {
       eyebrow: "Independent feedback",
@@ -1286,9 +1430,9 @@ export const sectionCatalog: SectionDesign[] = [
       variant: "trust-bar",
       rating: "[4.9]/5",
       reviewCount: "Based on [200]+ customer reviews",
-      ratingLabel: "[Review platform] · Verified feedback",
+      ratingLabel: "[Review platform] · Customer feedback",
       trustSignals: [
-        { label: "Real customer stories", value: "[200]+ verified reviews", icon: "star" },
+        { label: "Customer stories", value: "[200]+ customer reviews", icon: "star" },
         { label: "Locally trusted", value: "Serving [Town] and nearby", icon: "map-pin" },
         { label: "Clear first step", value: "No-obligation conversation", icon: "message-circle" },
       ],
@@ -1301,7 +1445,7 @@ export const sectionCatalog: SectionDesign[] = [
     id: "logos-wordmark-strip", blockType: "Logos", category: "Logos", name: "Understated wordmark strip",
     props: {
       eyebrow: "Our connections", heading: "Good company to keep",
-      text: "Meet the organisations that are part of our working world.",
+      text: "Sample partner logos shown. Replace these with organisations you work with.",
       logos: samplePartners, variant: "strip", design: shellDesign({ animation: "fade" }),
     },
   }),
@@ -1309,7 +1453,7 @@ export const sectionCatalog: SectionDesign[] = [
     id: "logos-partner-grid", blockType: "Logos", category: "Logos", name: "Partner tile grid",
     props: {
       eyebrow: "Working together", heading: "A shared eye for quality",
-      text: "Thoughtful materials, practical knowledge and people who care about the details.",
+      text: "Sample partner logos shown. Replace these with organisations you work with.",
       logos: samplePartners, variant: "grid", design: shellDesign(),
     },
   }),
@@ -1322,8 +1466,8 @@ export const sectionCatalog: SectionDesign[] = [
     bestFor: ["Partner credibility", "Client logos", "Trust building"],
     props: {
       eyebrow: "Good company to keep",
-      heading: "Trusted by people who care about the details",
-      text: "The partners and organisations who help make good work possible.",
+      heading: "Good work is better together",
+      text: "Sample partner logos shown. Replace these with organisations you work with.",
       logos: samplePartners,
       variant: "marquee",
       design: shellDesign({ animation: "none" }),
@@ -1354,6 +1498,26 @@ export const sectionCatalog: SectionDesign[] = [
       text: "<p>A note from the person behind the business.</p>",
       members: [{ ...sampleTeam[0], bio: "<p>I started [Business name] with a simple idea: make it easier for people to get thoughtful help close to home.</p><p>Tell us what you have in mind. We will listen, share a practical perspective and work out the next step together.</p>" }],
       variant: "featured", design: shellDesign({ anchorId: "team", animation: "fade" }),
+    },
+  }),
+  design({
+    id: "team-compact-introductions", blockType: "Team", category: "Team", name: "Compact team introductions",
+    description: "Introduce a team with circular portraits and concise, side-by-side profile cards.",
+    bestFor: ["Small teams", "Personal introductions"],
+    props: {
+      eyebrow: "Meet the team", heading: "The people ready to help",
+      text: "<p>Introduce the people behind your service and the roles they play.</p>",
+      members: sampleTeam, variant: "compact", design: shellDesign({ anchorId: "team" }),
+    },
+  }),
+  design({
+    id: "team-spotlight", blockType: "Team", category: "Team", name: "Team spotlight",
+    description: "Feature a team lead in a wide portrait card above the rest of the team.",
+    bestFor: ["Founder-led teams", "Team introductions"],
+    props: {
+      eyebrow: "People and perspective", heading: "Get to know the team",
+      text: "<p>Start with a featured introduction, then meet the people who make the work happen.</p>",
+      members: sampleTeam, variant: "spotlight", design: shellDesign({ anchorId: "team" }),
     },
   }),
 
@@ -1567,6 +1731,28 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "gallery" }),
     },
   }),
+  design({
+    id: "gallery-editorial-rows", blockType: "Gallery", category: "Gallery", name: "Editorial image rows",
+    description: "Tell the story behind each image in spacious alternating photo and caption rows.",
+    bestFor: ["Project stories", "Editorial galleries"],
+    props: {
+      eyebrow: "A closer look", heading: "The story in the details",
+      text: "Share the details and decisions behind your favourite work.",
+      images: sampleWork.slice(0, 3), columns: "2", variant: "portfolio-rows",
+      design: shellDesign({ anchorId: "gallery" }),
+    },
+  }),
+  design({
+    id: "gallery-captioned-cards", blockType: "Gallery", category: "Gallery", name: "Captioned image cards",
+    description: "Arrange project photographs in a clean grid with a visible caption beneath each image.",
+    bestFor: ["Project collections", "Captioned photography"],
+    props: {
+      eyebrow: "Selected details", heading: "A collection worth sharing",
+      text: "Give each image context with a short, editable caption.",
+      images: sampleWork.slice(0, 3), columns: "3", variant: "portfolio-cards",
+      design: shellDesign({ anchorId: "gallery" }),
+    },
+  }),
 
   // -------------------------------------------------------------- FAQ
   design({
@@ -1671,6 +1857,37 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "faq", animation: "fade" }),
     },
   }),
+  design({
+    id: "faq-answer-cards", blockType: "Faq", category: "FAQ", name: "Answer cards",
+    description: "Keep short answers visible in a soft, two-column grid of individual cards.",
+    bestFor: ["Quick answers", "Customer onboarding"],
+    props: {
+      eyebrow: "Good to know", heading: "The essentials, clearly explained",
+      text: "<p>Share the details visitors need before they take the next step.</p>",
+      items: [
+        { question: "Where do we begin?", answer: "<p>Tell us what you have in mind and we can talk through the next step.</p>" },
+        { question: "What should I prepare?", answer: "<p>Bring any notes or questions that will help us understand your priorities.</p>" },
+        { question: "Can I ask about timing?", answer: "<p>Yes. Share your preferred dates so we can discuss availability.</p>" },
+        { question: "How will I know what is included?", answer: "<p>Ask for a clear written outline before agreeing to any work.</p>" },
+      ],
+      variant: "cards", design: shellDesign({ anchorId: "faq" }),
+    },
+  }),
+  design({
+    id: "faq-split-accordion", blockType: "Faq", category: "FAQ", name: "Split introduction and questions",
+    description: "Keep an editorial introduction beside an expandable list of common questions.",
+    bestFor: ["Service questions", "Compact FAQs"],
+    props: {
+      eyebrow: "A clearer start", heading: "Answers for the road ahead",
+      text: "<p>Find practical answers before you start a conversation.</p>",
+      items: [
+        { question: "How do I get started?", answer: "<p>Share a few details about what you need and we can discuss your options.</p>" },
+        { question: "Can we talk about timing?", answer: "<p>Let us know your preferred dates and we will explain what is possible.</p>" },
+        { question: "Will I receive a written scope?", answer: "<p>Ask for the proposed work and costs to be outlined before you decide.</p>" },
+      ],
+      openFirst: false, variant: "split", design: shellDesign({ anchorId: "faq" }),
+    },
+  }),
 
   design({
     id: "blog-latest-posts",
@@ -1678,6 +1895,24 @@ export const sectionCatalog: SectionDesign[] = [
     category: "Blog",
     name: "Latest blog posts",
     props: { source: "latest", variant: "grid", design: shellDesign() },
+  }),
+  design({
+    id: "blog-editorial-list",
+    blockType: "BlogPosts",
+    category: "Blog",
+    name: "Editorial article list",
+    description: "Present recent articles as spacious image-and-text rows; preview uses sample posts.",
+    bestFor: ["Editorial publishing", "Longer article titles"],
+    props: { heading: "Ideas and insights", source: "latest", variant: "list", count: 3, design: shellDesign() },
+  }),
+  design({
+    id: "blog-featured-stories",
+    blockType: "BlogPosts",
+    category: "Blog",
+    name: "Featured story and articles",
+    description: "Highlight one recent story beside a compact list of articles; preview uses sample posts.",
+    bestFor: ["Content marketing", "Featured stories"],
+    props: { heading: "Stories worth sharing", source: "latest", variant: "featured-list", count: 3, design: shellDesign() },
   }),
 
   // --------------------------------------------------- Call to action
@@ -1811,6 +2046,32 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "contact", animation: "fade" }),
     },
   }),
+  design({
+    id: "contact-form-first", blockType: "ContactForm", category: "Contact", name: "Form-first enquiry",
+    description: "Put the enquiry form first, with contact details and reassurance alongside.",
+    bestFor: ["Lead generation", "Service enquiries"],
+    props: {
+      eyebrow: "Start here", heading: "Tell us about your next project",
+      text: "<p>Share a few details and the team can help you find a practical next step.</p>",
+      formName: "project-enquiry", submitText: "Send my enquiry", formFields: enquiryFields,
+      note: "Required fields are marked with an asterisk.",
+      details: [{ icon: "phone", label: "Prefer to call?", value: "[Business phone number]" }],
+      variant: "form-first", design: shellDesign({ anchorId: "contact" }),
+    },
+  }),
+  design({
+    id: "contact-wide-enquiry", blockType: "ContactForm", category: "Contact", name: "Wide enquiry form",
+    description: "Place a spacious enquiry form beneath a split introduction and contact details.",
+    bestFor: ["Detailed enquiries", "Professional services"],
+    props: {
+      eyebrow: "Get in touch", heading: "Let's find the right next step",
+      text: "<p>Introduce your project or ask a question using the form below.</p>",
+      formName: "contact", submitText: "Send message", formFields: enquiryFields,
+      note: "Required fields are marked with an asterisk.",
+      details: [{ icon: "clock", label: "Office hours", value: "[Opening days and hours]" }],
+      variant: "stacked", design: shellDesign({ anchorId: "contact" }),
+    },
+  }),
 
   // ----------------------------------------------------------- Footer
   design({
@@ -1862,6 +2123,12 @@ export function designsForCategory(
 ): SectionDesign[] {
   return designs.filter((entry) => entry.category === category ||
     (category === "Text & Image" && entry.blockType === "ImageWithText"));
+}
+
+export function visibleSectionCategories(designs: SectionDesign[]): SectionCategory[] {
+  return SECTION_CATEGORIES.filter((category) =>
+    category === "Blank" || designsForCategory(designs, category).length > 0,
+  );
 }
 
 export function searchSectionDesigns(designs: SectionDesign[], query: string): SectionDesign[] {

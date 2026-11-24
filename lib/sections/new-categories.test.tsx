@@ -87,4 +87,19 @@ describe("additional text, tab and portfolio designs", () => {
     } as PuckPageData;
     expect(findUnreplacedPlaceholders(data)).toEqual([]);
   });
+
+  it("starts the product demo with its built-in interface mockup, not a stock photograph", () => {
+    const design = sectionCatalog.find((entry) => entry.id === "hero-product-demo")!;
+    expect(design.props.backgroundImage).toBe("");
+    const data = {
+      root: { props: {} },
+      content: [{ type: "Hero", props: { ...puckConfig.components.Hero.defaultProps, ...design.props, id: "product-demo" } }],
+    } as PuckPageData;
+    const html = renderToStaticMarkup(createElement(Render, {
+      config: puckConfig, data,
+      fieldTransforms: { richtext: ({ value }) => value },
+    }));
+    expect(html).toContain("grid-cols-[0.3fr_1fr]");
+    expect(html).not.toContain("/samples/kitchen.jpg");
+  });
 });

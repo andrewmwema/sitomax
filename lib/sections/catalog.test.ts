@@ -6,7 +6,7 @@ import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import { isLayoutOrElementType } from "@/lib/layout/structure";
 import { normalizeDesign, type BlockDesign } from "@/lib/sections/design";
 import { THEME_PRESETS } from "@/lib/theme/presets";
-import { SECTION_CATEGORIES, sectionCatalog, searchSectionDesigns } from "./catalog";
+import { SECTION_CATEGORIES, designsForCategory, sectionCatalog, searchSectionDesigns } from "./catalog";
 
 describe("section catalog", () => {
   it("has unique design ids", () => {
@@ -14,12 +14,34 @@ describe("section catalog", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("offers at least five distinct layouts in each expanded category and three blog layouts", () => {
+    for (const category of ["About", "Team", "Stats", "FAQ", "Contact", "Gallery"] as const) {
+      const designs = designsForCategory(sectionCatalog, category);
+      expect(designs.length, category).toBeGreaterThanOrEqual(5);
+      expect(new Set(designs.map((design) => design.props.variant)).size, category).toBeGreaterThanOrEqual(5);
+    }
+    expect(new Set(designsForCategory(sectionCatalog, "Blog").map((design) => design.props.variant)).size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("uses editable sample SVG wordmarks instead of bracketed logo placeholders", () => {
+    for (const design of designsForCategory(sectionCatalog, "Logos")) {
+      const logos = design.props.logos as { name: string; image: string; imageAlt: string }[];
+      expect(logos.length).toBeGreaterThan(0);
+      for (const logo of logos) {
+        expect(logo.name).not.toMatch(/[\[\]]/);
+        expect(logo.image).toMatch(/^\/samples\/partner-[\w-]+\.svg$/);
+        expect(logo.imageAlt).toContain("Sample");
+      }
+    }
+  });
+
   it("only references blocks and categories that exist", () => {
     for (const design of sectionCatalog) {
       expect(puckConfig.components).toHaveProperty(design.blockType);
       expect(SECTION_CATEGORIES).toContain(design.category);
       expect(design.styles.length).toBeGreaterThan(0);
-      expect(design.description.trim().length).toBeGreaterThan(0);
+      expect(design.description.trim().length, design.id).toBeGreaterThan(0);
+      expect(design.description, design.id).not.toContain("ready-to-customize");
       expect(design.bestFor.length).toBeGreaterThan(0);
       expect(design.metadata.editableFields.length).toBeGreaterThan(0);
     }

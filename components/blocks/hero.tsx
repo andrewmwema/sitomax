@@ -383,7 +383,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                         <span className="block h-2 w-full rounded" style={{ background: "var(--color-border)" }} />
                         <span className="block h-2 w-4/5 rounded" style={{ background: "var(--color-border)" }} />
                       </div>
-                      <div className="flex items-end gap-2">
+                      <div className="flex h-24 items-end gap-2">
                         {[35, 58, 46, 82, 68, 96].map((height, index) => (
                           <span key={index} className="flex-1 rounded-t" style={{ height: `${height}%`, background: index === 5 ? "var(--color-secondary)" : "var(--color-primary)" }} />
                         ))}

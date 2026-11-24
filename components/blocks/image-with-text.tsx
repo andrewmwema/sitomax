@@ -16,7 +16,7 @@ export type ImageWithTextProps = {
   eyebrow: string;
   heading: string;
   text: RichText;
-  variant: "image-left" | "image-right" | "stacked" | "report-preview";
+  variant: "image-left" | "image-right" | "stacked" | "report-preview" | "image-framed" | "story-banner";
   reportLabel?: string;
   reportTitle?: string;
   reportReference?: string;
@@ -59,6 +59,8 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
         { label: "Image right", value: "image-right" },
         { label: "Stacked", value: "stacked" },
         { label: "Report / document preview", value: "report-preview" },
+        { label: "Framed story", value: "image-framed" },
+        { label: "Story banner", value: "story-banner" },
       ],
     },
   },
@@ -103,6 +105,23 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
         }}
       />
     );
+
+    if (layout === "image-framed" || layout === "story-banner") {
+      return (
+        <Section background={layout === "story-banner" ? "dark" : "soft"}>
+          <div className={`grid items-center gap-8 overflow-hidden rounded-[var(--radius-lg)] lg:grid-cols-2 ${layout === "image-framed" ? "site-card border p-5 sm:p-8" : ""}`}
+            style={layout === "image-framed" ? { background: "var(--color-bg)", borderColor: "var(--color-border)" } : undefined}>
+            <div className="section-intro flex flex-col items-start gap-4">
+              {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+              <RichHeading level={2}>{heading}</RichHeading>
+              <RichTextContent value={text} className="w-full max-w-[60ch]" />
+              {buttonText ? <Button href={buttonLink}>{buttonText}</Button> : null}
+            </div>
+            {imageElement}
+          </div>
+        </Section>
+      );
+    }
 
     if (layout === "report-preview") {
       return (

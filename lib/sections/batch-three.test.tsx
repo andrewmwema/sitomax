@@ -28,10 +28,10 @@ function render(data: PuckPageData, style = "classic") {
 }
 
 describe("Batch 3 designs", () => {
-  it("renders eight layouts in both styles with complete shell controls and sample assets", () => {
+  it("renders pricing and FAQ layouts in both styles with complete shell controls and sample assets", () => {
     expect(designs.filter((design) => design.category === "Pricing")).toHaveLength(5);
-    expect(designs.filter((design) => design.category === "FAQ")).toHaveLength(3);
-    expect(new Set(designs.map((design) => `${design.blockType}:${design.props.variant}`)).size).toBe(8);
+    expect(designs.filter((design) => design.category === "FAQ")).toHaveLength(5);
+    expect(new Set(designs.map((design) => `${design.blockType}:${design.props.variant}`)).size).toBe(10);
     for (const design of designs) {
       for (const style of ["classic", "modern"]) {
         const html = render(dataFor(design.blockType as "Pricing" | "Faq", design.props), style);

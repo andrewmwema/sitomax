@@ -22,10 +22,10 @@ function dataFor(blockType: string, props: Record<string, unknown>): PuckPageDat
 }
 
 describe("Batch 2 designs", () => {
-  it("renders all nine distinct layouts in both styles with complete sample assets", () => {
+  it("renders service and stats layouts in both styles with complete sample assets", () => {
     expect(designs.filter((design) => design.blockType === "Services")).toHaveLength(8);
-    expect(designs.filter((design) => design.category === "Stats")).toHaveLength(3);
-    expect(new Set(designs.map((design) => `${design.blockType}:${design.props.variant}`)).size).toBe(11);
+    expect(designs.filter((design) => design.category === "Stats")).toHaveLength(5);
+    expect(new Set(designs.map((design) => `${design.blockType}:${design.props.variant}`)).size).toBe(13);
 
     for (const design of designs) {
       for (const style of ["classic", "modern"]) {

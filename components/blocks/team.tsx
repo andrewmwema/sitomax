@@ -13,7 +13,7 @@ export type TeamProps = {
   eyebrow: string;
   heading: string;
   text: RichText;
-  variant: "cards" | "profiles" | "featured";
+  variant: "cards" | "profiles" | "featured" | "compact" | "spotlight";
   members: { name: string; role: string; bio: RichText; image: string; imageAlt: string; imagePosition?: "left" | "center" | "right"; socialLabel?: string; socialLink?: LinkValue }[];
 };
 
@@ -24,7 +24,7 @@ export const Team: ComponentConfig<TeamProps> = {
     eyebrow: { type: "text", label: "Eyebrow", contentEditable: true },
     heading: richHeadingField("Heading", 2),
     text: richTextField("Introduction"),
-    variant: { type: "select", label: "Layout", options: [{ label: "Photo cards", value: "cards" }, { label: "Editorial profiles", value: "profiles" }, { label: "Featured team member", value: "featured" }] },
+    variant: { type: "select", label: "Layout", options: [{ label: "Photo cards", value: "cards" }, { label: "Editorial profiles", value: "profiles" }, { label: "Featured team member", value: "featured" }, { label: "Compact introductions", value: "compact" }, { label: "Team spotlight", value: "spotlight" }] },
     members: {
       type: "array", label: "People", getItemSummary: (item) => item.name || "Team member",
       defaultItemProps: { name: "[Name]", role: "[Role]", bio: "<p>[A short introduction to this team member.]</p>", image: "/samples/team-at-work.jpg", imageAlt: "Sample team photograph" },
@@ -53,18 +53,18 @@ export const Team: ComponentConfig<TeamProps> = {
         <RichHeading level={2}>{heading}</RichHeading>
         <RichTextContent value={text} />
       </div>
-      <div className={variant === "profiles" ? "flex flex-col gap-8" : variant === "featured" ? "grid gap-8" : "grid gap-8 md:grid-cols-3"}>
+      <div className={variant === "profiles" ? "flex flex-col gap-8" : variant === "featured" ? "grid gap-8" : variant === "compact" || variant === "spotlight" ? "grid gap-5 md:grid-cols-2" : "grid gap-8 md:grid-cols-3"}>
         {members.map((member, i) => (
-          <article key={i} className={`min-w-0 ${variant === "profiles" ? "grid items-center gap-6 border-t pt-8 md:grid-cols-[1fr_2fr]" : variant === "featured" ? `grid items-center gap-8 ${i === 0 ? "md:grid-cols-2" : "md:grid-cols-[1fr_2fr]"}` : "site-card overflow-hidden rounded-[var(--radius-lg)] border"}`} style={{ borderColor: "var(--color-border)" }}>
+          <article key={i} className={`min-w-0 ${variant === "profiles" ? "grid items-center gap-6 border-t pt-8 md:grid-cols-[1fr_2fr]" : variant === "featured" ? `grid items-center gap-8 ${i === 0 ? "md:grid-cols-2" : "md:grid-cols-[1fr_2fr]"}` : variant === "compact" ? "site-card flex items-start gap-5 rounded-[var(--radius-lg)] border p-5" : variant === "spotlight" && i === 0 ? "site-card overflow-hidden rounded-[var(--radius-lg)] border md:col-span-2 md:grid md:grid-cols-2" : "site-card overflow-hidden rounded-[var(--radius-lg)] border"}`} style={{ borderColor: "var(--color-border)" }}>
             {member.image ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={member.image} alt={member.imageAlt} loading="lazy"
-                className={`w-full object-cover ${variant === "profiles" ? "aspect-[4/3] max-h-80" : "aspect-[3/4]"}`}
-                style={{ borderRadius: "var(--radius-lg)", objectPosition: member.imagePosition ?? "center" }} />
+                className={`object-cover ${variant === "compact" ? "aspect-square w-20 shrink-0" : variant === "profiles" ? "aspect-[4/3] max-h-80 w-full" : variant === "spotlight" ? "aspect-[4/3] w-full" : "aspect-[3/4] w-full"}`}
+                style={{ borderRadius: variant === "compact" ? "50%" : "var(--radius-lg)", objectPosition: member.imagePosition ?? "center" }} />
             ) : null}
-            <div className={`flex min-w-0 flex-col gap-3 ${variant === "cards" ? "p-6" : "py-4"}`} style={{ borderColor: "var(--color-border)" }}>
+            <div className={`flex min-w-0 flex-col gap-3 ${variant === "cards" || variant === "spotlight" ? "p-6" : variant === "compact" ? "" : "py-4"}`} style={{ borderColor: "var(--color-border)" }}>
               <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-muted)" }}>{member.role}</p>
-              <h3 className={variant === "cards" ? "text-2xl" : "text-3xl sm:text-4xl"} style={{ fontFamily: "var(--font-heading)" }}>{member.name}</h3>
+              <h3 className={variant === "cards" || variant === "compact" || variant === "spotlight" ? "text-2xl" : "text-3xl sm:text-4xl"} style={{ fontFamily: "var(--font-heading)" }}>{member.name}</h3>
               <RichTextContent value={member.bio} className="max-w-[55ch]" />
               {member.socialLabel && member.socialLink ? (
                 <Button href={member.socialLink} variant="ghost" className="self-start px-0 py-2 text-sm underline underline-offset-4">
