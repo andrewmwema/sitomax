@@ -16,7 +16,7 @@ export async function getAiUsageSummaries(): Promise<AiUsageSummary[]> {
   const { supabase } = await requireUser();
   const rows: AiUsageSummary[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase.rpc("ai_account_summaries")
+    const { data, error } = await supabase.rpc("ai_account_plan_summaries")
       .order("account_id").range(from, from + 999);
     if (error) throw new Error("Could not load AI usage. Check that the AI migration is applied.", { cause: error });
     const page = z.array(usageSummarySchema).parse(data);

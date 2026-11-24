@@ -57,10 +57,14 @@ describe("Phase 3 operations workspaces", () => {
     expect(container.querySelector("tbody")?.textContent).toContain("South Studio");
     expect(container.querySelector("tbody")?.textContent).not.toContain("North Studio");
     expect(window.location.search).toBe("?access=unassigned");
-    await act(async () => root.render(<ClientDetails account={client} backHref="/dashboard/clients?access=unassigned" />));
+    await act(async () => root.render(<ClientDetails account={client} backHref="/dashboard/clients?access=unassigned"
+      allowance={{ account_id: client.id, account_name: client.name, site_generations: 0, edits: 0,
+        included_generations: 0, included_edits: 0, pending_requests: 0, monthly_site_generations: 5, monthly_edits: 150, extra_credits: 2 }} />));
     expect(container.querySelector('a[href="/dashboard/clients?access=unassigned"]')?.textContent).toContain("Back to clients");
     expect(container.querySelector('a[href="/dashboard/sites/site"]')).not.toBeNull();
     expect(container.querySelector('input[name="accountId"]')?.getAttribute("value")).toBe("client");
+    expect(container.textContent).toContain("Site generations / month5");
+    expect(container.textContent).toContain("Edits / month150");
     expect(container.textContent).toContain("Acceptance status and invitation history are not currently tracked");
   });
 

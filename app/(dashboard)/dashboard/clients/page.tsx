@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Globe2, Plus, UserCheck, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/auth";
+import { getAiUsageSummaries } from "@/lib/ai/reporting";
 import { clientDirectoryHref, clientDirectorySchema } from "@/lib/clients/directory";
 import { CreateAccountForm } from "@/components/dashboard/create-account-form";
 import { ClientDirectory, type ClientAccount } from "@/components/dashboard/client-directory";
@@ -48,9 +49,10 @@ async function ClientsContent({ searchParams }: { searchParams: PageProps<"/dash
   if (filters.client) {
     const account = accounts.find((value) => value.id === filters.client);
     const backHref = clientDirectoryHref(filters);
-    return account ? <ClientDetails account={account} backHref={backHref} />
-      : <div className="space-y-4"><Link className="platform-button" href={backHref}>Back to clients</Link>
-        <p role="alert">That client is unavailable or you do not have permission to view it.</p></div>;
+    if (!account) return <div className="space-y-4"><Link className="platform-button" href={backHref}>Back to clients</Link>
+      <p role="alert">That client is unavailable or you do not have permission to view it.</p></div>;
+    const allowance = (await getAiUsageSummaries()).find((usage) => usage.account_id === account.id);
+    return <ClientDetails account={account} allowance={allowance} backHref={backHref} />;
   }
   const ownersAssigned = accounts.filter((account) => account.account_members.some((member) => member.role === "owner")).length;
   return <>

@@ -20,7 +20,7 @@ describe("AI usage reporting", () => {
   it("uses the owner-scoped summary and never substitutes empty usage for a query failure", async () => {
     expect(await getAiUsageSummaries()).toEqual([]);
     expect(mocks.authorize).toHaveBeenCalled();
-    expect(mocks.rpc).toHaveBeenCalledWith("ai_account_summaries");
+    expect(mocks.rpc).toHaveBeenCalledWith("ai_account_plan_summaries");
     mocks.range.mockResolvedValueOnce({ data: null, error: { code: "MISSING_MIGRATION" } });
     await expect(getAiUsageSummaries()).rejects.toThrow("migration");
   });

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { inviteOwner } from "@/app/(dashboard)/dashboard/clients/actions";
+import type { AiUsageSummary } from "@/lib/ai/reporting";
 import { InviteOwnerForm } from "./invite-owner-form";
 import type { ClientAccount } from "./client-directory";
 
-export function ClientDetails({ account, backHref }: { account: ClientAccount; backHref: string }) {
+export function ClientDetails({ account, allowance, backHref }: { account: ClientAccount; allowance?: AiUsageSummary; backHref: string }) {
   return <article className="mx-auto w-full max-w-6xl space-y-6">
     <Link href={backHref} className="platform-button"><ArrowLeft size={15} />Back to clients</Link>
     <header><p className="platform-eyebrow mb-1">Client account</p>
@@ -21,10 +22,10 @@ export function ClientDetails({ account, backHref }: { account: ClientAccount; b
           <Link href="/dashboard/sites/new" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[var(--platform-accent)] hover:underline">Create a website<ArrowUpRight size={13} /></Link>
         </section>
         <section className="platform-panel p-5"><h2 className="text-sm font-semibold">AI allowance</h2>
-          {account.ai_limits ? <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between gap-3"><dt>Site generations / month</dt><dd className="font-medium tabular-nums">{account.ai_limits.monthly_site_generations}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Edits / month</dt><dd className="font-medium tabular-nums">{account.ai_limits.monthly_edits}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Extra credits</dt><dd className="font-medium tabular-nums">{account.ai_limits.extra_credits}</dd></div>
+          {allowance ? <dl className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between gap-3"><dt>Site generations / month</dt><dd className="font-medium tabular-nums">{allowance.monthly_site_generations}</dd></div>
+            <div className="flex justify-between gap-3"><dt>Edits / month</dt><dd className="font-medium tabular-nums">{allowance.monthly_edits}</dd></div>
+            <div className="flex justify-between gap-3"><dt>Extra credits</dt><dd className="font-medium tabular-nums">{allowance.extra_credits}</dd></div>
           </dl> : <p className="mt-2 text-sm text-[var(--platform-muted)]">No allowance configured.</p>}
           <Link href="/dashboard/ai-usage" className="mt-3 inline-block text-xs font-medium text-[var(--platform-accent)] hover:underline">View AI usage and allowances</Link>
         </section>

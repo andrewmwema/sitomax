@@ -1,8 +1,9 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), admin: vi.fn(), accounts: [] as unknown[] }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), admin: vi.fn(), summaries: vi.fn(), accounts: [] as unknown[] }));
 vi.mock("@/lib/auth", () => ({ requireSuperAdmin: mocks.admin }));
+vi.mock("@/lib/ai/reporting", () => ({ getAiUsageSummaries: mocks.summaries }));
 vi.mock("@/app/(dashboard)/dashboard/clients/actions", () => ({ createAccount: vi.fn(), inviteOwner: vi.fn() }));
 import ClientsPage from "./page";
 
@@ -15,6 +16,7 @@ beforeEach(() => {
     return query;
   });
   mocks.admin.mockResolvedValue({ supabase: { from: mocks.from } });
+  mocks.summaries.mockResolvedValue([]);
 });
 
 async function render(params: Record<string, string>) {

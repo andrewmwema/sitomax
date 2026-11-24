@@ -25,7 +25,7 @@ beforeEach(() => {
 describe("AI server-side accounting", () => {
   it("uses the authenticated user and reserves the appropriate model only after account access", async () => {
     expect(await checkLimit(id, "generate_site")).toEqual({ id, model: SITE_GENERATION_MODEL });
-    expect(mocks.rpc).toHaveBeenCalledWith("reserve_ai_request", {
+    expect(mocks.rpc).toHaveBeenCalledWith("reserve_ai_request_for_plan", {
       p_user_id: "authenticated-user", p_account_id: id, p_action: "generate_site",
       p_model: SITE_GENERATION_MODEL, p_site_id: null,
     });
@@ -56,12 +56,15 @@ describe("AI server-side accounting", () => {
   it("reserves one generation, rate-checks each child call and closes the shared quota separately", async () => {
     const generationId = await beginSiteGeneration(id, id);
     await checkLimit(id, "generate_site", { siteId: id, generationId });
-    expect(mocks.rpc).toHaveBeenCalledWith("begin_ai_site_generation", expect.objectContaining({ p_account_id: id }));
+    expect(mocks.rpc).toHaveBeenCalledWith("begin_ai_site_generation_for_plan", expect.objectContaining({ p_account_id: id }));
     expect(mocks.rpc).toHaveBeenCalledWith("reserve_ai_generation_call", expect.objectContaining({
       p_generation_id: generationId, p_user_id: "authenticated-user",
     }));
     await finishSiteGeneration(generationId, true);
     expect(mocks.rpc).toHaveBeenLastCalledWith("finish_ai_site_generation", { p_generation_id: generationId, p_success: true });
+    await beginSiteGeneration(id, id, 7);
+    expect(mocks.rpc).toHaveBeenLastCalledWith("begin_selected_ai_generation_for_plan",
+      expect.objectContaining({ p_account_id: id, p_page_count: 7 }));
   });
   it("uses scoped server-only checkpoint RPCs after authenticated account checks", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: [], error: null }).mockResolvedValueOnce({ data: true, error: null });

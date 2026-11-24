@@ -323,6 +323,19 @@ is still recorded, with existing request rate limits but no credit quota.
 The dashboard greeting and header date use the browser's local timezone;
 reporting periods continue to use UTC.
 
+After the reviewed `0054_ai_plan_allowances.sql` is applied and this version is
+deployed, included monthly AI allowances follow the account's site plan:
+Starter 2 builds and 50 edits, Growth 5 and 150, Premium 10 and 500.
+Extra credits, page surcharges and large-run charges remain unchanged.
+The agency can change plan defaults in `ai_plan_allowances` or set individual
+fields in `ai_account_allowance_overrides`; a null field inherits the plan.
+The migration carries forward legacy per-account values differing from the old
+defaults of 1 build and 50 edits. Default-valued fields inherit the plan.
+Updates to the legacy quota columns are captured as overrides during a rolling
+deployment, including explicit writes of the old defaults. Clearing an override
+does not change those legacy columns, so rolling back to older app code restores
+its legacy quota behavior.
+
 ## Editor AI and business information
 
 Apply migrations through

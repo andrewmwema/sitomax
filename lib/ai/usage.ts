@@ -37,7 +37,7 @@ export async function checkLimit(
   // The DB rechecks membership/site ownership and atomically reserves the quota.
   if (parsed.generationId && parsed.action !== "generate_site") throw new Error("A generation can only contain site-generation calls.");
   if (parsed.customGeneration && !parsed.generationId) throw new Error("Custom section calls require a site generation.");
-  const { data: id, error: reserveError } = await createAdminClient().rpc(parsed.generationId ? "reserve_ai_generation_call" : "reserve_ai_request", {
+  const { data: id, error: reserveError } = await createAdminClient().rpc(parsed.generationId ? "reserve_ai_generation_call" : "reserve_ai_request_for_plan", {
     p_user_id: user.id, p_account_id: parsed.accountId, p_action: parsed.action,
     p_model: model, p_site_id: parsed.siteId ?? null,
     ...(parsed.generationId ? { p_generation_id: parsed.generationId } : {}),
@@ -53,7 +53,7 @@ export async function checkLimit(
 export async function beginSiteGeneration(accountId: string, siteId?: string, pageCount?: number): Promise<string> {
   const parsed = z.object({ accountId: z.uuid(), siteId: z.uuid().optional() }).parse({ accountId, siteId });
   const user = await authorizeAccount(parsed.accountId);
-  const { data, error } = await createAdminClient().rpc(pageCount === undefined ? "begin_ai_site_generation" : "begin_selected_ai_generation", {
+  const { data, error } = await createAdminClient().rpc(pageCount === undefined ? "begin_ai_site_generation_for_plan" : "begin_selected_ai_generation_for_plan", {
     p_user_id: user.id, p_account_id: parsed.accountId, p_site_id: parsed.siteId ?? null,
     p_model: modelForAction("generate_site"),
     ...(pageCount === undefined ? {} : { p_page_count: z.number().int().min(1).max(10).parse(pageCount) }),
