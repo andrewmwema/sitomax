@@ -1326,8 +1326,9 @@ async function finalizeReservation(state: AgentState, uncertain = false) {
     console.error("AI agent reservation requires reconciliation", { requestId: state.reservationId });
     return;
   }
-  if (state.tokenUsage.inputTokens || state.tokenUsage.outputTokens) {
-    await recordUsage(reservation, state.tokenUsage, agentRunCost(state).costUsd);
+  if (state.tokenUsage.inputTokens || state.tokenUsage.outputTokens || state.tokenUsage.cacheReadTokens ||
+    state.tokenUsage.cacheWrite5mTokens || state.tokenUsage.cacheWrite1hTokens) {
+    await recordUsage(reservation, state.tokenUsage, agentRunCost(state).costUsd, "agent_run");
   } else {
     await releaseFailedRequest(reservation);
   }

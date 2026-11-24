@@ -4,6 +4,8 @@ export const SMALL_EDIT_MODEL = "claude-haiku-5-5";
 export const AI_ACTIONS = ["generate_site", "edit_section", "rewrite_text"] as const;
 export type AiAction = (typeof AI_ACTIONS)[number];
 export type AiModel = typeof SITE_GENERATION_MODEL | typeof SMALL_EDIT_MODEL;
+export const AI_USAGE_TYPES = ["site_generation", "agent_run", "edit", "lead_draft", "blog_ai"] as const;
+export type AiUsageType = (typeof AI_USAGE_TYPES)[number];
 
 export function modelForAction(action: AiAction, largeRewrite = false): AiModel {
   return action === "generate_site" || largeRewrite ? SITE_GENERATION_MODEL : SMALL_EDIT_MODEL;

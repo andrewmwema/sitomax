@@ -137,6 +137,7 @@ describe("improving a draft with AI", () => {
   it("keeps contact details away from the model and restores them in the result", async () => {
     mocks.ai.mockResolvedValue(answer("Please call me on {{keep_1}} or email {{keep_2}}. Thank you."));
     expect(await draftLeadReply(request)).toEqual({ html: "<p>Please call me on +1 555 010 0199 or email sam@example.test. Thank you.</p>" });
+    expect(mocks.ai.mock.calls[0][0].usageType).toBe("lead_draft");
     const sent = JSON.stringify(mocks.ai.mock.calls[0][0].messages);
     expect(sent).toContain("{{keep_1}}");
     expect(sent).not.toContain("555 010");

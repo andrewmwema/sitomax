@@ -79,7 +79,7 @@ async function loadSite(siteId: string) {
 export async function runBlogWriterAi(raw: unknown) {
   const input = requestSchema.parse(raw);
   const { supabase, site, business } = await loadSite(input.siteId);
-  const common = { accountId: site.account_id, siteId: site.id, system: SYSTEM, maxTokens: 7000 };
+  const common = { accountId: site.account_id, siteId: site.id, system: SYSTEM, maxTokens: 7000, usageType: "blog_ai" as const };
 
   if (input.mode === "draft") {
     const toolName = "draft_blog_post";

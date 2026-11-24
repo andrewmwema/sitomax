@@ -3,6 +3,7 @@ import { unstable_rethrow } from "next/navigation";
 import { requireSuperAdmin } from "@/lib/auth";
 import { getAiUsageSummaries, getMonthlyAiCosts, monthSchema } from "@/lib/ai/reporting";
 import { AiCostReport, type AiCostSite } from "@/components/dashboard/ai-cost-report";
+import { reportingPeriod } from "@/lib/ai/reporting-period";
 
 export default function AiCostsPage({ searchParams }: {
   searchParams: Promise<{ month?: string | string[] }>;
@@ -20,7 +21,7 @@ async function MonthlyCosts({ searchParams }: { searchParams: Promise<{ month?: 
   const currentMonth = new Date().toISOString().slice(0, 7);
   const parsed = monthSchema.safeParse(params.month ?? currentMonth);
   if (!parsed.success) return <p role="alert">Choose a valid month using YYYY-MM.</p>;
-  const [rows, usage, sites] = await Promise.all([
+  const [report, usage, sites] = await Promise.all([
     getMonthlyAiCosts(parsed.data),
     getAiUsageSummaries().catch((error: unknown) => {
       unstable_rethrow(error);
@@ -40,12 +41,13 @@ async function MonthlyCosts({ searchParams }: { searchParams: Promise<{ month?: 
       }
     })(),
   ]);
+  const period = reportingPeriod(parsed.data);
   return <>
     <form key={parsed.data} action="/dashboard/ai-usage" className="platform-panel flex flex-wrap items-end gap-3 p-4">
       <label className="flex flex-col gap-1.5 text-xs text-[var(--platform-muted)]">Reporting month<input type="month" name="month" defaultValue={parsed.data} required className="border px-3 text-sm" /></label>
       <button type="submit" className="platform-button platform-button-primary">View report</button>
-      <p className="py-3 text-xs text-[var(--platform-muted)]">Calendar month · UTC · estimates in USD</p>
+      <p className="py-3 text-xs text-[var(--platform-muted)]">{period.start} to {period.end} (exclusive) · America/Chicago · USD estimates</p>
     </form>
-    <AiCostReport rows={rows} usage={usage} sites={sites} month={parsed.data} currentMonth={currentMonth} />
+    <AiCostReport report={report} usage={usage} sites={sites} month={parsed.data} currentMonth={currentMonth} />
   </>;
 }

@@ -148,7 +148,7 @@ describe("AI agent request", () => {
     expect(lastSave()).toMatchObject({ status: "completed", changeset: { quality: { fixed: [] } }, finished_at: expect.any(String) });
     expect(mocks.usage.recordUsage).toHaveBeenCalledWith({ id: reservation, model: expect.any(String) },
       // An edit to one section is the small model's, and is charged at its prices.
-      expect.objectContaining({ inputTokens: 2000, outputTokens: 200 }), expect.closeTo(0.0003, 8));
+      expect.objectContaining({ inputTokens: 2000, outputTokens: 200 }), expect.closeTo(0.0003, 8), "agent_run");
     expect(mocks.usage.releaseFailedRequest).not.toHaveBeenCalled();
     expect(mocks.usage.createAiAgentRun.mock.calls[0][2]).toMatchObject({ run_state: { route: "small", threadTurns: 1 } });
 
@@ -156,7 +156,20 @@ describe("AI agent request", () => {
     vi.clearAllMocks();
     await request({ ...start, message: "Improve every page" }, script(edit, done));
     expect(mocks.usage.createAiAgentRun.mock.calls[0][2]).toMatchObject({ run_state: { route: "main" } });
-    expect(mocks.usage.recordUsage).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.closeTo(0.006, 8));
+    expect(mocks.usage.recordUsage).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.closeTo(0.006, 8), "agent_run");
+  });
+
+  it("records a run whose only billable tokens came from the cache", async () => {
+    const base = script(edit, done);
+    const cached: AgentModel = async (params, options) => ({
+      ...await base(params, options), usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 1000 },
+    }) as Anthropic.Message;
+    await request(start, cached);
+    expect(mocks.usage.recordUsage).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 2000 }),
+      expect.any(Number), "agent_run",
+    );
+    expect(mocks.usage.releaseFailedRequest).not.toHaveBeenCalled();
   });
 
   it("refuses a request over the account limit before any credit is reserved or run created", async () => {

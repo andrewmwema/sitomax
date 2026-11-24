@@ -42,7 +42,7 @@ async function Overview() {
     canSeeReporting ? supabase.from("form_submissions").select("id", { count: "exact", head: true }).gte("created_at", leadsSince) : null,
     canSeeReporting ? supabase.from("page_views").select("id", { count: "exact", head: true }).gte("created_at", viewsSince) : null,
     canSeeReporting && ownerSite ? supabase.rpc("site_analytics", { p_site_id: ownerSite.id, p_days: 30 }) : null,
-    isAdmin ? getMonthlyAiCosts(month).then((rows) => ({ total: rows.reduce((sum, row) => sum + row.cost_usd, 0), error: false })).catch((error: unknown) => {
+    isAdmin ? getMonthlyAiCosts(month).then((report) => ({ total: report.clients.reduce((sum, row) => sum + row.cost_usd + row.agency_cost_usd, 0), error: false })).catch((error: unknown) => {
       console.error("Could not load AI cost summary", error);
       return { total: 0, error: true };
     }) : null,

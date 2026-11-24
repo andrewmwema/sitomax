@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AI_ACTIONS, modelForAction, type AiAction, type AiModel } from "./models";
+import { AI_ACTIONS, AI_USAGE_TYPES, modelForAction, type AiAction, type AiModel, type AiUsageType } from "./models";
 import { assertPricedModel, calculateCostUsd, tokenUsageSchema, type TokenUsage } from "./pricing";
 import { agentRunUsageSchema, type AgentRunUsage } from "./agent-usage";
 import { agentCostSchema } from "./agent-cost";
@@ -140,12 +140,12 @@ export async function finishSiteGeneration(id: string, success: boolean, siteId?
  * `costUsd` is given by callers that priced each of several model requests
  * themselves, such as an agent run that used more than one model.
  */
-export async function recordUsage(reservation: AiReservation, rawUsage: TokenUsage, costUsd?: number): Promise<void> {
+export async function recordUsage(reservation: AiReservation, rawUsage: TokenUsage, costUsd?: number, actionType: AiUsageType = "edit"): Promise<void> {
   const id = z.uuid().parse(reservation.id);
   const usage = tokenUsageSchema.parse(rawUsage);
   const cost = costUsd === undefined ? calculateCostUsd(reservation.model, usage) : z.number().nonnegative().parse(costUsd);
-  const { error } = await createAdminClient().rpc("finish_ai_request", {
-    p_request_id: id, p_failed: false,
+  const { error } = await createAdminClient().rpc("finish_ai_request_labeled", {
+    p_request_id: id, p_action_type: z.enum(AI_USAGE_TYPES).parse(actionType),
     p_input_tokens: usage.inputTokens, p_output_tokens: usage.outputTokens,
     p_cache_read_tokens: usage.cacheReadTokens, p_cache_write_5m_tokens: usage.cacheWrite5mTokens,
     p_cache_write_1h_tokens: usage.cacheWrite1hTokens, p_cost_usd: cost,

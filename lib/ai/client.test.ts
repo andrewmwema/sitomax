@@ -39,7 +39,7 @@ describe("metered AI entry point", () => {
     expect(mocks.check.mock.invocationCallOrder[0]).toBeLessThan(mocks.create.mock.invocationCallOrder[0]);
     expect(mocks.record).toHaveBeenCalledWith({ id, model: SMALL_EDIT_MODEL }, {
       inputTokens: 100, outputTokens: 25, cacheReadTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0,
-    });
+    }, undefined, "edit");
     expect(mocks.constructor).toHaveBeenCalledWith(expect.objectContaining({ maxRetries: 0 }));
   });
   it("does not call the provider when configuration or limits fail", async () => {
@@ -77,7 +77,7 @@ describe("metered AI entry point", () => {
     expect(mocks.check).toHaveBeenCalledWith(id, "rewrite_text", expect.objectContaining({ largeRewrite: true }));
     expect(mocks.record).toHaveBeenCalledWith({ id, model: SITE_GENERATION_MODEL }, {
       inputTokens: 30, outputTokens: 10, cacheReadTokens: 100, cacheWrite5mTokens: 100, cacheWrite1hTokens: 50,
-    });
+    }, undefined, "edit");
   });
   it("uses automatic tool choice for Sonnet without dropping strict schemas, caching or metering", async () => {
     const generationId = "00000000-0000-4000-8000-000000000002";

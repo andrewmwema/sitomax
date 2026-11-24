@@ -2,19 +2,19 @@
 // valid and keeps the agent's rules (no invented facts, AA contrast).
 //
 //   node scripts/agent-evals.mjs --dry-run        check the harness; no provider request
-//   node scripts/agent-evals.mjs                  every request against Anthropic (uses ANTHROPIC_API_KEY)
-//   node scripts/agent-evals.mjs --only faq,blog  selected requests
+//   npm run agency-token -- agent-evals           every request against Anthropic
+//   npm run agency-token -- agent-evals --only faq,blog  selected requests
 //   node scripts/agent-evals.mjs --verbose        print each step as it happens
 //   node scripts/agent-evals.mjs --budget 5       stop spending at 5 USD in total (default 3)
 //   node scripts/agent-evals.mjs --costs          print where each request's tokens and money went
 //   node scripts/agent-evals.mjs --out run.json   save the results, to compare one run with another
 //
-// Runs happen in the agent's sandbox: no database is read or written, and no
-// images are fetched. Exits with 1 when a request fails its checks.
-import { writeFileSync } from "node:fs";
+// Runs use fixture content and fetch no images. Live provider usage is recorded.
+import { existsSync, writeFileSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
+import { createEvalRecorder } from "./eval-accounting.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = process.argv.slice(2);
@@ -29,7 +29,7 @@ let vite;
 const redact = (value) => (apiKey ? value.replaceAll(apiKey, "[redacted]") : value).replace(/\bsk-ant-[\w-]+/g, "[redacted]");
 
 try {
-  try { loadEnvFile(`${root}.env.local`); } catch { /* The key may come from the environment instead. */ }
+  if (existsSync(`${root}.env.local`)) loadEnvFile(`${root}.env.local`);
   apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey && !dryRun) throw new Error("ANTHROPIC_API_KEY is not set; no request sent. Use --dry-run to check the harness.");
   if (!Number.isFinite(budget) || budget <= 0) throw new Error("--budget must be a positive number of US dollars.");
@@ -40,16 +40,23 @@ try {
   const { DRY_RUN_SCRIPT, EVAL_CASES, runEval, scriptedModel } = await vite.ssrLoadModule("/test/evals/agent-evals.ts");
   const { formatAiCost } = await vite.ssrLoadModule("/lib/ai/cost-format.ts");
   const { cacheSummary, describeAgentCost } = await vite.ssrLoadModule("/lib/ai/agent-cost.ts");
+  const { messageUsage } = await vite.ssrLoadModule("/lib/ai/agent-cost.ts");
+  const { calculateCostUsd } = await vite.ssrLoadModule("/lib/ai/pricing.ts");
 
   // The scripted edit cannot satisfy the requests, so a dry run judges only the rules every run must keep.
   const cases = EVAL_CASES.filter((entry) => !only || only.has(entry.id))
     .map((entry) => dryRun ? { ...entry, verify: () => null } : entry);
   if (!cases.length) throw new Error(`No eval matches --only. Choose from: ${EVAL_CASES.map((entry) => entry.id).join(", ")}.`);
   const sdk = dryRun ? null : new Anthropic({ apiKey, baseURL: "https://api.anthropic.com", maxRetries: 0, timeout: 120_000 });
-  const live = (params, { signal, onText }) => {
+  const record = dryRun ? null : await createEvalRecorder({ calculateCostUsd, messageUsage });
+  let accountingFailure;
+  const live = async (params, { signal, onText }) => {
     const stream = sdk.messages.stream(params, { signal });
     stream.on("text", onText);
-    return stream.finalMessage();
+    const response = await stream.finalMessage();
+    try { await record(response); }
+    catch (error) { accountingFailure = error; throw error; }
+    return response;
   };
 
   console.log(dryRun
@@ -74,6 +81,7 @@ try {
         if (event.type === "question") console.log(`    question: ${String(event.question).slice(0, 200)}`);
       },
     });
+    if (accountingFailure) throw accountingFailure;
     results.push(result);
     spent += result.costUsd;
     const { inputTokens, outputTokens, cacheReadTokens, cacheWrite5mTokens, cacheWrite1hTokens } = result.tokens;

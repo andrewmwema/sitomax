@@ -13,6 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "agency-token": "node scripts/agency-token.mjs",
     "test": "vitest run"
   },
   "dependencies": {

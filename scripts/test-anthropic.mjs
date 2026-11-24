@@ -1,7 +1,9 @@
 import { loadEnvFile } from "node:process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { SITE_GENERATION_MODEL } from "../lib/ai/models.ts";
+import { createEvalRecorder } from "./eval-accounting.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -13,24 +15,32 @@ let apiKey;
 let vite;
 const redact = (value) => (apiKey ? value.replaceAll(apiKey, "[redacted]") : value).replace(/\bsk-ant-[\w-]+/g, "[redacted]");
 try {
-  loadEnvFile(`${root}.env.local`);
+  if (existsSync(`${root}.env.local`)) loadEnvFile(`${root}.env.local`);
   apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey && !dryRun) throw new Error("ANTHROPIC_API_KEY is not set; no request sent.");
+  const { createServer } = await import("vite");
+  vite = await createServer({ root, configFile: `${root}vitest.config.ts`, logLevel: "error", server: { middlewareMode: true, ws: false, watch: null } });
+  const { messageUsage } = await vite.ssrLoadModule("/lib/ai/agent-cost.ts");
+  const { calculateCostUsd } = await vite.ssrLoadModule("/lib/ai/pricing.ts");
+  const record = dryRun ? null : await createEvalRecorder({ calculateCostUsd, messageUsage });
   const sdk = dryRun ? null : new Anthropic({
     apiKey, baseURL: "https://api.anthropic.com", maxRetries: 0, timeout: 120_000,
   });
+  const create = async (params) => {
+    const response = await sdk.messages.create(params);
+    await record(response);
+    return response;
+  };
   if (!generation && !custom && !curated) {
     const params = { model: SITE_GENERATION_MODEL, max_tokens: 32, thinking: { type: "between_tools" },
       messages: [{ role: "user", content: "Say hi" }] };
     console.log(JSON.stringify(params));
     if (sdk) {
-      const { content, model, stop_reason } = await sdk.messages.create(params);
+      const { content, model, stop_reason } = await create(params);
       console.log(JSON.stringify({ model, stop_reason, content }, null, 2));
     }
   } else {
     // Load the app's TypeScript, catalog and test stubs without starting Next.
-    const { createServer } = await import("vite");
-    vite = await createServer({ root, configFile: `${root}vitest.config.ts`, server: { middlewareMode: true, ws: false, watch: null } });
     const { anthropicRequestParams } = await vite.ssrLoadModule("/lib/ai/request-params.ts");
     const { pageFillContract } = await vite.ssrLoadModule("/lib/ai/site-schemas.ts");
     const { fillPage } = await vite.ssrLoadModule("/lib/ai/site-tool.ts");
@@ -52,7 +62,7 @@ try {
           cacheTtl: params.system[0].cache_control.ttl }));
         return;
       }
-      return sdk.messages.create(params);
+      return create(params);
     }
     const trace = {
       requestId: crypto.randomUUID(), contract: CUSTOM_LAYOUT_CONTRACT ?? "curated",
@@ -94,7 +104,7 @@ try {
           console.log(`Validated ${page.slug || "home"}: ${sections.length} sections, ${words(filled.data)} words.`);
           if (args.has("--show")) console.log(JSON.stringify(filled.data, null, 1));
         }
-        console.log(`Validated curated ${args.has("--plan-only") ? "plan" : "generation"}: ${input.desiredPages.map((slug) => slug || "home").join(", ")} (no database writes).`);
+        console.log(`Validated curated ${args.has("--plan-only") ? "plan" : "generation"}: ${input.desiredPages.map((slug) => slug || "home").join(", ")}.`);
       }
     } else {
       const desiredPages = args.has("--home-only") ? [""] : defaultPages;
@@ -112,7 +122,7 @@ try {
           const layout = await writeCustomPage(send, input, trace, plan, page, page.slug || "home", () => {});
           console.log(`Validated ${page.slug || "home"}: ${layout.length} sections (${page.sections.map(({ kind }) => kind).join(", ")}).`);
         }
-        console.log(`Validated custom ${args.has("--plan-only") ? "plan" : "generation"}: ${desiredPages.map((slug) => slug || "home").join(", ")} (no database writes).`);
+        console.log(`Validated custom ${args.has("--plan-only") ? "plan" : "generation"}: ${desiredPages.map((slug) => slug || "home").join(", ")}.`);
       }
     }
   }

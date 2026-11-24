@@ -47,8 +47,8 @@ describe("AI server-side accounting", () => {
   it("records precise calculated cost and reports failed ledger writes", async () => {
     const usage = { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 1000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0 };
     await recordUsage({ id, model: SITE_GENERATION_MODEL }, usage);
-    expect(mocks.rpc).toHaveBeenCalledWith("finish_ai_request", expect.objectContaining({
-      p_request_id: id, p_cost_usd: 0.0031, p_failed: false,
+    expect(mocks.rpc).toHaveBeenCalledWith("finish_ai_request_labeled", expect.objectContaining({
+      p_request_id: id, p_cost_usd: 0.0031, p_action_type: "edit",
     }));
     mocks.rpc.mockResolvedValueOnce({ error: { message: "offline" } });
     await expect(recordUsage({ id, model: SITE_GENERATION_MODEL }, usage)).rejects.toThrow("remains held");

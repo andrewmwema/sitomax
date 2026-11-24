@@ -48,7 +48,7 @@ describe("blog writer AI", () => {
       type: "paragraph", html: "<p>Useful text &lt;script&gt;alert(1)&lt;/script&gt;</p>",
     }]);
     expect(mocks.request).toHaveBeenCalledWith(expect.objectContaining({
-      action: "rewrite_text", largeRewrite: true, accountId, siteId,
+      action: "rewrite_text", usageType: "blog_ai", largeRewrite: true, accountId, siteId,
     }));
     expect(mocks.request.mock.calls[0][0].messages[0].content).toContain("Example Co");
     expect(mocks.request.mock.calls[0][0].system).toContain("Never invent");

@@ -94,10 +94,18 @@ indexed full-text search would require a separate migration.
 
 Analytics keeps UTC reporting and labels visitor counts as the sum of daily
 uniques, not a deduplicated monthly audience. Empty periods do not show synthetic
-traffic charts or conversion rates. AI Usage & Costs shows recorded client costs
-for the selected UTC month separately from current-month allocation and held
-reservations. All spending is estimated from configured token rates, not confirmed
-billing charges; internal agency usage is excluded from client reports.
+traffic charts or conversion rates. AI Usage & Costs is agency-only. Its billing
+month keeps the existing UTC boundaries, displayed in America/Chicago time; the
+daily chart groups by Chicago date, so the first and last local days are partial.
+Totals split client requests, agency requests (including agency work on client
+sites) and eval scripts. Client rows separately show both costs and their sum,
+completed credits charged, current remaining credits and margin (credits charged
+at $0.05 each minus total cost to serve). Margin is not actual revenue or profit:
+included usage has no credit charge. Current allowances and held requests are
+not historical snapshots. Older lead/blog calls are included under edits because
+their original category was not recorded. All spending is estimated from
+configured token rates, not confirmed billing charges; past unrecorded scripts,
+unreconciled requests and uncertain provider outcomes are excluded.
 
 Agency Settings groups the existing profile, logo and accent controls with a live
 branding preview. Unsaved changes warn on refresh/close and ordinary navigation
@@ -531,7 +539,7 @@ words unless the user asks for more.
 
 **Evals.** `node scripts/agent-evals.mjs --dry-run` checks the eval harness
 with a scripted model and sends nothing to the provider.
-`node scripts/agent-evals.mjs` runs sixteen sample requests against a fixture
+`npm run agency-token -- agent-evals` runs sixteen sample requests against a fixture
 site with the configured API key (about $0.50 of provider credits, more when the
 model plans a larger job; `--budget` caps the total, 3 USD by default, and one
 request may use a quarter of it) and checks that each staged changeset validates,
@@ -542,8 +550,16 @@ two), `page` (adds to or rewrites one page), `site` (across pages or shared by
 them) and `blog`. `--only faq,blog` runs selected requests, `--costs` prints
 each request's cost breakdown, `--verbose` adds each step and each model
 request with what the cache read and wrote, and `--out run.json` saves the
-results to compare one run with another. Evals run in the agent's sandbox:
-they read and write no database and fetch no images.
+results to compare one run with another. Evals use a fixture and fetch no images.
+Each successful live provider response is recorded as `source='eval'`, without
+client quota or site changes. Live scripts require an agency login: the helper
+prompts for email and password in the terminal, hides the password, passes the
+short-lived access token only to the child process, and revokes that session
+afterward. No credentials or token are written to files. For an already
+authenticated session, `AGENCY_AI_ACCESS_TOKEN` may instead be supplied in the
+process environment. The scripts verify super-admin access before a provider
+call and stop on accounting failure; use the logged usage reference and token
+counts to reconcile that response. Dry runs require neither login nor database.
 
 What a request costs, measured with the evals on the fixture site before and
 after the agent's input was cut down and small edits were given to the small
@@ -608,16 +624,16 @@ account's folder; its library also includes the agency-only branding bucket.
 ### AI diagnostics
 
 To diagnose the provider locally with a configured API key, run
-`node scripts/test-anthropic.mjs` for a small message using the site's model.
+`npm run agency-token -- test-anthropic` for a small message using the site's model.
 Add `--generation` to test planning and four page requests with synthetic
-details and no database writes (this uses provider credits). Add `--dry-run`
+details (this uses provider credits and records usage). Add `--dry-run`
 to check the planner and four synthetic page schemas without sending requests.
 The planner is strict; page fills are non-strict and get one Zod-driven repair
 before the run stops without saving drafts. The diagnostic prints tool metadata,
 not prompts, business details or keys.
 For SitoMax designs with preset pages, run
-`node scripts/test-anthropic.mjs --curated --plan-only` and then
-`node scripts/test-anthropic.mjs --curated` (Home, Features, Pricing, Examples,
+`npm run agency-token -- test-anthropic --curated --plan-only` and then
+`npm run agency-token -- test-anthropic --curated` (Home, Features, Pricing, Examples,
 About and Contact with FAQ and Pricing; prints each page's section and word
 counts, add `--show` for the generated props). Curated pages are built from the
 page-type blueprints in [`lib/ai/page-blueprints.ts`](lib/ai/page-blueprints.ts):
@@ -632,9 +648,9 @@ For existing Original Custom Layout retries, apply
 [`0024_custom_generation_call_budget.sql`](supabase/migrations/0024_custom_generation_call_budget.sql)
 before using per-section generation. The generation still consumes one credit;
 section calls and repairs are metered against the same generation. To verify
-with synthetic details and no database writes, run
-`node scripts/test-anthropic.mjs --custom --home-only` and then
-`node scripts/test-anthropic.mjs --custom` (four pages with FAQ and Pricing).
+with synthetic details, run
+`npm run agency-token -- test-anthropic --custom --home-only` and then
+`npm run agency-token -- test-anthropic --custom` (four pages with FAQ and Pricing).
 Apply [`0025_page_menu_labels.sql`](supabase/migrations/0025_page_menu_labels.sql)
 before deploying automatic site menus. Edit a page's short **Menu label** in
 the editor's **Pages → This page in menus**; this does not change the page or SEO

@@ -2,7 +2,7 @@ import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { AI_ACTIONS, modelForAction, SITE_GENERATION_MODEL } from "./models";
+import { AI_ACTIONS, AI_USAGE_TYPES, modelForAction, SITE_GENERATION_MODEL } from "./models";
 import { assertPricedModel, type TokenUsage } from "./pricing";
 import { checkLimit, recordUsage, releaseFailedRequest } from "./usage";
 import { anthropicRequestParams } from "./request-params";
@@ -20,6 +20,7 @@ const requestSchema = z.object({
   accountId: z.uuid(),
   siteId: z.uuid().optional(),
   action: z.enum(AI_ACTIONS),
+  usageType: z.enum(AI_USAGE_TYPES).optional(),
   largeRewrite: z.boolean().default(false),
   generationId: z.uuid().optional(),
   correlationId: z.uuid().optional(),
@@ -99,7 +100,7 @@ export async function requestAi(raw: AiRequest): Promise<Anthropic.Message & { _
       cacheReadTokens: usage.cache_read_input_tokens ?? 0,
       cacheWrite5mTokens: write5m, cacheWrite1hTokens: write1h,
     };
-    await recordUsage(reservation, tokens);
+    await recordUsage(reservation, tokens, undefined, input.usageType ?? (input.action === "generate_site" ? "site_generation" : "edit"));
   } catch {
     // Do not refund or return a billable response that failed accounting.
     console.error("Completed AI request needs usage reconciliation", {

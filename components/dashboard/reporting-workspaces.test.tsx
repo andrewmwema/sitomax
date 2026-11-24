@@ -4,6 +4,7 @@ import { AnalyticsReport } from "./analytics-report";
 import { AiCostReport } from "./ai-cost-report";
 import { formatAiCost } from "@/lib/ai/cost-format";
 import type { SiteAnalyticsReport } from "@/lib/analytics";
+import type { MonthlyAiReport } from "@/lib/ai/reporting";
 
 const emptyAnalytics: SiteAnalyticsReport = {
   visits: 0, unique_visitors: 0, form_submissions: 0,
@@ -11,6 +12,7 @@ const emptyAnalytics: SiteAnalyticsReport = {
   pages: [], referrers: [], devices: [],
 };
 const accountId = "00000000-0000-4000-8000-000000000001";
+const emptyReport: MonthlyAiReport = { clients: [], agency: [], daily: [], totals: { clients: 0, agency: 0, evals: 0, requests: 0 } };
 
 describe("Phase 4 reporting workspaces", () => {
   it("uses a useful traffic empty state instead of a zero-filled chart", () => {
@@ -42,22 +44,31 @@ describe("Phase 4 reporting workspaces", () => {
     expect(formatAiCost(0, true)).toBe("$0.00");
     expect(formatAiCost(0.0014)).toBe("$0.00");
     expect(formatAiCost(0.0014, true)).toBe("$0.001400");
+    expect(formatAiCost(-0.0014, true)).toBe("-$0.001400");
     expect(formatAiCost(0.0000001, true)).toBe("<$0.000001");
-    const html = renderToStaticMarkup(<AiCostReport rows={[]} usage={[]} sites={[]} month="2026-10" currentMonth="2026-11" />);
-    expect(html.match(/\$0\.00/g)?.length).toBe(2);
+    const html = renderToStaticMarkup(<AiCostReport report={emptyReport} usage={[]} sites={[]} month="2026-10" currentMonth="2026-11" />);
+    expect(html).toContain("$0.00");
     expect(html).toContain("No client accounts yet");
     expect(html).not.toMatch(/NaN|Infinity/);
   });
 
   it("separates historical recorded costs from current allocation and pending requests", () => {
     const html = renderToStaticMarkup(<AiCostReport
-      rows={[{ account_id: accountId, account_name: "Client A", requests: 2, cost_usd: 0.0014 }]}
+      report={{ clients: [{ account_id: accountId, account_name: "Client A", requests: 2, cost_usd: 0.0014, agency_cost_usd: 0.02, credits_charged: 2 }],
+        agency: [{ action_type: "agent_run", requests: 1, tokens: 1000, cost_usd: 0.02 }],
+        daily: [{ day: "2026-10-05", clients: 0.0014, agency: 0.02, evals: 0.03 }],
+        totals: { clients: 0.0014, agency: 0.02, evals: 0.03, requests: 4 } }}
       usage={[{ account_id: accountId, account_name: "Client A", site_generations: 1, edits: 2, included_generations: 1, included_edits: 1, monthly_site_generations: 0, monthly_edits: 2, pending_requests: 3, extra_credits: 4 }]}
       sites={[{ id: "site", account_id: accountId, name: "Client website", subdomain: "client" }]}
       month="2026-10" currentMonth="2026-11" />);
     expect(html).toContain("$0.001400");
-    expect(html).toContain("Costs and API requests: 2026-10");
-    expect(html).toContain("current UTC month (2026-11)");
+    expect(html).toContain("Costs and credits charged: 2026-10");
+    expect(html).toContain("Oct 31, 2026, 7:00 PM CDT");
+    expect(html).toContain("Agency work on this account");
+    expect(html).toContain("$0.08");
+    expect(html).toContain("1,000");
+    expect(html).toContain("Daily AI spending stacked by clients, agency and evals");
+    expect(html).toContain("Compare with Anthropic Console");
     expect(html).toContain("3 held / awaiting reconciliation");
     expect(html).toContain("No included allowance");
     expect(html).toContain("50%");
@@ -67,7 +78,7 @@ describe("Phase 4 reporting workspaces", () => {
   });
 
   it("reports unavailable allocation explicitly rather than substituting zero usage", () => {
-    const html = renderToStaticMarkup(<AiCostReport rows={[{ account_id: accountId, account_name: "Client A", requests: 0, cost_usd: 0 }]} usage={null} sites={null} month="2026-11" currentMonth="2026-11" />);
+    const html = renderToStaticMarkup(<AiCostReport report={{ ...emptyReport, clients: [{ account_id: accountId, account_name: "Client A", requests: 0, cost_usd: 0, agency_cost_usd: 0, credits_charged: 0 }] }} usage={null} sites={null} month="2026-11" currentMonth="2026-11" />);
     expect(html).toContain('role="alert"');
     expect(html).toContain("Could not load current allowances");
     expect(html).toContain("Website list unavailable");
