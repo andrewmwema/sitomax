@@ -370,9 +370,13 @@ An edit that changes nothing is answered as such and is not an error.
 call is refused for the way its input was written, the agent is asked to
 repair it, and the attempt and its repair are shown as one step that worked.
 The repair is made by the small model; if that is refused too, the main model
-has one last try. A step turns red, with "This step could not be completed.",
-when it was refused for any other reason, when the last try was refused too,
-or when the run ended without a repair. Agency staff also get **Details** on such steps, with
+has one last try. A run may ask for five repairs in all, over every tool and
+every Continue: a tool that works again gets its three attempts back, so
+without that a run could go on slipping and repairing until its steps ran out.
+After the fifth, the next refused input fails its step and pauses the run. A
+step turns red, with "This step could not be completed.", when it was refused
+for any other reason, when the last try was refused too, when the run's
+repairs are used up, or when the run ended without a repair. Agency staff also get **Details** on such steps, with
 the technical message the model was given. The editor's context
 for a message (the selected section, an insert position) is sent to the model
 apart from the user's words and is not stored or shown as part of them, and
@@ -482,9 +486,13 @@ conversation and stays as it was first sent for the whole run, also for an
 hour, so a run that waits for a plan approval and the next request in the
 session still read it from the cache. The conversation follows and only grows;
 it is marked up to its end with the five-minute cache, so each step reads the
-previous one's and adds its own. Cached input costs a twentieth of fresh input
-at the configured prices. The small model's requests are not cached: they are
-short, and no cache prices are configured for it.
+previous one's and adds its own. The small model's requests are cached the same
+way, with its own, shorter tools and rules. Cached input costs a twentieth of
+fresh input on the main model and a tenth on the small one; the prices in
+[pricing.ts](./lib/ai/pricing.ts) are entered by hand from Anthropic's
+published pricing, which the file cites. A repair request shares the cached
+tools and rules but writes nothing of the conversation, which its model will
+not read again.
 
 The overview is a compact map: every page with its menu label and status, and
 each section's id, type, design and first fifteen words, plus the theme, the
@@ -492,7 +500,12 @@ business facts and a summary of the header, footer and blog. It holds no
 section's properties. What the agent changes afterwards is in its own tool
 results; `get_site_overview` returns the site as it is now, and the overview is
 refreshed whenever the conversation is shortened. `get_site_settings` reads the
-header, footer, site SEO or blog settings in full. `get_page` returns a page's
+header, footer, site SEO or blog settings, and returns only the settings listed
+in `SITE_SETTINGS_FIELDS` ([agent-tools.ts](./lib/ai/agent-tools.ts)): what a
+visitor can see on the site. The site's analytics, pixel and verification ids
+are not among them, and nothing about billing, domains or accounts is loaded
+for the agent at all. A new setting is unreadable until it is added to that
+list. `get_page` returns a page's
 content (text, links, images and whole lists; empty properties are only named)
 and `get_section` one section in full, with its layout options, design and
 nested element ids. Content that was read in the run and has not changed since
@@ -546,6 +559,12 @@ it the `site` figures are $0.032 ($0.068). The "before" run started with a warm
 cache and paid no such write. The targets are $0.02 for a `section` request and
 $0.20 for a `site` request. Costs vary from run to run with how much the model
 decides to change; compare several runs before drawing conclusions from one.
+
+Those `section` figures are from before the small model's requests were
+cached. With caching, the same five requests cost $0.0007 on average ($0.0004
+to $0.0011) when the cache is warm, and $0.0011 on average in a run that
+started cold, whose first request also wrote the small model's tools and
+rules to the cache ($0.0016, once an hour for all sites together).
 
 ### Stock photos
 

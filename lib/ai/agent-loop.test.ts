@@ -238,8 +238,10 @@ describe("AI agent run loop", () => {
     // rules and tools. If its repair is refused too, the main model has the last try.
     expect(invalid.calls.map((params) => params.model)).toEqual([SITE_GENERATION_MODEL, SMALL_EDIT_MODEL, SITE_GENERATION_MODEL]);
     expect(invalid.calls[1].tools).toEqual(invalid.calls[0].tools);
-    expect(invalid.calls[1].system).toEqual([{ type: "text", text: (invalid.calls[0].system as Anthropic.TextBlockParam[])[0].text }]);
-    expect(JSON.stringify(invalid.calls[1])).not.toContain("cache_control");
+    // The repair shares the cached tools and rules, and writes nothing of a conversation it will not read again.
+    expect(invalid.calls[1].system).toEqual(invalid.calls[0].system);
+    expect(JSON.stringify(invalid.calls[1].system)).toContain('"ttl":"1h"');
+    expect(JSON.stringify(invalid.calls[1].messages)).not.toContain("cache_control");
     const errors = repair.events.filter((event) => event.type === "tool_error").map((event) => String(event.message));
     expect(errors[0]).toMatch(/^Invalid tool input: variant: .*Repair the input and retry once\.$/);
     expect(errors[1]).toMatch(/still invalid after one repair attempt: .*Repair the input and retry\.$/);
@@ -451,8 +453,15 @@ describe("AI agent model routing", () => {
     expect(rules).toContain("hand_off");
     expect(rules).not.toContain("PLANS.");
     expect(sent(model.calls[0]).overview).toMatch(/^SITE OVERVIEW/);
-    // Its requests are short and its cache is not priced, so nothing is marked for caching.
-    expect(JSON.stringify(model.calls)).not.toContain("cache_control");
+    // Its prompt is cached the same way as the main model's: tools and rules and the overview for an hour, then the conversation.
+    expect(model.calls[1].system).toEqual([expect.objectContaining({ cache_control: { type: "ephemeral", ttl: "1h" } })]);
+    for (const index of [1, 2]) {
+      const [before, after] = [sent(model.calls[index - 1]), sent(model.calls[index])];
+      expect(after.overview).toBe(before.overview);
+      expect(after.overviewMark).toEqual({ type: "ephemeral", ttl: "1h" });
+      expect(after.conversation.slice(0, before.conversation.length)).toEqual(before.conversation);
+      expect(after.cached.cache_control).toEqual({ type: "ephemeral", ttl: "5m" });
+    }
     expect(Object.keys(state.cost!.models)).toEqual([SMALL_EDIT_MODEL]);
     expect(state.route).toBe("small");
     expectAnswered(state.messages);
@@ -585,5 +594,34 @@ describe("AI agent model routing", () => {
     const stuck = smallRun(looping);
     expect(await stuck.run()).toBe("completed");
     expect(models(looping)).toEqual([...Array.from({ length: 8 }, () => "small"), "main"]);
+  });
+
+  it("allows five repairs in a run, then fails the step and stops, and Continue does not bring them back", async () => {
+    const good = (index: number) => edit(`Heading ${index}`);
+    const bad: Reply = { tool: ["update_section_props", { pageId: fixtureIds.home, sectionId: "home-hero", props: { variant: "nope" } }] };
+    // Every slip is put right at once, so no tool ever reaches its own limit of three attempts.
+    const model = scripted((_params, call) => call <= 12 ? (call % 2 ? bad : good(call)) : { text: "Done." });
+    const { state, changeset, events, run } = start(model);
+    expect(await run()).toBe("paused");
+    // Five slips were repaired; the sixth is refused for good and nothing more is asked of the model.
+    expect(model.calls).toHaveLength(11);
+    expect(state).toMatchObject({ repairs: AGENT_LIMITS.repairs, runChanges: 5, pauseReason: expect.stringContaining("too many of its steps") });
+    const errors = events.filter((event) => event.type === "tool_error");
+    expect(errors.map((event) => event.repairable)).toEqual([true, true, true, true, true, false]);
+    expect(String(errors.at(-1)!.message)).toMatch(/used all 5 of its repair attempts, so this step was not carried out/);
+    expect(heading(changeset)).toBe("Heading 10");
+    expectAnswered(state.messages);
+
+    // Continue gives fresh steps, but the run's repairs are spent: the next slip fails at once.
+    startAgentSegment(state);
+    const again = scripted((_params, call) => call === 1 ? good(20) : call === 2 ? bad : { text: "Done." });
+    const events2: AgentEvent[] = [];
+    expect(await runAgentLoop({ model: again, changeset, state, context, emit: (event) => events2.push(event), threadId: "thread", runId: "run" })).toBe("paused");
+    expect(again.calls).toHaveLength(2);
+    expect(heading(changeset)).toBe("Heading 20");
+    expect(events2.filter((event) => event.type === "tool_error").map((event) => event.repairable)).toEqual([false]);
+    expect(state.repairs).toBe(AGENT_LIMITS.repairs);
+    // A new request is a new run, with repairs of its own.
+    expect(newAgentState([{ role: "user", content: "Next" }], reservation).repairs).toBeUndefined();
   });
 });

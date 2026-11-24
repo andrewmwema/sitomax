@@ -26,7 +26,9 @@ import { DEFAULT_COLORS } from "@/lib/theme/presets";
 import { buildCustomSections, customSectionSchema } from "./custom-layout";
 import { designPatchSchema, editDesign, editMediaUrl } from "./edit-design";
 import { freshFooter } from "./site-footer";
-import { AGENT_WRITE_TOOLS, agentToolParameters, agentToolSchemas, agentTools, SMALL_AGENT_TOOLS, smallAgentTools, themePatchSchema } from "./agent-tools";
+import {
+  AGENT_WRITE_TOOLS, agentToolParameters, agentToolSchemas, agentTools, SITE_SETTINGS_FIELDS, SMALL_AGENT_TOOLS, smallAgentTools, themePatchSchema,
+} from "./agent-tools";
 import { routeAgentRequest, scopeExceeded, SMALL_SCOPE, widenScope, type AgentRoute, type ChangeScope } from "./agent-route";
 import { applyQuickStyle, quickStyleSchema } from "@/lib/theme/quick-styles";
 import { createAgentReviewPayload, jsonEqual, reviewPatches, type ReviewPatch } from "./agent-review";
@@ -54,6 +56,12 @@ const MAX_NUDGES = 2;
 const MAX_PLAN_DEMANDS = 2;
 /** Times a tool's input may be refused before the run stops: the first slip, its repair, and a last try by the main model. */
 const MAX_INPUT_ATTEMPTS = 3;
+/**
+ * Repairs a run may ask for in total, over every tool and every Continue. A
+ * tool that works again gets its attempts back, so without this a run could
+ * go on slipping and repairing for as long as it has steps left.
+ */
+const MAX_RUN_REPAIRS = 5;
 const WRITE_TOOLS = AGENT_WRITE_TOOLS;
 const agentDesigns = aiCatalog.filter((design) => design.category !== "Footer");
 
@@ -138,6 +146,8 @@ export type AgentState = {
   planDemands?: number;
   /** The tool whose input was just refused, when the next request is its repair. */
   repair?: string;
+  /** Repairs asked for in this run so far. It is never reset: a run has MAX_RUN_REPAIRS in all. */
+  repairs?: number;
   /** Requests in this conversation so far, which decides when its history is summarised. */
   threadTurns?: number;
   /** Times in a row the agent was told to carry on without making progress. */
@@ -166,7 +176,7 @@ const agentStateSchema = z.object({
   overview: z.string().optional(), reads: z.record(z.string(), z.object({ content: z.string().optional(), full: z.string().optional() })).optional(),
   route: z.enum(["small", "main"]).optional(), scope: z.object({ pageId: z.string().optional(), sections: z.array(z.string()) }).optional(),
   planDemands: z.number().int().nonnegative().optional(),
-  repair: z.string().optional(), threadTurns: z.number().int().nonnegative().optional(),
+  repair: z.string().optional(), repairs: z.number().int().nonnegative().optional(), threadTurns: z.number().int().nonnegative().optional(),
   plan: agentPlanSchema.optional(), pauseReason: z.string().optional(),
   tokenUsage: tokenUsageSchema, segmentUsage: tokenUsageSchema, cost: agentCostSchema.optional(),
   awaiting: z.object({ kind: z.enum(["plan", "question", "credit"]), toolUseId: z.string(), toolName: z.string(), payload: z.record(z.string(), z.unknown()) }).optional(),
@@ -814,13 +824,15 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
   switch (name) {
     case "get_site_overview":
       return siteOverview(changeset);
-    case "get_site_settings":
-      switch (args.part) {
-        case "header": return { header: changeset.working.header };
-        case "footer": return { footer: Object.fromEntries(Object.entries(changeset.working.footer).filter(([key]) => key !== "id")) };
-        case "seo": return { seo: changeset.working.site.seo ?? {} };
-        default: return { blog: changeset.working.blogSettings };
-      }
+    case "get_site_settings": {
+      const part = args.part as keyof typeof SITE_SETTINGS_FIELDS;
+      const { working } = changeset;
+      const stored: unknown = part === "header" ? working.header : part === "footer" ? working.footer
+        : part === "seo" ? working.site.seo : working.blogSettings;
+      // Only the listed settings are returned, whatever else is stored beside them.
+      const fields: readonly string[] = SITE_SETTINGS_FIELDS[part];
+      return { [part]: Object.fromEntries(fields.flatMap((key) => isRecord(stored) && stored[key] !== undefined ? [[key, stored[key]]] : [])) };
+    }
     case "get_page": {
       const page = getPage(changeset, String(args.pageId));
       const data = puckDataSchema.parse(page.draft_data);
@@ -1406,12 +1418,16 @@ export type AgentModel = (
   options: { signal?: AbortSignal; onText: (text: string) => void },
 ) => Promise<Anthropic.Message>;
 type Terminal = "completed" | "paused" | "awaiting_approval" | "awaiting_input" | "stopped";
-export const AGENT_LIMITS = { toolCalls: MAX_TOOL_CALLS, changes: MAX_CHANGES, tokens: MAX_TOKEN_BUDGET, largeRunChanges: 10, nudges: MAX_NUDGES } as const;
+export const AGENT_LIMITS = {
+  toolCalls: MAX_TOOL_CALLS, changes: MAX_CHANGES, tokens: MAX_TOKEN_BUDGET, largeRunChanges: 10, nudges: MAX_NUDGES,
+  inputAttempts: MAX_INPUT_ATTEMPTS, repairs: MAX_RUN_REPAIRS,
+} as const;
 
 const PAUSED = {
   limit: "This run reached its limit of steps for one go. Everything so far is saved.",
   budget: "This run used its allowance for one go. Everything so far is saved.",
   input: "The agent could not get a step right after trying again, so it stopped to avoid guessing. Everything so far is saved.",
+  repairs: "The agent had to correct too many of its steps in this request, so it stopped to avoid guessing. Everything so far is saved.",
   plan: "The agent stopped before the plan was finished. Everything so far is saved.",
   cutOff: "The agent's reply was cut off before it finished. Everything so far is saved.",
 } as const;
@@ -1550,18 +1566,20 @@ export async function runAgentLoop(run: {
     if (state.messages.at(-1)?.role !== "user") state.messages = appendUserContent(state.messages, [{ type: "text", text: "Continue." }]);
     const role = callRole(state);
     const small = role === "small";
-    // Only the main model's prompt is cached: its cache is priced, and its runs are the long ones.
-    const cached = role === "main";
-    const params = anthropicRequestParams(cached ? SITE_GENERATION_MODEL : SMALL_EDIT_MODEL, {
+    // Both models cache the same way: the tools and rules for an hour, shared by every site, then the
+    // overview and the conversation. A repair is one request by a model that will not read this
+    // conversation again, so it shares the cached tools and rules and writes nothing of the conversation.
+    const leads = role !== "repair";
+    const params = anthropicRequestParams(role === "main" ? SITE_GENERATION_MODEL : SMALL_EDIT_MODEL, {
       maxTokens: MODEL_TOKENS,
-      messages: withSiteOverview(state.messages, state.overview, cached),
+      messages: withSiteOverview(state.messages, state.overview, leads),
       tools: small ? smallAgentTools : agentTools,
     });
-    params.system = [{ type: "text", text: small ? SMALL_SYSTEM_PROMPT : SYSTEM_PROMPT, ...(cached ? { cache_control: { type: "ephemeral" as const, ttl: "1h" as const } } : {}) }];
+    params.system = [{ type: "text", text: small ? SMALL_SYSTEM_PROMPT : SYSTEM_PROMPT, cache_control: { type: "ephemeral", ttl: "1h" } }];
     params.tool_choice = { type: "auto", disable_parallel_tool_use: true };
     // What the small model writes is shown once its reply is kept: a reply that goes to the main model is never seen.
     const held: string[] = [];
-    const response = await model(params, { signal, onText: (text) => cached ? emit({ type: "text", text }) : held.push(text) });
+    const response = await model(params, { signal, onText: (text) => role === "main" ? emit({ type: "text", text }) : held.push(text) });
     const usage = messageUsage(response);
     const spent = agentRunCost(state);
     state.tokenUsage = addUsage(state.tokenUsage, usage);
@@ -1618,6 +1636,7 @@ export async function runAgentLoop(run: {
     }
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     const callSummaries: unknown[] = [];
+    const repairsLeft = () => MAX_RUN_REPAIRS - (state.repairs ?? 0);
     const invalidInput = (name: string, detail: string) => {
       const attempt = (state.toolRepairs[name] ?? 0) + 1;
       state.toolRepairs[name] = attempt;
@@ -1626,6 +1645,12 @@ export async function runAgentLoop(run: {
         terminal = pause(PAUSED.input);
         return `Tool input is still invalid after ${attempt - 1} repair attempts: ${problem}.`;
       }
+      if (repairsLeft() <= 0) {
+        // The run has had all its repairs, whichever tools they were for. This one fails and the run stops.
+        terminal = pause(PAUSED.repairs);
+        return `Invalid tool input: ${problem}. This run has used all ${MAX_RUN_REPAIRS} of its repair attempts, so this step was not carried out.`;
+      }
+      state.repairs = (state.repairs ?? 0) + 1;
       // The next request is the repair. A first slip is repaired by the small model; when its
       // repair is refused too, the main model makes the last attempt and leads from then on.
       state.repair = name;
@@ -1635,8 +1660,9 @@ export async function runAgentLoop(run: {
     };
     const failed = (call: Anthropic.ToolUseBlock, error: unknown) => {
       const input = error instanceof z.ZodError || error instanceof ToolInputError;
-      // A slip in the input is something the model is asked to repair with its next call, until the last attempt.
-      const repairable = input && (state.toolRepairs[call.name] ?? 0) < MAX_INPUT_ATTEMPTS - 1;
+      // A slip in the input is something the model is asked to repair with its next call, until the
+      // tool's last attempt or the run's last repair. After that the step is shown as failed.
+      const repairable = input && (state.toolRepairs[call.name] ?? 0) < MAX_INPUT_ATTEMPTS - 1 && repairsLeft() > 0;
       const message = input ? invalidInput(call.name, toolErrorMessage(error)) : toolErrorMessage(error);
       toolResults.push({ type: "tool_result", tool_use_id: call.id, is_error: true, content: message });
       callSummaries.push({ name: call.name, error: message.slice(0, 4000) });

@@ -120,8 +120,9 @@ export function compactToolResults(messages: Message[], compactedChars = 0, limi
  * in the same session, still read them from the cache. The conversation
  * follows and only grows; it is marked up to its end, so each request reads
  * the previous one's and adds its own.
- * The overview is not saved into the conversation. Without `cache` nothing is
- * marked: the small model's requests are short and its cache is not priced.
+ * The overview is not saved into the conversation. Without `cache` nothing
+ * here is marked, for a request whose model will not read this conversation
+ * again: writing it to the cache would cost more than sending it once.
  */
 export function withSiteOverview(messages: Message[], overview: string, cache = true): Message[] {
   const mark = (ttl: "5m" | "1h") => cache ? { cache_control: { type: "ephemeral" as const, ttl } } : {};

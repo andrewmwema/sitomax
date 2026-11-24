@@ -9,14 +9,22 @@ export type Rates = {
   cacheWrite1h?: number;
 };
 
-/** Agency-supplied USD per million tokens, not automatically fetched provider prices. */
+/**
+ * USD per million tokens, entered by hand: prices are not fetched from the provider.
+ * Source: Anthropic's published model pricing, https://platform.claude.com/docs/en/about-claude/pricing
+ * (the "Model pricing" table and "Long context pricing"), as read on 2026-11-24.
+ * Check that page before changing a model or when a price there changes.
+ */
 export const AI_PRICING: Record<string, { standard: Rates; longContext?: { above: number; rates: Rates } }> = {
+  // Claude Sonnet 5.5: cache hits are 0.05x the input price.
   [SITE_GENERATION_MODEL]: {
     standard: { input: 2, output: 10, cacheRead: 0.1, cacheWrite5m: 2.5, cacheWrite1h: 4 },
   },
+  // Claude Haiku 5.5 is priced by prompt length. A prompt of more than 100,000 tokens, counting
+  // cache reads and writes, pays the higher prices for the whole request.
   [SMALL_EDIT_MODEL]: {
-    standard: { input: 0.1, output: 0.5 },
-    longContext: { above: 100_000, rates: { input: 0.5, output: 2.5 } },
+    standard: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite5m: 0.125, cacheWrite1h: 0.2 },
+    longContext: { above: 100_000, rates: { input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite5m: 0.625, cacheWrite1h: 1 } },
   },
 };
 

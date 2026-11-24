@@ -6,6 +6,7 @@ import { fixtureChangeset, fixtureIds } from "@/test/fixtures/agent-site";
 import { makeToolResult, ToolInputError } from "./agent";
 import { planAgentApply, type ApplyMeta } from "./agent-apply-plan";
 import { createAgentReviewPayload, previewAgentReview } from "./agent-review";
+import { SITE_SETTINGS_FIELDS } from "./agent-tools";
 import { aiCatalog } from "./site-schemas";
 
 type Changeset = Parameters<typeof makeToolResult>[2];
@@ -671,7 +672,9 @@ describe("AI agent context diet", () => {
     expect(overview.footer).toEqual({ businessName: "Harbour Plumbing", tagline: "Local plumbers you can rely on.", variant: expect.any(String) });
     expect(overview.business).toEqual(changeset.working.site.business);
     expect(text.length).toBeLessThan(2_600);
-    expect(await run(changeset, "get_site_settings", { part: "header" })).toEqual({ header: changeset.working.header });
+    const { version: _schemaVersion, ...headerSettings } = changeset.working.header;
+    void _schemaVersion;
+    expect(await run(changeset, "get_site_settings", { part: "header" })).toEqual({ header: headerSettings });
     expect(await run(changeset, "get_site_settings", { part: "footer" })).toEqual({ footer: expect.objectContaining({ tagline: "Local plumbers you can rely on." }) });
   });
 
@@ -757,5 +760,45 @@ describe("AI agent context diet", () => {
     await expect(run(changeset, "apply_theme_preset", { palette: "neon" })).rejects.toThrow();
     expect(await run(changeset, "apply_theme_preset", { buttons: "pill" })).toMatchObject({ nothingChanged: true });
     expectReplays(changeset);
+  });
+
+  it("returns only the listed, visitor-visible settings from get_site_settings, whatever else is stored", async () => {
+    const changeset = fixtureChangeset();
+    const { working } = changeset;
+    // What a site row and its settings can hold beside what the agent may read.
+    working.site.seo = { noindex: true, socialImage: "/share.jpg", googleAnalyticsId: "G-SECRET1234", metaPixelId: "123456789012", googleVerification: "verify-token-abc" };
+    Object.assign(working.site, { custom_domain: "secret-domain.example", stripe_customer_id: "cus_secret", owner_email: "owner@private.example" });
+    Object.assign(working.footer, { apiKey: "sk-footer-secret", internalNote: "private" });
+    Object.assign(working.header, { adminEmail: "staff@private.example" });
+    working.blogSettings = {
+      timezone: "Europe/London", blog_path: "blog", posts_per_page: 9, index_layout: "grid", default_post_layout: "classic", show_author: true,
+      show_date: true, show_reading_time: true, show_share_links: true, show_in_menu: true, noindex_tags: false, cta_text: "Need a plumber?",
+      cta_button_text: "Call us", cta_link: "/contact", webhook_secret: "whsec_secret", author_emails: ["writer@private.example"],
+    };
+    const read = async (part: string) => (await run(changeset, "get_site_settings", { part }) as Record<string, Record<string, unknown>>)[part];
+
+    // The allowed field list, in full. A new setting is unreadable until it is added here on purpose.
+    expect(SITE_SETTINGS_FIELDS).toEqual({
+      header: ["logo", "menu", "cta", "contactsInMenu", "desktop", "tablet", "mobile"],
+      footer: ["businessName", "tagline", "variant", "navigation", "socialLinks", "phone", "email", "address", "hours", "design"],
+      seo: ["noindex", "socialImage"],
+      blog: ["blog_path", "posts_per_page", "index_layout", "default_post_layout", "show_author", "show_date", "show_reading_time",
+        "show_share_links", "show_in_menu", "noindex_tags", "cta_text", "cta_button_text", "cta_link"],
+    });
+    const parts = { header: await read("header"), footer: await read("footer"), seo: await read("seo"), blog: await read("blog") };
+    for (const [part, settings] of Object.entries(parts)) {
+      expect(Object.keys(settings).sort(), part).toEqual([...SITE_SETTINGS_FIELDS[part as keyof typeof SITE_SETTINGS_FIELDS]].sort());
+    }
+    expect(parts.seo).toEqual({ noindex: true, socialImage: "/share.jpg" });
+    expect(parts.header.logo).toEqual(working.header.logo);
+    await expect(run(changeset, "get_site_settings", { part: "billing" })).rejects.toThrow();
+    await expect(run(changeset, "get_site_settings", { part: "site" })).rejects.toThrow();
+
+    // Nothing the agent can read about the site as a whole carries the rest: not the settings, and not the overview.
+    const everything = JSON.stringify([parts, await run(changeset, "get_site_overview", {})]);
+    for (const secret of ["G-SECRET1234", "123456789012", "verify-token-abc", "secret-domain.example", "cus_secret", "private.example", "sk-footer-secret",
+      "whsec_secret", "internalNote", fixtureIds.account]) {
+      expect(everything, secret).not.toContain(secret);
+    }
   });
 });

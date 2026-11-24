@@ -9,6 +9,23 @@ import { customSectionSchema } from "./custom-layout";
 import { designPatchSchema } from "./edit-design";
 import { agentFieldSchemas } from "./site-schemas";
 
+/**
+ * Everything get_site_settings may return, part by part. These are settings a
+ * visitor can see on the site. Whatever else is stored beside them, such as
+ * the site's analytics and verification ids, never reaches the model: a new
+ * setting is unreadable until it is listed here.
+ */
+export const SITE_SETTINGS_FIELDS = {
+  header: ["logo", "menu", "cta", "contactsInMenu", "desktop", "tablet", "mobile"],
+  footer: ["businessName", "tagline", "variant", "navigation", "socialLinks", "phone", "email", "address", "hours", "design"],
+  seo: ["noindex", "socialImage"],
+  blog: [
+    "blog_path", "posts_per_page", "index_layout", "default_post_layout", "show_author", "show_date", "show_reading_time",
+    "show_share_links", "show_in_menu", "noindex_tags", "cta_text", "cta_button_text", "cta_link",
+  ],
+} as const;
+const SITE_SETTINGS_PARTS = ["header", "footer", "seo", "blog"] as const satisfies readonly (keyof typeof SITE_SETTINGS_FIELDS)[];
+
 const jsonScalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const jsonValues: z.ZodType[] = [jsonScalar];
 for (let depth = 1; depth <= 5; depth++) {
@@ -62,8 +79,8 @@ const footerShown = z.object({
 
 const specs = [
   { name: "get_site_overview", description: "Read the site overview again, as the site is now with your changes: every page with its pageId and its sections (sectionId, type, design and the first words of its text), plus the theme, business information and a summary of the header, footer and blog. The conversation starts with the overview from when the request began, so this is only needed after many changes.", schema: z.object({}) },
-  { name: "get_site_settings", description: 'Read one shared part of the site in full, where the overview only has a summary: "header" (menu items and the look on each screen size), "footer", "seo" (site-wide SEO) or "blog" (blog settings). Example: {"part":"header"}', schema: z.object({
-    part: z.enum(["header", "footer", "seo", "blog"]),
+  { name: "get_site_settings", description: 'Read one shared part of the site in full, where the overview only has a summary: "header" (menu items and the look on each screen size), "footer", "seo" (whether the whole site is hidden from search engines, and its sharing image) or "blog" (blog layout settings). Example: {"part":"header"}', schema: z.object({
+    part: z.enum(SITE_SETTINGS_PARTS),
   }) },
   { name: "get_page", description: 'Read a page: its title, menu label and SEO fields, and the content of its sections (text, links, images and lists). Layout options and design are left out; get_section has them. Pass sectionIds, a list, to read only some sections. A section you have already read in this run, and that has not changed since, is listed under unchanged instead of being sent again. Example: {"pageId":"<pageId>","sectionIds":["<sectionId>"]}', schema: z.object({
     pageId: z.uuid(), sectionIds: z.array(z.string().min(1).max(200)).min(1).max(30).optional(),
