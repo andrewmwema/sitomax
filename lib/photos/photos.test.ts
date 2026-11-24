@@ -123,8 +123,11 @@ describe("stock photo provider boundary", () => {
     mocks.fetch.mockResolvedValueOnce(search()).mockImplementation(async () => jpeg());
     mocks.upload.mockResolvedValue({ data: null, error: { statusCode: "409" } });
     const library = createPhotoLibrary(client(), accountId);
-    mocks.info.mockResolvedValueOnce({ data: { metadata: { source_provider: "Pixabay", source_id: 42,
-      source_url: hit.pageURL, source_author: hit.user } }, error: null });
+    const infoClient = createClient("https://storage.example", "public-test-key", { global: {
+      fetch: async () => Response.json({ user_metadata: { source_provider: "Pixabay", source_id: 42,
+        source_url: hit.pageURL, source_author: hit.user } }),
+    } });
+    mocks.info.mockImplementationOnce((path: string) => infoClient.storage.from("site-assets").info(path));
     await expect(library.select({ query: "tools", photoId: 42, siteId })).resolves.toMatchObject({ alt: "Stock photograph: tools, sink" });
     mocks.info.mockResolvedValueOnce({ data: { metadata: {} }, error: null });
     await expect(library.select({ query: "tools", photoId: 42, siteId })).rejects.toThrow("source could not be verified");

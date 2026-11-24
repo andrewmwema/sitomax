@@ -46,10 +46,10 @@ export function createPhotoLibrary(supabase: SupabaseClient, accountId: string) 
           source_url: photo.sourceUrl, source_author: photo.author }, upsert: false });
       if (error?.statusCode === "409") {
         const existing = await bucket.info(path);
-        const metadata = z.object({ source_provider: z.literal(provider.name), source_id: z.number(),
-          source_url: z.string(), source_author: z.string() }).safeParse(existing.data?.metadata);
-        if (existing.error || !metadata.success || metadata.data.source_id !== photo.id
-          || metadata.data.source_url !== photo.sourceUrl) {
+        const metadata = z.object({ userMetadata: z.object({ sourceProvider: z.literal(provider.name), sourceId: z.number(),
+          sourceUrl: z.string(), sourceAuthor: z.string() }) }).safeParse(existing.data);
+        if (existing.error || !metadata.success || metadata.data.userMetadata.sourceId !== photo.id
+          || metadata.data.userMetadata.sourceUrl !== photo.sourceUrl) {
           throw new PhotoError("The existing photo source could not be verified. Please choose another photo.");
         }
       } else if (error) throw new PhotoError("The photo could not be saved to site assets. Please retry.");
