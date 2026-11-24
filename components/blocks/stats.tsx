@@ -57,7 +57,7 @@ export const Stats: ComponentConfig<StatsProps> = {
         icon: iconField("Icon"),
       },
     },
-    image: imageField("Image (split layout)"),
+    image: imageField("Image (split layout)", "16/9"),
     imageAlt: { type: "text", label: "Image alt text" },
     variant: {
       type: "radio",

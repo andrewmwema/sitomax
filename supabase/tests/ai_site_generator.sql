@@ -23,6 +23,16 @@ declare
   selected_generated jsonb;
   n int;
 begin
+  assert public.valid_site_business('{"businessName":"Example","businessType":"Consultant","city":"York","difference":"","tone":"","phone":"","email":"","address":"","openingHours":"","services":[]}'),
+    'Business validation remains compatible with existing records';
+  assert public.valid_site_business('{"businessName":"Example","businessType":"Consultant","city":"York","difference":"","tone":"","phone":"","email":"","address":"","openingHours":"","services":[],"primaryAction":"book","audiences":["Small businesses"],"description":"Verified business details"}'),
+    'Business validation accepts the expanded AI intake';
+  assert public.valid_site_business('{"businessName":"Example","businessType":"Consultant","city":"York","difference":"","tone":"","phone":"","email":"","address":"","openingHours":"","services":[],"socialLinks":[{"label":"Photos","url":"https://instagram.com/example"}]}'),
+    'Business validation preserves social profiles';
+  assert not public.valid_site_business('{"businessName":"Example","businessType":"Consultant","city":"York","difference":"","tone":"","phone":"","email":"","address":"","openingHours":"","services":[],"socialLinks":[{"label":"Photos","url":"https://instagram.com/example","extra":"data"}]}'),
+    'Business validation rejects unsupported social profile fields';
+  assert not public.valid_site_business('{"businessName":"Example","businessType":"Consultant","city":"York","difference":"","tone":"","phone":"","email":"","address":"","openingHours":"","services":[],"primaryAction":"hack","audiences":[],"description":""}'),
+    'Business validation rejects unsupported primary actions';
   insert into auth.users(id, email, raw_user_meta_data) values
     (owner_id, 'owner@example.test', '{}'), (editor_id, 'editor@example.test', '{}'),
     (stranger_id, 'stranger@example.test', '{}'), (admin_id, 'agency@example.test', '{}');
@@ -120,8 +130,11 @@ begin
     (select value from jsonb_array_elements(generated) where value->>'slug' = ''),
     (select value from jsonb_array_elements(generated) where value->>'slug' = 'about')
   );
-  home_id := public.replace_ai_site_drafts_with_business(site_id, '{"style":"classic"}', selected_generated, '{}');
+  home_id := public.replace_ai_site_drafts_with_business(site_id, '{"style":"classic"}', selected_generated,
+    '{"businessName":"Example","businessType":"Consultant","city":"York","difference":"","tone":"","phone":"","email":"","address":"","openingHours":"","services":[],"primaryAction":"book","audiences":["Small businesses"],"description":"Verified business details"}');
   assert home_id = old_page, 'Selected-page generation must preserve the home page ID';
+  assert (select business->>'primaryAction' from public.sites where id = site_id) = 'book',
+    'Selected-page generation saves the primary action and other intake details';
   assert (select count(*) from public.pages where public.pages.site_id = site_id) = 4,
     'Unselected pages on an existing site must remain intact';
   assert (select p.draft_data->'root'->'props'->>'title' from public.pages p

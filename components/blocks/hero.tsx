@@ -192,9 +192,9 @@ export const Hero: ComponentConfig<HeroProps> = {
     secondaryButtonLink: linkField("Second button link"),
     secondaryButtonFormName: { type: "text", label: "Second popup form name" },
     trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
-    backgroundImage: imageField("Image"),
+    backgroundImage: imageField("Image", "16/9"),
     backgroundImageAlt: { type: "text", label: "Image alt text" },
-    secondaryImage: imageField("Second image (collage)"),
+    secondaryImage: imageField("Second image (collage)", "4/3"),
     secondaryImageAlt: { type: "text", label: "Second image alt text" },
     variant: {
       type: "select",

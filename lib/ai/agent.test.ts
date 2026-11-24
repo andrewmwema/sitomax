@@ -277,6 +277,14 @@ describe("AI agent tool guardrails", () => {
     await expect(run(changeset, "insert_section", { pageId, designId: "nope" })).rejects.toThrow("unavailable");
     expect(await run(changeset, "list_section_designs", { blockType: "Services" })).toMatchObject({
       designs: expect.arrayContaining([expect.objectContaining({ id: services.id })]),
+      catalog: {
+        blockType: "Services",
+        fields: {
+          services: { type: "array", maxItems: 40, fields: {
+            image: { type: "image", maxLength: 2000, aspectRatio: "4/3" },
+          } },
+        },
+      },
       props: { heading: "rich text (HTML)", services: [expect.objectContaining({ image: expect.stringContaining("set_image") })] },
     });
   });

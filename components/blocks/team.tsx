@@ -28,7 +28,7 @@ export const Team: ComponentConfig<TeamProps> = {
       defaultItemProps: { name: "[Name]", role: "[Role]", bio: "<p>[A short introduction to this team member.]</p>", image: "/samples/team-at-work.jpg", imageAlt: "Sample team photograph" },
       arrayFields: {
         name: { type: "text", label: "Name" }, role: { type: "text", label: "Role" }, bio: richTextField("Biography"),
-        image: imageField("Photo"), imageAlt: { type: "text", label: "Photo alt text" },
+        image: imageField("Photo", ["3/4", "4/3"]), imageAlt: { type: "text", label: "Photo alt text" },
         imagePosition: { type: "select", label: "Photo focal point", options: [{ label: "Left", value: "left" }, { label: "Centre", value: "center" }, { label: "Right", value: "right" }] },
       },
     },

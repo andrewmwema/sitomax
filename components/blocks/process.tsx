@@ -56,7 +56,7 @@ export const Process: ComponentConfig<ProcessProps> = {
     secondaryButtonFormName: { type: "text", label: "Second popup form name" },
     trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
     variant: { type: "select", label: "Layout", options: [{ label: "Numbered step cards", value: "steps" }, { label: "Editorial timeline", value: "timeline" }, { label: "Photo + checklist", value: "checklist" }] },
-    image: imageField("Photo"), imageAlt: { type: "text", label: "Photo alt text" },
+    image: imageField("Photo", "4/3"), imageAlt: { type: "text", label: "Photo alt text" },
     steps: {
       type: "array", label: "Steps", getItemSummary: (step) => step.title || "Step",
       defaultItemProps: { title: "The next step", text: "<p>Explain what happens at this stage.</p>", icon: "check" },

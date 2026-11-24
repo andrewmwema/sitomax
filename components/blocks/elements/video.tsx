@@ -40,7 +40,7 @@ export const VideoElement: ComponentConfig<VideoElementProps> = {
         <VideoUploadField value={value ?? ""} onChange={onChange} readOnly={readOnly} />
       ),
     },
-    poster: imageField("Cover image (optional)"),
+    poster: imageField("Cover image (optional)", ["16/9", "4/3", "1/1", "9/16"]),
     aspect: {
       type: "select",
       label: "Shape",

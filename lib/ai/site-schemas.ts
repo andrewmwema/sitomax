@@ -9,6 +9,7 @@ import { sectionCatalog } from "@/lib/sections/catalog";
 import { buildDesignItem } from "@/lib/sections/library";
 import { iconNameSchema } from "@/lib/icons";
 import { siteLinkSchema } from "@/lib/links";
+import type { ImageAspectMetadata } from "@/lib/puck/fields";
 
 type Fields = Record<string, Field>;
 export const aiCatalog = sectionCatalog.filter((design) => design.category !== "Blank");
@@ -25,7 +26,9 @@ export function validateBlockProps(type: string, value: unknown) {
   return fieldsSchema(blockFields(type)).parse(value);
 }
 
-export function isImageField(field: Field): boolean {
+type AiImageField = Field & { aiKind: "image"; aiAspectRatio: ImageAspectMetadata };
+
+export function isImageField(field: Field): field is AiImageField {
   return field.type === "custom" && "aiKind" in field && field.aiKind === "image";
 }
 
@@ -117,6 +120,71 @@ export function describeAgentFields(type: string): Record<string, unknown> {
 }
 
 export const blockSchemas = Object.fromEntries(blockTypes.map((type) => [type, fieldsSchema(blockFields(type))]));
+
+type AiBlockField = {
+  type: "text" | "textarea" | "richtext" | "number" | "choice" | "array" | "object" | "image" | "link" | "icon";
+  maxLength?: number;
+  options?: { label: string; value: string | number | boolean | null }[];
+  maxItems?: number;
+  fields?: Record<string, AiBlockField>;
+  aspectRatio?: ImageAspectMetadata;
+};
+
+function aiBlockField(field: Field, key: string): AiBlockField | null {
+  switch (field.type) {
+    case "text":
+      return { type: /(?:href|link)$/i.test(key) ? "link" : "text", maxLength: /(?:href|link)$/i.test(key) ? 500 : 2000 };
+    case "textarea": return { type: "textarea", maxLength: 2000 };
+    case "richtext": return { type: "richtext", maxLength: 8000 };
+    case "number": return { type: "number" };
+    case "radio":
+    case "select": {
+      const options = field.options.map(({ label, value }) => {
+        if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean" && value !== null) {
+          throw new Error(`Unsupported option for ${key}.`);
+        }
+        return { label, value };
+      });
+      return {
+        type: "choice",
+        options,
+      };
+    }
+    case "array":
+      return { type: "array", maxItems: 40, fields: aiBlockFields(field.arrayFields as Fields) };
+    case "object":
+      return { type: "object", fields: aiBlockFields(field.objectFields as Fields) };
+    case "custom":
+      if (isImageField(field)) return { type: "image", maxLength: 2000, aspectRatio: field.aiAspectRatio };
+      if ("aiKind" in field && field.aiKind === "link") return { type: "link", maxLength: 500 };
+      if ("aiKind" in field && field.aiKind === "icon") return { type: "icon" };
+      return null;
+    default: return null;
+  }
+}
+
+function aiBlockFields(fields: Fields): Record<string, AiBlockField> {
+  return Object.fromEntries(Object.entries(fields).flatMap(([key, field]) => {
+    if (key === "design" || key === "id") return [];
+    const metadata = aiBlockField(field, key);
+    return metadata ? [[key, metadata]] : [];
+  }));
+}
+
+export const aiBlockCatalog = blockTypes.map((blockType) => {
+  const fields = blockFields(blockType);
+  const variant = fields.variant;
+  return {
+    blockType,
+    label: puckConfig.components[blockType as keyof typeof puckConfig.components].label,
+    variants: variant && (variant.type === "select" || variant.type === "radio")
+      ? variant.options.map(({ label, value }) => ({ label, value }))
+      : [],
+    fields: Object.fromEntries(Object.entries(aiBlockFields(fields))
+      .filter(([key]) => key in agentFieldSchemas(blockType))),
+  };
+});
+
 const catalogById = new Map(aiCatalog.map((design) => [design.id, design]));
 export type SiteTheme = {
   style: "classic" | "modern";

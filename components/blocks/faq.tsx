@@ -53,7 +53,7 @@ export const Faq: ComponentConfig<FaqProps> = {
     contactText: richTextField("Contact sidebar text"),
     contactButtonText: { type: "text", label: "Contact button text", contentEditable: true },
     contactButtonLink: linkField("Contact button link"),
-    contactImage: imageField("Contact sidebar image"),
+    contactImage: imageField("Contact sidebar image", "16/9"),
     contactImageAlt: { type: "text", label: "Contact image alt text" },
     variant: {
       type: "radio",

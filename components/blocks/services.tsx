@@ -95,7 +95,7 @@ export const Services: ComponentConfig<ServicesProps> = {
         icon: iconField("Icon"),
         title: { type: "text", label: "Title", contentEditable: true },
         text: richTextField("Text"),
-        image: imageField("Image"),
+        image: imageField("Image", "4/3"),
         imageAlt: { type: "text", label: "Image alt text" },
         actionText: { type: "text", label: "Learn more button text", contentEditable: true },
         actionLink: linkField("Learn more link"),

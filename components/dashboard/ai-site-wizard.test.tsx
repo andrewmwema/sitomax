@@ -95,6 +95,29 @@ describe("AI site wizard", () => {
     expect(field.value).toBe("Friendly");
     expect(container.textContent).toContain("Repairs");
   });
+  it("extracts business facts from pasted text and requires review before continuing", async () => {
+    const extracted = {
+      businessName: "Example Plumbing", businessType: "Plumber", city: "York", services: ["Drain repairs"],
+      difference: "", tone: "", phone: "", email: "", address: "", openingHours: "",
+      primaryAction: "book", audiences: ["Homeowners"], description: "Plumbing services for homes in York.",
+    };
+    mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ business: extracted }) });
+    await act(async () => root.render(<AiSiteWizard accounts={[]} existingSite={site} rootDomain="localhost:3000" marketingSubdomain="sitomax" />));
+    const description = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Describe your business"))!.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(description, "Example Plumbing serves homes in York and books drain repairs.");
+      description.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await clickButton("Extract details from description");
+    expect(container.textContent).toContain("Review every field");
+    expect([...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Business name"))!.querySelector("input")!.value).toBe("Example Plumbing");
+    expect([...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Main action for visitors"))!.querySelector("select")!.value).toBe("book");
+    await submit();
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("confirm the extracted business details");
+    await act(async () => container.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+    await submit();
+    expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("Pages");
+  });
   it("uses curated SitoMax designs without offering original custom layouts", async () => {
     await design();
     expect(container.textContent).toContain("SitoMax designs");
@@ -197,6 +220,17 @@ describe("AI site wizard", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Drain repairs");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    const actionSelect = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Main action for visitors"))!.querySelector("select")!;
+    await act(async () => {
+      actionSelect.value = "book";
+      actionSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>("#ai-audiences")!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Homeowners");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
     await submit(); await submit();
     await setDesignGuidance("A restrained editorial layout");
     await submit();
@@ -209,6 +243,7 @@ describe("AI site wizard", () => {
     await submit();
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({
       subdomain: "local-plumbing", services: ["Drain repairs"], designDescription: "A restrained editorial layout",
+      primaryAction: "book", audiences: ["Homeowners"],
       desiredPages: ["", "about", "services", "contact"], generationMode: "catalog",
     });
   });

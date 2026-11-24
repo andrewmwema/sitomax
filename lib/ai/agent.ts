@@ -5,7 +5,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { Field } from "@puckeditor/core";
 import { createPhotoLibrary } from "@/lib/photos";
-import { agentFieldSchemas, aiCatalog, blockFields, defaultSection, describeAgentFields, isImageField } from "./site-schemas";
+import {
+  agentFieldSchemas, aiBlockCatalog, aiCatalog, blockFields, defaultSection, describeAgentFields, isImageField,
+} from "./site-schemas";
 import { SITE_GENERATION_MODEL, SMALL_EDIT_MODEL } from "./models";
 import { anthropicRequestParams } from "./request-params";
 import {
@@ -916,7 +918,10 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
     case "list_section_designs": {
       const designs = agentDesigns.filter((design) => !args.blockType || design.blockType === args.blockType)
         .map(({ id, blockType, category, name }) => ({ id, blockType, category, name }));
-      return args.blockType && designs.length ? { designs, props: describeAgentFields(String(args.blockType)) } : designs;
+      const catalog = aiBlockCatalog.find(({ blockType }) => blockType === args.blockType);
+      return args.blockType && designs.length
+        ? { designs, catalog, props: describeAgentFields(String(args.blockType)) }
+        : designs;
     }
     case "get_blog_posts": {
       const query = String(args.query ?? "").toLowerCase();

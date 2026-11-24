@@ -45,7 +45,7 @@ export const Gallery: ComponentConfig<GalleryProps> = {
       getItemSummary: (item, i) => item.alt || `Image ${(i ?? 0) + 1}`,
       defaultItemProps: { url: "", alt: "" },
       arrayFields: {
-        url: imageField("Image"),
+        url: imageField("Image", ["1/1", "4/3", "4/5", "16/9"]),
         alt: { type: "text", label: "Alt text" },
         caption: { type: "text", label: "Caption" },
       },

@@ -40,7 +40,7 @@ export const ContactForm: ComponentConfig<ContactFormProps> = {
     formName: { type: "text", label: "Form name", placeholder: "contact" },
     submitText: { type: "text", label: "Submit button text", contentEditable: true },
     text: richTextField("Introduction"),
-    image: imageField("Location photo"),
+    image: imageField("Location photo", "16/9"),
     imageAlt: { type: "text", label: "Photo alt text" },
     note: { type: "textarea", label: "Form note" },
     details: {

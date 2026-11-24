@@ -13,10 +13,17 @@ import { editorTextExtensions } from "./richtext-extensions";
  * Reusable image field for blocks. The field UI only ever renders inside
  * the (client-side) editor; the public renderer never calls it.
  */
-export function imageField(label: string): CustomField<string> & { aiKind: "image" } {
+export type ImageAspectRatio = "auto" | "1/1" | "4/3" | "3/2" | "16/9" | "3/4" | "4/5" | "9/16";
+export type ImageAspectMetadata = ImageAspectRatio | readonly ImageAspectRatio[];
+
+export function imageField(
+  label: string,
+  aiAspectRatio: ImageAspectMetadata = "auto",
+): CustomField<string> & { aiKind: "image"; aiAspectRatio: ImageAspectMetadata } {
   return {
     type: "custom",
     aiKind: "image",
+    aiAspectRatio,
     label,
     render: ({ name, value, onChange, readOnly }) => (
       <PuckImageField name={name} value={value} onChange={onChange} readOnly={readOnly} />

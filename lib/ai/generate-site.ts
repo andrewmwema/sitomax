@@ -175,6 +175,7 @@ export async function buildGeneratedSite(
   const warnings = new Set<string>();
   const business = JSON.stringify({
     businessName: input.businessName, businessType: input.businessType, city: input.city, services: input.services,
+    audiences: input.audiences, primaryAction: input.primaryAction,
     difference: input.difference, style: input.style, primaryColor: input.primaryColor, secondaryColor: input.secondaryColor,
     phone: input.phone, email: input.email, address: input.address, tone: input.tone,
     openingHours: input.openingHours, description: input.description,

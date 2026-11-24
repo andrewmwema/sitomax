@@ -27,7 +27,7 @@ export const Logos: ComponentConfig<LogosProps> = {
     logos: {
       type: "array", label: "Partner logos", getItemSummary: (item) => item.name || "Partner",
       defaultItemProps: { name: "[Partner name]", image: "" },
-      arrayFields: { name: { type: "text", label: "Partner name" }, image: imageField("Logo (optional)"),
+      arrayFields: { name: { type: "text", label: "Partner name" }, image: imageField("Logo (optional)", "auto"),
         imageAlt: { type: "text", label: "Image alt text (defaults to partner name)" } },
     },
   },

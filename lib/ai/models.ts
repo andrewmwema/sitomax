@@ -1,4 +1,16 @@
-export const SITE_GENERATION_MODEL = "claude-sonnet-5-5";
+const SITE_MODELS = ["claude-sonnet-5-5", "claude-haiku-5-5"] as const;
+const configuredSiteModel = process.env.ANTHROPIC_MODEL?.trim();
+
+function isSiteModel(value: string): value is (typeof SITE_MODELS)[number] {
+  return SITE_MODELS.some((model) => model === value);
+}
+
+if (configuredSiteModel && !isSiteModel(configuredSiteModel)) {
+  throw new Error("ANTHROPIC_MODEL must be a model with configured AI pricing.");
+}
+
+export const SITE_GENERATION_MODEL =
+  configuredSiteModel && isSiteModel(configuredSiteModel) ? configuredSiteModel : SITE_MODELS[0];
 export const SMALL_EDIT_MODEL = "claude-haiku-5-5";
 
 export const AI_ACTIONS = ["generate_site", "edit_section", "rewrite_text"] as const;

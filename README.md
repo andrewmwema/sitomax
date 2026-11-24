@@ -278,9 +278,12 @@ template**. AI creation has Business, Pages, Design and Review steps and saves
 unpublished drafts. Template creation has Client, Template, Business details
 and Review steps; **Create and publish site** publishes the template pages
 immediately. Both flows keep entered values when moving back between steps.
-The AI builder groups optional business context in an expandable section and
-requires separate confirmation before replacing drafts or updating shared
-Business information on an existing site.
+The AI builder collects a required main visitor action and allows optional
+audiences, services, and a business description. Users can request a metered AI
+extraction from pasted text, then must review and confirm the extracted fields
+before continuing. Generation saves these details with the site. Existing sites
+still require separate confirmation before replacing drafts or updating shared
+Business information.
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
 through `0018`. Opening **New site** or **Build with AI** as a super admin
@@ -297,10 +300,13 @@ reporting periods continue to use UTC.
 
 ## Editor AI and business information
 
-Apply migrations through `0013_site_business.sql` in order before using this version.
+Apply migrations through
+[`0052_ai_business_intake.sql`](supabase/migrations/0052_ai_business_intake.sql)
+in order before deploying expanded AI intake.
 Owners and editors can maintain a site's business information in its dashboard
 settings or the editor's Theme panel. AI site generation saves the supplied
-business details alongside its drafts. Editor AI sends that information and
+business details, including the primary action, audiences and description,
+alongside its drafts. Editor AI sends that information and
 the requested content to the configured AI provider; each attempt is metered.
 Review generated content and placeholders before accepting or publishing it.
 AI-created sections use stock photos when configured, otherwise image placeholders.
@@ -643,6 +649,8 @@ account's folder; its library also includes the agency-only branding bucket.
 
 To diagnose the provider locally with a configured API key, run
 `npm run agency-token -- test-anthropic` for a small message using the site's model.
+`ANTHROPIC_MODEL` optionally selects a priced site model (`claude-sonnet-5-5`
+or `claude-haiku-5-5`); the default is `claude-sonnet-5-5`.
 Add `--generation` to test planning and four page requests with synthetic
 details (this uses provider credits and records usage). Add `--dry-run`
 to check the planner and four synthetic page schemas without sending requests.

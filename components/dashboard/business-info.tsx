@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { z } from "zod";
 import { businessSchema, type Business } from "@/lib/business";
 import { saveBusinessInfo } from "@/lib/business-actions";
 
@@ -9,6 +10,7 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
 }) {
   const [values, setValues] = useState(initialBusiness);
   const [services, setServices] = useState(initialBusiness.services.join("\n"));
+  const [audiences, setAudiences] = useState(initialBusiness.audiences.join("\n"));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -17,13 +19,15 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
   const control = "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm";
   return <form className="platform-panel p-5" onSubmit={async (event) => {
     event.preventDefault();
-    const parsed = businessSchema.safeParse({ ...values, services: services.split("\n").map((s) => s.trim()).filter(Boolean) });
+    const parsed = businessSchema.safeParse({ ...values, services: services.split("\n").map((s) => s.trim()).filter(Boolean),
+      audiences: audiences.split("\n").map((s) => s.trim()).filter(Boolean) });
     if (!parsed.success) { setError(true); setMessage(parsed.error.issues[0]?.message ?? "Check your details."); return; }
     setBusy(true); setMessage("");
     try {
       const result = await saveBusinessInfo(siteId, parsed.data);
       if (result.status === "error") { setError(true); setMessage(result.message); return; }
       setValues(result.business); setServices(result.business.services.join("\n"));
+      setAudiences(result.business.audiences.join("\n"));
       setError(false); setMessage("Business information saved."); onSave?.(result.business);
     } catch (cause) {
       console.error("Unable to save business information", { type: cause instanceof Error ? cause.name : "Unknown" });
@@ -40,6 +44,18 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
       <input className={control} maxLength={maxLength} type={key === "email" ? "email" : "text"}
         value={values[key]} onChange={(event) => set(key, event.target.value)} />
     </label>)}
+    <label className="block text-xs font-medium">Main visitor action
+      <select className={control} value={values.primaryAction} onChange={(event) => {
+        const action = z.enum(["call", "book", "buy", "inquire"]).parse(event.target.value);
+        setValues((previous) => ({ ...previous, primaryAction: action }));
+      }}>
+        <option value="call">Call the business</option><option value="book">Book an appointment</option>
+        <option value="buy">Buy or order</option><option value="inquire">Send an inquiry</option>
+      </select>
+    </label>
+    <label className="block text-xs font-medium">Audiences (one per line)
+      <textarea className={control} rows={2} maxLength={819} value={audiences} onChange={(event) => setAudiences(event.target.value)} />
+    </label>
     <label className="block text-xs font-medium">Services (one per line)
       <textarea className={control} rows={3} maxLength={1619} value={services} onChange={(event) => setServices(event.target.value)} />
     </label>
@@ -47,6 +63,9 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
       <label key={key} className="block text-xs font-medium">{label}
         <textarea className={control} maxLength={1000} rows={2} value={values[key]} onChange={(event) => set(key, event.target.value)} />
       </label>)}
+      <label className="block text-xs font-medium">Business description
+        <textarea className={control} maxLength={4000} rows={4} value={values.description} onChange={(event) => set("description", event.target.value)} />
+      </label>
     <fieldset className="space-y-3 rounded-lg border p-3"><legend className="px-1 text-xs font-medium">Social profiles</legend>
       {(values.socialLinks ?? []).map((social, index) => <div key={index} className="space-y-2">
         <input aria-label={`Social profile label ${index + 1}`} className={control} maxLength={40} value={social.label}

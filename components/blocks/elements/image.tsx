@@ -24,7 +24,7 @@ export const ImageElement: ComponentConfig<ImageElementProps> = {
   label: "Image",
   inline: true,
   fields: {
-    src: imageField("Image"),
+    src: imageField("Image", ["auto", "1/1", "4/3", "3/2", "16/9", "3/4"]),
     alt: { type: "text", label: "Alt text (describe the image)" },
     link: linkField("Link (optional)"),
     aspect: {

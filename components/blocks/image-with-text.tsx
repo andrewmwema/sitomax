@@ -23,7 +23,7 @@ export const ImageWithText: ComponentConfig<ImageWithTextProps> = {
   label: "Image with text",
   fields: {
     design: designField(),
-    image: imageField("Image"),
+    image: imageField("Image", "4/3"),
     imageAlt: { type: "text", label: "Image alt text" },
     eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
     heading: richHeadingField("Heading", 2),

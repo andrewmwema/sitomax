@@ -56,7 +56,7 @@ export const CallToAction: ComponentConfig<CallToActionProps> = {
     secondaryButtonLink: linkField("Secondary button link"),
     secondaryButtonFormName: { type: "text", label: "Secondary popup form name" },
     trustLine: { type: "text", label: "Trust line under buttons", contentEditable: true },
-    image: imageField("Background photo"),
+    image: imageField("Background photo", "16/9"),
     imageAlt: { type: "text", label: "Photo alt text" },
     formName: { type: "text", label: "Form name" },
     formFields: enquiryFieldsField,

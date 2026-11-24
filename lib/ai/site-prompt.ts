@@ -34,6 +34,8 @@ COPY AND CONVERSION STANDARD:
 - Lead with the customer's problem and desired outcome, then show how the business delivers it. Prefer concrete details from the business data, services, location and differentiator.
 - Every section earns its place: an eyebrow (2–4 words), a heading with a clear promise (H2), supporting copy that adds new information, and where relevant a next step.
 - Use one consistent primary call to action across the site (e.g. "Get a free quote", "Book a consultation") linking to /contact when that page is selected, otherwise to a supplied phone/email (or #contact only on pages with a contact form); secondary buttons explore relevant selected pages.
+- Match the primary action, button labels and conversion path to the supplied primaryAction. Use the listed audiences to make benefits and examples relevant; never assume facts about them.
+- Do not imply that online booking or checkout exists unless the user supplied a working URL. For a buy action without one, invite visitors to inquire about ordering through the site's contact path.
 - Handle objections (cost, timing, trust, process) in Process, FAQ and CTA copy. Reassure without inventing guarantees.
 - Pages must feel complete: fill every array to the depth in the section briefs, keep paragraphs short (2–3 sentences) and scannable, and never leave headings without supporting copy.
 - Weave in the service and city naturally for local SEO; never keyword-stuff.

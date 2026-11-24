@@ -94,7 +94,7 @@ const specs = [
   }) },
   { name: "get_section", description: 'Read one section, or a nested layout element, in full: props, layout, design and nested ids. Read before changing design, layout or nested elements. Off-center indent/spacing is reported in layoutCheck with affected elements, devices and fixes. Example: {"pageId":"<pageId>","sectionId":"<sectionId>"}', schema: sectionRef },
   { name: "search_site", description: "Search text across pages and blog posts.", schema: z.object({ query: z.string().trim().min(1).max(200) }) },
-  { name: "list_section_designs", description: "List curated section designs. With a blockType, also returns that block's editable props.", schema: z.object({ blockType: z.string().max(80).optional() }) },
+  { name: "list_section_designs", description: "List curated section designs. With a blockType, also returns its editable props, variants and field metadata.", schema: z.object({ blockType: z.string().max(80).optional() }) },
   { name: "get_blog_posts", description: "List blog draft and published post summaries.", schema: z.object({
     query: z.string().max(200).optional(), status: z.enum(["draft", "scheduled", "published", "all"]).default("all"),
     limit: z.number().int().min(1).max(30).default(10),

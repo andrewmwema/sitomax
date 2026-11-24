@@ -7,7 +7,7 @@ import { z } from "zod";
 import { createGenerationInputSchema, type GenerationInput } from "@/lib/ai/site-input";
 import { DESIRED_SECTION_TYPES, GENERATION_PAGE_SLUGS, PRESET_PAGES, MAX_GENERATION_PAGES, extraPageCredits,
   generationOutcomeSchema, pageDetailsSchema, slugFromPageName, type GenerationResult } from "@/lib/ai/site-input";
-import type { Business } from "@/lib/business";
+import { businessIntakeSchema, type Business } from "@/lib/business";
 import { businessDetailsChanged } from "@/lib/ai/site-business";
 import { creationInputClass as fieldClass, SiteCreationShell } from "./site-creation-shell";
 
@@ -18,7 +18,8 @@ const steps = [
   { title: "Review & build", description: "Check your plan before creating editable drafts." },
 ] as const;
 const stepFields: (keyof GenerationInput)[][] = [
-  ["accountId", "businessName", "businessType", "city", "services", "difference", "tone", "openingHours", "phone", "email", "address", "description"],
+  ["accountId", "businessName", "businessType", "city", "services", "audiences", "primaryAction",
+    "difference", "tone", "openingHours", "phone", "email", "address", "description"],
   ["desiredPages", "pageDetails", "desiredSections"],
   ["style", "styleDirection", "fontDirection", "designDescription", "primaryColor", "secondaryColor"],
 ];
@@ -48,17 +49,23 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
     businessName: existingSite?.business.businessName || existingSite?.name || "",
     businessType: existingSite?.business.businessType ?? "", city: existingSite?.business.city ?? "",
     services: existingSite?.business.services ?? [], difference: existingSite?.business.difference ?? "",
+    audiences: existingSite?.business.audiences ?? [], primaryAction: existingSite?.business.primaryAction ?? "inquire",
     tone: existingSite?.business.tone ?? "", openingHours: existingSite?.business.openingHours ?? "",
     style: "auto", generationMode: "catalog", styleDirection: "auto", fontDirection: "auto",
     designDescription: "", desiredPages: existingSite ? (existingSite.pages ?? []).filter(({ empty }) => empty).slice(0, MAX_GENERATION_PAGES).map(({ slug }) => slug)
       : [...GENERATION_PAGE_SLUGS], desiredSections: [],
     primaryColor: "", secondaryColor: "", phone: existingSite?.business.phone ?? "",
-    email: existingSite?.business.email ?? "", address: existingSite?.business.address ?? "", description: "", confirmReplace: false,
+    email: existingSite?.business.email ?? "", address: existingSite?.business.address ?? "",
+    description: existingSite?.business.description ?? "", confirmReplace: false,
     confirmBusinessUpdate: false, expectedBusiness: existingSite?.business,
   });
   const isInternal = accounts.some((account) => account.id === values.accountId && account.is_internal);
   const generationInputSchema = createGenerationInputSchema(marketingSubdomain, isInternal);
   const [service, setService] = useState("");
+  const [audience, setAudience] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractionMessage, setExtractionMessage] = useState("");
+  const [extractionConfirmed, setExtractionConfirmed] = useState(false);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -75,13 +82,37 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
   const needsConfirmation = existingSite?.pages?.some(({ slug, empty }) => !empty && values.desiredPages.includes(slug));
   const changesBusiness = existingSite && businessDetailsChanged(values, existingSite.business);
   const set = <K extends keyof GenerationInput>(key: K, value: GenerationInput[K]) => {
-    setValues((previous) => ({ ...previous, [key]: value })); setError("");
+    setValues((previous) => ({ ...previous, [key]: value })); setError(""); setExtractionConfirmed(false);
   };
   const addService = () => {
     const tag = service.trim();
     if (tag && values.services.length >= 20 && !values.services.includes(tag)) { setError("You can add up to 20 services."); return; }
     if (tag && values.services.length < 20 && !values.services.includes(tag)) set("services", [...values.services, tag]);
     setService("");
+  };
+  const addAudience = () => {
+    const tag = audience.trim();
+    if (tag && values.audiences.length >= 10 && !values.audiences.includes(tag)) { setError("You can add up to 10 audiences."); return; }
+    if (tag && values.audiences.length < 10 && !values.audiences.includes(tag)) set("audiences", [...values.audiences, tag]);
+    setAudience("");
+  };
+  const extractBusiness = async () => {
+    if (!values.description.trim()) { setError("Paste a business description before extracting details."); return; }
+    setExtracting(true); setError(""); setExtractionMessage("");
+    try {
+      const response = await fetch("/api/ai/extract-business", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: values.accountId, siteId: values.siteId, text: values.description }),
+      });
+      const result = await response.json() as { business?: unknown; message?: string };
+      if (!response.ok) throw new Error(result.message ?? "Could not extract business details. Please retry.");
+      const extracted = businessIntakeSchema.parse(result.business);
+      setValues((previous) => ({ ...previous, ...extracted, expectedBusiness: previous.expectedBusiness, confirmBusinessUpdate: false }));
+      setExtractionMessage("Details extracted. Review every field and correct anything that is missing or inaccurate before continuing.");
+      setExtractionConfirmed(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not extract business details. Please enter them manually.");
+    } finally { setExtracting(false); }
   };
   const generate = async (retryId?: string) => {
     const parsed = generationInputSchema.safeParse(values);
@@ -137,9 +168,9 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
   const editorPageId = result?.pages.find((page) => page.built && page.pageId)?.pageId;
   const advance = () => {
     if (step === 1 && custom) { setError("Add or cancel your custom page before continuing."); return; }
+    if (step === 0 && extractionMessage && !extractionConfirmed) { setError("Review and confirm the extracted business details before continuing."); return; }
     const tag = service.trim();
     const next = step === 0 && tag && !values.services.includes(tag) ? { ...values, services: [...values.services, tag] } : values;
-    if (step === 0 && !next.services.length) { setError("Add at least one service."); return; }
     const parsed = generationInputSchema.safeParse(next);
     const issue = !parsed.success && parsed.error.issues.find(({ path }) => stepFields[step].some((field) => field === path[0]));
     if (issue) { setError(issue.message); return; }
@@ -196,8 +227,17 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
             type={key === "email" ? "email" : key === "phone" ? "tel" : "text"} className={`${fieldClass} mt-2`}
             value={values[key]} onChange={(event) => set(key, event.target.value)} />
         </label>)}
+        <label className="text-sm font-medium sm:col-span-2">Main action for visitors
+          <select required className={`${fieldClass} mt-2`} value={values.primaryAction} onChange={(event) => {
+            const action = z.enum(["call", "book", "buy", "inquire"]).parse(event.target.value);
+            set("primaryAction", action);
+          }}>
+            <option value="call">Call the business</option><option value="book">Book an appointment</option>
+            <option value="buy">Buy or order</option><option value="inquire">Send an inquiry</option>
+          </select>
+        </label>
         <div className="sm:col-span-2">
-          <label htmlFor="ai-services" className="text-sm font-medium">Services</label>
+          <label htmlFor="ai-services" className="text-sm font-medium">Services (optional)</label>
           <div className="mt-2 flex gap-2"><input id="ai-services" maxLength={80} className={fieldClass} value={service}
             onChange={(event) => setService(event.target.value)} onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addService(); }
@@ -210,6 +250,18 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
         <details className="creation-section sm:col-span-2">
           <summary className="creation-disclosure"><span>More business context<span className="creation-hint mt-1 block font-normal">Optional details to make the copy more personal.</span></span><ChevronDown size={16} aria-hidden="true" /></summary>
           <div className="creation-field-grid mt-5">
+        <div className="sm:col-span-2">
+          <label htmlFor="ai-audiences" className="text-sm font-medium">Who do you serve? (optional)</label>
+          <div className="mt-2 flex gap-2"><input id="ai-audiences" maxLength={80} className={fieldClass} value={audience}
+            onChange={(event) => setAudience(event.target.value)} onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addAudience(); }
+            }} placeholder="Add an audience, then press Enter" />
+            <button type="button" className="creation-secondary" disabled={!audience.trim()} onClick={addAudience}>Add</button></div>
+          <ul className="mt-2 flex flex-wrap gap-2">{values.audiences.map((tag) => <li key={tag}>
+            <button type="button" aria-label={`Remove audience ${tag}`} className="creation-chip"
+              onClick={() => set("audiences", values.audiences.filter((entry) => entry !== tag))}>{tag} &times;</button>
+          </li>)}</ul>
+        </div>
         <label className="text-sm font-medium sm:col-span-2">What makes you different?
           <textarea maxLength={1000} className={`${fieldClass} mt-2`} rows={2} value={values.difference} onChange={(event) => set("difference", event.target.value)} />
         </label>
@@ -222,6 +274,14 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
         <label className="text-sm font-medium sm:col-span-2">Describe your business
           <textarea maxLength={4000} className={`${fieldClass} mt-2`} rows={4} value={values.description} onChange={(event) => set("description", event.target.value)}
             placeholder="Who you help, what you do and any facts you want included. Do not include private customer information." />
+          <span className="creation-hint mt-1 block">You can paste an existing business description instead of entering every detail manually. Verify all extracted information.</span>
+          <button type="button" className="creation-secondary mt-2" disabled={extracting || !values.accountId || !values.description.trim()}
+            onClick={() => void extractBusiness()}>{extracting ? "Extracting…" : "Extract details from description"}</button>
+          {extractionMessage ? <span role="status" className="mt-2 block text-xs text-green-800">{extractionMessage}</span> : null}
+          {extractionMessage ? <label className="mt-2 flex items-start gap-2 text-xs">
+            <input type="checkbox" checked={extractionConfirmed} onChange={(event) => setExtractionConfirmed(event.target.checked)} />
+            <span>I reviewed these details and confirm they are accurate, or have corrected them.</span>
+          </label> : null}
         </label>
           </div>
         </details>
@@ -350,6 +410,8 @@ export function AiSiteWizard({ accounts, existingSite, pendingRetries = [], root
           <div><dt>Business</dt><dd>{values.businessName}</dd></div>
           <div><dt>Location</dt><dd>{values.city}</dd></div>
           <div><dt>Services</dt><dd>{values.services.join(", ")}</dd></div>
+          <div><dt>Primary action</dt><dd>{values.primaryAction}</dd></div>
+          <div><dt>Audiences</dt><dd>{values.audiences.join(", ") || "Not provided"}</dd></div>
           <div><dt>Design</dt><dd>Curated sections · {values.styleDirection === "auto" ? "AI-chosen style" : values.styleDirection}</dd></div>
           <div><dt>Contact details</dt><dd>{[values.email, values.phone, values.address].filter(Boolean).join("\n") || "Not provided"}</dd></div>
           <div><dt>Brand colors</dt><dd>{[values.primaryColor, values.secondaryColor].filter(Boolean).join(" / ") || "Let AI choose"}</dd></div>

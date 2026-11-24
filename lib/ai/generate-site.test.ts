@@ -140,6 +140,7 @@ describe("catalog site generation", () => {
     const detail = { slug, name: "Café Service Areas", purpose: "Cities we serve" };
     expect(slug).toBe("cafe-service-areas");
     expect(schema.safeParse({ ...input, desiredPages: [slug], pageDetails: [detail] }).success).toBe(true);
+    expect(schema.safeParse({ ...input, services: [] }).success).toBe(true);
     expect(schema.safeParse({ ...input, desiredPages: [slug, slug], pageDetails: [detail] }).success).toBe(false);
     expect(schema.safeParse({ ...input, desiredPages: ["dashboard"] }).success).toBe(false);
     expect(schema.safeParse({ ...input, siteId: undefined, subdomain: "local-plumbing", desiredPages: [slug] }).success).toBe(false);
@@ -258,10 +259,13 @@ describe("catalog site generation", () => {
     expect(mocks.begin).not.toHaveBeenCalled();
     const saved = { ...business, socialLinks: [{ label: "Photos", url: "https://instagram.com/example" }] };
     mocks.lookup.mockResolvedValue({ data: { id: siteId, business: saved }, error: null });
-    await buildGeneratedSite({ ...input, phone: "+1 555 0100", expectedBusiness: saved, desiredPages: [""] });
+    await buildGeneratedSite({ ...input, phone: "+1 555 0100", primaryAction: "book", audiences: ["Homeowners"],
+      description: "Emergency repairs for homes.", expectedBusiness: saved, desiredPages: [""] });
     expect(mocks.start.mock.calls[0][3]).toMatchObject({
-      business: { phone: "+1 555 0100", socialLinks: saved.socialLinks }, expectedBusiness: saved,
+      business: { phone: "+1 555 0100", primaryAction: "book", audiences: ["Homeowners"],
+        description: "Emergency repairs for homes.", socialLinks: saved.socialLinks }, expectedBusiness: saved,
     });
+    expect(mocks.request.mock.calls[0][0].messages[0].content).toContain('"primaryAction":"book"');
   });
   it("explains a concurrent Business change detected while the plan was being written", async () => {
     mocks.start.mockRejectedValue(new Error("Business information changed. Reload and confirm the latest details before building."));
