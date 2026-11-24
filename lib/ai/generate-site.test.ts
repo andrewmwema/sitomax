@@ -252,15 +252,17 @@ describe("catalog site generation", () => {
     }
     expect(saved[0].data.content.at(-1).props.id).not.toBe(saved[1].data.content.at(-1).props.id);
   });
-  it("requires explicit current Business confirmation before charging and preserves saved social profiles", async () => {
+  it("requires current Business confirmation and preserves saved intake and social profiles", async () => {
     await expect(buildGeneratedSite({ ...input, phone: "+1 555 0100", confirmBusinessUpdate: false })).rejects.toThrow("Confirm the site-wide");
     await expect(buildGeneratedSite({ ...input, phone: "+1 555 0100", expectedBusiness: { ...business, city: "Stale" } })).rejects.toThrow("Business information changed");
     expect(mocks.begin).not.toHaveBeenCalled();
-    const saved = { ...business, socialLinks: [{ label: "Photos", url: "https://instagram.com/example" }] };
+    const saved = { ...business, primaryAction: "book", audiences: ["Homeowners"], description: "Local repairs",
+      socialLinks: [{ label: "Photos", url: "https://instagram.com/example" }] };
     mocks.lookup.mockResolvedValue({ data: { id: siteId, business: saved }, error: null });
     await buildGeneratedSite({ ...input, phone: "+1 555 0100", expectedBusiness: saved, desiredPages: [""] });
     expect(mocks.start.mock.calls[0][3]).toMatchObject({
-      business: { phone: "+1 555 0100", socialLinks: saved.socialLinks }, expectedBusiness: saved,
+      business: { phone: "+1 555 0100", primaryAction: saved.primaryAction, audiences: saved.audiences,
+        description: saved.description, socialLinks: saved.socialLinks }, expectedBusiness: saved,
     });
   });
   it("explains a concurrent Business change detected while the plan was being written", async () => {

@@ -12,7 +12,7 @@ export function BusinessInfo({ siteId, initialBusiness, onSave }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
-  const set = (key: Exclude<keyof Business, "services" | "socialLinks">, value: string) =>
+  const set = (key: Exclude<keyof Business, "services" | "socialLinks" | "primaryAction" | "audiences">, value: string) =>
     setValues((previous) => ({ ...previous, [key]: value }));
   const control = "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm";
   return <form className="platform-panel p-5" onSubmit={async (event) => {
