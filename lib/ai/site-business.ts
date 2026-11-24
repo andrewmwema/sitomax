@@ -4,6 +4,9 @@ export function generationBusiness(input: Omit<Business, "socialLinks">, saved?:
   const { businessName, businessType, city, services, difference, tone, phone, email, address, openingHours } = input;
   return businessSchema.parse({
     businessName, businessType, city, services, difference, tone, phone, email, address, openingHours,
+    ...(saved?.primaryAction !== undefined ? { primaryAction: saved.primaryAction } : {}),
+    ...(saved?.audiences !== undefined ? { audiences: saved.audiences } : {}),
+    ...(saved?.description !== undefined ? { description: saved.description } : {}),
     ...(saved?.socialLinks ? { socialLinks: saved.socialLinks } : {}),
   });
 }
