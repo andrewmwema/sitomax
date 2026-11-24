@@ -11,8 +11,8 @@ import type { BlogFeedPost } from "@/components/blocks/blog-posts";
 /**
  * Gallery thumbnail for a section design. The design renders live at a
  * fixed 1280px viewport inside a sandboxed <iframe> (no scripts). Cards
- * use a cover crop based on the rendered section height; expanded
- * previews retain the complete section at the selected viewport width.
+ * fit the complete rendered section into the card; expanded previews
+ * retain the complete section at the selected viewport width.
  *
  * The iframe document receives everything the real page has: the app's
  * compiled stylesheets (kept in sync with a MutationObserver, since dev
@@ -99,12 +99,14 @@ export function DesignThumbnail({
   theme,
   expanded = false,
   viewportWidth = DEFAULT_RENDER_WIDTH,
+  compact = false,
 }: {
   design: SectionDesign;
   theme: SiteTheme;
   expanded?: boolean;
   /** Actual iframe viewport width; scaling changes only its display size. */
   viewportWidth?: number;
+  compact?: boolean;
 }) {
   const [cardWidth, setCardWidth] = useState(0);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
@@ -224,8 +226,9 @@ export function DesignThumbnail({
   const widthScale = cardWidth > 0 ? cardWidth / viewportWidth : 0.2;
   const scale = expanded || contentHeight <= 0
     ? widthScale
-    : Math.max(widthScale, cardWidth * 10 / 16 / contentHeight);
+    : Math.min(widthScale, cardWidth * 10 / 16 / contentHeight);
   const offsetX = expanded ? 0 : (cardWidth - viewportWidth * scale) / 2;
+  const offsetY = expanded ? 0 : (cardWidth * 10 / 16 - contentHeight * scale) / 2;
 
   return (
     <div
@@ -245,7 +248,7 @@ export function DesignThumbnail({
         style={{
           width: viewportWidth,
           height: contentHeight,
-          transform: `translateX(${offsetX}px) scale(${scale})`,
+          transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
           transformOrigin: "top left",
         }}
       />
@@ -255,7 +258,14 @@ export function DesignThumbnail({
             <div
               ref={liveRef}
               className="design-thumb-content"
-              style={{ width: viewportWidth }}
+              style={compact ? {
+                width: viewportWidth,
+                minHeight: viewportWidth * 10 / 16,
+                boxSizing: "border-box",
+                padding: 32,
+                display: "grid",
+                alignContent: "center",
+              } : { width: viewportWidth }}
             >
               <Render
                 config={puckConfig}

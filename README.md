@@ -133,9 +133,10 @@ to them. `sites.theme.spacing` (`compact`, `comfortable`, `spacious`) sets
 autosave, undo history, or publishing.
 
 The section library hides empty categories, while still showing Blank layouts
-and categories containing saved designs. Its thumbnails render the selected
-design at a responsive viewport and use a cover crop; the enlarge control shows
-the full section. Blog thumbnails use sample posts, while inserted blog feeds
+and categories containing saved designs. Its thumbnails fit the full rendered
+design into each card; the enlarge control shows it in more detail. The editor
+drawer uses compact previews for elements and placeholders for empty media and
+layout blocks. Blog thumbnails use sample posts, while inserted blog feeds
 show the site's published posts. Sample partner wordmarks are illustrative and
 should be replaced with actual partners before publishing.
 
