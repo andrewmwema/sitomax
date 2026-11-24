@@ -11,6 +11,28 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { IconTile } from "./ui/icon-tile";
 
+function faqStructuredData(items: FaqProps["items"]): string {
+  const plainText = (value: RichText) => String(value)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: { "@type": "Answer", text: plainText(item.answer) },
+    })),
+  }).replace(/</g, "\\u003c");
+}
+
 export type FaqProps = {
   design?: BlockDesign;
   eyebrow: string;
@@ -90,6 +112,7 @@ export const Faq: ComponentConfig<FaqProps> = {
     eyebrow, heading, text, items, variant = "accordion", openFirst = false,
     contactHeading, contactText, contactButtonText, contactButtonLink, contactImage, contactImageAlt,
   }) => {
+    const structuredData = items.length > 0 ? faqStructuredData(items) : null;
     const intro = (
       <div className={`section-intro flex flex-col gap-4 ${variant === "sidebar" ? "max-w-[43rem]" : "mx-auto max-w-[43rem] items-center text-center"}`}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
@@ -113,6 +136,7 @@ export const Faq: ComponentConfig<FaqProps> = {
               ))}
             </div>
           </div>
+          {structuredData ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} /> : null}
         </Section>
       );
     }
@@ -164,6 +188,7 @@ export const Faq: ComponentConfig<FaqProps> = {
               </div>
             </Card>
           </div>
+          {structuredData ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} /> : null}
         </Section>
       );
     }
@@ -174,6 +199,7 @@ export const Faq: ComponentConfig<FaqProps> = {
           {intro}
           {accordion}
         </div>
+        {structuredData ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} /> : null}
       </Section>
     );
   },

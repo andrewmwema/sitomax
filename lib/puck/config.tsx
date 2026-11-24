@@ -9,6 +9,7 @@ import { buildThemeStyle, themeFonts, type SiteTheme } from "@/lib/theme/presets
 import { googleFontsUrl } from "@/lib/theme/fonts";
 import type { BlockDesign, DesignLevel } from "@/lib/sections/design";
 import { SectionShell } from "@/components/blocks/ui/SectionShell";
+import { hasMobileStickyCta, MobileStickyCTA } from "@/components/blocks/ui/mobile-sticky-cta";
 import { PhotoCredits } from "@/components/blocks/ui/photo-credits";
 import { ImageUploadField } from "@/components/editor/image-upload-field";
 import { Hero, type HeroProps } from "@/components/blocks/hero";
@@ -22,6 +23,7 @@ import { Logos, type LogosProps } from "@/components/blocks/logos";
 import { Team, type TeamProps } from "@/components/blocks/team";
 import { Process, type ProcessProps } from "@/components/blocks/process";
 import { Pricing, type PricingProps } from "@/components/blocks/pricing";
+import { ComparisonTable, type ComparisonTableProps } from "@/components/blocks/comparison-table";
 import { Faq, type FaqProps } from "@/components/blocks/faq";
 import { CallToAction, type CallToActionProps } from "@/components/blocks/call-to-action";
 import { ContactForm, type ContactFormProps } from "@/components/blocks/contact-form";
@@ -74,6 +76,7 @@ type Components = {
   Team: TeamProps;
   Process: ProcessProps;
   Pricing: PricingProps;
+  ComparisonTable: ComparisonTableProps;
   Faq: FaqProps;
   CallToAction: CallToActionProps;
   ContactForm: ContactFormProps;
@@ -195,6 +198,7 @@ export const puckConfig: PuckConfig = {
         "Team",
         "Process",
         "Pricing",
+        "ComparisonTable",
         "Faq",
         "BlogPosts",
       ],
@@ -272,6 +276,7 @@ export const puckConfig: PuckConfig = {
         <div
           className="site-content flex min-h-screen min-w-0 flex-col antialiased"
           data-site-style={theme.style === "modern" ? "modern" : "classic"}
+          data-mobile-sticky-cta={hasMobileStickyCta(theme.mobileStickyCta) ? "true" : undefined}
           style={{
             ...buildThemeStyle(theme),
             position: "relative",
@@ -285,6 +290,7 @@ export const puckConfig: PuckConfig = {
           {puck.isEditing && typeof puck.metadata?.renderHeader === "function"
             ? puck.metadata.renderHeader(headerView) : headerView}
           <main id={header ? "site-main-content" : undefined} className="flex flex-1 flex-col" tabIndex={-1}>{children}</main>
+          <MobileStickyCTA settings={theme.mobileStickyCta} />
         </div>
       );
     },
@@ -301,6 +307,7 @@ export const puckConfig: PuckConfig = {
     Team: withSectionShell(Team),
     Process: withSectionShell(Process),
     Pricing: withSectionShell(Pricing),
+    ComparisonTable: withSectionShell(ComparisonTable),
     Faq: withSectionShell(Faq),
     CallToAction: withSectionShell(CallToAction),
     ContactForm: withSectionShell(ContactForm),

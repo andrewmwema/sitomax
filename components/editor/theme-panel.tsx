@@ -361,6 +361,61 @@ export function ThemePanel({
         </section>
 
         <section className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">Mobile sticky CTA</h3>
+          <p className="text-xs text-zinc-500">An optional call or booking button shown at the bottom of mobile pages.</p>
+          <label className="flex items-center justify-between gap-3 text-sm text-zinc-700">
+            Show sticky button
+            <input
+              type="checkbox"
+              checked={theme.mobileStickyCta?.enabled ?? false}
+              onChange={(event) => onChange({
+                ...theme,
+                mobileStickyCta: {
+                  enabled: event.target.checked,
+                  label: theme.mobileStickyCta?.label ?? "Get a quote",
+                  href: theme.mobileStickyCta?.href ?? "/contact",
+                },
+              })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-zinc-700">
+            Button label
+            <input
+              type="text"
+              maxLength={40}
+              value={theme.mobileStickyCta?.label ?? "Get a quote"}
+              onChange={(event) => onChange({
+                ...theme,
+                mobileStickyCta: {
+                  enabled: theme.mobileStickyCta?.enabled ?? false,
+                  label: event.target.value,
+                  href: theme.mobileStickyCta?.href ?? "/contact",
+                },
+              })}
+              className="min-h-10 rounded-md border border-zinc-300 px-3"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-zinc-700">
+            Link or phone
+            <input
+              type="text"
+              maxLength={512}
+              value={theme.mobileStickyCta?.href ?? "/contact"}
+              onChange={(event) => onChange({
+                ...theme,
+                mobileStickyCta: {
+                  enabled: theme.mobileStickyCta?.enabled ?? false,
+                  label: theme.mobileStickyCta?.label ?? "Get a quote",
+                  href: event.target.value,
+                },
+              })}
+              placeholder="/contact or tel:+15551234567"
+              className="min-h-10 rounded-md border border-zinc-300 px-3"
+            />
+          </label>
+        </section>
+
+        <section className="flex flex-col gap-3">
           <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
             Custom colors
           </h3>

@@ -1,7 +1,11 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Render } from "@puckeditor/core";
 import { describe, expect, it } from "vitest";
-import { puckConfig } from "@/lib/puck/config";
+import { puckConfig, type PuckPageData } from "@/lib/puck/config";
 import { isLayoutOrElementType } from "@/lib/layout/structure";
 import { normalizeDesign, type BlockDesign } from "@/lib/sections/design";
+import { THEME_PRESETS } from "@/lib/theme/presets";
 import { SECTION_CATEGORIES, sectionCatalog, searchSectionDesigns } from "./catalog";
 
 describe("section catalog", () => {
@@ -15,6 +19,9 @@ describe("section catalog", () => {
       expect(puckConfig.components).toHaveProperty(design.blockType);
       expect(SECTION_CATEGORIES).toContain(design.category);
       expect(design.styles.length).toBeGreaterThan(0);
+      expect(design.description.trim().length).toBeGreaterThan(0);
+      expect(design.bestFor.length).toBeGreaterThan(0);
+      expect(design.metadata.editableFields.length).toBeGreaterThan(0);
     }
   });
 
@@ -24,6 +31,7 @@ describe("section catalog", () => {
       expect(shell, `${design.id} is missing props.design`).toBeDefined();
       expect(shell).toMatchObject({
         designVersion: 2,
+        visualVersion: 2,
         settings: { fullBleed: true },
         background: { type: expect.any(String) },
         animation: { trigger: expect.any(String) },
@@ -34,13 +42,40 @@ describe("section catalog", () => {
     }
   });
 
+  it("renders every catalog design with every curated theme preset", () => {
+    for (const design of sectionCatalog) {
+      const component = puckConfig.components[design.blockType as keyof typeof puckConfig.components];
+      const data = {
+        root: { props: {} },
+        content: [{
+          type: design.blockType,
+          props: { ...component.defaultProps, ...design.props, id: `theme-test-${design.id}` },
+        }],
+      } as PuckPageData;
+      for (const preset of THEME_PRESETS) {
+        const html = renderToStaticMarkup(createElement(Render, {
+          config: puckConfig,
+          data,
+          metadata: { theme: preset.theme },
+          fieldTransforms: { richtext: ({ value }) => value },
+        }));
+        expect(html, `${design.id} / ${preset.id}`).toContain("section-shell");
+      }
+    }
+  }, 20_000);
+
   it("every designed block exposes a variant field so designs can switch layout", () => {
     for (const [type, component] of Object.entries(puckConfig.components)) {
       // Custom-layout blocks are composed freely instead of using variants.
       if (isLayoutOrElementType(type)) continue;
-      expect(component.fields, `${type} is missing a variant field`).toHaveProperty(
-        "variant",
-      );
+      const fields = component.fields;
+      expect(fields, `${type} is missing a variant field`).toHaveProperty("variant");
+      if (!fields || !("variant" in fields)) continue;
+      const field = fields.variant;
+      if (field.type === "radio" || field.type === "select") {
+        const values = field.options.map((option) => option.value);
+        expect(new Set(values).size, `${type} has duplicate variant options`).toBe(values.length);
+      }
     }
   });
 

@@ -1,10 +1,12 @@
 import type { ComponentConfig, RichText } from "@puckeditor/core";
-import { designField, imageField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import { designField, imageField, linkField, richTextField, richHeadingField } from "@/lib/puck/fields";
+import type { LinkValue } from "@/lib/links";
 import type { BlockDesign } from "@/lib/sections/design";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { RichHeading } from "./ui/heading";
 import { RichTextContent } from "./ui/rich-text";
+import { Button } from "./ui/button";
 
 export type TeamProps = {
   design?: BlockDesign;
@@ -12,7 +14,7 @@ export type TeamProps = {
   heading: string;
   text: RichText;
   variant: "cards" | "profiles" | "featured";
-  members: { name: string; role: string; bio: RichText; image: string; imageAlt: string; imagePosition?: "left" | "center" | "right" }[];
+  members: { name: string; role: string; bio: RichText; image: string; imageAlt: string; imagePosition?: "left" | "center" | "right"; socialLabel?: string; socialLink?: LinkValue }[];
 };
 
 export const Team: ComponentConfig<TeamProps> = {
@@ -30,6 +32,8 @@ export const Team: ComponentConfig<TeamProps> = {
         name: { type: "text", label: "Name" }, role: { type: "text", label: "Role" }, bio: richTextField("Biography"),
         image: imageField("Photo"), imageAlt: { type: "text", label: "Photo alt text" },
         imagePosition: { type: "select", label: "Photo focal point", options: [{ label: "Left", value: "left" }, { label: "Centre", value: "center" }, { label: "Right", value: "right" }] },
+        socialLabel: { type: "text", label: "Social link label (optional)", contentEditable: true },
+        socialLink: linkField("Social profile link"),
       },
     },
   },
@@ -62,6 +66,11 @@ export const Team: ComponentConfig<TeamProps> = {
               <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-muted)" }}>{member.role}</p>
               <h3 className={variant === "cards" ? "text-2xl" : "text-3xl sm:text-4xl"} style={{ fontFamily: "var(--font-heading)" }}>{member.name}</h3>
               <RichTextContent value={member.bio} className="max-w-[55ch]" />
+              {member.socialLabel && member.socialLink ? (
+                <Button href={member.socialLink} variant="ghost" className="self-start px-0 py-2 text-sm underline underline-offset-4">
+                  {member.socialLabel}
+                </Button>
+              ) : null}
             </div>
           </article>
         ))}

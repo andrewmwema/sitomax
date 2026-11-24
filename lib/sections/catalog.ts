@@ -10,6 +10,7 @@ import type { TeamProps } from "@/components/blocks/team";
 import type { ProcessProps } from "@/components/blocks/process";
 import { enquiryFields } from "@/components/blocks/ui/enquiry-form";
 import type { PricingProps } from "@/components/blocks/pricing";
+import type { ComparisonTableProps } from "@/components/blocks/comparison-table";
 import type { FaqProps } from "@/components/blocks/faq";
 import type { BlogPostsProps } from "@/components/blocks/blog-posts";
 import type { CallToActionProps } from "@/components/blocks/call-to-action";
@@ -72,6 +73,9 @@ export type SectionDesign = {
   blockType: string;
   category: SectionCategory;
   name: string;
+  description: string;
+  bestFor: string[];
+  metadata: SectionContentMetadata;
   /** Legacy screenshot metadata; the editor always renders a themed live preview. */
   thumbnail: string | null;
   /**
@@ -83,6 +87,13 @@ export type SectionDesign = {
   /** Site styles this design looks good in. */
   styles: SiteStyle[];
   saved?: { id: string; isGlobal: boolean; isOwner: boolean };
+};
+
+export type SectionContentMetadata = {
+  editableFields: readonly string[];
+  repeatableFields: readonly string[];
+  limits: Readonly<Record<string, { maxLength?: number; maxItems?: number; maxValue?: number }>>;
+  imageSlots: readonly { field: string; aspectRatio: "16:9" | "4:3" | "3:2" | "1:1" | "responsive"; maxItems?: number }[];
 };
 
 type BlockPropsMap = {
@@ -97,6 +108,7 @@ type BlockPropsMap = {
   Team: TeamProps;
   Process: ProcessProps;
   Pricing: PricingProps;
+  ComparisonTable: ComparisonTableProps;
   Faq: FaqProps;
   BlogPosts: BlogPostsProps & { design?: BlockDesign };
   CallToAction: CallToActionProps;
@@ -104,6 +116,148 @@ type BlockPropsMap = {
   Map: MapProps;
   Footer: FooterProps;
 };
+
+const BLOCK_CONTENT_METADATA: Record<keyof BlockPropsMap, SectionContentMetadata> = {
+  Hero: {
+    editableFields: ["eyebrow", "badgeText", "heading", "subheading", "buttonText", "buttonLink", "secondaryButtonText", "secondaryButtonLink", "trustLine", "formName", "submitText", "formFields", "stats"],
+    repeatableFields: ["stats", "formFields"],
+    limits: { heading: { maxLength: 100 }, subheading: { maxLength: 500 }, stats: { maxItems: 5 }, formFields: { maxItems: 5 } },
+    imageSlots: [{ field: "backgroundImage", aspectRatio: "16:9" }, { field: "secondaryImage", aspectRatio: "4:3" }],
+  },
+  TextSection: {
+    editableFields: ["eyebrow", "heading", "text", "variant"],
+    repeatableFields: [],
+    limits: { heading: { maxLength: 100 }, text: { maxLength: 1800 } },
+    imageSlots: [],
+  },
+  ImageWithText: {
+    editableFields: ["eyebrow", "heading", "text", "variant", "reportLabel", "reportTitle", "reportReference", "reportHighlights", "buttonText", "buttonLink"],
+    repeatableFields: ["reportHighlights"],
+    limits: { heading: { maxLength: 100 }, text: { maxLength: 1800 }, reportHighlights: { maxItems: 5 } },
+    imageSlots: [{ field: "image", aspectRatio: "4:3" }],
+  },
+  Services: {
+    editableFields: ["eyebrow", "heading", "text", "services", "buttonText", "buttonLink", "secondaryButtonText", "secondaryButtonLink", "trustLine"],
+    repeatableFields: ["services"],
+    limits: { heading: { maxLength: 100 }, services: { maxItems: 6 } },
+    imageSlots: [{ field: "services[].image", aspectRatio: "4:3", maxItems: 6 }],
+  },
+  Stats: {
+    editableFields: ["eyebrow", "heading", "text", "stats", "image", "imageAlt"],
+    repeatableFields: ["stats"],
+    limits: { heading: { maxLength: 100 }, stats: { maxItems: 5 } },
+    imageSlots: [{ field: "image", aspectRatio: "16:9" }],
+  },
+  Gallery: {
+    editableFields: ["eyebrow", "heading", "text", "images", "columns", "variant", "caseStudyChallenge", "caseStudyApproach", "caseStudyResults", "caseStudyMetrics", "nextProjectText", "nextProjectLink"],
+    repeatableFields: ["images", "caseStudyMetrics"],
+    limits: { heading: { maxLength: 100 }, images: { maxItems: 12 }, caseStudyMetrics: { maxItems: 5 } },
+    imageSlots: [{ field: "images[].url", aspectRatio: "4:3", maxItems: 12 }],
+  },
+  Testimonials: {
+    editableFields: ["eyebrow", "heading", "testimonials", "rating", "reviewCount", "ratingLabel", "trustSignals"],
+    repeatableFields: ["testimonials", "trustSignals"],
+    limits: { heading: { maxLength: 100 }, testimonials: { maxItems: 6 }, trustSignals: { maxItems: 5 } },
+    imageSlots: [{ field: "testimonials[].image", aspectRatio: "1:1", maxItems: 6 }],
+  },
+  Logos: {
+    editableFields: ["eyebrow", "heading", "text", "logos"],
+    repeatableFields: ["logos"],
+    limits: { heading: { maxLength: 100 }, logos: { maxItems: 12 } },
+    imageSlots: [{ field: "logos[].image", aspectRatio: "3:2", maxItems: 12 }],
+  },
+  Team: {
+    editableFields: ["eyebrow", "heading", "text", "members"],
+    repeatableFields: ["members"],
+    limits: { heading: { maxLength: 100 }, members: { maxItems: 8 } },
+    imageSlots: [{ field: "members[].image", aspectRatio: "3:2", maxItems: 8 }],
+  },
+  Process: {
+    editableFields: ["eyebrow", "heading", "text", "steps", "buttonText", "buttonLink", "trustLine"],
+    repeatableFields: ["steps"],
+    limits: { heading: { maxLength: 100 }, steps: { maxItems: 5 } },
+    imageSlots: [{ field: "image", aspectRatio: "4:3" }, { field: "steps[].image", aspectRatio: "4:3", maxItems: 5 }],
+  },
+  Pricing: {
+    editableFields: ["eyebrow", "heading", "text", "note", "highlightLabel", "plans"],
+    repeatableFields: ["plans"],
+    limits: { heading: { maxLength: 100 }, plans: { maxItems: 4 } },
+    imageSlots: [],
+  },
+  ComparisonTable: {
+    editableFields: ["eyebrow", "heading", "text", "ourLabel", "typicalLabel", "rows", "buttonText", "buttonLink"],
+    repeatableFields: ["rows"],
+    limits: { heading: { maxLength: 100 }, rows: { maxItems: 8 } },
+    imageSlots: [],
+  },
+  Faq: {
+    editableFields: ["eyebrow", "heading", "text", "items", "contactHeading", "contactText", "contactButtonText", "contactButtonLink"],
+    repeatableFields: ["items"],
+    limits: { heading: { maxLength: 100 }, items: { maxItems: 12 } },
+    imageSlots: [{ field: "contactImage", aspectRatio: "16:9" }],
+  },
+  BlogPosts: {
+    editableFields: ["heading", "source", "category", "count", "showExcerpt", "showDate", "showAuthor"],
+    repeatableFields: [],
+    limits: { heading: { maxLength: 100 }, count: { maxValue: 12 } },
+    imageSlots: [{ field: "archiveData.posts[].coverImage", aspectRatio: "16:9", maxItems: 12 }],
+  },
+  CallToAction: {
+    editableFields: ["eyebrow", "heading", "text", "buttonText", "buttonLink", "secondaryButtonText", "secondaryButtonLink", "trustLine"],
+    repeatableFields: ["formFields"],
+    limits: { heading: { maxLength: 100 }, text: { maxLength: 500 }, formFields: { maxItems: 5 } },
+    imageSlots: [{ field: "image", aspectRatio: "16:9" }],
+  },
+  ContactForm: {
+    editableFields: ["heading", "text", "formName", "formFields", "phone", "email", "address", "hours"],
+    repeatableFields: ["formFields"],
+    limits: { heading: { maxLength: 100 }, formFields: { maxItems: 8 } },
+    imageSlots: [{ field: "image", aspectRatio: "4:3" }],
+  },
+  Map: {
+    editableFields: ["heading", "address", "mapUrl", "showDirections"],
+    repeatableFields: [],
+    limits: { heading: { maxLength: 100 } },
+    imageSlots: [],
+  },
+  Footer: {
+    editableFields: ["businessName", "phone", "email", "address", "hours", "navigation", "socialLinks"],
+    repeatableFields: ["navigation", "socialLinks"],
+    limits: { businessName: { maxLength: 100 }, navigation: { maxItems: 8 }, socialLinks: { maxItems: 8 } },
+    imageSlots: [{ field: "logo", aspectRatio: "responsive" }],
+  },
+};
+
+const CATEGORY_BEST_FOR: Partial<Record<SectionCategory, string[]>> = {
+  Hero: ["Above the fold", "Lead generation"],
+  Services: ["Service businesses", "Lead generation"],
+  About: ["Brand story", "Professional services"],
+  "Text & Image": ["Editorial storytelling", "Professional services"],
+  "Text blocks": ["Brand messaging", "Editorial content"],
+  Stats: ["Social proof", "Business milestones"],
+  Logos: ["Partner credibility", "Trust building"],
+  Team: ["Meet the team", "Personal brands"],
+  Testimonials: ["Customer proof", "Trust building"],
+  Pricing: ["Plan comparison", "Lead generation"],
+  FAQ: ["Objection handling", "Customer support"],
+  Blog: ["Content marketing", "Recent articles"],
+  "Call to action": ["Lead generation", "Next-step prompts"],
+  Contact: ["Enquiries", "Local businesses"],
+  Gallery: ["Visual portfolios", "Project imagery"],
+  Portfolio: ["Case studies", "Project portfolios"],
+  Footer: ["Site navigation", "Contact details"],
+};
+
+const FALLBACK_METADATA: SectionContentMetadata = {
+  editableFields: [],
+  repeatableFields: [],
+  limits: {},
+  imageSlots: [],
+};
+
+export function sectionContentMetadata(blockType: string): SectionContentMetadata {
+  return Object.entries(BLOCK_CONTENT_METADATA).find(([key]) => key === blockType)?.[1] ?? FALLBACK_METADATA;
+}
 
 /**
  * Typed builder so every preset is checked against its block's props.
@@ -116,15 +270,21 @@ function design<T extends keyof BlockPropsMap>(entry: {
   blockType: T;
   category: SectionCategory | "Features/Services" | "Process" | "Text";
   name: string;
+  description?: string;
+  bestFor?: string[];
   props: Partial<BlockPropsMap[T]>;
   thumbnail?: string | null;
   styles?: SiteStyle[];
 }): SectionDesign {
+  const category = sectionCategory(entry.category)!;
   return {
+    ...entry,
     thumbnail: entry.thumbnail ?? null,
     styles: entry.styles ?? ["classic", "modern"],
-    ...entry,
-    category: sectionCategory(entry.category)!,
+    description: entry.description ?? `${entry.name} is a responsive, ready-to-customize ${category.toLowerCase()} section.`,
+    bestFor: entry.bestFor ?? CATEGORY_BEST_FOR[category] ?? ["Small businesses", "Lead generation"],
+    metadata: sectionContentMetadata(entry.blockType),
+    category,
     props: entry.props as unknown as Record<string, unknown>,
   };
 }
@@ -152,6 +312,7 @@ function shellDesign(
   } = options;
   return {
     designVersion: 2,
+    visualVersion: 2,
     settings: {
       fullBleed: true,
       sectionPadding: "normal",
@@ -174,9 +335,9 @@ function shellDesign(
 }
 
 const sampleReviews: TestimonialsProps["testimonials"] = [
-  { quote: "[They took the time to understand what we wanted. The advice was clear, and the finished space feels like us.]", name: "[Alex P.]", role: "[Homeowner, neighbourhood]" },
-  { quote: "[Having one person to speak to made everything easier. We always knew what was happening next.]", name: "[Sam R.]", role: "[Local business owner]" },
-  { quote: "[A thoughtful team from the first conversation to the finishing touches. We felt in good hands throughout.]", name: "[Taylor M.]", role: "[Homeowner, neighbourhood]" },
+  { quote: "[They took the time to understand what we wanted. The advice was clear, and the finished space feels like us.]", name: "[Alex P.]", role: "[Homeowner, neighbourhood]", rating: "5", image: "/samples/happy-customer.jpg", imageAlt: "Sample customer portrait" },
+  { quote: "[Having one person to speak to made everything easier. We always knew what was happening next.]", name: "[Sam R.]", role: "[Local business owner]", rating: "5", image: "/samples/team-at-work.jpg", imageAlt: "Sample customer at work" },
+  { quote: "[A thoughtful team from the first conversation to the finishing touches. We felt in good hands throughout.]", name: "[Taylor M.]", role: "[Homeowner, neighbourhood]", rating: "5", image: "/samples/happy-customer.jpg", imageAlt: "Sample customer portrait" },
 ];
 
 const samplePartners: LogosProps["logos"] = [
@@ -359,6 +520,73 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ animation: "fade" }),
     },
   }),
+  design({
+    id: "hero-product-demo",
+    blockType: "Hero",
+    category: "Hero",
+    name: "Product demo · device showcase",
+    description: "An above-the-fold product story with an editable screenshot and responsive laptop-and-phone mockup.",
+    bestFor: ["Software products", "Product demos", "Lead generation"],
+    props: {
+      eyebrow: "One clear view of your product",
+      heading: "A simpler way to bring your best work together",
+      subheading: "Show how your product helps people move from a good idea to a confident next step.",
+      buttonText: "Book a product demo",
+      buttonLink: "/contact",
+      secondaryButtonText: "Explore the details",
+      secondaryButtonLink: "#features",
+      trustLine: "A friendly walkthrough, shaped around your questions.",
+      backgroundImage: "/samples/kitchen.jpg",
+      backgroundImageAlt: "Sample interface image used as a product demo screenshot",
+      secondaryImage: "",
+      variant: "product-demo",
+      design: shellDesign({ animation: "fade" }),
+    },
+  }),
+  design({
+    id: "hero-editorial-centered",
+    blockType: "Hero",
+    category: "Hero",
+    name: "Editorial centered",
+    description: "A quiet centered headline with room for a concise benefit, two actions and a reassurance line.",
+    bestFor: ["Consultancies", "Editorial brands", "Professional services"],
+    props: {
+      eyebrow: "Thoughtful work, made personal",
+      heading: "A better way to move your next idea forward",
+      subheading: "Start with a conversation, find the right approach and make progress at a pace that feels right.",
+      buttonText: "Start a conversation",
+      buttonLink: "/contact",
+      secondaryButtonText: "See how we work",
+      secondaryButtonLink: "#how-it-works",
+      trustLine: "Clear advice, with no pressure to decide.",
+      backgroundImage: "",
+      secondaryImage: "",
+      variant: "editorial",
+      design: shellDesign({ animation: "fade" }),
+    },
+  }),
+  design({
+    id: "hero-oversized-statement",
+    blockType: "Hero",
+    category: "Hero",
+    name: "Oversized statement",
+    description: "A high-impact typographic opening for creative teams and brands with a clear point of view.",
+    bestFor: ["Creative agencies", "Studios", "Bold brand launches"],
+    props: {
+      eyebrow: "Make your next move count",
+      heading: "Make good work impossible to ignore.",
+      subheading: "A clear point of view, backed by thoughtful work and a team ready to help you get started.",
+      buttonText: "Make a plan",
+      buttonLink: "/contact",
+      secondaryButtonText: "Explore our work",
+      secondaryButtonLink: "#portfolio",
+      trustLine: "",
+      backgroundImage: "",
+      secondaryImage: "",
+      variant: "oversized",
+      design: shellDesign({ animation: "fade" }),
+    },
+  }),
 
   // -------------------------------------------- Features / Services
   design({
@@ -508,6 +736,49 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "services", animation: "fade" }),
     },
   }),
+  design({
+    id: "services-audience-paths",
+    blockType: "Services",
+    category: "Services",
+    name: "Find the right fit",
+    description: "Three clear audience paths help visitors choose the service or solution that fits them.",
+    bestFor: ["Multiple audiences", "Service businesses", "Lead generation"],
+    props: {
+      eyebrow: "Choose your starting point",
+      heading: "Find the right fit for what you need",
+      text: "<p>Choose the path that feels closest. Each one leads to a useful next step.</p>",
+      services: [
+        { icon: "home", title: "For your home", text: "<p>Practical help and thoughtful improvements for the place you call home.</p>", image: "/samples/home-interior.jpg", imageAlt: "Sample of a welcoming living space", actionText: "Explore home services", actionLink: "/services/home" },
+        { icon: "building", title: "For your business", text: "<p>Reliable support shaped around your team, your customers and your working day.</p>", image: "/samples/team-at-work.jpg", imageAlt: "Sample of a small team planning together", actionText: "Explore business services", actionLink: "/services/business" },
+        { icon: "message-circle", title: "Not sure yet?", text: "<p>Tell us what you have in mind and we will help you find a sensible place to begin.</p>", image: "/samples/happy-customer.jpg", imageAlt: "Sample portrait of a customer", actionText: "Talk it through", actionLink: "/contact" },
+      ],
+      buttonText: "",
+      buttonLink: "",
+      variant: "audience-paths",
+      design: shellDesign({ anchorId: "services" }),
+    },
+  }),
+  design({
+    id: "services-feature-showcase",
+    blockType: "Services",
+    category: "Services",
+    name: "Visual feature showcase",
+    description: "Alternating image and benefit rows give important features room to breathe.",
+    bestFor: ["Feature-led services", "Product benefits", "Detailed offers"],
+    props: {
+      eyebrow: "A thoughtful service, at every stage",
+      heading: "The details that make the difference",
+      text: "<p>Show visitors the outcomes they can expect, with space to explain what makes each one useful.</p>",
+      services: [
+        { icon: "message-circle", title: "A plan shaped around you", text: "<ul><li>Start with your priorities</li><li>Understand your options</li><li>Agree the next step together</li></ul>", image: "/samples/team-at-work.jpg", imageAlt: "Sample team discussing a project", actionText: "Talk through your plans", actionLink: "/contact" },
+        { icon: "shield-check", title: "Care in every detail", text: "<ul><li>Clear communication throughout</li><li>Thoughtful work and tidy finishes</li><li>Practical guidance after the visit</li></ul>", image: "/samples/tools.jpg", imageAlt: "Sample of prepared tools for careful work", actionText: "See how we work", actionLink: "#how-it-works" },
+      ],
+      buttonText: "",
+      buttonLink: "",
+      variant: "feature-showcase",
+      design: shellDesign({ anchorId: "features" }),
+    },
+  }),
 
   // ------------------------------------------------------------ Stats
   design({
@@ -617,6 +888,33 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "about" }),
     },
   }),
+  design({
+    id: "about-report-preview",
+    blockType: "ImageWithText",
+    category: "Text & Image",
+    name: "Report / estimate preview",
+    description: "Pairs an editable story with a polished sample report, estimate or project plan.",
+    bestFor: ["Consultancies", "Project estimates", "Professional services"],
+    props: {
+      eyebrow: "A clear next step",
+      heading: "Know what the plan includes before work begins",
+      text: "<p>Show visitors the kind of clarity they can expect: a considered scope, practical timing and recommendations they can discuss with your team.</p>",
+      image: "",
+      imageAlt: "",
+      variant: "report-preview",
+      reportLabel: "Project plan",
+      reportTitle: "A thoughtful plan for [your project]",
+      reportReference: "PLAN · [2025-014]",
+      reportHighlights: [
+        { label: "Recommended scope", value: "[3] work stages" },
+        { label: "Estimated timing", value: "[4–6] weeks" },
+        { label: "Next step", value: "Review together" },
+      ],
+      buttonText: "Request a project plan",
+      buttonLink: "/contact",
+      design: shellDesign({ anchorId: "project-plan" }),
+    },
+  }),
 
   // ---------------------------------------------------------- Process
   design({
@@ -642,6 +940,50 @@ export const sectionCatalog: SectionDesign[] = [
       text: "<p>Bring your ideas and questions. We will help you find a starting point that makes sense for you.</p>",
       image: "/samples/team-at-work.jpg", imageAlt: "Sample team planning the next stages of a project",
       steps: sampleSteps, variant: "checklist", design: shellDesign({ anchorId: "how-it-works" }),
+    },
+  }),
+  design({
+    id: "process-horizontal-visual",
+    blockType: "Process",
+    category: "Services",
+    name: "Visual process · horizontal",
+    description: "A concise, visual route through three practical steps with clear numbering.",
+    bestFor: ["Simple processes", "Service businesses", "First-time customers"],
+    props: {
+      eyebrow: "How it works",
+      heading: "A clear path from idea to completion",
+      text: "<p>Know what happens next, with a team ready to guide you at every stage.</p>",
+      steps: [
+        { title: "Share your idea", text: "<p>Tell us what matters most and what you would like to change.</p>", icon: "message-circle", image: "/samples/team-at-work.jpg", imageAlt: "Sample of a team discussing a project" },
+        { title: "Agree the plan", text: "<p>Explore the options, scope and timing before work begins.</p>", icon: "ruler", image: "/samples/tools.jpg", imageAlt: "Sample tools ready for careful planning" },
+        { title: "See it take shape", text: "<p>Follow progress and review the finishing details together.</p>", icon: "sparkles", image: "/samples/home-interior.jpg", imageAlt: "Sample of a finished home interior" },
+      ],
+      variant: "horizontal",
+      buttonText: "Start a conversation",
+      buttonLink: "/contact",
+      design: shellDesign({ anchorId: "how-it-works" }),
+    },
+  }),
+  design({
+    id: "process-vertical-visual",
+    blockType: "Process",
+    category: "Services",
+    name: "Visual process · vertical",
+    description: "An editorial step-by-step flow with a visual for each stage and space for detail.",
+    bestFor: ["Detailed services", "Consultations", "Longer customer journeys"],
+    props: {
+      eyebrow: "Your project, step by step",
+      heading: "Thoughtful from the first conversation",
+      text: "<p>Each stage is explained clearly, so you can make decisions with confidence.</p>",
+      steps: [
+        { title: "Listen and understand", text: "<p>We learn about your priorities, timeline and the details that matter to you.</p>", icon: "message-circle", image: "/samples/happy-customer.jpg", imageAlt: "Sample customer conversation" },
+        { title: "Shape a practical scope", text: "<p>We discuss suitable options, share a written scope and answer your questions.</p>", icon: "ruler", image: "/samples/team-at-work.jpg", imageAlt: "Sample team planning the work" },
+        { title: "Deliver with care", text: "<p>We keep you informed and walk through the result together.</p>", icon: "check", image: "/samples/home-exterior.jpg", imageAlt: "Sample of a completed property project" },
+      ],
+      variant: "vertical",
+      buttonText: "Talk with our team",
+      buttonLink: "/contact",
+      design: shellDesign({ anchorId: "how-it-works" }),
     },
   }),
 
@@ -839,6 +1181,52 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "portfolio" }),
     },
   })),
+  design({
+    id: "portfolio-asymmetric-grid",
+    blockType: "Gallery",
+    category: "Portfolio",
+    name: "Asymmetric portfolio grid",
+    description: "A varied editorial grid gives one standout project visual priority without hiding captions.",
+    bestFor: ["Creative studios", "Project portfolios", "Visual brands"],
+    props: {
+      eyebrow: "Selected work",
+      heading: "A few projects, each with its own story",
+      text: "Explore a selection of thoughtful work, from the bigger picture to the small details.",
+      images: sampleWork,
+      columns: "3",
+      variant: "portfolio-asymmetric",
+      design: shellDesign({ anchorId: "portfolio" }),
+    },
+  }),
+  design({
+    id: "portfolio-case-study",
+    blockType: "Gallery",
+    category: "Portfolio",
+    name: "Case study · challenge to results",
+    description: "A full-width project image, an editable challenge/approach/results story and outcome metrics.",
+    bestFor: ["Case studies", "Consultancies", "High-consideration services"],
+    props: {
+      eyebrow: "Project story",
+      heading: "A considered refresh for [a growing local business]",
+      text: "<p>See how a clear plan and careful execution helped this project move forward.</p>",
+      images: [
+        { url: "/samples/home-interior.jpg", alt: "Sample of a completed, light-filled interior", caption: "A more useful space, made for everyday life" },
+      ],
+      columns: "3",
+      variant: "case-study",
+      caseStudyChallenge: "<p>[The space needed to work harder for a growing team, without losing the character people already loved.]</p>",
+      caseStudyApproach: "<p>[We listened, agreed the priorities and developed a practical scope. Thoughtful materials and clear milestones kept decisions manageable.]</p>",
+      caseStudyResults: "<p>[The finished space feels brighter, works better for the team and gives the business room to grow.]</p>",
+      caseStudyMetrics: [
+        { value: "[32]%", label: "More usable space" },
+        { value: "[6]", label: "Weeks to complete" },
+        { value: "[1]", label: "Clear project lead" },
+      ],
+      nextProjectText: "Plan a project like this",
+      nextProjectLink: "/contact",
+      design: shellDesign({ anchorId: "case-study" }),
+    },
+  }),
 
   // ----------------------------------------------------- Testimonials
   design({
@@ -884,6 +1272,29 @@ export const sectionCatalog: SectionDesign[] = [
       design: shellDesign({ anchorId: "reviews" }),
     },
   }),
+  design({
+    id: "testimonials-trust-bar",
+    blockType: "Testimonials",
+    category: "Testimonials",
+    name: "Trust and rating bar",
+    description: "A verified rating beside three editable proof points for trust close to a decision.",
+    bestFor: ["Trust building", "Local businesses", "Lead generation"],
+    props: {
+      eyebrow: "Independent feedback",
+      heading: "A little reassurance goes a long way",
+      testimonials: [],
+      variant: "trust-bar",
+      rating: "[4.9]/5",
+      reviewCount: "Based on [200]+ customer reviews",
+      ratingLabel: "[Review platform] · Verified feedback",
+      trustSignals: [
+        { label: "Real customer stories", value: "[200]+ verified reviews", icon: "star" },
+        { label: "Locally trusted", value: "Serving [Town] and nearby", icon: "map-pin" },
+        { label: "Clear first step", value: "No-obligation conversation", icon: "message-circle" },
+      ],
+      design: shellDesign({ anchorId: "reviews" }),
+    },
+  }),
 
   // ------------------------------------------------------------ Logos
   design({
@@ -900,6 +1311,22 @@ export const sectionCatalog: SectionDesign[] = [
       eyebrow: "Working together", heading: "A shared eye for quality",
       text: "Thoughtful materials, practical knowledge and people who care about the details.",
       logos: samplePartners, variant: "grid", design: shellDesign(),
+    },
+  }),
+  design({
+    id: "logos-moving-marquee",
+    blockType: "Logos",
+    category: "Logos",
+    name: "Partner marquee",
+    description: "A calm, continuous partner strip with pause-on-hover and reduced-motion support.",
+    bestFor: ["Partner credibility", "Client logos", "Trust building"],
+    props: {
+      eyebrow: "Good company to keep",
+      heading: "Trusted by people who care about the details",
+      text: "The partners and organisations who help make good work possible.",
+      logos: samplePartners,
+      variant: "marquee",
+      design: shellDesign({ animation: "none" }),
     },
   }),
 
@@ -1073,6 +1500,30 @@ export const sectionCatalog: SectionDesign[] = [
       ],
       variant: "single",
       design: shellDesign({ anchorId: "pricing" }),
+    },
+  }),
+  design({
+    id: "pricing-approach-comparison",
+    blockType: "ComparisonTable",
+    category: "Pricing",
+    name: "Our approach vs typical",
+    description: "An accessible comparison of the service details that matter before a customer chooses.",
+    bestFor: ["High-consideration services", "Lead generation", "Setting expectations"],
+    props: {
+      eyebrow: "A more considered choice",
+      heading: "Clear expectations make a better start",
+      text: "<p>Compare the details that shape a good working relationship, then choose the approach that feels right.</p>",
+      ourLabel: "Our approach",
+      typicalLabel: "A typical experience",
+      rows: [
+        { topic: "Scope", ours: "Agreed in writing before work starts", typical: "May be clarified as work progresses" },
+        { topic: "Communication", ours: "A clear point of contact throughout", typical: "Updates depend on the project" },
+        { topic: "Next steps", ours: "Options and timing explained upfront", typical: "Details vary by provider" },
+      ],
+      buttonText: "Talk through your project",
+      buttonLink: "/contact",
+      variant: "table",
+      design: shellDesign({ anchorId: "compare" }),
     },
   }),
 

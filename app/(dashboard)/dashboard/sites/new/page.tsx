@@ -3,7 +3,7 @@ import { getSiteAccountOptions } from "@/lib/accounts";
 import { instantiateTemplate } from "@/templates/instantiate";
 import { templates } from "@/templates";
 import { NewSiteWizard } from "@/components/dashboard/new-site-wizard";
-import type { SectionDesign } from "@/lib/sections/catalog";
+import { sectionCatalog, type SectionDesign } from "@/lib/sections/catalog";
 import { brand } from "@/lib/brand";
 import { ArrowLeft, ArrowRight, Check, LayoutTemplate, MousePointer2, Sparkles } from "lucide-react";
 
@@ -16,10 +16,15 @@ export default async function NewSitePage({ searchParams }: {
   const choices = templateMode ? Object.values(templates).map((template) => {
     const hero = instantiateTemplate(template, sample)[0].data.content.find((item) => item.type === "Hero");
     if (!hero) throw new Error(`Missing preview for ${template.key}`);
+    const heroMetadata = sectionCatalog.find((design) => design.blockType === hero.type)?.metadata;
+    if (!heroMetadata) throw new Error(`Missing section metadata for template hero ${template.key}`);
     return {
       key: template.key, name: template.name, theme: template.theme,
       design: { id: `preview-${template.key}`, name: template.name, blockType: hero.type, category: "Hero",
-        props: hero.props, thumbnail: null, styles: ["classic", "modern"] } satisfies SectionDesign,
+        props: hero.props, thumbnail: null, styles: ["classic", "modern"],
+        description: `Preview of the ${template.name} template hero.`,
+        bestFor: ["Template preview"],
+        metadata: heroMetadata } satisfies SectionDesign,
     };
   }) : [];
   return <section className="site-creation mx-auto flex w-full max-w-6xl flex-col gap-8">

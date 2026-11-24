@@ -8,6 +8,8 @@ it("re-keys saved slot trees on every insert without modifying their content or 
   const design: SectionDesign = {
     id: "saved-layout", name: "Custom columns", blockType: "Section",
     category: "Text blocks", thumbnail: null, styles: ["classic", "modern"], props: layout.props,
+    description: "Test layout", bestFor: ["Test"],
+    metadata: { editableFields: [], repeatableFields: [], limits: {}, imageSlots: [] },
   };
   const original = JSON.stringify(design);
   const first = buildDesignItem(design);
@@ -24,7 +26,7 @@ it("keeps legacy saved categories available and exposes image-and-text designs i
   expect(sectionCategory("Text")).toBe("Text blocks");
   expect(sectionCategory("Process")).toBe("Services");
   expect(sectionCategory("unknown")).toBeNull();
-  expect(designsForCategory(sectionCatalog, "Text & Image")).toHaveLength(3);
+  expect(designsForCategory(sectionCatalog, "Text & Image")).toHaveLength(4);
 });
 
 it("finds and inserts the blog feed from the library's category and search", () => {

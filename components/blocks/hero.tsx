@@ -24,7 +24,7 @@ export type HeroFormField = {
   required: boolean;
 };
 
-export type HeroVariant = "centered" | "split" | "overlay" | "lead-form" | "stats";
+export type HeroVariant = "centered" | "split" | "overlay" | "lead-form" | "stats" | "product-demo" | "editorial" | "oversized";
 
 export type HeroProps = {
   eyebrow: string;
@@ -205,6 +205,9 @@ export const Hero: ComponentConfig<HeroProps> = {
         { label: "Photo with overlay", value: "overlay" },
         { label: "With lead form", value: "lead-form" },
         { label: "With stats row", value: "stats" },
+        { label: "Product / demo", value: "product-demo" },
+        { label: "Editorial centered", value: "editorial" },
+        { label: "Oversized statement", value: "oversized" },
       ],
     },
     stats: {
@@ -326,6 +329,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     formName,
     submitText,
     formFields,
+    design,
     layout,
     puck,
   }) => {
@@ -344,6 +348,92 @@ export const Hero: ComponentConfig<HeroProps> = {
         center={center}
       />
     );
+
+    if (resolved === "product-demo") {
+      return (
+        <Section background="soft" container={false}>
+          <Container className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
+            <div className="section-intro flex flex-col items-start gap-5">
+              <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
+              <RichHeading level={1}>{heading}</RichHeading>
+              <Subheading>{subheading}</Subheading>
+              {buttons()}
+            </div>
+            <div className="relative mx-auto w-full max-w-2xl pb-8 sm:pb-12">
+              <div className="overflow-hidden border shadow-[var(--shadow-medium)]" style={{ borderColor: "var(--color-border)", borderRadius: "var(--radius-lg)", background: "var(--color-bg)" }}>
+                <div className="flex h-9 items-center gap-1.5 border-b px-3" style={{ borderColor: "var(--color-border)" }} aria-hidden="true">
+                  <span className="size-2 rounded-full" style={{ background: "var(--color-secondary)" }} />
+                  <span className="size-2 rounded-full" style={{ background: "var(--color-primary)" }} />
+                  <span className="size-2 rounded-full" style={{ background: "var(--color-muted)" }} />
+                  <span className="ml-3 h-4 flex-1 rounded-full" style={{ background: "var(--color-soft-bg)" }} />
+                </div>
+                {backgroundImage ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={backgroundImage} alt={backgroundImageAlt || ""} className="aspect-[16/10] w-full object-cover" />
+                ) : (
+                  <div className="grid aspect-[16/10] grid-cols-[0.3fr_1fr] gap-3 p-4 sm:gap-5 sm:p-6" aria-hidden="true">
+                    <div className="flex flex-col gap-3 rounded-md p-3" style={{ background: "var(--color-soft-bg)" }}>
+                      <span className="h-2 w-3/4 rounded" style={{ background: "var(--color-primary)" }} />
+                      <span className="h-2 w-full rounded" style={{ background: "var(--color-border)" }} />
+                      <span className="h-2 w-4/5 rounded" style={{ background: "var(--color-border)" }} />
+                    </div>
+                    <div className="flex flex-col justify-between rounded-md border p-4 sm:p-6" style={{ borderColor: "var(--color-border)" }}>
+                      <div className="space-y-3">
+                        <span className="block h-3 w-2/3 rounded" style={{ background: "var(--color-primary)" }} />
+                        <span className="block h-2 w-full rounded" style={{ background: "var(--color-border)" }} />
+                        <span className="block h-2 w-4/5 rounded" style={{ background: "var(--color-border)" }} />
+                      </div>
+                      <div className="flex items-end gap-2">
+                        {[35, 58, 46, 82, 68, 96].map((height, index) => (
+                          <span key={index} className="flex-1 rounded-t" style={{ height: `${height}%`, background: index === 5 ? "var(--color-secondary)" : "var(--color-primary)" }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="absolute right-0 bottom-0 hidden w-[25%] overflow-hidden border-4 shadow-[var(--shadow-medium)] sm:block" style={{ borderColor: "var(--color-bg)", borderRadius: "var(--radius-lg)", background: "var(--color-bg)" }}>
+                {backgroundImage ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={backgroundImage} alt={backgroundImageAlt || ""} className="aspect-[9/16] w-full object-cover" />
+                ) : (
+                  <div className="flex aspect-[9/16] flex-col gap-2 p-2" aria-hidden="true">
+                    <span className="h-2 w-2/3 rounded" style={{ background: "var(--color-primary)" }} />
+                    <span className="h-16 rounded" style={{ background: "var(--color-soft-bg)" }} />
+                    <span className="h-2 w-full rounded" style={{ background: "var(--color-border)" }} />
+                    <span className="h-2 w-4/5 rounded" style={{ background: "var(--color-border)" }} />
+                    <span className="mt-auto h-5 rounded" style={{ background: "var(--color-primary)" }} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </Container>
+        </Section>
+      );
+    }
+
+    if (resolved === "editorial" || resolved === "oversized") {
+      const oversized = resolved === "oversized";
+      return (
+        <Section background={oversized ? "default" : "soft"}>
+          <div className={`section-intro mx-auto flex flex-col items-center text-center ${oversized ? "max-w-6xl gap-7" : "max-w-4xl gap-6"}`}>
+            <HeroLabel badgeText={badgeText} badgeIcon={badgeIcon} eyebrow={eyebrow} editing={puck.isEditing} />
+            <RichHeading
+              level={1}
+              className={oversized ? "w-full" : "max-w-[18ch]"}
+              style={oversized
+                ? { fontSize: "clamp(3.5rem, 11vw, 9rem)", lineHeight: 0.96, letterSpacing: "var(--tracking-display, -0.05em)" }
+                : { fontSize: "clamp(3rem, 7vw, 6rem)", lineHeight: 1.02, fontStyle: "normal" }}
+            >
+              {heading}
+            </RichHeading>
+            <Subheading className="max-w-[55ch]">{subheading}</Subheading>
+            {buttons(true)}
+            {trustLine ? <p className="text-sm" style={{ color: "var(--color-muted)" }}>{trustLine}</p> : null}
+          </div>
+        </Section>
+      );
+    }
 
     /* ------------------------------------------------- Split image */
     if (resolved === "split") {
@@ -418,7 +508,9 @@ export const Hero: ComponentConfig<HeroProps> = {
           {backgroundImage ? (
             <div
               className="absolute inset-0"
-              style={{ backgroundColor: "rgba(10, 14, 20, 0.56)" }}
+              style={design?.visualVersion === 2 ? {
+                background: "linear-gradient(100deg, color-mix(in srgb, var(--color-dark-bg) 92%, transparent), color-mix(in srgb, var(--color-dark-bg) 35%, transparent))",
+              } : { backgroundColor: "rgba(10, 14, 20, 0.56)" }}
             />
           ) : null}
           <Container className="relative flex min-h-[380px] flex-col justify-center gap-6 sm:min-h-[460px]">
@@ -618,7 +710,9 @@ export const Hero: ComponentConfig<HeroProps> = {
         {backgroundImage ? (
           <div
             className="absolute inset-0"
-            style={{ backgroundColor: "rgba(10, 14, 20, 0.62)" }}
+            style={design?.visualVersion === 2 ? {
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--color-dark-bg) 55%, transparent), color-mix(in srgb, var(--color-dark-bg) 90%, transparent))",
+            } : { backgroundColor: "rgba(10, 14, 20, 0.62)" }}
           />
         ) : null}
         <Container className="section-intro relative flex flex-col items-center gap-6 text-center"

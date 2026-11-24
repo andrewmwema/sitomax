@@ -32,6 +32,8 @@ export type SpacingBox = {
 export type BlockDesign = {
   /** Missing means v1; only newly authored catalog entries opt into v2. */
   designVersion?: 1 | 2;
+  /** Visual refresh is opt-in so saved client sections keep their original styling. */
+  visualVersion?: 1 | 2;
   appearance?: Partial<Record<DeviceId, {
     backgroundColor?: string;
     textColor?: string;
