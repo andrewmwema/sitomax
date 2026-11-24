@@ -115,6 +115,13 @@ describe("Batches 4 and 5", () => {
     }))).toHaveLength(1);
   });
 
+  it.each(["cards", "quotes", "carousel", "rating"])("labels a sample testimonial in the %s layout until its placeholders are replaced", (variant) => {
+    const sample = { quote: "[Add a real review]", name: "Customer", role: "", rating: "5" };
+    expect(render("Testimonials", { variant, testimonials: [sample] })).toContain("Sample testimonial");
+    expect(render("Testimonials", { variant, testimonials: [{ ...sample, quote: "A real review" }] }))
+      .not.toContain("Sample testimonial");
+  });
+
   it("preserves all existing people, steps and reviews across layout changes", () => {
     const cases: { block: Block; id: string; key: string; name: string; variants: string[] }[] = [
       { block: "Team", id: "team-photo-cards", key: "members", name: "name", variants: ["cards", "profiles", "featured", "compact", "spotlight"] },

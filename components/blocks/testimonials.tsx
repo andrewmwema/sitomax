@@ -1,6 +1,7 @@
 import type { ComponentConfig } from "@puckeditor/core";
 import { designField, iconField, optionalImageField, richHeadingField } from "@/lib/puck/fields";
 import type { BlockDesign } from "@/lib/sections/design";
+import { hasPlaceholder } from "@/lib/sections/placeholders";
 import { Section } from "./ui/section";
 import { Eyebrow } from "./ui/eyebrow";
 import { RichHeading } from "./ui/heading";
@@ -36,6 +37,7 @@ export type TestimonialsProps = {
 };
 
 function ReviewMeta({ review }: { review: TestimonialsProps["testimonials"][number] }) {
+  const sample = hasPlaceholder({ quote: review.quote, name: review.name, role: review.role, rating: review.rating });
   return (
     <div className="flex items-center gap-3">
       {review.image ? (
@@ -44,6 +46,7 @@ function ReviewMeta({ review }: { review: TestimonialsProps["testimonials"][numb
           className="size-11 rounded-full object-cover" />
       ) : null}
       <div className="flex min-w-0 flex-col gap-1">
+        {sample ? <span className="text-xs font-medium" style={{ color: "var(--color-muted)" }}>Sample testimonial</span> : null}
         <p className="text-sm"><strong>{review.name}</strong>{review.role ? ` · ${review.role}` : ""}</p>
         {review.rating ? <RatingStars rating={review.rating} /> : null}
       </div>
