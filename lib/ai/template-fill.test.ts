@@ -55,6 +55,18 @@ describe("template page fill contract", () => {
     expect(after[0].actionLink).toEqual(before[0].actionLink);
   });
 
+  it("preserves form identifiers and image alt text", () => {
+    const data = structuredClone(premiumTemplates.showcase.pages.find(({ slug }) => slug === "contact")!.data);
+    const contract = templateFillContract(data);
+    const values = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
+      [key, sampleReview ? "[Add a real review]" : "Replacement"]));
+    const result = contract.apply({ fields: values });
+    const before = data.content.find((item) => item.type === "ContactForm")!;
+    const after = result.content.find((item) => item.type === "ContactForm")!;
+    expect(after.props.formName).toEqual(before.props.formName);
+    expect(after.props.imageAlt).toEqual(before.props.imageAlt);
+  });
+
   it("requests and validates copy before producing a separate draft", async () => {
     const page = premiumTemplates.showcase.pages[0];
     const contract = templateFillContract(page.data);
@@ -68,7 +80,7 @@ describe("template page fill contract", () => {
       { title: page.title, slug: page.slug });
     expect(result).not.toBe(page.data);
     expect(result.content.find((item) => item.type === "Hero")?.props.heading).toBe("Replacement");
-    expect(result.root.props).toMatchObject({ seoTitle: "Replacement", description: "Replacement" });
+    expect(result.root.props).toMatchObject({ title: "Replacement", seoTitle: "Replacement", description: "Replacement" });
     expect(call).toHaveBeenCalledTimes(1);
   });
 

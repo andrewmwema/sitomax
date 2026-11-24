@@ -12,6 +12,7 @@ import { strictTool } from "./strict-tool";
 
 type Fields = Record<string, Field>;
 type Path = (string | number)[];
+const NON_COPY_FIELD = /^(?:id|code|formname|cssclass|anchorid)$|(?:href|link|url|alt|formname)$/i;
 type CopyField = {
   key: string;
   section: string;
@@ -50,7 +51,7 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
       const nextPath = [...path, key];
       const propertyPath = `${metadataPath}${key}`;
       if ((field.type === "text" || field.type === "textarea" || field.type === "richtext")
-        && !/(?:href|link|url)$/i.test(key) && typeof current === "string" && current.trim()) {
+        && !NON_COPY_FIELD.test(key) && typeof current === "string" && current.trim()) {
         add(section, nextPath, propertyPath, current, field.type === "richtext",
           limits[propertyPath]?.maxLength ?? (field.type === "richtext" ? 8000 : 2000),
           section === "Testimonials" && propertyPath.startsWith("testimonials[].")
@@ -80,7 +81,7 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
 
   data.content.forEach((item, index) => visit(item, ["content", index]));
   if (!isRecord(data.root?.props)) throw new Error("The template page has invalid root settings.");
-  for (const [key, maxLength] of [["seoTitle", 59], ["description", 159]] as const) {
+  for (const [key, maxLength] of [["title", 100], ["seoTitle", 59], ["description", 159]] as const) {
     const current = data.root.props[key];
     add("SEO", ["root", "props", key], key, typeof current === "string" ? current : "", false, maxLength, false, undefined, true);
   }
