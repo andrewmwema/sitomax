@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Eye, LayoutTemplate, LoaderCircle, Monitor, Smartphone, X } from "lucide-react";
 import { createSiteFromMasterTemplate } from "@/app/(dashboard)/dashboard/sites/new/template-actions";
 import type { PremiumTemplate, TemplateAccount } from "@/lib/templates/catalog";
+import { TemplateAiWizard } from "./template-ai-wizard";
 
 type Props = {
   templates: PremiumTemplate[];
@@ -31,6 +32,7 @@ export function PremiumTemplateGallery({ templates, accounts, isSuperAdmin, root
   const [timezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const [aiTemplate, setAiTemplate] = useState<string | null>(null);
   const activeTemplate = templates.find((template) => template.id === activeTemplateId);
   const activePage = activeTemplate?.pages.find((page) => page.slug === activePageSlug) ?? activeTemplate?.pages[0];
   const viewportWidth = previewMode === "mobile" ? 390 : 1280;
@@ -95,6 +97,9 @@ export function PremiumTemplateGallery({ templates, accounts, isSuperAdmin, root
           ? "Create a client account before copying a design."
           : "Only client account owners can create a site. Ask your account owner for access."}
       </p> : null}
+      {accounts.length && templates.length >= 2 ? <div>
+        <button type="button" className="platform-button" onClick={() => setAiTemplate("")}>Help me choose a design with AI</button>
+      </div> : null}
 
       {templates.length ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {templates.map((template) => <article key={template.id} className="platform-panel flex min-w-0 flex-col overflow-hidden">
@@ -117,6 +122,9 @@ export function PremiumTemplateGallery({ templates, accounts, isSuperAdmin, root
               </button>
               <button type="button" className="platform-button platform-button-primary" onClick={() => beginPreview(template)}>
                 <LayoutTemplate size={14} aria-hidden="true" />Use this design
+              </button>
+              <button type="button" className="platform-button" disabled={!accounts.length} onClick={() => setAiTemplate(template.id)}>
+                Personalize with AI
               </button>
             </div>
           </div>
@@ -231,5 +239,7 @@ export function PremiumTemplateGallery({ templates, accounts, isSuperAdmin, root
         </form>}
       </div> : null}
     </dialog>
+    {aiTemplate !== null ? <TemplateAiWizard templates={templates} accounts={accounts} rootDomain={rootDomain}
+      initialTemplateId={aiTemplate || undefined} onClose={() => setAiTemplate(null)} /> : null}
   </>;
 }

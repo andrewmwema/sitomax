@@ -80,7 +80,8 @@ export const generationInputSchema = createGenerationInputSchema();
 export type GenerationInput = z.infer<typeof generationInputSchema>;
 export type GenerationProgress = { message: string; warnings?: string[] };
 export const generationOutcomeSchema = z.object({
-  slug: selectedSlugSchema, label: z.string(), pageId: z.uuid().optional(), built: z.boolean(), retryId: z.uuid().optional(),
+  slug: z.union([z.literal(""), z.string().max(200).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/)]),
+  label: z.string(), pageId: z.uuid().optional(), built: z.boolean(), retryId: z.uuid().optional(),
 });
 export type GenerationOutcome = z.infer<typeof generationOutcomeSchema>;
 export type GenerationResult = { siteId: string; pageId: string; warnings: string[]; pages: GenerationOutcome[] };

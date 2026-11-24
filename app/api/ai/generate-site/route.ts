@@ -2,6 +2,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { buildGeneratedSite, retryGeneratedPage, SiteGenerationError } from "@/lib/ai/generate-site";
 import { AiProviderError, aiErrorMessage } from "@/lib/ai/provider-error";
+import { retryTemplatePage } from "@/lib/ai/template-build";
+import { retryUsesTemplate } from "@/lib/ai/usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 800;
@@ -25,7 +27,9 @@ export async function POST(request: Request) {
       try {
         const retry = z.strictObject({ retryId: z.uuid() }).safeParse(raw);
         if (retry.success) {
-          const page = await retryGeneratedPage(retry.data.retryId, (progress) => send({ type: "progress", ...progress }), requestId);
+          const page = await retryUsesTemplate(retry.data.retryId)
+            ? await retryTemplatePage(retry.data.retryId, requestId)
+            : await retryGeneratedPage(retry.data.retryId, (progress) => send({ type: "progress", ...progress }), requestId);
           revalidatePath("/dashboard");
           send({ type: "retry", page });
           return;

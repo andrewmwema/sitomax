@@ -27,8 +27,8 @@ const themeSchema: z.ZodType<SiteTheme> = z.object({
   faviconUrl: z.string().optional(),
 });
 
-const pageDataSchema = z.object({
-  root: z.object({ props: z.record(z.string(), z.unknown()) }),
+export const pageDataSchema = z.object({
+  root: z.object({ props: z.record(z.string(), z.unknown()) }).passthrough(),
   content: z.array(z.object({
     type: z.string().min(1),
     props: z.record(z.string(), z.unknown()),

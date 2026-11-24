@@ -1,0 +1,83 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { emptyBusiness } from "@/lib/business";
+import { premiumTemplates } from "@/templates/premium";
+
+const mocks = vi.hoisted(() => ({
+  requireUser: vi.fn(), copy: vi.fn(), request: vi.fn(), fill: vi.fn(), recommend: vi.fn(),
+  begin: vi.fn(), cancel: vi.fn(), select: vi.fn(), start: vi.fn(), checkpoint: vi.fn(), complete: vi.fn(),
+  claim: vi.fn(), finish: vi.fn(),
+}));
+vi.mock("@/lib/auth", () => ({ requireUser: mocks.requireUser }));
+vi.mock("@/app/(dashboard)/dashboard/sites/new/template-actions", () => ({ createSiteFromMasterTemplate: mocks.copy }));
+vi.mock("./client", () => ({ requestAi: mocks.request }));
+vi.mock("./template-fill", () => ({ fillTemplatePage: mocks.fill }));
+vi.mock("./template-recommendation", () => ({ recommendTemplate: mocks.recommend }));
+vi.mock("./usage", () => ({
+  beginTemplateBuild: mocks.begin, cancelTemplateBuild: mocks.cancel, selectTemplateForBuild: mocks.select,
+  startTemplateCheckpoints: mocks.start, checkpointDraft: mocks.checkpoint, completeTemplateCheckpoints: mocks.complete,
+  claimTemplateRetry: mocks.claim, finishPageRetry: mocks.finish,
+}));
+import { buildTemplateSite, recommendTemplateBuild } from "./template-build";
+
+const accountId = "00000000-0000-4000-8000-000000000001";
+const siteId = "00000000-0000-4000-8000-000000000002";
+const pageId = "00000000-0000-4000-8000-000000000003";
+const generationId = "00000000-0000-4000-8000-000000000004";
+const retryId = "00000000-0000-4000-8000-000000000005";
+const business = { ...emptyBusiness, businessName: "Example", businessType: "Plumber", city: "York" };
+const input = { accountId, templateId: "showcase", siteName: "Example", subdomain: "example",
+  timezone: "UTC", business };
+const page = premiumTemplates.showcase.pages[0];
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.stubEnv("ANTHROPIC_API_KEY", "local-test-key");
+  mocks.begin.mockResolvedValue(generationId);
+  mocks.select.mockResolvedValue(1);
+  mocks.copy.mockResolvedValue({ status: "success", siteId, editorPageId: pageId });
+  const pending = structuredClone(page.data);
+  pending.content.forEach(({ props }) => { props.__aiPending = "[Finish the AI build]"; });
+  mocks.start.mockResolvedValue([{ retryId, pageId, slug: page.slug, label: page.title, draft: pending }]);
+  mocks.fill.mockResolvedValue(page.data);
+  mocks.checkpoint.mockResolvedValue(true);
+  mocks.requireUser.mockResolvedValue({ supabase: {
+    from: (table: string) => table === "sites"
+      ? { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { business: {}, draft_header: null }, error: null }) }) }) }) }
+      : { select: () => ({ eq: () => ({ order: async () => ({ data: [{ id: pageId, slug: page.slug, title: page.title, draft_data: page.data }], error: null }) }) }) },
+  } });
+});
+
+describe("template AI build orchestration", () => {
+  it("copies first, then checkpoints a filled draft without pending markers", async () => {
+    const result = await buildTemplateSite(input);
+    expect(mocks.copy).toHaveBeenCalledWith(expect.objectContaining({ templateId: "showcase" }));
+    expect(mocks.copy.mock.invocationCallOrder[0]).toBeLessThan(mocks.start.mock.invocationCallOrder[0]);
+    const filledDraft = mocks.fill.mock.calls[0][1] as typeof page.data;
+    expect(filledDraft.content.every(({ props }) => !("__aiPending" in props))).toBe(true);
+    expect(mocks.checkpoint).toHaveBeenCalledWith(accountId, generationId, retryId, page.data);
+    expect(mocks.complete).toHaveBeenCalledWith(accountId, generationId);
+    expect(result.pages).toEqual([{ slug: page.slug, label: page.title, pageId, built: true }]);
+  });
+
+  it("does not cancel an existing reservation when a competing selection fails", async () => {
+    mocks.select.mockRejectedValue(new Error("Already being created"));
+    await expect(buildTemplateSite({ ...input, generationId })).rejects.toThrow("Already being created");
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.copy).not.toHaveBeenCalled();
+  });
+
+  it("releases a new reservation when copying fails", async () => {
+    mocks.copy.mockResolvedValue({ status: "error", message: "Site limit reached" });
+    await expect(buildTemplateSite(input)).rejects.toThrow("Site limit reached");
+    expect(mocks.cancel).toHaveBeenCalledWith(accountId, generationId);
+  });
+
+  it("releases the recommendation reservation if its proposal fails", async () => {
+    mocks.requireUser.mockResolvedValue({ supabase: { from: () => ({
+      select: () => ({ eq: () => ({ order: async () => ({ data: [{ id: "one" }, { id: "two" }], error: null }) }) }),
+    }) } });
+    mocks.recommend.mockRejectedValue(new Error("Invalid proposal"));
+    await expect(recommendTemplateBuild({ accountId, business })).rejects.toThrow("Invalid proposal");
+    expect(mocks.cancel).toHaveBeenCalledWith(accountId, generationId);
+  });
+});
