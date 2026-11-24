@@ -122,7 +122,7 @@ describe("AI agent run loop", () => {
     expect(state.toolCalls).toBe(0);
     expect(state.runChanges).toBe(1);
     expect(state.tokenUsage.inputTokens).toBe(100 * (AGENT_LIMITS.toolCalls + 2));
-    expect(events.at(-1)).toMatchObject({ type: "text", text: "All done." });
+    expect(events.at(-1)).toMatchObject({ type: "text", text: "Changes staged for review:\n- Update Hero section (Home page)" });
     expect(heading(changeset)).toBe("Reliable plumbers");
     expectAnswered(state.messages);
   });
@@ -302,13 +302,14 @@ describe("AI agent run loop", () => {
         default: return { text: "All three pages are updated." };
       }
     });
-    const { state, changeset, run } = start(model);
+    const { state, changeset, events, run } = start(model);
     expect(await run()).toBe("awaiting_approval");
     approve(state);
     // Approval repeats the steps, so they are in front of the model when it starts.
     expect(JSON.stringify(state.messages.at(-1))).toContain("1. Rewrite the Home hero");
     expect(await run()).toBe("completed");
     expect(model.calls).toHaveLength(8);
+    expect(events.filter((event) => event.type === "text").map((event) => event.text)).toEqual(["All three pages are updated."]);
     expect(changeset.changes.map((change) => change.pageId)).toEqual([fixtureIds.home, fixtureIds.about, fixtureIds.pricing]);
     expect(state.plan?.steps.map((step) => step.status)).toEqual(["done", "done", "done"]);
     expect(unfinishedPlanSteps(state.plan)).toEqual([]);
@@ -585,7 +586,7 @@ describe("AI agent model routing", () => {
     const mainRun = start(wandering);
     expect(await mainRun.run()).toBe("completed");
     expect(models(wandering)).toEqual(["main", "small", "main", "main"]);
-    expect(texts(mainRun.events)).toEqual(["Done."]);
+    expect(texts(mainRun.events)).toEqual(["Changes staged for review:\n- Update Hero section (Home page)"]);
     expect(heading(mainRun.changeset)).toBe("Reliable plumbers");
     expect(JSON.stringify(mainRun.state.messages)).not.toContain("All done!");
     expectAnswered(mainRun.state.messages);

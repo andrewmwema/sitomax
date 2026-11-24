@@ -476,8 +476,14 @@ model answers instead when it hands off, reaches beyond one page or three
 sections, has its input refused twice, is still going after eight steps, or
 ends without changing anything (a question, or a request it could not carry
 out). A run never moves back to the small model, except for the one request
-that repairs a refused tool input. Its text is shown only once its reply is
-kept. The run log names the model a run started with and why it was taken over.
+that repairs a refused tool input. The run log names the model a run started
+with and why it was taken over.
+
+**Replies.** Text accompanying tool calls and premature replies are not shown
+as chat messages. Only the completed closing reply is sent and saved. After a
+rejected attempt, the closing reply is instead built from the staged change
+labels, so model narration about repairs cannot leak into the conversation.
+Failed steps still appear in the step list.
 
 **Memory and input size.** Each request to the main model is sent in the order
 the provider caches it. The tools and the rules come first and never change, so

@@ -72,7 +72,7 @@ const SCOPE = "SCOPE. You make small edits to what is already on one page: the t
 const TOOL_INPUT = "TOOL INPUT. Follow each tool's description, schema and example exactly: use the key names and option values given there, and write objects and lists as objects and lists, never as JSON strings. A change is answered with a short result: ok, the ids of anything new and what changed. When a tool result has notes, part of what you sent was left out or replaced: read them, and send that part again properly if it matters.";
 const EDITING = "EDITING. Send only the properties you change. Keep the existing brand consistent. Never invent business facts, prices, reviews, statistics, credentials, or contact details; use clearly marked [placeholders] for unknown details. A placeholder names what is missing, such as [average rating] or [price], and never holds a made-up value such as [4.9]. Make accessible WCAG AA and mobile-friendly choices. You may only propose business-information edits as a note: do not modify it. Never publish, change domains, billing, accounts, or user settings. All edits are temporary changeset entries until the user keeps them.";
 const BUILDING = "BUILDING. The footer is a section repeated on every page: change it only with update_footer, which applies the same change to the footer of every page. Curated designs arrive with sample content, which the result lists as sampleContent: replace all of it with supplied facts or [placeholders], and never leave sample names, numbers, prices or reviews in place. After adding a section or page, choose its images with set_image. When the user asks for exactly what a theme preset does (a button shape, rounder or sharper corners, more or less space between sections, or a preset palette or font pairing by name), apply_theme_preset does it in one short call; a look you design yourself is made with update_theme.";
-const REPLIES = "REPLIES. Explain changes in plain English. Whatever the user reads (replies, plan steps, questions) names pages and sections in plain words and never shows an id such as a pageId or sectionId. Your closing message, once the work is finished, is a summary of at most about 120 words unless the user asked for more detail: what changed and anything they need to fill in or check, in plain sentences or a short list.";
+const REPLIES = "REPLIES. Explain changes in plain English. Whatever the user reads (replies, plan steps, questions) names pages and sections in plain words and never shows an id such as a pageId or sectionId. Your closing message, once the work is finished, is a summary of at most about 120 words unless the user asked for more detail: what changed and anything they need to fill in or check, in plain sentences or a short list. Do not narrate tool calls, rejected attempts or repairs.";
 /** The rules never change, so every request reads them, and the tools before them, from the provider's cache. */
 const SYSTEM_PROMPT = [INTRO, FINDING, PLANS, TOOL_INPUT, EDITING, BUILDING, REPLIES].join("\n\n");
 /** The small model's rules: the same care, without planning or building, and a way out. */
@@ -148,6 +148,8 @@ export type AgentState = {
   repair?: string;
   /** Repairs asked for in this run so far. It is never reset: a run has MAX_RUN_REPAIRS in all. */
   repairs?: number;
+  /** A rejected attempt may have influenced the model's closing text, even after a Continue. */
+  hadRejectedAttempt?: boolean;
   /** Requests in this conversation so far, which decides when its history is summarised. */
   threadTurns?: number;
   /** Times in a row the agent was told to carry on without making progress. */
@@ -176,7 +178,7 @@ const agentStateSchema = z.object({
   overview: z.string().optional(), reads: z.record(z.string(), z.object({ content: z.string().optional(), full: z.string().optional() })).optional(),
   route: z.enum(["small", "main"]).optional(), scope: z.object({ pageId: z.string().optional(), sections: z.array(z.string()) }).optional(),
   planDemands: z.number().int().nonnegative().optional(),
-  repair: z.string().optional(), repairs: z.number().int().nonnegative().optional(), threadTurns: z.number().int().nonnegative().optional(),
+  repair: z.string().optional(), repairs: z.number().int().nonnegative().optional(), hadRejectedAttempt: z.boolean().optional(), threadTurns: z.number().int().nonnegative().optional(),
   plan: agentPlanSchema.optional(), pauseReason: z.string().optional(),
   tokenUsage: tokenUsageSchema, segmentUsage: tokenUsageSchema, cost: agentCostSchema.optional(),
   awaiting: z.object({ kind: z.enum(["plan", "question", "credit"]), toolUseId: z.string(), toolName: z.string(), payload: z.record(z.string(), z.unknown()) }).optional(),
@@ -1577,15 +1579,15 @@ export async function runAgentLoop(run: {
     });
     params.system = [{ type: "text", text: small ? SMALL_SYSTEM_PROMPT : SYSTEM_PROMPT, cache_control: { type: "ephemeral", ttl: "1h" } }];
     params.tool_choice = { type: "auto", disable_parallel_tool_use: true };
-    // What the small model writes is shown once its reply is kept: a reply that goes to the main model is never seen.
-    const held: string[] = [];
-    const response = await model(params, { signal, onText: (text) => role === "main" ? emit({ type: "text", text }) : held.push(text) });
+    // Text is only safe to show after the complete reply has finished the run.
+    const response = await model(params, { signal, onText: () => {} });
     const usage = messageUsage(response);
     const spent = agentRunCost(state);
     state.tokenUsage = addUsage(state.tokenUsage, usage);
     state.segmentUsage = addUsage(state.segmentUsage, usage);
     state.cost = addCallCost(spent, params.model, params, usage);
     run.onModelCall?.({ model: params.model, usage, costUsd: state.cost.costUsd - spent.costUsd });
+    if (signal?.aborted) { terminal = "stopped"; break; }
     const repairing = role === "repair" ? state.repair : undefined;
     state.repair = undefined;
     if (small) {
@@ -1602,10 +1604,12 @@ export async function runAgentLoop(run: {
       const repaired = response.stop_reason === "tool_use" && response.content.some((part) => part.type === "tool_use" && part.name === repairing);
       if (!repaired) continue;
     }
-    for (const text of held) emit({ type: "text", text });
-    if (response.content.length) state.messages = dropThinking([...state.messages, { role: "assistant", content: response.content }]);
     const calls = response.content.filter((part) => part.type === "tool_use");
     const cutOff = response.stop_reason === "max_tokens";
+    if (cutOff || (calls.length > 0 && response.stop_reason !== "tool_use")) state.hadRejectedAttempt = true;
+    // Tool-call narration is neither a user reply nor useful conversation history.
+    const content = calls.length ? response.content.filter((part) => part.type !== "text") : response.content;
+    if (content.length) state.messages = dropThinking([...state.messages, { role: "assistant", content }]);
     if (cutOff || !calls.length || response.stop_reason !== "tool_use") {
       // A call in a reply that was cut off may be incomplete, so it is answered and not run.
       if (calls.length) {
@@ -1613,7 +1617,20 @@ export async function runAgentLoop(run: {
           ({ type: "tool_result" as const, tool_use_id: call.id, is_error: true, content: "This call was in a reply that was cut off, so it was not run." })));
       }
       const open = openPlanSteps(state.plan);
-      if (!cutOff && !open.length) break;
+      if (!cutOff && !open.length) {
+        const labels = stagedLabels(changeset).slice(-state.runChanges);
+        const remaining = labels.length - 6;
+        const text = state.hadRejectedAttempt
+          ? state.runChanges
+            ? `Changes staged for review:\n${labels.slice(0, 6).map((label) => `- ${label}`).join("\n")}${remaining > 0 ? `\n- ${remaining} more changes` : ""}`
+            : "No changes were staged in this request."
+          : response.content.filter((part) => part.type === "text").map((part) => part.text.trim()).filter(Boolean).join("\n\n");
+        if (state.hadRejectedAttempt && state.messages.at(-1)?.role === "assistant") {
+          state.messages[state.messages.length - 1] = { role: "assistant", content: [{ type: "text", text }] };
+        }
+        if (text) emit({ type: "text", text });
+        break;
+      }
       if (state.nudges >= MAX_NUDGES) {
         // Told to carry on and still not moving. A go in which nothing at all was done ends
         // here with the open steps reported; otherwise the user decides whether to continue.
@@ -1629,6 +1646,7 @@ export async function runAgentLoop(run: {
     // and shared parts, without an approved plan is sent back for one before the change is made.
     const unplanned = !state.plan && (state.planDemands ?? 0) < MAX_PLAN_DEMANDS ? beyondScope(calls, state, changeset) : null;
     if (unplanned) {
+      state.hadRejectedAttempt = true;
       state.planDemands = (state.planDemands ?? 0) + 1;
       state.messages.push({ role: "user", content: calls.map((call) =>
         ({ type: "tool_result" as const, tool_use_id: call.id, is_error: true, content: PLAN_FIRST(unplanned) })) });
@@ -1659,6 +1677,7 @@ export async function runAgentLoop(run: {
         : `Tool input is still invalid after one repair attempt: ${problem}. Repair the input and retry.`;
     };
     const failed = (call: Anthropic.ToolUseBlock, error: unknown) => {
+      state.hadRejectedAttempt = true;
       const input = error instanceof z.ZodError || error instanceof ToolInputError;
       // A slip in the input is something the model is asked to repair with its next call, until the
       // tool's last attempt or the run's last repair. After that the step is shown as failed.
@@ -1671,6 +1690,7 @@ export async function runAgentLoop(run: {
     };
     for (const call of calls) {
       if (state.toolCalls >= MAX_TOOL_CALLS || state.changesThisRun >= MAX_CHANGES || overBudget()) {
+        state.hadRejectedAttempt = true;
         terminal = pause(overBudget() ? PAUSED.budget : PAUSED.limit);
         toolResults.push({ type: "tool_result", tool_use_id: call.id, is_error: true, content: "Run limit reached. The current changeset is saved; continue to resume." });
         continue;
@@ -1796,7 +1816,11 @@ export async function executeAgentRequest(
 ) {
   const input = requestSchema.parse(raw);
   const technical = await isAgencyViewer();
-  const emit = (event: AgentEvent) => send(clientAgentEvent(event, technical));
+  let assistantText = "";
+  const emit = (event: AgentEvent) => {
+    if (event.type === "text" && typeof event.text === "string") assistantText = event.text;
+    send(clientAgentEvent(event, technical));
+  };
   let threadId: string;
   let runId: string;
   let changeset: Changeset;
@@ -1991,12 +2015,6 @@ export async function executeAgentRequest(
     }
   }
 
-  const assistantText = state.messages.filter((message) => message.role === "assistant")
-    .map((message) => {
-      const content = Array.isArray(message.content) ? message.content : [];
-      return content.map((part) => "text" in part && typeof part.text === "string" ? part.text : "")
-        .filter(Boolean).join("\n");
-    }).filter(Boolean).slice(-1)[0] ?? "";
   if (assistantText) await insertMessage(supabase, threadId, runId, "assistant", assistantText);
   const finished = terminal === "completed" || terminal === "stopped" || terminal === "failed";
   if (finished && changeset.changes.length) reviewChangesetQuality(changeset);

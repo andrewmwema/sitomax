@@ -77,6 +77,63 @@ beforeEach(() => {
 });
 
 describe("AI agent request", () => {
+  it.each(["Improve the hero", "Improve every page"])("only sends and saves the final reply for %s", async (message) => {
+    const narration = reply([
+      { type: "text", text: "I'll read the hero first.", citations: null },
+      { type: "tool_use", id: "read", name: "get_section", input: { pageId: fixtureIds.home, sectionId: "home-hero" } },
+      { type: "text", text: "Then I'll change it.", citations: null },
+    ]);
+    const editing = reply([{ type: "text", text: "Now I'm editing.", citations: null }, ...edit.content]);
+    const final = reply([
+      { type: "text", text: "I've warmed up the hero.", citations: null },
+      { type: "text", text: "Review the new heading.", citations: null },
+    ]);
+    const events = await request({ ...start, message }, script(narration, editing, final));
+    const text = "I've warmed up the hero.\n\nReview the new heading.";
+    expect(events.filter((event) => event.type === "text")).toEqual([{ type: "text", text }]);
+    expect(events.at(-1)).toMatchObject({ type: "done", summary: text });
+    expect(mocks.usage.appendAiAgentMessage.mock.calls.map((call) => call[3]))
+      .toContainEqual(expect.objectContaining({ role: "assistant", content: text }));
+    expect(JSON.stringify(events)).not.toMatch(/I'll read|Then I'll|Now I'm editing/);
+    expect(JSON.stringify(lastSave())).not.toMatch(/I'll read|Then I'll|Now I'm editing/);
+  });
+
+  it("does not expose rejected attempts in the final reply or saved conversation", async () => {
+    const wrong = reply([
+      { type: "text", text: "I'll try a full-row update.", citations: null },
+      { type: "tool_use", id: "wrong", name: "update_section_props",
+        input: { pageId: fixtureIds.about, sectionId: "home-hero", props: { heading: "Reliable plumbers" } } },
+    ]);
+    const repaired = reply([{ type: "text", text: "The update was rejected, so I'll try again.", citations: null }, ...edit.content]);
+    const final = reply([{ type: "text", text: "The full-row update was rejected. I've warmed up the hero.", citations: null }]);
+    const events = await request(start, script(wrong, repaired, final));
+    const text = "Changes staged for review:\n- Update Hero section (Home page)";
+    expect(events.filter((event) => event.type === "text")).toEqual([{ type: "text", text }]);
+    expect(events.at(-1)).toMatchObject({ type: "done", summary: text });
+    expect(mocks.usage.appendAiAgentMessage.mock.calls.map((call) => call[3]))
+      .toContainEqual(expect.objectContaining({ role: "assistant", content: text }));
+    expect(JSON.stringify(events)).not.toMatch(/full-row|was rejected|try again/);
+    const savedState = mocks.usage.saveAiAgentRun.mock.calls.at(-1)![3] as { run_state: unknown };
+    expect(JSON.stringify(savedState.run_state)).not.toMatch(/full-row|was rejected|try again/);
+  });
+
+  it("keeps rejected attempts out of the reply after a paused run continues", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const wrong = reply([{ type: "tool_use", id: "wrong", name: "update_section_props",
+      input: { pageId: fixtureIds.about, sectionId: "home-hero", props: { heading: "Reliable plumbers" } } }]);
+    const paused = await request(start, script(wrong, edit, providerError(529, "overloaded_error")));
+    expect(paused.filter((event) => event.type === "text")).toEqual([]);
+    const saved = mocks.usage.saveAiAgentRun.mock.calls.at(-1)![3] as { run_state: unknown; changeset: unknown };
+    expect(saved.run_state).toMatchObject({ hadRejectedAttempt: true });
+    mocks.usage.loadAiAgentRunState.mockResolvedValue(saved.run_state);
+    savedRun.changeset = saved.changeset;
+    const final = reply([{ type: "text", text: "The first attempt was rejected, but I updated the hero.", citations: null }]);
+    const events = await request({ action: "continue", threadId, runId }, script(final));
+    expect(events.at(-1)).toMatchObject({ type: "done", summary: "Changes staged for review:\n- Update Hero section (Home page)" });
+    expect(JSON.stringify(events)).not.toContain("first attempt was rejected");
+    log.mockRestore();
+  });
+
   it("checks the account limit before reserving, then runs, checks quality, saves and reports the cost", async () => {
     const events = await request(start, script(edit, done));
     expect(mocks.usage.reserveAiAgentSlot).toHaveBeenCalledWith(fixtureIds.account);
@@ -115,7 +172,10 @@ describe("AI agent request", () => {
 
   it("pauses a run when the AI service is busy, so Continue retries it without a new charge", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    const events = await request(start, script(edit, providerError(529, "overloaded_error")));
+    const events = await request(start, script(reply([{ type: "text", text: "Editing the hero.", citations: null }, ...edit.content]), providerError(529, "overloaded_error")));
+    expect(events.filter((event) => event.type === "text")).toEqual([]);
+    expect(mocks.usage.appendAiAgentMessage.mock.calls.map((call) => call[3]))
+      .not.toContainEqual(expect.objectContaining({ role: "assistant" }));
     expect(events.slice(-2)).toMatchObject([
       { type: "error", message: "The AI service is busy or did not respond. Your progress is saved: press Continue to try again." },
       { type: "paused", continueAvailable: true },
