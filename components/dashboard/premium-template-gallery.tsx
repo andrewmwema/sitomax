@@ -36,12 +36,8 @@ export function PremiumTemplateGallery({ templates, accounts, isSuperAdmin, root
   const viewportWidth = previewMode === "mobile" ? 390 : 1280;
 
   useEffect(() => {
-    if (dialogMode === "preview" || dialogMode === "create") {
-      if (activeTemplateId && !dialog.current?.open) dialog.current?.showModal();
-    } else {
-      dialog.current?.close();
-    }
-  }, [activeTemplateId, dialogMode]);
+    if (activeTemplateId && !dialog.current?.open) dialog.current?.showModal();
+  }, [activeTemplateId]);
 
   const closeDialog = () => {
     setActiveTemplateId("");
@@ -139,7 +135,7 @@ export function PremiumTemplateGallery({ templates, accounts, isSuperAdmin, root
             <p className="platform-eyebrow">{dialogMode === "preview" ? "Design preview" : "Create your draft"}</p>
             <h2 id="template-dialog-title" className="mt-1 text-xl font-semibold">{activeTemplate.name}</h2>
           </div>
-          <button type="button" className="platform-button shrink-0" aria-label="Close design preview" onClick={closeDialog}>
+          <button type="button" className="platform-button shrink-0" aria-label="Close design preview" onClick={() => dialog.current?.close()}>
             <X size={16} aria-hidden="true" />
           </button>
         </header>
