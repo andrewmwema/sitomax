@@ -346,7 +346,7 @@ is still recorded, with existing request rate limits but no credit quota.
 The dashboard greeting and header date use the browser's local timezone;
 reporting periods continue to use UTC.
 
-After the reviewed `0054_ai_plan_allowances.sql` is applied and this version is
+After the reviewed Phase 2 migrations are applied and this version is
 deployed, included monthly AI allowances follow the account's site plan:
 Starter 2 builds and 50 edits, Growth 5 and 150, Premium 10 and 500.
 Extra credits, page surcharges and large-run charges remain unchanged.
@@ -357,7 +357,9 @@ defaults of 1 build and 50 edits. Default-valued fields inherit the plan.
 After the reviewed `0056_ai_allowance_template_corrections.sql` is applied,
 changes to the legacy quota columns are captured as overrides during a rolling
 deployment, including changes to the old defaults; unchanged values are ignored.
-Pause legacy quota changes until 0054 through 0056 are all applied. Clearing an override
+Confirm production migration state and follow the reviewed order in
+[`MIGRATIONS.md`](docs/MIGRATIONS.md); 0056 is not strictly additive. Pause
+legacy quota changes until 0054 through 0056 are all applied. Clearing an override
 does not change those legacy columns, so rolling back to older app code restores
 its legacy quota behavior.
 
@@ -377,7 +379,8 @@ as samples in the rendered site until those details are replaced.
 Optional saved intake fields are accepted and preserved without adding them to
 older business records.
 Review generated content and placeholders before accepting or publishing it.
-AI-created sections use stock photos when configured, otherwise image placeholders.
+AI-created sections offer stock-photo suggestions where supported; select a photo
+or upload your own in the editor.
 
 ### Build an empty page
 
@@ -386,6 +389,7 @@ canvas. Generation uses the site's saved business information, current theme and
 page links, retaining shared navigation/footer styling. It saves only a draft;
 review the result before publishing. Nonempty pages are never replaced, and a
 concurrent draft change cancels the save. Each AI attempt is metered.
+The new save and history function requires the reviewed migration 0058.
 
 ### AI site agent
 
