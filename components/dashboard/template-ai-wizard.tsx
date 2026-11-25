@@ -225,6 +225,11 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
               {" "}{index === 0 ? "Recommended" : "Runner-up"}: <strong>{item.name}</strong> — {choice.reason}
             </label> : null;
           })}
+          {templates.filter((item) => item.id !== choices.recommended.templateId && item.id !== choices.runnerUp.templateId)
+            .map((item) => <label key={item.id} className="block rounded-lg border p-3 text-sm">
+              <input type="radio" name="template" checked={templateId === item.id} onChange={() => setTemplateId(item.id)} />
+              {" "}Other design: <strong>{item.name}</strong> — {item.description}
+            </label>)}
         </div> : null}
         {(initialTemplateId || choices) ? <>
           <label className="flex flex-col gap-1 text-sm font-medium">Site name
