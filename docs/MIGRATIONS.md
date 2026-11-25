@@ -11,6 +11,9 @@ the responsible operator verifies it and explicitly approves execution.
 | `0052_ai_business_intake.sql` | Applied effects observed | Read-only database inspection on 2026-11-24 |
 | `0052_premium_template_catalog.sql` | Applied effects observed, with differences from the branch file | Read-only database inspection on 2026-11-24 |
 | `0053_premium_template_repair.sql` | Applied, as reported by the user | User reported successful execution on 2026-11-24; not independently verified |
+| `0054_ai_plan_allowances.sql` | Applied, as reported by the user | User reported application on 2026-11-25; table and function presence reported, full definitions not independently verified |
+| `0055_ai_template_builds.sql` | Applied, as reported by the user | User reported application on 2026-11-25; table and column presence reported, full definitions not independently verified |
+| `0056_ai_allowance_template_corrections.sql` | Applied, as reported by the user | User reported application on 2026-11-25; corrected trigger conditions reported, function definitions not independently verified |
 | `0057_ai_draft_history_header.sql` | Applied, as reported by the user | User reported application on 2026-11-25; not independently verified |
 
 The production database did not expose a
@@ -42,12 +45,11 @@ followed by
 [`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql),
 then [`0056_ai_allowance_template_corrections.sql`](../supabase/migrations/0056_ai_allowance_template_corrections.sql).
 The user reported that [`0057_ai_draft_history_header.sql`](../supabase/migrations/0057_ai_draft_history_header.sql)
-was applied; do not reapply it. The application status of 0054-0056 has not
-been confirmed. Their intended order is 0054, 0055, then 0056. Confirm the
-actual production state before applying anything; do not assume any migration
-is missing or reapply either 0052 file. These migrations have not been
-independently database-validated. Record a migration above only after its
-application is confirmed.
+was applied; do not reapply it. The user also reports 0054-0056 applied and
+reported their key object and trigger indicators. Their complete production
+definitions have not been independently verified. Do not reapply them or
+either 0052 file. These migrations have not been independently database-validated.
+Record a migration above only after its application is confirmed.
 
 0056 is **not strictly additive**: with the user's approval, it replaces the two
 0054 legacy-override triggers and two newly introduced functions. Pause legacy
@@ -76,7 +78,8 @@ any page surcharge and the copy. Existing
 functions, triggers and policies are unchanged, and deployed main does not
 call it. It requires the existing 0053 copy function and the 0054-0056
 allowance and checkpoint objects; verify their actual production definitions
-and apply 0054-0056 in order if missing before considering 0059. It has not
+before considering 0059. Investigate missing objects without reapplying the
+reported migrations. It has not
 been database-tested or applied. The review-only
 [`phase2_atomic_template_copy_review.sql`](../supabase/tests/phase2_atomic_template_copy_review.sql)
 requires the TEST fixtures and separate approval before execution.
@@ -141,8 +144,7 @@ compatibility has not been independently tested. The
 build, its history and its recovery paths remain incomplete and have not been
 database-tested; do not treat 0055 or the feature branch as production-ready.
 The read-only [`phase2_0055_dependencies.sql`](../supabase/checks/phase2_0055_dependencies.sql)
-lists named dependencies and their source migrations. The 0054 function is
-expected to be missing before 0054 is applied. The check verifies names only,
+lists named dependencies and their source migrations. The check verifies names only,
 not column types, grants, function bodies or indirect dependencies. A missing
 object requires investigation; do not blindly reapply an earlier migration.
 

@@ -8,26 +8,28 @@ checks pass. Confirm each operation separately before performing it.
 
 ## Production state and preflight
 
-The user reported 0053 and 0057 applied. Both 0052 files have observed effects,
+The user reported 0053-0057 applied. Both 0052 files have observed effects,
 but the production premium-catalog definition differs from the branch file.
-Do not reapply 0052 or 0057. The actual status of 0054-0056 is **unknown**;
-0058-0061 have not been reported applied. See the
+Do not reapply 0052-0057. The user reports that the key 0058-0061 functions
+are absent; their complete production state has not been independently
+verified. See the
 [manual migration record](./MIGRATIONS.md).
 
 Before deciding what to apply, review the exact read-only queries in
 [`phase2_0055_dependencies.sql`](../supabase/checks/phase2_0055_dependencies.sql)
 and [`phase2_final_dependencies.sql`](../supabase/checks/phase2_final_dependencies.sql),
+plus [`phase2_0054_0057_dependencies.sql`](../supabase/checks/phase2_0054_0057_dependencies.sql)
+for direct references in those functions,
 the other-plan and missing-limit queries in the migration record, and actual
 function and trigger definitions. These queries are not a migration history
-and cannot prove compatibility. In particular, 0055 adds
-`site_draft_versions.header`, which 0057 references. If that column or any
-0055 object already exists, investigate whether 0055 was applied or partially
-applied; do not blindly rerun it. If 0057's trigger is present without its
-required columns, existing backup writes may fail: stop and investigate.
+and cannot prove compatibility. In particular, the user reports that 0055's
+`site_draft_versions.header`, which 0057 references, is present. If other
+required objects are missing, existing backup writes may fail: stop and
+investigate rather than rerunning a reported migration.
 
 Do not use `supabase db push` against production: the duplicate 0052 numbers
-and historical state need separate reconciliation. Only the operator should
-record an applied migration in the manual log after confirming its execution.
+and historical state need separate reconciliation. Record migrations in the
+manual log only after the operator confirms their application.
 
 ## Local verification
 
@@ -38,8 +40,9 @@ fixture, upload or migration was performed.
 
 ## Exact migration SQL, conditional order
 
-The following links are the full committed SQL. Apply only migrations confirmed
-missing after reviewing their prerequisites and existing definitions:
+The following links are the full committed SQL. Do not reapply 0054-0057,
+which the user reports applied. Consider later migrations only after reviewing
+their prerequisites and existing definitions:
 
 1. [`0054_ai_plan_allowances.sql`](../supabase/migrations/0054_ai_plan_allowances.sql)
 2. [`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql)
