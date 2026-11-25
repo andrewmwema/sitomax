@@ -18,6 +18,7 @@ vi.mock("./usage", () => ({
   claimTemplateRetry: mocks.claim, finishPageRetry: mocks.finish,
 }));
 import { buildTemplateSite, recommendTemplateBuild } from "./template-build";
+import { AiUserError } from "./errors";
 
 const accountId = "00000000-0000-4000-8000-000000000001";
 const siteId = "00000000-0000-4000-8000-000000000002";
@@ -90,9 +91,21 @@ describe("template AI build orchestration", () => {
 
   it("stops further generation if a provider or accounting call fails", async () => {
     mocks.fill.mockRejectedValue(new Error("AI usage needs reconciliation"));
-    await expect(buildTemplateSite(input)).rejects.toThrow("site was copied");
+    await expect(buildTemplateSite(input)).rejects.toBeInstanceOf(AiUserError);
     expect(mocks.checkpoint).not.toHaveBeenCalled();
     expect(mocks.complete).toHaveBeenCalledWith(accountId, generationId);
+  });
+
+  it("reports a reconciliation reference if checkpoint finalization fails", async () => {
+    mocks.fill.mockRejectedValue(new Error("AI usage needs reconciliation"));
+    mocks.complete.mockRejectedValue(new Error("database details"));
+    await expect(buildTemplateSite(input)).rejects.toThrow(`reference ${generationId} before retrying`);
+  });
+
+  it("reports a reconciliation reference if an unstarted reservation cannot be released", async () => {
+    mocks.select.mockRejectedValue(new Error("Selection failed"));
+    mocks.cancel.mockRejectedValue(new Error("database details"));
+    await expect(buildTemplateSite(input)).rejects.toThrow(`reference ${generationId} before retrying`);
   });
 
   it("releases the recommendation reservation if its proposal fails", async () => {

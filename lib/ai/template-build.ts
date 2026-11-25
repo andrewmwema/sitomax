@@ -59,7 +59,7 @@ async function releaseUnstarted(accountId: string, generationId: string, cause: 
   try { await cancelTemplateBuild(accountId, generationId); }
   catch (error) {
     console.error("Template reservation needs reconciliation", { generationId, type: error instanceof Error ? error.name : "Unknown" });
-    throw new Error(`The build reservation needs reconciliation. Contact your agency with reference ${generationId}.`, { cause: error });
+    throw new AiUserError(`The build reservation needs reconciliation. Contact your agency with reference ${generationId} before retrying.`, { cause: error });
   }
   throw cause;
 }
@@ -144,18 +144,24 @@ export async function buildTemplateSite(raw: unknown, emit: (event: GenerationPr
     return { siteId, pageId: copied.editorPageId, pages: outcomes, warnings };
   } catch (cause) {
     if (generationId) {
-      if (started) await completeTemplateCheckpoints(input.accountId, generationId);
+      if (started) {
+        try { await completeTemplateCheckpoints(input.accountId, generationId); }
+        catch (error) {
+          console.error("Template checkpoints need reconciliation", { generationId, type: error instanceof Error ? error.name : "Unknown" });
+          throw new AiUserError(`Your site was copied, but its build needs reconciliation. Contact your agency with reference ${generationId} before retrying.`, { cause: error });
+        }
+      }
       else if (!siteId && (selected || !input.generationId)) return releaseUnstarted(input.accountId, generationId, cause);
       else if (!siteId) throw cause;
       else {
         try { await cancelTemplateBuild(input.accountId, generationId); }
         catch (error) {
           console.error("Copied template reservation needs reconciliation", { generationId, type: error instanceof Error ? error.name : "Unknown" });
-          throw new Error(`Your site was copied, but its reservation needs reconciliation. Contact your agency with reference ${generationId}.`, { cause: error });
+          throw new AiUserError(`Your site was copied, but its reservation needs reconciliation. Contact your agency with reference ${generationId} before retrying.`, { cause: error });
         }
       }
     }
-    if (siteId) throw new Error("Your site was copied. Find it in your Sites dashboard and check its drafts before retrying.", { cause });
+    if (siteId) throw new AiUserError("Your site was copied. Find it in your Sites dashboard and contact your agency to check the build and usage before retrying.", { cause });
     throw cause;
   }
 }
