@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: { from: mocks.from } }) }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
 vi.mock("./photos", () => ({
-  createPhotoResolver: () => vi.fn(), fillSectionPhotos: async () => [],
+  prepareSectionPhotoSuggestions: vi.fn(),
 }));
 
 import { generateEmptyPage, saveEmptyPage } from "./empty-page";

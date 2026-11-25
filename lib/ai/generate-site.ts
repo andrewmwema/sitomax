@@ -16,7 +16,7 @@ import { fillPage, type SiteToolCall } from "./site-tool";
 import { CuratedPlanError, planCuratedSite } from "./curated-plan";
 import { finalizeCuratedLinks } from "./curated-links";
 import { SITE_SYSTEM_PROMPT } from "./site-prompt";
-import { createPhotoResolver, fillSectionPhotos } from "./photos";
+import { prepareSectionPhotoSuggestions } from "./photos";
 import { CUSTOM_LAYOUT_CONTRACT, customSystemPrompt } from "./custom-layout";
 import { CustomSiteError, customSiteMaxTokens, planCustomSite, writeCustomPage } from "./custom-site";
 import { brand } from "@/lib/brand";
@@ -93,7 +93,7 @@ function providerCall(input: GenerationInput, generationId: string, requestId: s
 }
 
 async function buildSelectedPage(spec: RetrySpec, call: SiteToolCall, trace: { generationId: string; requestId: string; contract: string },
-  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], assetSiteId: string, emit: (event: GenerationProgress) => void, repair = "") {
+  emit: (event: GenerationProgress) => void, repair = "") {
   const { input, build, theme, menu } = spec;
   const { page } = build;
   const brief = selectedPageBriefs(input).find(({ slug }) => slug === page.slug);
@@ -136,8 +136,7 @@ async function buildSelectedPage(spec: RetrySpec, call: SiteToolCall, trace: { g
   if (issues.length || !draft.root.props.seoTitle || !draft.root.props.description) {
     throw new SiteGenerationError(`${label} did not pass the final page checks. ${issues.join(" ")}`);
   }
-  const resolve = createPhotoResolver(warnings, { supabase, accountId: input.accountId, siteId: assetSiteId });
-  for (const section of review.content) section.props.photoCredits = await fillSectionPhotos(section.type, section.props, resolve);
+  for (const section of review.content) prepareSectionPhotoSuggestions(section.type, section.props, warnings);
   return { ...draft, content: review.content, root: { props: { ...draft.root.props, generationWarnings: [...review.notes, ...warnings] } } };
 }
 
@@ -233,7 +232,7 @@ export async function buildGeneratedSite(
       for (let attempt = 0; attempt < 2; attempt++) {
         emit({ message: `${attempt ? "Retrying" : "Writing"} ${label}…` });
         try {
-          data = await buildSelectedPage(spec, bodyCall, trace, supabase, assetSiteId, emit, repair);
+          data = await buildSelectedPage(spec, bodyCall, trace, emit, repair);
           data.root.props.generationWarnings.forEach((note) => warnings.add(note));
           break;
         } catch (error) {
@@ -282,7 +281,6 @@ export async function buildGeneratedSite(
 
     export async function retryGeneratedPage(rawId: unknown, emit: (event: GenerationProgress) => void, requestId: string): Promise<GenerationOutcome> {
       const retryId = z.uuid().parse(rawId);
-      const { supabase } = await requireUser();
       const job = await claimPageRetry(retryId).catch((cause) => {
         throw new SiteGenerationError(cause instanceof Error ? cause.message : "This retry is not available.");
       });
@@ -295,7 +293,7 @@ export async function buildGeneratedSite(
       try {
         if (build.page.slug !== job.slug) throw new Error("Page address changed.");
         emit({ message: `Writing ${label}…` });
-        data = await buildSelectedPage({ ...spec, input, build, theme, menu }, providerCall(input, job.leaseId, requestId), trace, supabase, job.siteId, emit);
+        data = await buildSelectedPage({ ...spec, input, build, theme, menu }, providerCall(input, job.leaseId, requestId), trace, emit);
       } catch (error) {
         console.warn("AI page retry failed", { requestId, pageId: job.pageId, type: error instanceof Error ? error.name : "Unknown" });
       }

@@ -139,9 +139,9 @@ image requires manual review rather than automatic deletion. Stop other test
 activity before cleanup.
 For a selected stock photo, enter `TEST` in the media picker's optional
 filename-prefix field before choosing **Use image**. For uploaded files, use a
-filename beginning `TEST-`. Automatic stock imports in other AI flows do not
-offer a prefix; do not use them in these fixtures until a safe cleanup approach
-has been reviewed.
+filename beginning `TEST-`. Agent-initiated automatic stock imports do not offer
+a prefix; do not use them in these fixtures until a safe cleanup approach has
+been reviewed.
 
 Cleanup needs separate approval. Set `PHASE2_TEST_EXPECTED_PROJECT_URL` to the
 intended project URL and configure `NEXT_PUBLIC_SUPABASE_URL` and the

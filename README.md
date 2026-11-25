@@ -319,6 +319,8 @@ For supported template image fields, the editor offers AI search suggestions
 in groups of up to five. The existing image stays in place until the user
 chooses a stock photo or uploads one; review the suggested alt text against
 the selected image.
+New AI-generated pages use image placeholders and offer the same editor
+selection rather than automatically importing a stock photo.
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
 through `0018`. Opening **New site** or **Build with AI** as a super admin

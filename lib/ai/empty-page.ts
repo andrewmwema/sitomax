@@ -13,7 +13,7 @@ import type { LayoutItem } from "@/lib/layout/structure";
 import { pageMenuLinks } from "@/lib/page-navigation";
 import { buildCustomSections, customSectionSchema, customSystemPrompt } from "./custom-layout";
 import { requestAi } from "./client";
-import { createPhotoResolver, fillSectionPhotos } from "./photos";
+import { prepareSectionPhotoSuggestions } from "./photos";
 import { fillSiteTool } from "./site-tool";
 import { generatedPageIssues, reviewGeneratedPage } from "./site-quality";
 import { headerMigrationMissing } from "@/lib/header";
@@ -88,10 +88,7 @@ ${JSON.stringify({ page: { title: page.title, slug: page.slug }, business, theme
   if (!result.result.success) throw new Error("The generated page failed validation. No drafts were changed.");
   const sections = buildCustomSections(result.result.data.sections, { ...DEFAULT_COLORS, ...theme.colors });
   const warnings = new Set<string>();
-  const resolvePhoto = createPhotoResolver(warnings, { supabase, accountId: site.account_id, siteId: site.id });
-  await Promise.all(sections.map(async (section) => {
-    section.props.photoCredits = await fillSectionPhotos(section.type, section.props, resolvePhoto);
-  }));
+  for (const section of sections) prepareSectionPhotoSuggestions(section.type, section.props, warnings);
   const chrome = (type: "Navigation"): LayoutItem => {
     for (const peer of pages.filter((entry) => entry.id !== id)) {
       for (const draft of [peer.draft_data, peer.published_data]) {

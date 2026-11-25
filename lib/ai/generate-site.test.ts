@@ -376,10 +376,6 @@ describe("catalog site generation", () => {
       }
       return response;
     });
-    const selectPhoto = vi.fn().mockImplementation(async ({ siteId: id }) => ({
-      url: `https://storage.example/site-assets/${id}/pixabay-42.jpg`, alt: "Stock photograph: tools",
-    }));
-    mocks.photoLibrary.mockReturnValue({ search: vi.fn().mockResolvedValue([{ id: 42 }]), select: selectPhoto });
     mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_super_admin", error: null }));
     mocks.lookup.mockResolvedValueOnce({ data: { id: accountId, is_internal: false }, error: null })
       .mockResolvedValue({ data: null, error: null });
@@ -387,12 +383,9 @@ describe("catalog site generation", () => {
     expect(mocks.start).toHaveBeenCalledWith(accountId, futureSiteId, generationId, expect.objectContaining({
       subdomain: "local-plumbing", business: expect.objectContaining({ businessName: input.businessName }),
     }));
-    expect(mocks.photoLibrary).toHaveBeenCalledWith(expect.anything(), accountId);
-    expect(selectPhoto).toHaveBeenCalledExactlyOnceWith({
-      siteId: futureSiteId, query: "plumbing tools", orientation: "horizontal", photoId: 42,
-    });
+    expect(mocks.photoLibrary).not.toHaveBeenCalled();
     expect(savedPayload().p_pages[0].data).toMatchObject({ content: expect.arrayContaining([expect.objectContaining({ props: expect.objectContaining({
-      backgroundImage: `https://storage.example/site-assets/${futureSiteId}/pixabay-42.jpg`, photoCredits: [],
+      backgroundImage: "", __aiImageSuggestions: { backgroundImage: { query: "plumbing tools", alt: expect.any(String) } },
     }) })]) });
     expect(mocks.finish).not.toHaveBeenCalled();
     for (const [request] of mocks.request.mock.calls) expect(request.messages[0].content).not.toContain(accountId);
