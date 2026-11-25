@@ -12,11 +12,11 @@ export function AiDraftHistory({ siteId, versions }: {
   const router = useRouter();
   return <section id="ai-history" className="platform-panel p-6">
     <h2 className="font-semibold">Version history: AI draft backups</h2>
-    <p className="mt-2 text-sm text-zinc-600">Site-wide drafts and theme saved before AI replacement or restore. Published pages are never changed. Page-level published versions remain available in the editor&apos;s History.</p>
+    <p className="mt-2 text-sm text-zinc-600">Site-wide drafts, theme and header saved before AI replacement or restore. Older backups may not include a header. Published pages are never changed. Page-level published versions remain available in the editor&apos;s History.</p>
     <ul className="mt-4 divide-y">{versions.map((version) => <li key={version.id} className="flex items-center justify-between gap-3 py-3 text-sm">
       <time dateTime={version.created_at}>{new Date(version.created_at).toLocaleString()}</time>
       <button disabled={pending} className="rounded-lg border px-3 py-2 text-xs disabled:opacity-40" onClick={() => {
-        if (!window.confirm("Restore all backed-up drafts and the draft theme? Your current drafts will also be backed up. Published pages will not change.")) return;
+        if (!window.confirm("Restore all backed-up drafts, the draft theme and any saved header? Your current drafts will also be backed up. Published pages will not change.")) return;
         startTransition(async () => {
           try {
             const result = await restoreAiDrafts({ siteId, versionId: version.id });

@@ -26,7 +26,10 @@ export async function restoreAiDrafts(raw: unknown) {
   const parsed = z.object({ siteId: z.uuid(), versionId: z.uuid() }).safeParse(raw);
   if (!parsed.success) return { status: "error" as const, message: "Invalid draft backup." };
   const { supabase } = await requireUser();
-  const { error } = await supabase.rpc("restore_site_draft_version", { p_version_id: parsed.data.versionId });
+  const { error } = await supabase.rpc("restore_ai_draft_version", {
+    p_site_id: parsed.data.siteId,
+    p_version_id: parsed.data.versionId,
+  });
   if (error) {
     console.error("Could not restore AI draft backup", { code: error.code });
     return { status: "error" as const, message: "Could not restore this backup. Account-owner access is required; deleted pages must be recovered by your agency." };

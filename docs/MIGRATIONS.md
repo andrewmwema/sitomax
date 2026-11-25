@@ -40,6 +40,7 @@ The committed, unapplied SQL is
 followed by
 [`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql),
 then [`0056_ai_allowance_template_corrections.sql`](../supabase/migrations/0056_ai_allowance_template_corrections.sql).
+Then apply [`0057_ai_draft_history_header.sql`](../supabase/migrations/0057_ai_draft_history_header.sql).
 Do not reapply either 0052 file. None of these Phase 2 migrations has been executed or
 database-validated; verify the deployed schema and review each transaction
 before approving any application. Record a migration above only after its
@@ -77,7 +78,14 @@ order by p.plan_key;
 
 0055 depends on 0054. It adds template-build reservations, page surcharges,
 checkpoint/retry functions and storage for a draft-header snapshot. The
-existing site-draft restore function does not restore that header. The
+existing site-draft restore function does not restore that header. 0057 adds a
+separate restore function for the feature and a backup-insert trigger that
+captures the draft header and page pending flags. The old restore function
+remains unchanged for main. Historical backups without a captured header
+leave the current draft header unchanged; a pre-0057 null header cannot be
+distinguished from an uncaptured header. These changes do not publish drafts.
+The new trigger affects backup inserts made by deployed main and requires
+database compatibility testing before application. The
 `ai_pending_build` marker is not a database publishing guard. The template
 build, its history and its recovery paths remain incomplete and have not been
 database-tested; do not treat 0055 or the feature branch as production-ready.
@@ -107,6 +115,9 @@ Phase 2 fixtures, unused named TEST accounts and separate approval; it does not
 test migration backfill, row-level security or concurrent reservations. The
 unexecuted [`phase2_template_cta_review.sql`](../supabase/tests/phase2_template_cta_review.sql)
 tests header action labels and the absent-action fallback under the same rules.
+The unexecuted [`phase2_ai_draft_history_review.sql`](../supabase/tests/phase2_ai_draft_history_review.sql)
+checks restoring a header (including null), pending flag and drafts, and undoing
+that restore without changing published page data. It requires 0054-0057.
 
 ## Phase 2 test fixtures (review only)
 
