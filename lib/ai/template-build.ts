@@ -110,7 +110,7 @@ export async function buildTemplateSite(raw: unknown, emit: (event: GenerationPr
     siteId = copied.siteId;
     started = true;
     const rows = checkpointsSchema.parse(copied.checkpoints);
-    emit({ message: "Your copied site and page checkpoints are ready.", siteId });
+    emit({ message: "Your copied site and page checkpoints are ready.", siteId, generationId });
     const outcomes: GenerationOutcome[] = [];
     const warnings: string[] = [];
     const call = providerCall(input.accountId, generationId, requestId, siteId);

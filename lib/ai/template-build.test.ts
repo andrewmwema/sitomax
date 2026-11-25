@@ -55,7 +55,7 @@ describe("template AI build orchestration", () => {
     expect(mocks.copy).toHaveBeenCalledWith(expect.objectContaining({ templateId: "showcase" }), {
       generationId, business: { ...business, audiences: [], description: "", socialLinks: [] },
     });
-    expect(progress).toHaveBeenCalledWith({ message: "Your copied site and page checkpoints are ready.", siteId });
+    expect(progress).toHaveBeenCalledWith({ message: "Your copied site and page checkpoints are ready.", siteId, generationId });
     const filledDraft = mocks.fill.mock.calls[0][1] as typeof page.data;
     expect(filledDraft.content.every(({ props }) => !("__aiPending" in props))).toBe(true);
     expect(mocks.checkpoint).toHaveBeenCalledWith(accountId, generationId, retryId, page.data);

@@ -5,6 +5,10 @@ import Link from "next/link";
 import { z } from "zod";
 import { businessIntakeSchema } from "@/lib/business";
 import { extraPageCredits, generationOutcomeSchema } from "@/lib/ai/site-input";
+import { IMAGE_TYPES } from "@/lib/media";
+import { createClient } from "@/lib/supabase/client";
+import { prepareMediaUpload } from "@/app/editor/[pageId]/media-actions";
+import { applyTemplateLogo } from "@/app/(dashboard)/dashboard/sites/new/template-logo-actions";
 import type { PremiumTemplate, TemplateAccount } from "@/lib/templates/catalog";
 
 const choiceSchema = z.object({
@@ -13,7 +17,7 @@ const choiceSchema = z.object({
   runnerUp: z.object({ templateId: z.string(), reason: z.string() }),
 });
 const eventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("progress"), message: z.string(), siteId: z.uuid().optional() }),
+  z.object({ type: z.literal("progress"), message: z.string(), siteId: z.uuid().optional(), generationId: z.uuid().optional() }),
   z.object({ type: z.literal("error"), message: z.string() }),
   z.object({ type: z.literal("result"), siteId: z.uuid(), pageId: z.uuid(), warnings: z.array(z.string()), pages: z.array(generationOutcomeSchema) }),
   z.object({ type: z.literal("retry"), page: generationOutcomeSchema }),
@@ -36,6 +40,9 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
   const [subdomain, setSubdomain] = useState("");
   const [primaryColor, setPrimaryColor] = useState("");
   const [secondaryColor, setSecondaryColor] = useState("");
+  const [logo, setLogo] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState("");
+  const [logoStatus, setLogoStatus] = useState("");
   const [templateId, setTemplateId] = useState(initialTemplateId ?? "");
   const [choices, setChoices] = useState<z.infer<typeof choiceSchema> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,8 +115,11 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
   };
   const stream = async (retryId?: string) => {
     setBusy(true); setError(""); setMessage(retryId ? "Retrying page…" : "Preparing your draft…");
+    if (!retryId) setLogoStatus("");
     if (!retryId) setAttempted(true);
     let requestId: string | null = null;
+    let checkpoint: { siteId: string; generationId: string } | undefined;
+    let completedResult: Result | undefined;
     try {
       const response = await fetch(retryId ? "/api/ai/generate-site" : "/api/ai/template-build", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -130,8 +140,9 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
         if (event.type === "progress") {
           setMessage(event.message);
           if (event.siteId) setCheckpointSiteId(event.siteId);
+          if (event.siteId && event.generationId) checkpoint = { siteId: event.siteId, generationId: event.generationId };
         }
-        if (event.type === "result") { complete = true; setResult(event); }
+        if (event.type === "result") { complete = true; completedResult = event; }
         if (event.type === "retry") {
           complete = true;
           setResult((current) => current && ({ ...current, pages: current.pages.map((page) => page.retryId === retryId ? event.page : page) }));
@@ -154,10 +165,37 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
     } catch (cause) {
       const text = cause instanceof Error && !(cause instanceof z.ZodError) ? cause.message : "Invalid progress response. Check your drafts before retrying.";
       setError(requestId ? `${text} Reference: ${requestId}` : text);
-    } finally { setBusy(false); setMessage(""); }
+    } finally {
+      if (!retryId && logo) {
+        if (!checkpoint) setLogoStatus("The logo was not uploaded. Add it in the editor once your site is ready.");
+        else {
+          setMessage("Uploading your logo…");
+          try {
+            const alt = `${business.businessName.trim()} logo`.trim().slice(0, 500);
+            const prepared = await prepareMediaUpload({ siteId: checkpoint.siteId }, {
+              name: logo.name, type: logo.type, size: logo.size, alt,
+            });
+            if (prepared.status === "error") throw new Error(prepared.message);
+            const { error: uploadError } = await createClient().storage.from(prepared.bucket)
+              .upload(prepared.path, logo, { contentType: logo.type, metadata: { alt } });
+            if (uploadError) throw new Error("Logo upload was not confirmed. Check the media library before retrying.");
+            const applied = await applyTemplateLogo({
+              siteId: checkpoint.siteId, generationId: checkpoint.generationId, path: prepared.path, alt,
+            });
+            if (applied.status === "error") throw new Error(applied.message);
+            setLogoStatus("Your logo was added to the draft header and theme.");
+          } catch (cause) {
+            setLogoStatus(cause instanceof Error ? cause.message : "The logo could not be applied. Check the media library.");
+          }
+        }
+      }
+      if (completedResult) setResult(completedResult);
+      setBusy(false); setMessage("");
+    }
   };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (logoError) { setError(logoError); return; }
     if (extracted && !confirmed) { setError("Review and confirm the extracted business details before continuing."); return; }
     if (!initialTemplateId && !choices) void recommend(); else void stream();
   };
@@ -219,6 +257,16 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
             <input className="creation-input" value={color} onChange={(event) => setColor(event.target.value)}
               placeholder="#1e3a5f" pattern="#[0-9a-fA-F]{6}" maxLength={7} />
           </label>)}
+        <label className="flex flex-col gap-1 text-sm font-medium sm:col-span-2">Logo (optional)
+          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" className="creation-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              const issue = file && (!IMAGE_TYPES[file.type] || !file.size || file.size > 50 * 1024 * 1024)
+                ? "Choose a JPEG, PNG, GIF, WebP or AVIF logo up to 50 MB." : "";
+              setLogoError(issue); setLogo(issue ? null : file); setError("");
+            }} />
+          <span className="text-xs font-normal">The logo uploads to the new site&apos;s media library after the build stops. Keep this window open.</span>
+        </label>
         <label className="flex flex-col gap-1 text-sm font-medium">Primary action
           <select className="creation-input" disabled={Boolean(choices)} value={business.primaryAction}
             onChange={(event) => { setBusiness((previous) => ({ ...previous, primaryAction: z.enum(["call", "book", "buy", "inquire"]).parse(event.target.value) })); setConfirmed(false); }}>
@@ -261,6 +309,7 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
       </button> : <Link className="platform-button" href="/dashboard/sites">Check your sites</Link>}
     </form>}
     {message ? <p className="mt-4 text-sm" role="status">{message}</p> : null}
+    {logoStatus ? <p className="mt-4 text-sm" role="status">{logoStatus}</p> : null}
     {checkpointSiteId && !result ? <p className="mt-3 text-sm">
       If this build is interrupted, open <Link className="underline" href={`/dashboard/sites/${checkpointSiteId}/generate`}>unfinished page builds</Link> to review and retry.
       An active build may take up to 15 minutes before retries are available.

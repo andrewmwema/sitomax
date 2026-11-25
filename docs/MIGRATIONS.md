@@ -90,6 +90,21 @@ dependencies are confirmed. It has not been database-tested or applied.
 [`phase2_template_brand_colors_review.sql`](../supabase/tests/phase2_template_brand_colors_review.sql)
 is a review-only rollback test requiring the TEST fixtures and separate approval.
 
+[`0061_ai_template_logo.sql`](../supabase/migrations/0061_ai_template_logo.sql)
+adds a service-role-only checkpoint for a template build's uploaded site asset.
+After authenticated account access is checked in server code, it rechecks the
+original user, owner or agency permission, build, site, asset, original logo,
+and current theme/header baselines before updating only the draft theme and
+header. It records a pre-change draft snapshot. Existing functions, triggers,
+policies and published content are unchanged; deployed main does not call it.
+It requires 0054-0057 and 0059 and has not been database-tested or applied.
+[`phase2_template_logo_review.sql`](../supabase/tests/phase2_template_logo_review.sql)
+is a review-only rollback test; it inserts TEST storage metadata but uploads no
+file. It requires the TEST fixtures and separate approval before execution.
+Selected logos are not uploaded until the wizard receives a checkpointed site
+and generation stops. If the browser closes early, the user must select the logo
+again in the editor; failed or uncertain uploads may require media-library review.
+
 0054 adds plan allowances and per-account overrides. Its backfill copies
 non-default legacy values and does not change existing credit balances. Main
 continues calling its legacy reservation and summary functions and showing

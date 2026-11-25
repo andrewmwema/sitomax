@@ -78,7 +78,7 @@ export function createGenerationInputSchema(marketingSubdomain?: string, isInter
 
 export const generationInputSchema = createGenerationInputSchema();
 export type GenerationInput = z.infer<typeof generationInputSchema>;
-export type GenerationProgress = { message: string; warnings?: string[]; siteId?: string };
+export type GenerationProgress = { message: string; warnings?: string[]; siteId?: string; generationId?: string };
 export const generationOutcomeSchema = z.object({
   slug: z.union([z.literal(""), z.string().max(200).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/)]),
   label: z.string(), pageId: z.uuid().optional(), built: z.boolean(), retryId: z.uuid().optional(),

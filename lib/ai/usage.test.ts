@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({ authorize: vi.fn(), account: vi.fn(), rpc: vi.
 vi.mock("@/lib/auth", () => ({ requireUser: mocks.authorize }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 import {
-  beginSiteGeneration, checkpointDraft, checkLimit, completeDraftCheckpoints, finishSiteGeneration, getAiAgentRunUsage,
+  beginSiteGeneration, checkpointDraft, checkpointTemplateLogo, checkLimit, completeDraftCheckpoints, finishSiteGeneration, getAiAgentRunUsage,
   recordUsage, reserveAiAgentSlot, startDraftCheckpoints,
 } from "./usage";
 import { describeAgentUsage } from "./agent-usage";
@@ -86,6 +86,21 @@ describe("AI server-side accounting", () => {
     await expect(startDraftCheckpoints(id, id, id, { name: "", theme: {}, pages: [], business: {}, expectedBusiness: {} })).rejects.toThrow("Business information changed");
     await expect(checkpointDraft(id, id, id, {})).rejects.toThrow("Could not save");
     await expect(completeDraftCheckpoints(id, id)).rejects.toThrow("Could not finalize");
+  });
+  it("checks account access before using the scoped template-logo checkpoint", async () => {
+    const logo = { path: `${id}/TEST-logo.png`, url: `https://example.test/${id}/TEST-logo.png`,
+      alt: "TEST logo", expectedTheme: {}, expectedHeader: null, header: {} };
+    mocks.rpc.mockResolvedValueOnce({ error: null });
+    await checkpointTemplateLogo(id, id, id, logo);
+    expect(mocks.rpc).toHaveBeenCalledWith("checkpoint_ai_template_logo", expect.objectContaining({
+      p_user_id: "authenticated-user", p_account_id: id, p_site_id: id, p_generation_id: id, p_path: logo.path,
+    }));
+    mocks.account.mockResolvedValueOnce({ data: null, error: null });
+    mocks.admin.mockClear();
+    await expect(checkpointTemplateLogo(id, id, id, logo)).rejects.toThrow("access");
+    expect(mocks.admin).not.toHaveBeenCalled();
+    mocks.rpc.mockResolvedValueOnce({ error: { code: "40001" } });
+    await expect(checkpointTemplateLogo(id, id, id, logo)).rejects.toThrow("changed");
   });
   it("counts agent requests against the account, showing the limit to the user and tolerating a missing migration", async () => {
     await reserveAiAgentSlot(id);

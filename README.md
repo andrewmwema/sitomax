@@ -314,6 +314,12 @@ the entered business fields, counts as an AI edit, and requires review and
 confirmation before choosing or building a design.
 Optional primary and secondary brand colors are saved to the copied site's
 draft theme (migration 0060 is required); review contrast before publishing.
+An optional logo selected during template intake uploads to the new site's
+media library after generation stops and is applied to the draft theme and
+header (migration 0061 is required). Keep the wizard open until it confirms
+the upload. If the build, upload or a concurrent logo edit prevents application,
+check the site's media library and choose the logo in the editor. For TEST runs,
+the selected filename must begin `TEST-`.
 Template personalization may hide unsuitable testimonial, team, partner-logo
 or pricing sections on all devices. Their content remains editable in the
 editor, where the section's visibility settings can restore it.

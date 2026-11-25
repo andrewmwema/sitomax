@@ -95,6 +95,25 @@ export async function completeTemplateCheckpoints(accountId: string, generationI
   if (error) throw new Error("Could not finalize the template build. Check your drafts before retrying.", { cause: error });
 }
 
+export async function checkpointTemplateLogo(accountId: string, siteId: string, generationId: string, logo: {
+  path: string; url: string; alt: string; expectedTheme: unknown; expectedHeader: unknown; header: unknown;
+}) {
+  const parsed = z.object({
+    accountId: z.uuid(), siteId: z.uuid(), generationId: z.uuid(),
+    path: z.string().max(255), url: z.url().max(2000), alt: z.string().max(500),
+  }).parse({ accountId, siteId, generationId, ...logo });
+  const user = await authorizeAccount(parsed.accountId);
+  const { error } = await createAdminClient().rpc("checkpoint_ai_template_logo", {
+    p_user_id: user.id, p_account_id: parsed.accountId, p_site_id: parsed.siteId,
+    p_generation_id: parsed.generationId, p_path: parsed.path, p_url: parsed.url, p_alt: parsed.alt,
+    p_expected_theme: logo.expectedTheme, p_expected_header: logo.expectedHeader, p_header: logo.header,
+  });
+  if (error) {
+    if (error.code === "40001") throw new AiUserError("The site theme or header changed. Choose your uploaded logo in the editor.");
+    throw new Error("The uploaded logo could not be applied. Choose it in the editor.", { cause: error });
+  }
+}
+
 export async function claimTemplateRetry(retryId: string) {
   const { supabase, user } = await requireUser();
   const { data: visible, error: accessError } = await supabase.rpc("can_retry_ai_page", { p_retry_id: z.uuid().parse(retryId) });
