@@ -68,6 +68,19 @@ database-tested.
 is a review-only rollback test for the new function. It requires the TEST
 fixtures and separate approval before execution.
 
+[`0059_atomic_ai_template_copy.sql`](../supabase/migrations/0059_atomic_ai_template_copy.sql)
+adds a separate authenticated function that calls the existing design-selection,
+template-copy and checkpoint functions in one transaction. It checks the
+signed-in user and reservation; failed preparation rolls back the selection,
+any page surcharge and the copy. Existing
+functions, triggers and policies are unchanged, and deployed main does not
+call it. It requires the existing 0053 copy function and the 0054-0056
+allowance and checkpoint objects; verify their actual production definitions
+and apply 0054-0056 in order if missing before considering 0059. It has not
+been database-tested or applied. The review-only
+[`phase2_atomic_template_copy_review.sql`](../supabase/tests/phase2_atomic_template_copy_review.sql)
+requires the TEST fixtures and separate approval before execution.
+
 0054 adds plan allowances and per-account overrides. Its backfill copies
 non-default legacy values and does not change existing credit balances. Main
 continues calling its legacy reservation and summary functions and showing

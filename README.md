@@ -317,8 +317,10 @@ or pricing sections on all devices. Their content remains editable in the
 editor, where the section's visibility settings can restore it.
 Interior-page copy and draft titles may be repurposed for the business.
 Addresses and menu labels remain as copied and can be changed separately.
-After page checkpoints are prepared, an interrupted build can be resumed from
-the site's **Build pages with AI** screen. Active or interrupted requests may
+Design selection, template copying and page-checkpoint preparation use one
+database transaction (reviewed migration 0059 is required). After checkpoints are prepared, an
+interrupted build can be resumed from the site's **Build pages with AI** screen.
+Active or interrupted requests may
 need time to expire or agency reconciliation before a retry is available.
 For supported template image fields, the editor offers AI search suggestions
 in groups of up to five. The existing image stays in place until the user

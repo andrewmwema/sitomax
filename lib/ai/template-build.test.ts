@@ -4,7 +4,7 @@ import { premiumTemplates } from "@/templates/premium";
 
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(), copy: vi.fn(), request: vi.fn(), fill: vi.fn(), recommend: vi.fn(),
-  begin: vi.fn(), cancel: vi.fn(), select: vi.fn(), start: vi.fn(), checkpoint: vi.fn(), complete: vi.fn(),
+  begin: vi.fn(), cancel: vi.fn(), checkpoint: vi.fn(), complete: vi.fn(),
   claim: vi.fn(), finish: vi.fn(), moderate: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ requireUser: mocks.requireUser }));
@@ -14,8 +14,8 @@ vi.mock("./template-fill", () => ({ fillTemplatePage: mocks.fill }));
 vi.mock("./template-recommendation", () => ({ recommendTemplate: mocks.recommend }));
 vi.mock("./template-moderation", () => ({ moderateTemplateBusiness: mocks.moderate }));
 vi.mock("./usage", () => ({
-  beginTemplateBuild: mocks.begin, cancelTemplateBuild: mocks.cancel, selectTemplateForBuild: mocks.select,
-  startTemplateCheckpoints: mocks.start, checkpointDraft: mocks.checkpoint, completeTemplateCheckpoints: mocks.complete,
+  beginTemplateBuild: mocks.begin, cancelTemplateBuild: mocks.cancel,
+  checkpointDraft: mocks.checkpoint, completeTemplateCheckpoints: mocks.complete,
   claimTemplateRetry: mocks.claim, finishPageRetry: mocks.finish,
 }));
 import { buildTemplateSite, recommendTemplateBuild } from "./template-build";
@@ -35,11 +35,10 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("ANTHROPIC_API_KEY", "local-test-key");
   mocks.begin.mockResolvedValue(generationId);
-  mocks.select.mockResolvedValue(1);
-  mocks.copy.mockResolvedValue({ status: "success", siteId, editorPageId: pageId });
   const pending = structuredClone(page.data);
   pending.content.forEach(({ props }) => { props.__aiPending = "[Finish the AI build]"; });
-  mocks.start.mockResolvedValue([{ retryId, pageId, slug: page.slug, label: page.title, draft: pending }]);
+  mocks.copy.mockResolvedValue({ status: "success", siteId, editorPageId: pageId,
+    checkpoints: [{ retryId, pageId, slug: page.slug, label: page.title, title: page.title, draft: pending }] });
   mocks.fill.mockResolvedValue(page.data);
   mocks.checkpoint.mockResolvedValue(true);
   mocks.requireUser.mockResolvedValue({ supabase: {
@@ -50,11 +49,12 @@ beforeEach(() => {
 });
 
 describe("template AI build orchestration", () => {
-  it("copies first, then checkpoints a filled draft without pending markers", async () => {
+  it("copies and prepares checkpoints together, then saves a filled draft without pending markers", async () => {
     const progress = vi.fn();
     const result = await buildTemplateSite(input, progress);
-    expect(mocks.copy).toHaveBeenCalledWith(expect.objectContaining({ templateId: "showcase" }));
-    expect(mocks.copy.mock.invocationCallOrder[0]).toBeLessThan(mocks.start.mock.invocationCallOrder[0]);
+    expect(mocks.copy).toHaveBeenCalledWith(expect.objectContaining({ templateId: "showcase" }), {
+      generationId, business: { ...business, audiences: [], description: "", socialLinks: [] },
+    });
     expect(progress).toHaveBeenCalledWith({ message: "Your copied site and page checkpoints are ready.", siteId });
     const filledDraft = mocks.fill.mock.calls[0][1] as typeof page.data;
     expect(filledDraft.content.every(({ props }) => !("__aiPending" in props))).toBe(true);
@@ -65,17 +65,24 @@ describe("template AI build orchestration", () => {
 
   it("preserves an omitted primary action for the template header fallback", async () => {
     await buildTemplateSite(input);
-    const options = mocks.start.mock.calls[0][3];
+    const options = mocks.copy.mock.calls[0][1];
     expect(options.business).not.toHaveProperty("primaryAction");
     await buildTemplateSite({ ...input, business: { ...business, primaryAction: "book" } });
-    expect(mocks.start.mock.calls[1][3].business.primaryAction).toBe("book");
+    expect(mocks.copy.mock.calls[1][1].business.primaryAction).toBe("book");
   });
 
-  it("does not cancel an existing reservation when a competing selection fails", async () => {
-    mocks.select.mockRejectedValue(new Error("Already being created"));
+  it("finalizes checkpoints rather than cancelling after a malformed committed response", async () => {
+    mocks.copy.mockResolvedValue({ status: "success", siteId, editorPageId: pageId, checkpoints: [] });
+    await expect(buildTemplateSite(input)).rejects.toThrow("Your site was copied.");
+    expect(mocks.complete).toHaveBeenCalledWith(accountId, generationId);
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.fill).not.toHaveBeenCalled();
+  });
+
+  it("does not cancel an existing reservation when a competing creation fails", async () => {
+    mocks.copy.mockResolvedValue({ status: "error", message: "Already being created" });
     await expect(buildTemplateSite({ ...input, generationId })).rejects.toThrow("Already being created");
     expect(mocks.cancel).not.toHaveBeenCalled();
-    expect(mocks.copy).not.toHaveBeenCalled();
   });
 
   it("releases a new reservation when copying fails", async () => {
@@ -87,7 +94,6 @@ describe("template AI build orchestration", () => {
   it("refuses a prohibited business before copying a template and releases the reservation", async () => {
     mocks.moderate.mockRejectedValue(new AiUserError("We can't build a site for this business."));
     await expect(buildTemplateSite(input)).rejects.toThrow("can't build");
-    expect(mocks.select).not.toHaveBeenCalled();
     expect(mocks.copy).not.toHaveBeenCalled();
     expect(mocks.cancel).toHaveBeenCalledWith(accountId, generationId);
   });
@@ -95,7 +101,6 @@ describe("template AI build orchestration", () => {
   it("does not cancel a shared recommendation when moderation refuses it", async () => {
     mocks.moderate.mockRejectedValue(new AiUserError("We can't build a site for this business."));
     await expect(buildTemplateSite({ ...input, generationId })).rejects.toThrow("eligible for release");
-    expect(mocks.select).not.toHaveBeenCalled();
     expect(mocks.cancel).not.toHaveBeenCalled();
     expect(mocks.copy).not.toHaveBeenCalled();
   });
@@ -122,7 +127,7 @@ describe("template AI build orchestration", () => {
   });
 
   it("reports a reconciliation reference if an unstarted reservation cannot be released", async () => {
-    mocks.select.mockRejectedValue(new Error("Selection failed"));
+    mocks.copy.mockRejectedValue(new Error("Creation failed"));
     mocks.cancel.mockRejectedValue(new Error("database details"));
     await expect(buildTemplateSite(input)).rejects.toThrow(`reference ${generationId} before retrying`);
   });

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { businessSchema } from "@/lib/business";
 import { isReservedForAccountSite } from "@/lib/reserved-subdomains";
 
 const createTemplateSiteInput = z.object({
@@ -14,8 +15,12 @@ const createTemplateSiteInput = z.object({
   timezone: z.string().trim().min(1).max(64),
 });
 
-export async function createSiteFromMasterTemplate(raw: unknown): Promise<
-  | { status: "success"; siteId: string; editorPageId: string }
+const aiBuildInput = z.strictObject({
+  generationId: z.uuid(), business: businessSchema,
+});
+
+export async function createSiteFromMasterTemplate(raw: unknown, aiBuild?: unknown): Promise<
+  | { status: "success"; siteId: string; editorPageId: string; checkpoints?: unknown }
   | { status: "error"; message: string }
 > {
   const parsed = createTemplateSiteInput.safeParse(raw);
@@ -23,6 +28,10 @@ export async function createSiteFromMasterTemplate(raw: unknown): Promise<
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Check the site details and try again." };
   }
   const input = parsed.data;
+  const parsedBuild = aiBuild === undefined ? undefined : aiBuildInput.safeParse(aiBuild);
+  if (parsedBuild && !parsedBuild.success) {
+    return { status: "error", message: "Check the AI build details and try again." };
+  }
   try {
     new Intl.DateTimeFormat("en", { timeZone: input.timezone });
   } catch {
@@ -68,19 +77,38 @@ export async function createSiteFromMasterTemplate(raw: unknown): Promise<
     return { status: "error", message: "That site address is reserved. Choose another subdomain." };
   }
 
-  const { data: siteId, error: createError } = await supabase.rpc("create_site_from_template", {
+  const copyParams = {
     p_account_id: input.accountId,
     p_template_id: input.templateId,
     p_site_name: input.siteName,
     p_subdomain: input.subdomain,
     p_timezone: input.timezone,
-  });
-  if (createError || typeof siteId !== "string") {
+  };
+  const { data, error: createError } = parsedBuild?.success
+    ? await supabase.rpc("create_ai_template_site", {
+      ...copyParams, p_generation_id: parsedBuild.data.generationId,
+      p_business: parsedBuild.data.business,
+    })
+    : await supabase.rpc("create_site_from_template", copyParams);
+  const aiResult = parsedBuild?.success
+    ? z.object({ siteId: z.uuid(), editorPageId: z.uuid(), pages: z.unknown() }).safeParse(data)
+    : undefined;
+  const siteId = aiResult?.success ? aiResult.data.siteId : typeof data === "string" && !parsedBuild ? data : undefined;
+  if (createError || !siteId) {
     if (createError?.code === "P0001" && createError.message.includes("SITE_LIMIT_REACHED")) {
       return {
         status: "error",
         message: "Your plan's site limit has been reached. Upgrade your plan or remove an existing site before creating another.",
       };
+    }
+    if (createError?.code === "P0001" && createError.message === "Not enough credits for the selected pages.") {
+      return { status: "error", message: createError.message };
+    }
+    if (createError?.code === "P0001" && createError.message === "This build is already being created.") {
+      return { status: "error", message: createError.message };
+    }
+    if (createError?.code === "40001") {
+      return { status: "error", message: "The selected design changed. Please select it again." };
     }
     if (createError?.code === "23505") {
       return { status: "error", message: "That site address is already in use. Choose another subdomain." };
@@ -90,6 +118,12 @@ export async function createSiteFromMasterTemplate(raw: unknown): Promise<
     }
     console.error("Could not create site from master template.", { code: createError?.code ?? "NoDatabaseCode" });
     return { status: "error", message: "Could not create the site. Please retry." };
+  }
+
+  if (aiResult?.success) {
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/sites");
+    return { status: "success", siteId, editorPageId: aiResult.data.editorPageId, checkpoints: aiResult.data.pages };
   }
 
   const { data: homePage, error: pageError } = await supabase.from("pages")

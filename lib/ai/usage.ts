@@ -79,38 +79,12 @@ export async function beginTemplateBuild(accountId: string): Promise<string> {
   return z.uuid().parse(data);
 }
 
-export async function selectTemplateForBuild(accountId: string, generationId: string, templateId: string) {
-  const user = await authorizeAccount(z.uuid().parse(accountId));
-  const { data, error } = await createAdminClient().rpc("select_ai_template", {
-    p_user_id: user.id, p_account_id: accountId, p_generation_id: z.uuid().parse(generationId),
-    p_template_id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,49}$/).parse(templateId),
-  });
-  if (error) {
-    if (error.code === "P0001" || error.code === "42501") throw new AiUserError(error.message);
-    throw new Error("Could not reserve the selected design.", { cause: error });
-  }
-  return z.number().int().min(1).max(12).parse(data);
-}
-
 export async function cancelTemplateBuild(accountId: string, generationId: string) {
   const user = await authorizeAccount(z.uuid().parse(accountId));
   const { error } = await createAdminClient().rpc("cancel_ai_template_build", {
     p_user_id: user.id, p_account_id: accountId, p_generation_id: z.uuid().parse(generationId),
   });
   if (error) throw new Error("The build reservation could not be released. Contact your agency before retrying.", { cause: error });
-}
-
-export async function startTemplateCheckpoints(accountId: string, generationId: string, siteId: string, options: {
-  business: unknown; expectedBusiness: unknown; expectedHeader: unknown; pages: unknown;
-}) {
-  const user = await authorizeAccount(z.uuid().parse(accountId));
-  const { data, error } = await createAdminClient().rpc("start_ai_template_checkpoints", {
-    p_user_id: user.id, p_generation_id: z.uuid().parse(generationId), p_site_id: z.uuid().parse(siteId),
-    p_business: options.business, p_expected_business: options.expectedBusiness,
-    p_expected_header: options.expectedHeader, p_pages: options.pages,
-  });
-  if (error) throw new Error("Could not prepare the copied site's AI drafts. Find the site in your dashboard.", { cause: error });
-  return data;
 }
 
 export async function completeTemplateCheckpoints(accountId: string, generationId: string) {
