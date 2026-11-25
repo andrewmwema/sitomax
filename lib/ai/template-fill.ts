@@ -55,9 +55,11 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
       const current = value[key];
       const nextPath = [...path, key];
       const propertyPath = `${metadataPath}${key}`;
-      if (isImageField(field) && typeof current === "string" && section !== "Logos") {
-        imageSlots.push({ key: `image_${imageSlots.length + 1}`, section, path: sectionPath,
-          name: imageFieldPath(nextPath.slice(sectionPath.length)), aspect: field.aiAspectRatio });
+      if (isImageField(field)) {
+        if ((typeof current === "string" || current == null) && section !== "Logos" && section !== "Team") {
+          imageSlots.push({ key: `image_${imageSlots.length + 1}`, section, path: sectionPath,
+            name: imageFieldPath(nextPath.slice(sectionPath.length)), aspect: field.aiAspectRatio });
+        }
       } else if ((field.type === "text" || field.type === "textarea" || field.type === "richtext")
         && !NON_COPY_FIELD.test(key) && typeof current === "string" && current.trim()) {
         add(section, nextPath, propertyPath, current, field.type === "richtext",

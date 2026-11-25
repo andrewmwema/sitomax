@@ -135,4 +135,21 @@ describe("template page fill contract", () => {
       .toBe((data.content.find(({ type }) => type === "Services")!.props.services as { image: string }[])[0].image);
     expect(() => contract.apply({ fields, hiddenSections: [], images: { ...images, [slot.key]: { query: "", alt: "Tools" } } })).toThrow();
   });
+
+  it("includes empty optional image fields without suggesting invented team portraits", () => {
+    const data = structuredClone(premiumTemplates.showcase.pages[0].data);
+    const services = data.content.find(({ type }) => type === "Services")!;
+    const item = (services.props.services as Record<string, unknown>[])[0];
+    delete item.image;
+    data.content.push(block("Team", "team", {}));
+    const contract = templateFillContract(data);
+    expect(contract.imageSlots.some(({ section, name }) => section === "Services" && name === "services[0].image")).toBe(true);
+    expect(contract.imageSlots.some(({ section }) => section === "Team")).toBe(false);
+    const fields = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
+      [key, sampleReview ? "[Add a real review]" : "Replacement"]));
+    const result = contract.apply({ fields, hiddenSections: [], images: imageSuggestions(contract) });
+    const filled = result.content.find(({ type }) => type === "Services")!;
+    expect(filled.props.__aiImageSuggestions).toMatchObject({ "services[0].image": { query: "plumber tools" } });
+    expect((filled.props.services as Record<string, unknown>[])[0].image).toBeUndefined();
+  });
 });
