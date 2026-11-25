@@ -321,6 +321,9 @@ chooses a stock photo or uploads one; review the suggested alt text against
 the selected image.
 New AI-generated pages use image placeholders and offer the same editor
 selection rather than automatically importing a stock photo.
+Template builds check the supplied business description for clearly harmful
+or illegal activity before copying a site. This model-based check can make
+mistakes; contact the agency if it incorrectly rejects a business.
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
 through `0018`. Opening **New site** or **Build with AI** as a super admin

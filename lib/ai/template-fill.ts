@@ -172,7 +172,7 @@ Do not include links, scripts, styling or HTML except simple paragraphs, emphasi
 When a field includes requiredText, return that exact text.
 You may hide optional sections that would otherwise imply unprovided staff, reviews, partnerships or prices.
 Return their keys in hiddenSections; return an empty array when none should be hidden. Never hide a section merely because details are missing if placeholders are appropriate.
-For each image slot, provide concise stock-photo search keywords and a short suggested alt description. Do not invent identifiable staff or endorsements.
+For each image slot, provide generic stock-photo search keywords and a short suggested alt description. Never include names, addresses or private business details in search keywords. Do not invent identifiable staff or endorsements.
 ${JSON.stringify({ business, page, fields: contract.fields, optionalSections: contract.optionalSections, imageSlots: contract.imageSlots })}`);
   if (!result.result.success) throw new Error("The template page failed validation. Its draft was not changed.");
   return contract.apply(result.result.data);

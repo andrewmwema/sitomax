@@ -71,14 +71,14 @@ export async function runSiteTool<T>(
         })) : [],
     });
   }
-  console.info("AI site tool call", { ...metadata, stop_reason: response.stop_reason, repairNeeded: !result.success && !repairAttempt && (!trace || outcome !== "refused") });
+  console.info("AI site tool call", { ...metadata, stop_reason: response.stop_reason, repairNeeded: !result.success && !repairAttempt && outcome !== "refused" });
   return { response, blocks, result, matchingCall, outcome };
 }
 
 export async function fillSiteTool<T>(call: SiteToolCall, tool: SiteTool, schema: z.ZodType<T>, prompt: string, trace?: SiteToolTrace) {
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
   const first = await runSiteTool(call, tool, schema, messages, false, trace);
-  if (first.result.success || (trace && first.outcome === "refused")) return first;
+  if (first.result.success || first.outcome === "refused") return first;
   const errors = first.matchingCall ? `Validation errors:\n${trace
     ? first.result.error.issues.map(({ path, code, message }) => `${path.join(".") || "(root)"} (${code}): ${message}`).join("\n").slice(0, 8000)
     : validationMessage(first.result.error)}`

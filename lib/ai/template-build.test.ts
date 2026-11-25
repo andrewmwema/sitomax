@@ -5,13 +5,14 @@ import { premiumTemplates } from "@/templates/premium";
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(), copy: vi.fn(), request: vi.fn(), fill: vi.fn(), recommend: vi.fn(),
   begin: vi.fn(), cancel: vi.fn(), select: vi.fn(), start: vi.fn(), checkpoint: vi.fn(), complete: vi.fn(),
-  claim: vi.fn(), finish: vi.fn(),
+  claim: vi.fn(), finish: vi.fn(), moderate: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ requireUser: mocks.requireUser }));
 vi.mock("@/app/(dashboard)/dashboard/sites/new/template-actions", () => ({ createSiteFromMasterTemplate: mocks.copy }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
 vi.mock("./template-fill", () => ({ fillTemplatePage: mocks.fill }));
 vi.mock("./template-recommendation", () => ({ recommendTemplate: mocks.recommend }));
+vi.mock("./template-moderation", () => ({ moderateTemplateBusiness: mocks.moderate }));
 vi.mock("./usage", () => ({
   beginTemplateBuild: mocks.begin, cancelTemplateBuild: mocks.cancel, selectTemplateForBuild: mocks.select,
   startTemplateCheckpoints: mocks.start, checkpointDraft: mocks.checkpoint, completeTemplateCheckpoints: mocks.complete,
@@ -79,6 +80,22 @@ describe("template AI build orchestration", () => {
     mocks.copy.mockResolvedValue({ status: "error", message: "Site limit reached" });
     await expect(buildTemplateSite(input)).rejects.toThrow("Site limit reached");
     expect(mocks.cancel).toHaveBeenCalledWith(accountId, generationId);
+  });
+
+  it("refuses a prohibited business before copying a template and releases the reservation", async () => {
+    mocks.moderate.mockRejectedValue(new AiUserError("We can't build a site for this business."));
+    await expect(buildTemplateSite(input)).rejects.toThrow("can't build");
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(mocks.copy).not.toHaveBeenCalled();
+    expect(mocks.cancel).toHaveBeenCalledWith(accountId, generationId);
+  });
+
+  it("does not cancel a shared recommendation when moderation refuses it", async () => {
+    mocks.moderate.mockRejectedValue(new AiUserError("We can't build a site for this business."));
+    await expect(buildTemplateSite({ ...input, generationId })).rejects.toThrow("eligible for release");
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.copy).not.toHaveBeenCalled();
   });
 
   it("keeps a failed page checkpoint available for retry", async () => {
