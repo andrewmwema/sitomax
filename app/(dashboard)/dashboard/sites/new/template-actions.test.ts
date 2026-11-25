@@ -49,6 +49,14 @@ describe("template copy action", () => {
     }));
   });
 
+  it("uses the branded atomic copy only when a color is supplied", async () => {
+    mocks.rpc.mockResolvedValue({ data: { siteId, editorPageId: pageId, pages: [] }, error: null });
+    await createSiteFromMasterTemplate(input, { ...ai, primaryColor: "#123456" });
+    expect(mocks.rpc).toHaveBeenCalledWith("create_ai_template_site_with_colors", expect.objectContaining({
+      p_primary: "#123456", p_secondary: null,
+    }));
+  });
+
   it("rejects invalid AI options before calling the database", async () => {
     await expect(createSiteFromMasterTemplate(input, { ...ai, generationId: "invalid" })).resolves.toMatchObject({ status: "error" });
     expect(mocks.requireUser).not.toHaveBeenCalled();

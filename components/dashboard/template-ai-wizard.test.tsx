@@ -88,7 +88,13 @@ describe("template AI intake", () => {
     ].join("\n")));
     await act(async () => root.render(<TemplateAiWizard templates={[]} accounts={[{ id: accountId, name: "Example" }]}
       rootDomain="localhost:3000" initialTemplateId="showcase" isSuperAdmin={false} onClose={() => {}} />));
+    const color = [...container.querySelectorAll("label")].find((label) => label.textContent?.includes("Primary brand color"))!.querySelector("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(color, "#123456");
+      color.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).input.primaryColor).toBe("#123456");
     expect(container.textContent).toContain("The build stopped.");
     expect(container.querySelector(`a[href="/dashboard/sites/${siteId}/generate"]`)?.textContent).toBe("unfinished page builds");
     expect(container.textContent).toContain("15 minutes");

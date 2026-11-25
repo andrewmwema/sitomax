@@ -23,6 +23,8 @@ const buildInput = recommendationInput.extend({
   siteName: z.string().trim().min(1).max(100),
   subdomain: z.string().trim().toLowerCase().max(63).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   timezone: z.string().trim().min(1).max(64),
+  primaryColor: z.union([z.literal(""), z.string().regex(/^#[0-9a-f]{6}$/i)]).default(""),
+  secondaryColor: z.union([z.literal(""), z.string().regex(/^#[0-9a-f]{6}$/i)]).default(""),
 });
 const retrySpec = z.strictObject({
   build: z.strictObject({ mode: z.literal("template"), page: z.strictObject({
@@ -101,6 +103,8 @@ export async function buildTemplateSite(raw: unknown, emit: (event: GenerationPr
     emit({ message: "Preparing your selected design…" });
     const copied = await createSiteFromMasterTemplate(input, {
       generationId, business: { ...input.business, socialLinks: [] },
+      ...(input.primaryColor ? { primaryColor: input.primaryColor } : {}),
+      ...(input.secondaryColor ? { secondaryColor: input.secondaryColor } : {}),
     });
     if (copied.status === "error") throw new AiUserError(copied.message);
     siteId = copied.siteId;

@@ -312,6 +312,8 @@ Business information.
 Template AI intake also supports this extraction for account owners. It replaces
 the entered business fields, counts as an AI edit, and requires review and
 confirmation before choosing or building a design.
+Optional primary and secondary brand colors are saved to the copied site's
+draft theme (migration 0060 is required); review contrast before publishing.
 Template personalization may hide unsuitable testimonial, team, partner-logo
 or pricing sections on all devices. Their content remains editable in the
 editor, where the section's visibility settings can restore it.

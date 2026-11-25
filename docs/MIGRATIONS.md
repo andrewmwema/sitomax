@@ -81,6 +81,15 @@ been database-tested or applied. The review-only
 [`phase2_atomic_template_copy_review.sql`](../supabase/tests/phase2_atomic_template_copy_review.sql)
 requires the TEST fixtures and separate approval before execution.
 
+[`0060_ai_template_brand_colors.sql`](../supabase/migrations/0060_ai_template_brand_colors.sql)
+adds a separate wrapper around 0059 to apply optional validated brand colors
+to the new site's draft theme within the same transaction. The original theme
+and master remain untouched. Existing functions, triggers and policies are
+unchanged; deployed main does not call it. Apply only after 0059 and its
+dependencies are confirmed. It has not been database-tested or applied.
+[`phase2_template_brand_colors_review.sql`](../supabase/tests/phase2_template_brand_colors_review.sql)
+is a review-only rollback test requiring the TEST fixtures and separate approval.
+
 0054 adds plan allowances and per-account overrides. Its backfill copies
 non-default legacy values and does not change existing credit balances. Main
 continues calling its legacy reservation and summary functions and showing

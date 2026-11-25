@@ -34,6 +34,8 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
   const [audiences, setAudiences] = useState("");
   const [siteName, setSiteName] = useState("");
   const [subdomain, setSubdomain] = useState("");
+  const [primaryColor, setPrimaryColor] = useState("");
+  const [secondaryColor, setSecondaryColor] = useState("");
   const [templateId, setTemplateId] = useState(initialTemplateId ?? "");
   const [choices, setChoices] = useState<z.infer<typeof choiceSchema> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -113,6 +115,7 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(retryId ? { retryId } : { mode: "build", input: {
           accountId, business: intake, templateId, siteName, subdomain,
+          primaryColor, secondaryColor,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           ...(choices ? { generationId: choices.generationId } : {}),
         } }),
@@ -211,6 +214,11 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
         {field("email", "Email", false, 254)}
         {field("address", "Address", false, 250)}
         {field("openingHours", "Opening hours", false, 1000)}
+        {([["Primary", primaryColor, setPrimaryColor], ["Secondary", secondaryColor, setSecondaryColor]] as const).map(([label, color, setColor]) =>
+          <label key={label} className="flex flex-col gap-1 text-sm font-medium">{label} brand color (optional)
+            <input className="creation-input" value={color} onChange={(event) => setColor(event.target.value)}
+              placeholder="#1e3a5f" pattern="#[0-9a-fA-F]{6}" maxLength={7} />
+          </label>)}
         <label className="flex flex-col gap-1 text-sm font-medium">Primary action
           <select className="creation-input" disabled={Boolean(choices)} value={business.primaryAction}
             onChange={(event) => { setBusiness((previous) => ({ ...previous, primaryAction: z.enum(["call", "book", "buy", "inquire"]).parse(event.target.value) })); setConfirmed(false); }}>

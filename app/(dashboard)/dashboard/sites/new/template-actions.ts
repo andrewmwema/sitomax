@@ -17,6 +17,8 @@ const createTemplateSiteInput = z.object({
 
 const aiBuildInput = z.strictObject({
   generationId: z.uuid(), business: businessSchema,
+  primaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+  secondaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
 });
 
 export async function createSiteFromMasterTemplate(raw: unknown, aiBuild?: unknown): Promise<
@@ -85,9 +87,13 @@ export async function createSiteFromMasterTemplate(raw: unknown, aiBuild?: unkno
     p_timezone: input.timezone,
   };
   const { data, error: createError } = parsedBuild?.success
-    ? await supabase.rpc("create_ai_template_site", {
+    ? await supabase.rpc(parsedBuild.data.primaryColor || parsedBuild.data.secondaryColor
+      ? "create_ai_template_site_with_colors" : "create_ai_template_site", {
       ...copyParams, p_generation_id: parsedBuild.data.generationId,
       p_business: parsedBuild.data.business,
+      ...(parsedBuild.data.primaryColor || parsedBuild.data.secondaryColor ? {
+        p_primary: parsedBuild.data.primaryColor ?? null, p_secondary: parsedBuild.data.secondaryColor ?? null,
+      } : {}),
     })
     : await supabase.rpc("create_site_from_template", copyParams);
   const aiResult = parsedBuild?.success

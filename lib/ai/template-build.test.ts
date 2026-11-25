@@ -71,6 +71,13 @@ describe("template AI build orchestration", () => {
     expect(mocks.copy.mock.calls[1][1].business.primaryAction).toBe("book");
   });
 
+  it("passes brand colors to the atomic copy without adding them to Business", async () => {
+    await buildTemplateSite({ ...input, primaryColor: "#123456", secondaryColor: "" });
+    expect(mocks.copy.mock.calls[0][1]).toMatchObject({ primaryColor: "#123456" });
+    expect(mocks.copy.mock.calls[0][1]).not.toHaveProperty("secondaryColor");
+    expect(mocks.copy.mock.calls[0][1].business).not.toHaveProperty("primaryColor");
+  });
+
   it("finalizes checkpoints rather than cancelling after a malformed committed response", async () => {
     mocks.copy.mockResolvedValue({ status: "success", siteId, editorPageId: pageId, checkpoints: [] });
     await expect(buildTemplateSite(input)).rejects.toThrow("Your site was copied.");
