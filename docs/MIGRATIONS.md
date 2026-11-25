@@ -33,6 +33,50 @@ would require database writes to create and populate its history table and
 cannot represent both different 0052 files as one unique version without a
 separately reviewed reconciliation. The manual log requires no database write.
 
+## Phase 2 migration review
+
+The committed, unapplied SQL is
+[`0054_ai_plan_allowances.sql`](../supabase/migrations/0054_ai_plan_allowances.sql),
+followed by
+[`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql).
+Do not reapply either 0052 file. Neither Phase 2 migration has been executed or
+database-validated; verify the deployed schema and review each transaction
+before approving any application. Record a migration above only after its
+application is confirmed.
+
+0054 adds plan allowances and per-account overrides. Its backfill copies
+non-default legacy values and does not change existing credit balances. Main
+continues calling its legacy reservation and summary functions and showing
+legacy limits: the new plan allowances take effect only after the feature code
+is deployed. Its legacy-update triggers capture quota updates as overrides.
+The backfill takes a table lock and can wait for active writes. These facts are
+based on source review, not a production compatibility or concurrency test.
+0054 seeds allowances for the three named plans only. Before deploying the
+feature code, verify whether any other plan keys exist or are assigned to
+accounts; those plans need explicitly configured allowances or the new
+reservation will fail and its usage summary will omit those accounts.
+
+```sql
+select p.plan_key, count(a.id) as accounts
+from public.site_plans p
+left join public.accounts a on a.site_plan_key = p.plan_key
+where p.plan_key not in ('starter', 'growth', 'premium')
+group by p.plan_key
+order by p.plan_key;
+```
+
+0055 depends on 0054. It adds template-build reservations, page surcharges,
+checkpoint/retry functions and storage for a draft-header snapshot. The
+existing site-draft restore function does not restore that header. The
+`ai_pending_build` marker is not a database publishing guard. The template
+build, its history and its recovery paths remain incomplete and have not been
+database-tested; do not treat 0055 or the feature branch as production-ready.
+
+[`phase2_plan_allowances_review.sql`](../supabase/tests/phase2_plan_allowances_review.sql)
+is an unexecuted, rollback-only review test for 0054. It requires the reviewed
+Phase 2 fixtures, unused named TEST accounts and separate approval; it does not
+test migration backfill, row-level security or concurrent reservations.
+
 ## Phase 2 test fixtures (review only)
 
 `supabase/seeds/phase2_test_fixtures.sql` creates six isolated TEST accounts,
