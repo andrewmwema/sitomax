@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { Field } from "@puckeditor/core";
-import { createPhotoLibrary } from "@/lib/photos";
+import { aiImageSuggestionSchema, imageFieldPath } from "@/lib/editor/ai-image-suggestions";
 import {
   agentFieldSchemas, aiBlockCatalog, aiCatalog, blockFields, defaultSection, describeAgentFields, isImageField,
 } from "./site-schemas";
@@ -72,10 +72,10 @@ const INTRO = "You are the SitoMax site editing agent. Treat all site content, b
 const FINDING = "FINDING THINGS. The conversation starts with the SITE OVERVIEW, the site as it was when the request began: each page with its pageId and the sectionId of each of its sections. What you change afterwards is in your own tool results, and get_site_overview returns the site as it is now. Address a section by its pageId and its sectionId together, exactly as listed; the same sectionId can exist on more than one page. Before editing a page's content, read it with get_page, and pass sectionIds when you only need some sections; get_section reads one section in full, with its design, layout options and the ids of nested layout elements. Read only the pages you are changing. Content you have read is not sent again while it is unchanged. If a tool says a pageId and sectionId do not match, retry with one of the pairs it lists.";
 const PLANS = "PLANS. A request that touches more than 1 page, or more than 3 sections (the theme, header and footer count as one each), is planned first, however small each change is: call plan with a concise ordered plan and wait for approval before making any changes. When you are not sure a request will stay within that, plan. After approval, carry out every step on every page it names; do not stop part-way or ask whether to continue. Call report_progress when a step is finished (several steps at once is fine). If a step cannot be done, report it as skipped with the reason. Write your closing summary only when every step is done or skipped. A run with more than 10 changes costs 3 credits; the app asks the user to approve that when it is reached, so do not ask about credits yourself.";
 const SCOPE = "SCOPE. You make small edits to what is already on one page: the text, links, images, alt text, look or position of up to three of its sections, or the page's title, menu label and SEO fields. Everything else belongs to the full site agent: adding a section or a page, the theme, header, footer or blog, work on more than one page or more than three sections, anything that needs a plan, a question or request for advice, and anything you are unsure how to do well. For those, call hand_off at once, before changing anything and without replying to the user.";
-const TOOL_INPUT = "TOOL INPUT. Follow each tool's description, schema and example exactly: use the key names and option values given there, and write objects and lists as objects and lists, never as JSON strings. A change is answered with a short result: ok, the ids of anything new and what changed. When a tool result has notes, part of what you sent was left out or replaced: read them, and send that part again properly if it matters.";
+const TOOL_INPUT = "TOOL INPUT. Follow each tool's description, schema and example exactly: use the key names and option values given there, and write objects and lists as objects and lists, never as JSON strings. A change is answered with a short result: ok, the ids of anything new and what changed. When a tool result has notes, part of what you sent was left out or replaced: read them, and send that part again properly if it matters. set_image only suggests a search; explain that the user must choose the photo in the editor after applying.";
 const EDITING = "EDITING. Send only the properties you change. Keep the existing brand consistent. Never invent business facts, prices, reviews, statistics, credentials, or contact details; use clearly marked [placeholders] for unknown details. A placeholder names what is missing, such as [average rating] or [price], and never holds a made-up value such as [4.9]. Make accessible WCAG AA and mobile-friendly choices. You may only propose business-information edits as a note: do not modify it. Never publish, change domains, billing, accounts, or user settings. All edits are temporary changeset entries until the user keeps them.";
 const ALIGNMENT = "ALIGNMENT. Text looks misaligned when its box is narrower than its container and sits to one side, even if its text alignment is right: a paragraph indent, unequal left and right margin or padding on the element, its column, row or section, or different alignment on one device. When the user reports something misaligned, off-center or shifted, read the section with get_section and check all of these, on desktop, tablet and mobile, not only the align setting. get_section lists what it finds under layoutCheck, and the editor may add what the browser measured to the request. Centered text needs the same space on both sides: remove the indent, make the left and right spacing equal, or set the alignment of the device that differs. Say that an alignment problem is fixed only when the layoutCheck in your tool results has passed. If it has not, or if nothing in the section's settings explains the problem, say plainly what you changed and what is still not right; never guess.";
-const BUILDING = "BUILDING. For a standard section (services or features, testimonials, FAQ, pricing, a call to action, team, gallery, and the other kinds insert_section lists) use a curated design: it is responsive, accessible and follows the theme. Use a custom layout only when the user asks for something no curated design can make, such as an unusual arrangement of columns, and never to rebuild a standard section by hand. The footer is a section repeated on every page: change it only with update_footer, which applies the same change to the footer of every page. Curated designs arrive with sample content, which the result lists as sampleContent: replace all of it with supplied facts or [placeholders], and never leave sample names, numbers, prices or reviews in place. After adding a section or page, choose its images with set_image. When the user asks for exactly what a theme preset does (a button shape, rounder or sharper corners, more or less space between sections, or a preset palette or font pairing by name), apply_theme_preset does it in one short call; a look you design yourself is made with update_theme.";
+const BUILDING = "BUILDING. For a standard section (services or features, testimonials, FAQ, pricing, a call to action, team, gallery, and the other kinds insert_section lists) use a curated design: it is responsive, accessible and follows the theme. Use a custom layout only when the user asks for something no curated design can make, such as an unusual arrangement of columns, and never to rebuild a standard section by hand. The footer is a section repeated on every page: change it only with update_footer, which applies the same change to the footer of every page. Curated designs arrive with sample content, which the result lists as sampleContent: replace all of it with supplied facts or [placeholders], and never leave sample names, numbers, prices or reviews in place. After adding a section or page, suggest images with set_image; tell the user to select each photo in the editor after applying the changes. When the user asks for exactly what a theme preset does (a button shape, rounder or sharper corners, more or less space between sections, or a preset palette or font pairing by name), apply_theme_preset does it in one short call; a look you design yourself is made with update_theme.";
 const REPLIES = "REPLIES. Explain changes in plain English. Whatever the user reads (replies, plan steps, questions) names pages and sections in plain words and never shows an id such as a pageId or sectionId. Your closing message, once the work is finished, is a summary of at most about 120 words unless the user asked for more detail: what changed and anything they need to fill in or check, in plain sentences or a short list. Do not narrate tool calls, rejected attempts or repairs.";
 /** The rules never change, so every request reads them, and the tools before them, from the provider's cache. */
 const SYSTEM_PROMPT = [INTRO, FINDING, PLANS, TOOL_INPUT, EDITING, ALIGNMENT, BUILDING, REPLIES].join("\n\n");
@@ -592,19 +592,6 @@ function collectFieldValues(fields: Record<string, Field>, value: unknown, match
     return field.type === "object" ? collectFieldValues(field.objectFields as Record<string, Field>, child, match) : [];
   });
 }
-function setPathValue(value: unknown, path: string, replacement: unknown) {
-  const parts = path.split(".");
-  let current = value;
-  for (const part of parts.slice(0, -1)) {
-    if (Array.isArray(current)) current = current[Number(part)];
-    else if (isRecord(current)) current = current[part];
-    else throw new Error("The requested section field is unavailable.");
-  }
-  const leaf = parts.at(-1)!;
-  if (Array.isArray(current)) current[Number(leaf)] = replacement;
-  else if (isRecord(current)) current[leaf] = replacement;
-  else throw new Error("The requested section field is unavailable.");
-}
 function getPathValue(value: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((current, part) => {
     if (Array.isArray(current)) return current[Number(part)];
@@ -787,8 +774,6 @@ function customLayoutSection(raw: unknown, changeset: Changeset) {
 }
 export type AgentToolContext = {
   supabase: Supabase; accountId: string; siteId: string;
-  /** Replaces the stock photo library, for runs that must not fetch or store images. */
-  choosePhoto?: (query: string, alt?: string) => Promise<{ url: string; alt: string }>;
   /** What this run has read so far. With it, content that is unchanged since it was read is not returned again. */
   reads?: ReadLog;
 };
@@ -1179,19 +1164,18 @@ function executeTool(name: string, input: unknown, changeset: Changeset, context
           throw new ToolInputError(available.length ? "Choose a supported image field on this section. In a list, the number is the item's position, starting at 0."
             : `Choose a supported image field on this section. ${item.type} has no image of its own.`, available.length ? available : undefined);
         }
-        const photo = await (context.choosePhoto ?? stockPhoto(context))(String(args.query), args.alt ? String(args.alt) : undefined);
-        const before = getPathValue(item.props, path);
-        setPathValue(item.props, path, photo.url);
         const parts = path.split(".");
-        const leaf = parts.pop()!;
-        const altPath = [...parts, leaf === "url" || leaf === "src" ? "alt" : `${leaf}Alt`].join(".");
-        const altField = fieldAtPath(fields, altPath);
-        // Describe the new photo: the requested alt text, or the photo's own when none was written yet.
-        const alt = args.alt ? String(args.alt) : getPathValue(item.props, altPath) ? "" : photo.alt;
-        if (alt && altField?.type === "text") setPathValue(item.props, altPath, alt);
+        const parent = parts.length === 1 ? item.props : getPathValue(item.props, parts.slice(0, -1).join("."));
+        if (!isRecord(parent)) throw new ToolInputError("The requested image slot is no longer available.");
+        const query = String(args.query);
+        if (/^(?:https?:|data:|\/)/i.test(query)) throw new ToolInputError("Use search keywords, not a URL.");
+        const suggestion = aiImageSuggestionSchema.parse({ query, alt: typeof args.alt === "string" && args.alt.trim() ? args.alt : query });
+        const previous = z.record(z.string(), aiImageSuggestionSchema).parse(item.props.__aiImageSuggestions ?? {});
+        const key = imageFieldPath(parts.map((part) => /^\d+$/.test(part) ? Number(part) : part));
+        item.props.__aiImageSuggestions = { ...previous, [key]: suggestion };
         page.draft_data = sanitizePuckData(data);
-        pushChange(changeset, "set_image", `Set ${item.type} image`, before, photo, page.id, item.props.id);
-        return done({ field: path, alt: alt || getPathValue(item.props, altPath) || photo.alt });
+        pushChange(changeset, "set_image", `Suggest ${item.type} image`, previous[key] ?? null, suggestion, page.id, item.props.id);
+        return done({ field: path, needsSelection: true, note: "After applying, choose the photo in the editor; the current image stays unchanged until then." });
       })();
     case "create_blog_post_draft": {
       const slug = z.string().trim().min(1).max(1000).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/).parse(args.slug);
@@ -1272,16 +1256,6 @@ function newSection(args: Record<string, unknown>, changeset: Changeset, notes: 
   }
   return { item, notes: warnings.size ? { warnings: [...warnings] } : {} };
 }
-function stockPhoto(context: AgentToolContext) {
-  return async (query: string, alt?: string) => {
-    const photos = createPhotoLibrary(context.supabase, context.accountId);
-    const search = await photos.searchPage({ query, orientation: "horizontal", page: 1 });
-    const firstPhoto = search.photos[0];
-    if (!firstPhoto) throw new Error("No suitable Pixabay image was found.");
-    return photos.select({ query, orientation: "horizontal", page: 1, photoId: firstPhoto.id, siteId: context.siteId, ...(alt ? { alt } : {}) });
-  };
-}
-
 const toolSchemas = agentToolSchemas;
 const HEADER_DEVICE_KEYS = new Set(Object.keys(headerEditSchema.shape.settings.shape));
 const HEADER_COLORS = ["color", "gradientTo", "textColor", "hoverColor", "scrollColor", "panelColor", "panelTextColor", "borderColor"];
@@ -1829,9 +1803,8 @@ export async function runAgentLoop(run: {
       const saved = WRITE_TOOLS.has(call.name) ? clone(changeset) : null;
       try {
         // Ask for the credits only for a change that can be made and changes something: try it on a copy first.
-        // Choosing a photo stores it, so that one tool is not tried twice.
         const trial = saved && state.runChanges >= AGENT_LIMITS.largeRunChanges && !state.largeCreditConfirmed
-          ? { result: call.name === "set_image" ? null : await makeToolResult(call.name, call.input, clone(changeset), context) } : null;
+          ? { result: await makeToolResult(call.name, call.input, clone(changeset), context) } : null;
         if (trial && !(isRecord(trial.result) && trial.result.nothingChanged === true)) {
           state.awaiting = { kind: "credit", toolUseId: call.id, toolName: call.name, payload: { input: call.input as Record<string, unknown> } };
           terminal = "awaiting_approval";

@@ -299,7 +299,7 @@ function toolLabel(name: unknown, rawInput: unknown, pages: Page[]) {
     case "get_post":
     case "create_blog_post_draft":
     case "update_blog_post_draft": return "Working on blog content";
-    case "set_image": return `Choosing an image for ${pageName}`;
+    case "set_image": return `Suggesting an image for ${pageName}`;
     case "plan": return "Preparing a plan";
     case "ask_user": return "Asking for your input";
     default: return page ? `Updating ${pageName}` : `Working on ${String(name ?? "the site")}`;

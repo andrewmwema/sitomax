@@ -299,10 +299,6 @@ class CostLimitReached extends Error {}
 
 const context = {
   accountId: fixtureIds.account, siteId: fixtureIds.site,
-  // Evals never fetch or store images.
-  choosePhoto: async (query: string, alt?: string) => ({
-    url: `/samples/${query.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40) || "photo"}.jpg`, alt: alt ?? query,
-  }),
 } as AgentToolContext;
 
 /**

@@ -321,6 +321,9 @@ chooses a stock photo or uploads one; review the suggested alt text against
 the selected image.
 New AI-generated pages use image placeholders and offer the same editor
 selection rather than automatically importing a stock photo.
+AI editing stages photo search suggestions for review; after applying those
+changes, choose each image in its field in the editor. Existing photos remain
+unchanged until a replacement is selected.
 Template builds check the supplied business description for clearly harmful
 or illegal activity before copying a site. This model-based check can make
 mistakes; contact the agency if it incorrectly rejects a business.

@@ -205,15 +205,17 @@ describe("AI agent tool guardrails", () => {
 
     await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { text: "Trusted since [year]", level: "h3" } });
     await run(changeset, "update_section_design", { pageId, sectionId: "heading", design: { shadow: "soft" } });
-    const photos: Context = { ...context, choosePhoto: async (query, alt) => ({ url: `https://assets.example/${query}.jpg`, alt: alt ?? "Stock photo" }) };
-    await makeToolResult("set_image", { pageId, sectionId: "image", field: "src", query: "plumber", alt: "A plumber at work" }, changeset, photos);
+    await makeToolResult("set_image", { pageId, sectionId: "image", field: "src", query: "plumber", alt: "A plumber at work" }, changeset, context);
     const services = await run(changeset, "insert_section", { pageId, designId: aiCatalog.find((entry) => entry.blockType === "Services")!.id }) as { sectionId: string };
-    await makeToolResult("set_image", { pageId, sectionId: services.sectionId, field: "services.0.image", query: "pipes" }, changeset, photos);
-    expect((sections(changeset.working).at(-2)!.props.services as Record<string, unknown>[])[0]).toMatchObject({ image: "https://assets.example/pipes.jpg" });
-    await expect(makeToolResult("set_image", { pageId, sectionId: "heading", field: "text", query: "pipes" }, changeset, photos)).rejects.toThrow("supported image field");
+    const originalImage = (sections(changeset.working).at(-2)!.props.services as Record<string, unknown>[])[0].image;
+    await makeToolResult("set_image", { pageId, sectionId: services.sectionId, field: "services.0.image", query: "pipes" }, changeset, context);
+    expect((sections(changeset.working).at(-2)!.props.services as Record<string, unknown>[])[0].image).toBe(originalImage);
+    expect(sections(changeset.working).at(-2)!.props.__aiImageSuggestions).toMatchObject({ "services[0].image": { query: "pipes", alt: "pipes" } });
+    await expect(makeToolResult("set_image", { pageId, sectionId: "heading", field: "text", query: "pipes" }, changeset, context)).rejects.toThrow("supported image field");
+    await expect(makeToolResult("set_image", { pageId, sectionId: services.sectionId, field: "services.99.image", query: "pipes" }, changeset, context)).rejects.toThrow("no longer available");
 
     expect(nested(changeset.working, "heading").props).toMatchObject({ text: "Trusted since [year]", level: "h3", design: { shadow: "soft" } });
-    expect(nested(changeset.working, "image").props).toMatchObject({ src: "https://assets.example/plumber.jpg", alt: "A plumber at work" });
+    expect(nested(changeset.working, "image").props).toMatchObject({ src: "", __aiImageSuggestions: { src: { query: "plumber", alt: "A plumber at work" } } });
     expect(nested(changeset.baseline, "heading").props.text).toBe("Original");
     expect(changeset.changes).toHaveLength(5);
     expectReplays(changeset);
@@ -223,6 +225,24 @@ describe("AI agent tool guardrails", () => {
     await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { text: "Trusted locally", design: { shadow: "medium" }, textColor: "#111111" } });
     expect(nested(changeset.working, "heading").props).toMatchObject({ text: "Trusted locally", design: { shadow: "medium", appearance: { desktop: { textColor: "#111111" } } } });
     expect(await run(changeset, "update_section_props", { pageId, sectionId: "heading", props: { design: {} } })).toMatchObject({ nothingChanged: true });
+  });
+
+  it("stages an image suggestion without replacing an uploaded image", async () => {
+    const changeset = fixtureChangeset();
+    const hero = sections(changeset.working)[0];
+    hero.props.backgroundImage = "https://assets.example/user-upload.jpg";
+    changeset.baseline = structuredClone(changeset.working);
+    await makeToolResult("set_image", {
+      pageId: fixtureIds.home, sectionId: "home-hero", field: "backgroundImage", query: "garden",
+    }, changeset, context);
+    expect(sections(changeset.working)[0].props).toMatchObject({
+      backgroundImage: "https://assets.example/user-upload.jpg",
+      __aiImageSuggestions: { backgroundImage: { query: "garden", alt: "garden" } },
+    });
+    expectReplays(changeset);
+    await expect(makeToolResult("set_image", {
+      pageId: fixtureIds.home, sectionId: "home-hero", field: "backgroundImage", query: "https://example.com/image.jpg",
+    }, changeset, context)).rejects.toThrow("search keywords");
   });
 
   it("keeps links from the link picker and stored images when editing other content", async () => {
@@ -432,7 +452,7 @@ describe("AI agent tool guardrails", () => {
 
   it("carries out the first attempts that used to be refused, and tells the model what it left out", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const photos: Context = { ...context, accountId: fixtureIds.account, siteId: fixtureIds.site, choosePhoto: async (query) => ({ url: `/samples/${query}.jpg`, alt: query }) };
+    const photos: Context = { ...context, accountId: fixtureIds.account, siteId: fixtureIds.site };
     const attempt = async (name: string, input: unknown) => {
       const changeset = fixtureChangeset();
       const result = await makeToolResult(name, input, changeset, photos) as { notes?: string[] };
@@ -490,7 +510,7 @@ describe("AI agent tool guardrails", () => {
     expect(contact.footer).toMatchObject({ tagline: "Here to help", phone: "" });
     expect(contact.result.notes).toEqual([expect.stringContaining("phone was left as it is: contact details come from Business information")]);
     const image = await attempt("set_image", { pageId: fixtureIds.home, sectionId: "home-services", field: "services[0].image", query: "pipes" });
-    expect((image.home[1].props.services as { image: string }[])[0].image).toBe("/samples/pipes.jpg");
+    expect(image.home[1].props.__aiImageSuggestions).toMatchObject({ "services[0].image": { query: "pipes", alt: "pipes" } });
     // Each adjusted call is logged for the agency, by what was left out and never by content.
     expect(warn).toHaveBeenCalledWith("AI agent tool input was adjusted", expect.objectContaining({ tool: "update_theme" }));
 
@@ -691,8 +711,7 @@ describe("AI agent tool guardrails", () => {
 describe("AI agent context diet", () => {
   const reading = (reads = {}) => {
     const changeset = fixtureChangeset();
-    const choosePhoto = async (query: string, alt?: string) => ({ url: `/samples/${query}.jpg`, alt: alt ?? query });
-    const tool = (name: string, input: unknown) => makeToolResult(name, input, changeset, { ...context, reads, choosePhoto } as Context);
+    const tool = (name: string, input: unknown) => makeToolResult(name, input, changeset, { ...context, reads } as Context);
     return { changeset, tool, reads };
   };
 
@@ -779,7 +798,8 @@ describe("AI agent context diet", () => {
     expect(await tool("move_section", { ...home, sectionId: "home-services", position: 0 })).toEqual({ ok: true, position: 0 });
     expect(await tool("delete_section", { ...home, sectionId: "home-services" })).toEqual({ ok: true });
     expect(await tool("set_image", { ...home, sectionId: "home-hero", field: "backgroundImage", query: "plumber", alt: "A plumber at work" }))
-      .toEqual({ ok: true, field: "backgroundImage", alt: "A plumber at work" });
+      .toEqual({ ok: true, field: "backgroundImage", needsSelection: true,
+        note: "After applying, choose the photo in the editor; the current image stays unchanged until then." });
 
     // A curated design arrives with sample content; only what the call did not supply comes back, to be replaced.
     const faq = aiCatalog.find((design) => design.blockType === "Faq")!;
