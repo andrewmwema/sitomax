@@ -1,5 +1,6 @@
 -- REVIEW ONLY. Do not execute without explicit approval.
--- Creates six isolated accounts and does not change either user's privileges.
+-- Creates eight isolated accounts and does not change either user's privileges.
+-- Each receives 12 TEST credits for designs with more than six pages.
 begin;
 
 do $$
@@ -46,17 +47,20 @@ begin
     ('64000000-0000-4000-8000-000000000003'::uuid, 'TEST-PHASE2-Clarity-Client', 'growth'),
     ('64000000-0000-4000-8000-000000000004'::uuid, 'TEST-PHASE2-Clarity-Agency', 'growth'),
     ('64000000-0000-4000-8000-000000000005'::uuid, 'TEST-PHASE2-Studio-Client', 'premium'),
-    ('64000000-0000-4000-8000-000000000006'::uuid, 'TEST-PHASE2-Studio-Agency', 'premium')
+    ('64000000-0000-4000-8000-000000000006'::uuid, 'TEST-PHASE2-Studio-Agency', 'premium'),
+    ('64000000-0000-4000-8000-000000000007'::uuid, 'TEST-PHASE2-Mode2-Client', 'starter'),
+    ('64000000-0000-4000-8000-000000000008'::uuid, 'TEST-PHASE2-Mode2-Agency', 'starter')
   ) as fixtures(id, name, plan_key) loop
     if exists (select 1 from public.accounts where id = fixture.id or name = fixture.name) then
       raise exception 'A Phase 2 fixture account ID or name already exists; review it before proceeding.';
     end if;
     insert into public.accounts(id, name, site_plan_key) values (fixture.id, fixture.name, fixture.plan_key);
     insert into public.account_members(account_id, user_id, role) values (fixture.id, client_id, 'owner');
-    if not exists (select 1 from public.ai_limits where account_id = fixture.id)
+    if not exists (select 1 from public.ai_limits where account_id = fixture.id and extra_credits = 0)
       or exists (select 1 from public.ai_account_allowance_overrides where account_id = fixture.id) then
-      raise exception 'Fixture % must have AI limits and no account overrides.', fixture.name;
+      raise exception 'Fixture % must have AI limits, zero credits and no account overrides.', fixture.name;
     end if;
+    update public.ai_limits set extra_credits = 12 where account_id = fixture.id;
   end loop;
 end;
 $$;

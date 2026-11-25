@@ -172,14 +172,16 @@ that restore without changing published page data. It requires 0054-0057.
 
 ## Phase 2 test fixtures (review only)
 
-`supabase/seeds/phase2_test_fixtures.sql` creates six isolated TEST accounts,
-two per master design, with Starter, Growth and Premium represented. It
+`supabase/seeds/phase2_test_fixtures.sql` creates eight isolated TEST accounts:
+two per master design and two for recommendation builds, with Starter, Growth
+and Premium represented. Each receives 12 TEST-only credits for page surcharges. It
 requires the two existing test users to have matching Auth and profile emails
 and exactly one to already be a super admin. It makes the other user the
 owner of each fixture account; it never changes either user's privileges.
 The script references the existing masters and does not change or copy them.
 It refuses to reuse an existing fixture ID or name, requires the approved plan
-allowances, and checks that every new account has AI limits and no overrides.
+allowances, and checks that every new account has AI limits, zero initial
+credits and no overrides before adding the TEST credits.
 
 Use only these fixture accounts, `TEST-` site names, `test-` subdomains and
 the Showcase, Clarity or Studio masters. Do not connect custom domains.
@@ -191,6 +193,13 @@ filename-prefix field before choosing **Use image**. For uploaded files, use a
 filename beginning `TEST-`. AI prompt edits stage image suggestions rather than
 importing a stock photo. Choose the suggested photo in the editor and use the
 same `TEST` filename prefix.
+The separate [`phase2_test_exhaust_edits.sql`](../supabase/seeds/phase2_test_exhaust_edits.sql)
+is an optional review-only acceptance fixture: after the Mode 2 client site is
+built, it fills that TEST account's Starter edit allowance with simulated
+requests and sets its remaining TEST credits to zero. It makes no provider
+calls, changes only that fixture account, and is removed by account cleanup.
+It requires separate approval before execution; wait a minute after other AI
+requests before checking the limit message so the rate limit does not mask it.
 
 Cleanup needs separate approval. Set `PHASE2_TEST_EXPECTED_PROJECT_URL` to the
 intended project URL and configure `NEXT_PUBLIC_SUPABASE_URL` and the

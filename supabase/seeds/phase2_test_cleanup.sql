@@ -9,7 +9,8 @@ declare
   fixture_ids constant uuid[] := array[
     '64000000-0000-4000-8000-000000000001', '64000000-0000-4000-8000-000000000002',
     '64000000-0000-4000-8000-000000000003', '64000000-0000-4000-8000-000000000004',
-    '64000000-0000-4000-8000-000000000005', '64000000-0000-4000-8000-000000000006'
+    '64000000-0000-4000-8000-000000000005', '64000000-0000-4000-8000-000000000006',
+    '64000000-0000-4000-8000-000000000007', '64000000-0000-4000-8000-000000000008'
   ]::uuid[];
   test_users uuid[];
 begin
@@ -24,7 +25,9 @@ begin
     ('64000000-0000-4000-8000-000000000003'::uuid, 'TEST-PHASE2-Clarity-Client'),
     ('64000000-0000-4000-8000-000000000004'::uuid, 'TEST-PHASE2-Clarity-Agency'),
     ('64000000-0000-4000-8000-000000000005'::uuid, 'TEST-PHASE2-Studio-Client'),
-    ('64000000-0000-4000-8000-000000000006'::uuid, 'TEST-PHASE2-Studio-Agency')
+    ('64000000-0000-4000-8000-000000000006'::uuid, 'TEST-PHASE2-Studio-Agency'),
+    ('64000000-0000-4000-8000-000000000007'::uuid, 'TEST-PHASE2-Mode2-Client'),
+    ('64000000-0000-4000-8000-000000000008'::uuid, 'TEST-PHASE2-Mode2-Agency')
   ) as fixtures(id, name) loop
     if exists (select 1 from public.accounts where id = fixture.id and (name <> fixture.name or is_internal)) then
       raise exception 'A fixture account no longer has its expected identity.';

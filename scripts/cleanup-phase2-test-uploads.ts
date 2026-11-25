@@ -10,6 +10,8 @@ const fixtures = [
   ["64000000-0000-4000-8000-000000000004", "TEST-PHASE2-Clarity-Agency"],
   ["64000000-0000-4000-8000-000000000005", "TEST-PHASE2-Studio-Client"],
   ["64000000-0000-4000-8000-000000000006", "TEST-PHASE2-Studio-Agency"],
+  ["64000000-0000-4000-8000-000000000007", "TEST-PHASE2-Mode2-Client"],
+  ["64000000-0000-4000-8000-000000000008", "TEST-PHASE2-Mode2-Agency"],
 ] as const;
 const templates = new Set(["showcase", "clarity", "studio"]);
 const args = process.argv.slice(2);
