@@ -38,17 +38,27 @@ separately reviewed reconciliation. The manual log requires no database write.
 The committed, unapplied SQL is
 [`0054_ai_plan_allowances.sql`](../supabase/migrations/0054_ai_plan_allowances.sql),
 followed by
-[`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql).
-Do not reapply either 0052 file. Neither Phase 2 migration has been executed or
+[`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql),
+then [`0056_ai_allowance_template_corrections.sql`](../supabase/migrations/0056_ai_allowance_template_corrections.sql).
+Do not reapply either 0052 file. None of these Phase 2 migrations has been executed or
 database-validated; verify the deployed schema and review each transaction
 before approving any application. Record a migration above only after its
 application is confirmed.
+
+0056 is **not strictly additive**: with the user's approval, it replaces the two
+0054 legacy-override triggers and two newly introduced functions. Pause legacy
+quota changes and do not deploy the feature code until all three migrations
+are applied; 0054's original triggers capture unchanged values before 0056.
+0056 captures only actual changes and fails explicitly when a client account
+has no AI limits. It maps intake actions to CTA labels while retaining the
+template CTA text if no action is supplied; it does not change the CTA link.
 
 0054 adds plan allowances and per-account overrides. Its backfill copies
 non-default legacy values and does not change existing credit balances. Main
 continues calling its legacy reservation and summary functions and showing
 legacy limits: the new plan allowances take effect only after the feature code
-is deployed. Its legacy-update triggers capture quota updates as overrides.
+is deployed. After 0056, its legacy-update triggers capture changed quota values
+as overrides, but unchanged values do not create or alter overrides.
 The backfill takes a table lock and can wait for active writes. These facts are
 based on source review, not a production compatibility or concurrency test.
 0054 seeds allowances for the three named plans only. Before deploying the
@@ -71,11 +81,32 @@ existing site-draft restore function does not restore that header. The
 `ai_pending_build` marker is not a database publishing guard. The template
 build, its history and its recovery paths remain incomplete and have not been
 database-tested; do not treat 0055 or the feature branch as production-ready.
+The read-only [`phase2_0055_dependencies.sql`](../supabase/checks/phase2_0055_dependencies.sql)
+lists named dependencies and their source migrations. The 0054 function is
+expected to be missing before 0054 is applied. The check verifies names only,
+not column types, grants, function bodies or indirect dependencies. A missing
+object requires investigation; do not blindly reapply an earlier migration.
+
+Check missing AI-limit rows without changing data:
+
+```sql
+select a.id, a.name, a.is_internal
+from public.accounts a
+left join public.ai_limits l on l.account_id = a.id
+where l.account_id is null
+order by a.name, a.id;
+```
+
+Internal accounts intentionally have no limit row. For any client row returned,
+investigate before applying changes; 0056 reports an explicit error and does
+not insert a row or infer a credit balance.
 
 [`phase2_plan_allowances_review.sql`](../supabase/tests/phase2_plan_allowances_review.sql)
 is an unexecuted, rollback-only review test for 0054. It requires the reviewed
 Phase 2 fixtures, unused named TEST accounts and separate approval; it does not
-test migration backfill, row-level security or concurrent reservations.
+test migration backfill, row-level security or concurrent reservations. The
+unexecuted [`phase2_template_cta_review.sql`](../supabase/tests/phase2_template_cta_review.sql)
+tests header action labels and the absent-action fallback under the same rules.
 
 ## Phase 2 test fixtures (review only)
 

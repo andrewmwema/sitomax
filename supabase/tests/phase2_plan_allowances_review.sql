@@ -1,4 +1,4 @@
--- REVIEW ONLY: run only with explicit approval, after 0054 and the Phase 2
+-- REVIEW ONLY: run only with explicit approval, after 0054-0056 and the Phase 2
 -- fixtures. This transaction writes only to the named TEST accounts and is
 -- rolled back. It makes no provider calls. Stop other test activity first.
 begin;
@@ -106,6 +106,25 @@ begin
     or exists (select 1 from public.ai_account_allowance_overrides where account_id = '64000000-0000-4000-8000-000000000002') then
     raise exception 'The legacy compatibility fixture is missing, changed, or already used.';
   end if;
+  update public.ai_limits set monthly_site_generations = monthly_site_generations, monthly_edits = monthly_edits
+    where account_id = '64000000-0000-4000-8000-000000000002';
+  if exists (select 1 from public.ai_account_allowance_overrides
+    where account_id = '64000000-0000-4000-8000-000000000002') then
+    raise exception 'An unchanged legacy save must not create overrides.';
+  end if;
+  begin
+    delete from public.ai_limits where account_id = '64000000-0000-4000-8000-000000000002';
+    if not found then raise exception 'Missing legacy compatibility fixture limits.'; end if;
+    begin
+      perform public.reserve_ai_request_for_plan(client_id, '64000000-0000-4000-8000-000000000002',
+        'edit_section', 'TEST-model');
+      raise exception 'Expected a missing-limits error.';
+    exception when raise_exception then
+      if sqlerrm <> 'AI limits are not configured for this account. Contact your agency.' then raise; end if;
+    end;
+    raise sqlstate 'P1234' using message = 'Rollback the missing-limits test.';
+  exception when sqlstate 'P1234' then null;
+  end;
   update public.ai_limits set monthly_site_generations = 3, monthly_edits = 55, extra_credits = 20
     where account_id = '64000000-0000-4000-8000-000000000002';
   if not found or not exists (select 1 from public.ai_account_allowance_overrides

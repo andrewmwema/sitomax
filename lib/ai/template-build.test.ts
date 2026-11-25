@@ -59,6 +59,14 @@ describe("template AI build orchestration", () => {
     expect(result.pages).toEqual([{ slug: page.slug, label: page.title, pageId, built: true }]);
   });
 
+  it("preserves an omitted primary action for the template header fallback", async () => {
+    await buildTemplateSite(input);
+    const options = mocks.start.mock.calls[0][3];
+    expect(options.business).not.toHaveProperty("primaryAction");
+    await buildTemplateSite({ ...input, business: { ...business, primaryAction: "book" } });
+    expect(mocks.start.mock.calls[1][3].business.primaryAction).toBe("book");
+  });
+
   it("does not cancel an existing reservation when a competing selection fails", async () => {
     mocks.select.mockRejectedValue(new Error("Already being created"));
     await expect(buildTemplateSite({ ...input, generationId })).rejects.toThrow("Already being created");

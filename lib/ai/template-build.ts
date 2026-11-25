@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { createSiteFromMasterTemplate } from "@/app/(dashboard)/dashboard/sites/new/template-actions";
 import { requireUser } from "@/lib/auth";
-import { templateBusinessIntakeSchema } from "@/lib/business";
+import { businessSchema, templateBusinessIntakeSchema } from "@/lib/business";
 import { pageDataSchema } from "@/lib/templates/catalog";
 import { requestAi } from "./client";
 import { fillTemplatePage } from "./template-fill";
@@ -15,7 +15,7 @@ import type { GenerationOutcome, GenerationProgress, GenerationResult } from "./
 import type { SiteToolCall } from "./site-tool";
 
 const templateId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,49}$/);
-const business = templateBusinessIntakeSchema;
+const business = templateBusinessIntakeSchema.extend({ primaryAction: businessSchema.shape.primaryAction });
 const recommendationInput = z.strictObject({ accountId: z.uuid(), business });
 const buildInput = recommendationInput.extend({
   generationId: z.uuid().optional(), templateId,

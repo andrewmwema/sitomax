@@ -331,8 +331,10 @@ The agency can change plan defaults in `ai_plan_allowances` or set individual
 fields in `ai_account_allowance_overrides`; a null field inherits the plan.
 The migration carries forward legacy per-account values differing from the old
 defaults of 1 build and 50 edits. Default-valued fields inherit the plan.
-Updates to the legacy quota columns are captured as overrides during a rolling
-deployment, including explicit writes of the old defaults. Clearing an override
+After the reviewed `0056_ai_allowance_template_corrections.sql` is applied,
+changes to the legacy quota columns are captured as overrides during a rolling
+deployment, including changes to the old defaults; unchanged values are ignored.
+Pause legacy quota changes until 0054 through 0056 are all applied. Clearing an override
 does not change those legacy columns, so rolling back to older app code restores
 its legacy quota behavior.
 
