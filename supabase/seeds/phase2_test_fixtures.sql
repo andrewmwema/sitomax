@@ -31,6 +31,14 @@ begin
   if (select count(*) from public.site_plans where plan_key in ('starter', 'growth', 'premium')) <> 3 then
     raise exception 'The three site plans must already exist.';
   end if;
+  if not exists (select 1 from public.ai_plan_allowances where plan_key = 'starter'
+      and monthly_site_generations = 2 and monthly_edits = 50)
+    or not exists (select 1 from public.ai_plan_allowances where plan_key = 'growth'
+      and monthly_site_generations = 5 and monthly_edits = 150)
+    or not exists (select 1 from public.ai_plan_allowances where plan_key = 'premium'
+      and monthly_site_generations = 10 and monthly_edits = 500) then
+    raise exception 'The approved plan allowances must already exist.';
+  end if;
 
   for fixture in select * from (values
     ('64000000-0000-4000-8000-000000000001'::uuid, 'TEST-PHASE2-Showcase-Client', 'starter'),
@@ -45,6 +53,10 @@ begin
     end if;
     insert into public.accounts(id, name, site_plan_key) values (fixture.id, fixture.name, fixture.plan_key);
     insert into public.account_members(account_id, user_id, role) values (fixture.id, client_id, 'owner');
+    if not exists (select 1 from public.ai_limits where account_id = fixture.id)
+      or exists (select 1 from public.ai_account_allowance_overrides where account_id = fixture.id) then
+      raise exception 'Fixture % must have AI limits and no account overrides.', fixture.name;
+    end if;
   end loop;
 end;
 $$;

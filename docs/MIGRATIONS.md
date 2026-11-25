@@ -141,7 +141,8 @@ requires the two existing test users to have matching Auth and profile emails
 and exactly one to already be a super admin. It makes the other user the
 owner of each fixture account; it never changes either user's privileges.
 The script references the existing masters and does not change or copy them.
-It refuses to reuse an existing fixture ID or name.
+It refuses to reuse an existing fixture ID or name, requires the approved plan
+allowances, and checks that every new account has AI limits and no overrides.
 
 Use only these fixture accounts, `TEST-` site names, `test-` subdomains and
 the Showcase, Clarity or Studio masters. Do not connect custom domains.
