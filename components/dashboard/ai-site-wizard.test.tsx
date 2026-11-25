@@ -12,7 +12,8 @@ import { createGenerationInputSchema } from "@/lib/ai/site-input";
 
 let container: HTMLDivElement, root: Root;
 const site = { id: "00000000-0000-4000-8000-000000000001", accountId: "00000000-0000-4000-8000-000000000002", name: "Local Plumbing",
-  business: { ...emptyBusiness, businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi", services: ["Drain repairs"] },
+  business: { ...emptyBusiness, businessName: "Local Plumbing", businessType: "Plumber", city: "Nairobi",
+    services: ["Drain repairs"], primaryAction: "inquire" as const, audiences: [], description: "" },
   pages: [{ slug: "", label: "Home", empty: false }, { slug: "about", label: "About", empty: true }] };
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.stubGlobal("fetch", mocks.fetch);
