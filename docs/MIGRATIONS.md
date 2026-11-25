@@ -11,6 +11,7 @@ the responsible operator verifies it and explicitly approves execution.
 | `0052_ai_business_intake.sql` | Applied effects observed | Read-only database inspection on 2026-11-24 |
 | `0052_premium_template_catalog.sql` | Applied effects observed, with differences from the branch file | Read-only database inspection on 2026-11-24 |
 | `0053_premium_template_repair.sql` | Applied, as reported by the user | User reported successful execution on 2026-11-24; not independently verified |
+| `0057_ai_draft_history_header.sql` | Applied, as reported by the user | User reported application on 2026-11-25; not independently verified |
 
 The production database did not expose a
 `supabase_migrations.schema_migrations` table, so the historical application
@@ -35,15 +36,17 @@ separately reviewed reconciliation. The manual log requires no database write.
 
 ## Phase 2 migration review
 
-The committed, unapplied SQL is
+The committed SQL is
 [`0054_ai_plan_allowances.sql`](../supabase/migrations/0054_ai_plan_allowances.sql),
 followed by
 [`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql),
 then [`0056_ai_allowance_template_corrections.sql`](../supabase/migrations/0056_ai_allowance_template_corrections.sql).
-Then apply [`0057_ai_draft_history_header.sql`](../supabase/migrations/0057_ai_draft_history_header.sql).
-Do not reapply either 0052 file. None of these Phase 2 migrations has been executed or
-database-validated; verify the deployed schema and review each transaction
-before approving any application. Record a migration above only after its
+The user reported that [`0057_ai_draft_history_header.sql`](../supabase/migrations/0057_ai_draft_history_header.sql)
+was applied; do not reapply it. The application status of 0054-0056 has not
+been confirmed. Their intended order is 0054, 0055, then 0056. Confirm the
+actual production state before applying anything; do not assume any migration
+is missing or reapply either 0052 file. These migrations have not been
+independently database-validated. Record a migration above only after its
 application is confirmed.
 
 0056 is **not strictly additive**: with the user's approval, it replaces the two
@@ -84,8 +87,8 @@ captures the draft header and page pending flags. The old restore function
 remains unchanged for main. Historical backups without a captured header
 leave the current draft header unchanged; a pre-0057 null header cannot be
 distinguished from an uncaptured header. These changes do not publish drafts.
-The new trigger affects backup inserts made by deployed main and requires
-database compatibility testing before application. The
+The new trigger affects backup inserts made by deployed main; its production
+compatibility has not been independently tested. The
 `ai_pending_build` marker is not a database publishing guard. The template
 build, its history and its recovery paths remain incomplete and have not been
 database-tested; do not treat 0055 or the feature branch as production-ready.
