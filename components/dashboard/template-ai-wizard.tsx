@@ -13,7 +13,7 @@ const choiceSchema = z.object({
   runnerUp: z.object({ templateId: z.string(), reason: z.string() }),
 });
 const eventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("progress"), message: z.string() }),
+  z.object({ type: z.literal("progress"), message: z.string(), siteId: z.uuid().optional() }),
   z.object({ type: z.literal("error"), message: z.string() }),
   z.object({ type: z.literal("result"), siteId: z.uuid(), pageId: z.uuid(), warnings: z.array(z.string()), pages: z.array(generationOutcomeSchema) }),
   z.object({ type: z.literal("retry"), page: generationOutcomeSchema }),
@@ -40,6 +40,7 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
+  const [checkpointSiteId, setCheckpointSiteId] = useState<string | null>(null);
   const [attempted, setAttempted] = useState(false);
   const [extracted, setExtracted] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -123,7 +124,10 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
       const receive = (line: string) => {
         const event = eventSchema.parse(JSON.parse(line));
         if (event.type === "error") throw new Error(event.message);
-        if (event.type === "progress") setMessage(event.message);
+        if (event.type === "progress") {
+          setMessage(event.message);
+          if (event.siteId) setCheckpointSiteId(event.siteId);
+        }
         if (event.type === "result") { complete = true; setResult(event); }
         if (event.type === "retry") {
           complete = true;
@@ -249,6 +253,10 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
       </button> : <Link className="platform-button" href="/dashboard/sites">Check your sites</Link>}
     </form>}
     {message ? <p className="mt-4 text-sm" role="status">{message}</p> : null}
+    {checkpointSiteId && !result ? <p className="mt-3 text-sm">
+      If this build is interrupted, open <Link className="underline" href={`/dashboard/sites/${checkpointSiteId}/generate`}>unfinished page builds</Link> to review and retry.
+      An active build may take up to 15 minutes before retries are available.
+    </p> : null}
     {error ? <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p> : null}
   </dialog>;
 }

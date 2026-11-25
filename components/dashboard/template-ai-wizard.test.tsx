@@ -79,4 +79,18 @@ describe("template AI intake", () => {
     expect(radio.checked).toBe(true);
     expect(container.querySelectorAll('input[name="template"]')).toHaveLength(3);
   });
+
+  it("shows a recovery link when a checkpointed build stops", async () => {
+    const siteId = "00000000-0000-4000-8000-000000000003";
+    fetchMock.mockResolvedValueOnce(new Response([
+      JSON.stringify({ type: "progress", message: "Checkpoints ready.", siteId }),
+      JSON.stringify({ type: "error", message: "The build stopped." }),
+    ].join("\n")));
+    await act(async () => root.render(<TemplateAiWizard templates={[]} accounts={[{ id: accountId, name: "Example" }]}
+      rootDomain="localhost:3000" initialTemplateId="showcase" isSuperAdmin={false} onClose={() => {}} />));
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(container.textContent).toContain("The build stopped.");
+    expect(container.querySelector(`a[href="/dashboard/sites/${siteId}/generate"]`)?.textContent).toBe("unfinished page builds");
+    expect(container.textContent).toContain("15 minutes");
+  });
 });

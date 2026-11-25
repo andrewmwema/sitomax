@@ -51,9 +51,11 @@ beforeEach(() => {
 
 describe("template AI build orchestration", () => {
   it("copies first, then checkpoints a filled draft without pending markers", async () => {
-    const result = await buildTemplateSite(input);
+    const progress = vi.fn();
+    const result = await buildTemplateSite(input, progress);
     expect(mocks.copy).toHaveBeenCalledWith(expect.objectContaining({ templateId: "showcase" }));
     expect(mocks.copy.mock.invocationCallOrder[0]).toBeLessThan(mocks.start.mock.invocationCallOrder[0]);
+    expect(progress).toHaveBeenCalledWith({ message: "Your copied site and page checkpoints are ready.", siteId });
     const filledDraft = mocks.fill.mock.calls[0][1] as typeof page.data;
     expect(filledDraft.content.every(({ props }) => !("__aiPending" in props))).toBe(true);
     expect(mocks.checkpoint).toHaveBeenCalledWith(accountId, generationId, retryId, page.data);
