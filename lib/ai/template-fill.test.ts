@@ -14,7 +14,7 @@ describe("template page fill contract", () => {
         expect(contract.fields.length, `${template.key}/${page.slug}`).toBeGreaterThan(0);
         const values = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
           [key, sampleReview ? "[Add a real review]" : "Replacement"]));
-        const result = contract.apply({ fields: values });
+        const result = contract.apply({ fields: values, hiddenSections: [] });
         expect(page.data).toEqual(before);
         expect(result.content.map(({ type, props }) => ({ type, id: props.id, design: props.design, variant: props.variant })))
           .toEqual(before.content.map(({ type, props }) => ({ type, id: props.id, design: props.design, variant: props.variant })));
@@ -32,12 +32,12 @@ describe("template page fill contract", () => {
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
     const review = contract.fields.find((field) => field.sampleReview);
     expect(review).toBeDefined();
-    expect(() => contract.apply({ fields: { ...values, extra: "untrusted" } })).toThrow();
-    expect(() => contract.apply({ fields: { ...values, [review!.key]: "A real customer loved it" } })).toThrow();
+    expect(() => contract.apply({ fields: { ...values, extra: "untrusted" }, hiddenSections: [] })).toThrow();
+    expect(() => contract.apply({ fields: { ...values, [review!.key]: "A real customer loved it" }, hiddenSections: [] })).toThrow();
     const limited = contract.fields.find((field) => field.maxLength < 1000)!;
-    expect(() => contract.apply({ fields: { ...values, [limited.key]: "x".repeat(limited.maxLength + 1) } })).toThrow();
+    expect(() => contract.apply({ fields: { ...values, [limited.key]: "x".repeat(limited.maxLength + 1) }, hiddenSections: [] })).toThrow();
     const seo = contract.fields.find((field) => field.label === "seoTitle")!;
-    expect(() => contract.apply({ fields: { ...values, [seo.key]: " " } })).toThrow();
+    expect(() => contract.apply({ fields: { ...values, [seo.key]: " " }, hiddenSections: [] })).toThrow();
   });
 
   it("preserves nested images and links while replacing text", () => {
@@ -45,7 +45,7 @@ describe("template page fill contract", () => {
     const contract = templateFillContract(data);
     const values = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
-    const result = contract.apply({ fields: values });
+    const result = contract.apply({ fields: values, hiddenSections: [] });
     const original = data.content.find((item) => item.type === "Services")!;
     const updated = result.content.find((item) => item.type === "Services")!;
     const before = original.props.services as { title: string; image: string; actionLink: string }[];
@@ -60,7 +60,7 @@ describe("template page fill contract", () => {
     const contract = templateFillContract(data);
     const values = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
-    const result = contract.apply({ fields: values });
+    const result = contract.apply({ fields: values, hiddenSections: [] });
     const before = data.content.find((item) => item.type === "ContactForm")!;
     const after = result.content.find((item) => item.type === "ContactForm")!;
     expect(after.props.formName).toEqual(before.props.formName);
@@ -73,7 +73,7 @@ describe("template page fill contract", () => {
     const fields = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
     const call = vi.fn().mockResolvedValue({ stop_reason: "tool_use", content: [{
-      type: "tool_use", name: "fill_template_page", id: "call", input: { fields },
+      type: "tool_use", name: "fill_template_page", id: "call", input: { fields, hiddenSections: [] },
     }] });
     const result = await fillTemplatePage(call as SiteToolCall, page.data,
       { ...emptyBusiness, businessName: "Example", businessType: "Plumber", city: "York" },
@@ -91,9 +91,25 @@ describe("template page fill contract", () => {
       [key, requiredText ?? (sampleReview ? "[Add a real review]" : "Replacement")]));
     const legal = contract.fields.find(({ requiredText }) => requiredText)!;
     expect(legal.requiredText).toContain("[Add your reviewed privacy policy]");
-    expect(() => contract.apply({ fields: { ...fields, [legal.key]: "<p>We never share your information.</p>" } })).toThrow();
+    expect(() => contract.apply({ fields: { ...fields, [legal.key]: "<p>We never share your information.</p>" }, hiddenSections: [] })).toThrow();
     const rich = contract.fields.find(({ richText, requiredText }) => richText && !requiredText)!;
-    expect(() => contract.apply({ fields: { ...fields, [rich.key]: '<a href="https://example.com">Link</a>' } })).toThrow();
-    expect(contract.apply({ fields }).content).toHaveLength(page.data.content.length);
+    expect(() => contract.apply({ fields: { ...fields, [rich.key]: '<a href="https://example.com">Link</a>' }, hiddenSections: [] })).toThrow();
+    expect(contract.apply({ fields, hiddenSections: [] }).content).toHaveLength(page.data.content.length);
+  });
+
+  it("only hides listed optional sections, retaining their content and existing design", () => {
+    const data = structuredClone(premiumTemplates.showcase.pages[0].data);
+    data.content.push(block("Testimonials", "sample-reviews", { design: { settings: { fullBleed: false } } }));
+    const contract = templateFillContract(data);
+    const fields = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
+      [key, sampleReview ? "[Add a real review]" : "Replacement"]));
+    const section = contract.optionalSections.find(({ type }) => type === "Testimonials")!;
+    const result = contract.apply({ fields, hiddenSections: [section.key] });
+    expect(result.content.at(-1)?.props.design).toMatchObject({ settings: {
+      fullBleed: false, hideOnDesktop: true, hideOnTablet: true, hideOnMobile: true,
+    } });
+    expect(data.content.at(-1)?.props.design).toEqual({ settings: { fullBleed: false } });
+    expect(() => contract.apply({ fields, hiddenSections: ["section_1"] })).toThrow();
+    expect(() => contract.apply({ fields, hiddenSections: [section.key, section.key] })).toThrow();
   });
 });
