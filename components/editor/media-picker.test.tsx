@@ -134,9 +134,10 @@ describe("unified media picker", () => {
     expect(document.querySelectorAll('button[aria-label="Select Tools"]')).toHaveLength(3);
     expect(mocks.search).toHaveBeenCalledTimes(1);
     await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Select Tools"]')!.click());
+    await input([...document.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Filename prefix"))!.querySelector("input")!, "TEST");
     await click("Use image");
     expect(mocks.select).toHaveBeenCalledWith(expect.objectContaining({
-      query: "plumbing tools", page: 1, photoId: 6, alt: "Tools for plumbing work",
+      query: "plumbing tools", page: 1, photoId: 6, alt: "Tools for plumbing work", filenamePrefix: "TEST",
     }));
     expect(onSelect).toHaveBeenCalledWith({ url: imported, alt: "Tools for plumbing work" });
   });

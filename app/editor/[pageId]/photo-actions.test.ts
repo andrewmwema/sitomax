@@ -38,6 +38,13 @@ describe("editor stock photo actions", () => {
     expect(mocks.select).toHaveBeenCalledExactlyOnceWith({ siteId, query: "tools", orientation: "all", page: 1, photoId: 42 });
     expect(await selectStockPhoto({ siteId, query: "tools", photoId: -1 })).toMatchObject({ status: "error" });
   });
+  it("accepts a safe stock filename prefix and rejects path traversal", async () => {
+    mocks.select.mockResolvedValue({ url: "https://storage.example/42.jpg", alt: "Tools" });
+    expect(await selectStockPhoto({ siteId, query: "tools", photoId: 42, filenamePrefix: "TEST" })).toMatchObject({ status: "success" });
+    expect(mocks.select).toHaveBeenCalledWith(expect.objectContaining({ filenamePrefix: "TEST" }));
+    expect(await selectStockPhoto({ siteId, query: "tools", photoId: 42, filenamePrefix: "../other" })).toMatchObject({ status: "error" });
+    expect(mocks.select).toHaveBeenCalledTimes(1);
+  });
   it("shows expected failures and withholds raw request or credential-bearing errors", async () => {
     mocks.search.mockRejectedValueOnce(new PhotoError("Photo search is busy."));
     expect(await searchStockPhotos({ siteId, query: "tools" })).toMatchObject({ status: "error", message: "Photo search is busy." });

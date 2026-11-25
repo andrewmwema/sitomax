@@ -25,6 +25,7 @@ export function MediaPicker({ scope, initialQuery = "", aiAlt, value, onSelect, 
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [pendingUpload, setPendingUpload] = useState<{ file: File; bucket: string; path: string; url: string } | null>(null);
   const [alt, setAlt] = useState("");
+  const [filenamePrefix, setFilenamePrefix] = useState("");
   const [url, setUrl] = useState("");
   const [isAdmin, setAdmin] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -143,7 +144,11 @@ export function MediaPicker({ scope, initialQuery = "", aiAlt, value, onSelect, 
       }
       if (!candidate) return;
       if (candidate.photoId && candidate.search) {
-        const result = await selectStockPhoto({ ...scope, ...candidate.search, photoId: candidate.photoId, alt });
+        if (filenamePrefix && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,59}$/.test(filenamePrefix)) {
+          setError("Use letters, numbers, hyphens or underscores for the filename prefix."); return;
+        }
+        const result = await selectStockPhoto({ ...scope, ...candidate.search, photoId: candidate.photoId, alt,
+          ...(filenamePrefix ? { filenamePrefix } : {}) });
         if (result.status === "error") { setError(result.message); return; }
         onSelect({ url: result.url, alt });
       } else if (pendingUpload) {
@@ -243,6 +248,10 @@ export function MediaPicker({ scope, initialQuery = "", aiAlt, value, onSelect, 
         ) : null}
         <label className="min-w-48 flex-1 text-xs font-medium">Alt text
           <input className={`${control} mt-1`} disabled={busy} value={alt} maxLength={500} onChange={(event) => setAlt(event.target.value)} placeholder="Describe the image" /></label>
+        {tab === "stock" ? <label className="text-xs font-medium">Filename prefix (optional)
+          <input className={`${control} mt-1`} disabled={busy} value={filenamePrefix} maxLength={60}
+            pattern="[A-Za-z0-9][A-Za-z0-9_-]*" onChange={(event) => setFilenamePrefix(event.target.value)} placeholder="e.g. campaign" />
+        </label> : null}
         <button type="button" disabled={busy || (tab === "url" ? !url.trim() : !candidate)} onClick={() => void apply()} className="platform-button platform-button-primary">
           {busy ? "Working..." : "Use image"}</button>
       </footer>

@@ -34,13 +34,16 @@ export function createPhotoLibrary(supabase: SupabaseClient, accountId: string) 
   return {
     search,
     searchPage,
-    async select(raw: z.input<typeof photoSearchSchema> & { photoId: number; siteId: string; alt?: string }): Promise<StoredPhoto> {
-      const { photoId, siteId, alt } = z.object({ photoId: z.number().int().positive(), siteId: z.uuid(), alt: z.string().max(500).optional() }).parse(raw);
+    async select(raw: z.input<typeof photoSearchSchema> & { photoId: number; siteId: string; alt?: string; filenamePrefix?: string }): Promise<StoredPhoto> {
+      const { photoId, siteId, alt, filenamePrefix } = z.object({
+        photoId: z.number().int().positive(), siteId: z.uuid(), alt: z.string().max(500).optional(),
+        filenamePrefix: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,59}$/).optional(),
+      }).parse(raw);
       const photo = (await search(raw)).find(({ id }) => id === photoId);
       if (!photo) throw new PhotoError("That photo is no longer available. Search again.");
       const file = await provider.download(photo);
       const bucket = supabase.storage.from("site-assets");
-      const path = `${siteId}/${provider.name.toLowerCase()}-source-${photo.id}.${file.extension}`;
+      const path = `${siteId}/${filenamePrefix ? `${filenamePrefix}-` : ""}${provider.name.toLowerCase()}-source-${photo.id}.${file.extension}`;
       const { error } = await bucket.upload(path, file.bytes, { contentType: file.contentType, cacheControl: "31536000",
         metadata: { alt: alt ?? photo.alt, source_provider: provider.name, source_id: photo.id,
           source_url: photo.sourceUrl, source_author: photo.author }, upsert: false });

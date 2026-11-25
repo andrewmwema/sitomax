@@ -10,7 +10,10 @@ import { requireSuperAdmin } from "@/lib/auth";
 
 const searchSchema = photoSearchSchema.extend({ siteId: z.uuid().optional(), agency: z.boolean().optional() })
   .refine((value) => Boolean(value.siteId) !== Boolean(value.agency), "Choose a site or agency media.");
-const selectionSchema = searchSchema.safeExtend({ photoId: z.number().int().positive(), alt: z.string().trim().max(500).optional() });
+const selectionSchema = searchSchema.safeExtend({
+  photoId: z.number().int().positive(), alt: z.string().trim().max(500).optional(),
+  filenamePrefix: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,59}$/).optional(),
+});
 
 async function libraryForSite(siteId: string | undefined, agency?: boolean) {
   if (agency) {

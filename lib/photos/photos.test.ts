@@ -83,6 +83,16 @@ describe("stock photo provider boundary", () => {
     expect(result.url).not.toContain("pixabay.com");
     expect(result.alt).toBe("Workshop tools");
   });
+  it("supports a validated filename prefix without weakening source metadata", async () => {
+    mocks.fetch.mockResolvedValueOnce(search()).mockResolvedValueOnce(jpeg());
+    const library = createPhotoLibrary(client(), accountId);
+    await library.select({ query: "tools", photoId: 42, siteId, filenamePrefix: "TEST" });
+    expect(mocks.upload).toHaveBeenCalledWith(`${siteId}/TEST-pixabay-source-42.jpg`, expect.any(Uint8Array), expect.objectContaining({
+      metadata: expect.objectContaining({ source_provider: "Pixabay", source_id: 42, source_url: hit.pageURL }),
+    }));
+    await expect(library.select({ query: "tools", photoId: 42, siteId, filenamePrefix: "../other" })).rejects.toThrow();
+    expect(mocks.upload).toHaveBeenCalledTimes(1);
+  });
   it("uses the largest public size when full API access is unavailable and ignores oversized originals", async () => {
     mocks.fetch.mockResolvedValueOnce(search([{ ...hit, imageURL: undefined, fullHDURL: undefined }]));
     expect((await pixabay.search({ query: "tools", orientation: "all" })).photos[0].downloadUrls[0]).toBe(hit.largeImageURL);
