@@ -41,6 +41,8 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [attempted, setAttempted] = useState(false);
+  const [extracted, setExtracted] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const template = templates.find((item) => item.id === templateId);
   const split = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
   const intake = { ...business, services: split(services), audiences: split(audiences) };
@@ -80,6 +82,25 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
       setChoices(selected); setTemplateId(selected.recommended.templateId);
     } catch (cause) {
       setError(cause instanceof Error && !(cause instanceof z.ZodError) ? cause.message : "Check the business details and try again.");
+    } finally { setBusy(false); setMessage(""); }
+  };
+  const extract = async () => {
+    setBusy(true); setError(""); setMessage("Extracting business details…");
+    try {
+      const response = await fetch("/api/ai/extract-business", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, template: true, text: business.description }),
+      });
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        const failure = z.object({ message: z.string() }).safeParse(body);
+        throw new Error(failure.success ? failure.data.message : "Could not extract business details.");
+      }
+      const details = z.object({ business: businessIntakeSchema }).parse(body).business;
+      setBusiness(details); setServices(details.services.join(", ")); setAudiences(details.audiences.join(", "));
+      setExtracted(true); setConfirmed(false);
+    } catch (cause) {
+      setError(cause instanceof Error && !(cause instanceof z.ZodError) ? cause.message : "Could not extract business details. Enter them manually.");
     } finally { setBusy(false); setMessage(""); }
   };
   const stream = async (retryId?: string) => {
@@ -130,12 +151,13 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
   };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (extracted && !confirmed) { setError("Review and confirm the extracted business details before continuing."); return; }
     if (!initialTemplateId && !choices) void recommend(); else void stream();
   };
   const field = (key: "businessName" | "businessType" | "city" | "phone" | "email" | "address" | "openingHours" | "difference" | "tone" | "description",
     label: string, required = false, maxLength = 100) => <label className="flex flex-col gap-1 text-sm font-medium">
       {label}<input className="creation-input" required={required} maxLength={maxLength} value={business[key]} disabled={Boolean(choices)}
-        onChange={(event) => setBusiness((previous) => ({ ...previous, [key]: event.target.value }))} />
+        onChange={(event) => { setBusiness((previous) => ({ ...previous, [key]: event.target.value })); setConfirmed(false); }} />
     </label>;
 
   return <dialog ref={dialog} onCancel={(event) => { event.preventDefault(); void close(); }} aria-labelledby="template-ai-title"
@@ -165,13 +187,21 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
         {field("businessType", "Business type", true)}
         {field("city", "City / service area", true)}
         <label className="flex flex-col gap-1 text-sm font-medium">Services (comma-separated)
-          <input className="creation-input" disabled={Boolean(choices)} value={services} onChange={(event) => setServices(event.target.value)} />
+          <input className="creation-input" disabled={Boolean(choices)} value={services}
+            onChange={(event) => { setServices(event.target.value); setConfirmed(false); }} />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">Audiences (comma-separated)
-          <input className="creation-input" disabled={Boolean(choices)} value={audiences} onChange={(event) => setAudiences(event.target.value)} />
+          <input className="creation-input" disabled={Boolean(choices)} value={audiences}
+            onChange={(event) => { setAudiences(event.target.value); setConfirmed(false); }} />
         </label>
         {field("difference", "What makes you different?", false, 1000)}
-        {field("description", "Business description", false, 4000)}
+        <label className="flex flex-col gap-1 text-sm font-medium sm:col-span-2">Business description
+          <textarea className="creation-input" rows={4} maxLength={4000} value={business.description} disabled={Boolean(choices)}
+            onChange={(event) => { setBusiness((previous) => ({ ...previous, description: event.target.value })); setConfirmed(false); }} />
+          <span className="text-xs font-normal">Pasting a description is optional. Extraction replaces the fields above and counts as an AI edit.</span>
+          <button type="button" className="platform-button self-start" disabled={Boolean(choices) || !accountId || !business.description.trim()}
+            onClick={() => void extract()}>Extract business details</button>
+        </label>
         {field("tone", "Tone", false, 200)}
         {field("phone", "Phone", false, 40)}
         {field("email", "Email", false, 254)}
@@ -179,10 +209,14 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
         {field("openingHours", "Opening hours", false, 1000)}
         <label className="flex flex-col gap-1 text-sm font-medium">Primary action
           <select className="creation-input" disabled={Boolean(choices)} value={business.primaryAction}
-            onChange={(event) => setBusiness((previous) => ({ ...previous, primaryAction: z.enum(["call", "book", "buy", "inquire"]).parse(event.target.value) }))}>
+            onChange={(event) => { setBusiness((previous) => ({ ...previous, primaryAction: z.enum(["call", "book", "buy", "inquire"]).parse(event.target.value) })); setConfirmed(false); }}>
             <option value="inquire">Inquire</option><option value="call">Call</option><option value="book">Book</option><option value="buy">Buy</option>
           </select>
         </label>
+        {extracted && !choices ? <label className="flex items-start gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+          I reviewed the extracted details and corrected anything inaccurate.
+        </label> : null}
         {choices ? <div className="space-y-2 sm:col-span-2">
           {[choices.recommended, choices.runnerUp].map((choice, index) => {
             const item = templates.find((candidate) => candidate.id === choice.templateId);

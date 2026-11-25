@@ -13,6 +13,7 @@ export const maxDuration = 60;
 const requestSchema = z.strictObject({
   accountId: z.uuid(),
   siteId: z.uuid().optional(),
+  template: z.literal(true).optional(),
   text: z.string().trim().min(1).max(4000),
 });
 const extractionTool = strictTool("extract_business", "Extract only verifiable business details from the supplied description.", businessIntakeSchema);
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
     const { data: site, error } = await supabase.from("sites").select("id")
       .eq("id", parsed.data.siteId).eq("account_id", parsed.data.accountId).maybeSingle();
     if (error || !site) return Response.json({ message: "This site is unavailable to your account." }, { status: 403 });
-  } else if (!admin) {
+  } else if (!admin && !parsed.data.template) {
     return Response.json({ message: "Only the agency can extract details for a new site." }, { status: 403 });
   }
 

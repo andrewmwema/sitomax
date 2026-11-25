@@ -55,6 +55,13 @@ describe("business description extraction", () => {
     expect(mocks.requestAi).not.toHaveBeenCalled();
   });
 
+  it("allows an account owner to extract for a template build", async () => {
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "is_account_owner", error: null }));
+    const response = await POST(request({ accountId, template: true, text: "Example Plumbing serves York." }));
+    expect(response.status).toBe(200);
+    expect(mocks.requestAi).toHaveBeenCalledWith(expect.objectContaining({ accountId, siteId: undefined, usageType: "edit" }));
+  });
+
   it("does not return invalid provider output as usable business information", async () => {
     mocks.requestAi.mockResolvedValue({
       stop_reason: "tool_use", content: [{ type: "tool_use", name: "extract_business", input: { ...extracted, primaryAction: "invent" } }],

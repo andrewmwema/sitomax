@@ -309,6 +309,9 @@ extraction from pasted text, then must review and confirm the extracted fields
 before continuing. Generation saves these details with the site. Existing sites
 still require separate confirmation before replacing drafts or updating shared
 Business information.
+Template AI intake also supports this extraction for account owners. It replaces
+the entered business fields, counts as an AI edit, and requires review and
+confirmation before choosing or building a design.
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
 through `0018`. Opening **New site** or **Build with AI** as a super admin
