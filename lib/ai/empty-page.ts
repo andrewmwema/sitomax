@@ -137,14 +137,14 @@ export async function saveEmptyPage(pageId: string, rawData: unknown, rawExpecte
     delete clean.root.props.__expectedHeader;
   }
   const { supabase } = await requireUser();
-  // The empty snapshot and update are one SQL statement: another tab's edits
-  // (including root settings) must never be replaced by an AI result.
-  const { data: saved, error } = await supabase.from("pages").update({ draft_data: clean })
-    .eq("id", id).eq("draft_data", JSON.stringify(expectedDraft)).select("id");
-  if (error || !saved?.length) {
+  const { error } = await supabase.rpc("save_ai_empty_page", {
+    p_page_id: id, p_expected_draft: expectedDraft, p_data: clean,
+  });
+  if (error) {
     console.error("Could not save the AI page", { code: error?.code });
-    return { status: "error", conflict: error?.code === "40001" || !error,
-      message: "The page changed or is no longer available. Reload before building it again." };
+    return { status: "error", conflict: error.code === "40001",
+      message: error.code === "40001" ? "The page changed. Reload before building it again."
+        : "Could not save the AI page and its history. Check access and try again." };
   }
   return { status: "success", version, message: "AI page saved to draft. Publish to make it live." };
 }

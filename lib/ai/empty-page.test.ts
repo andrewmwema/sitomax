@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  lookup: vi.fn(), pages: vi.fn(), save: vi.fn(), request: vi.fn(), from: vi.fn(), update: vi.fn(), eq: vi.fn(),
+  lookup: vi.fn(), pages: vi.fn(), save: vi.fn(), request: vi.fn(), from: vi.fn(), update: vi.fn(), eq: vi.fn(), rpc: vi.fn(),
 }));
-vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: { from: mocks.from } }) }));
+vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }) }));
 vi.mock("./client", () => ({ requestAi: mocks.request }));
 vi.mock("./photos", () => ({
   prepareSectionPhotoSuggestions: vi.fn(),
@@ -35,6 +35,7 @@ beforeEach(() => {
   query.select.mockImplementation(() => mocks.update.mock.calls.length
     ? mocks.save() : query);
   mocks.save.mockResolvedValue({ data: [{ id: pageId }], error: null });
+  mocks.rpc.mockResolvedValue({ error: null });
   mocks.lookup.mockResolvedValue({ data: {
     id: pageId, slug: "our-team", title: "About our team", draft_data: draft,
     site: { id: siteId, account_id: accountId, business: { businessName: "Example", city: "York" },
@@ -116,20 +117,19 @@ describe("saving an AI page", () => {
   const data = { root: { props: { title: "Team", __editorTheme: { colors: { primary: "#ffffff" } } } },
     content: [{ type: "Section", props: { id: "generated", rows: [] } }] };
 
-  it("atomically compares the full empty snapshot and updates only draft content via the RLS client", async () => {
+  it("passes the exact empty baseline and versioned draft to the atomic history save", async () => {
     await expect(saveEmptyPage(pageId, data, draft, pageId)).resolves.toMatchObject({ status: "success" });
-    expect(mocks.update.mock.calls[0][0]).toMatchObject({ draft_data: {
-      ...data, root: { props: { title: "Team" } },
-    } });
-    expect(mocks.eq).toHaveBeenCalledWith("id", pageId);
-    expect(mocks.eq).toHaveBeenCalledWith("draft_data", JSON.stringify(draft));
-    expect(mocks.from).toHaveBeenCalledWith("pages");
+    expect(mocks.rpc).toHaveBeenCalledWith("save_ai_empty_page", {
+      p_page_id: pageId, p_expected_draft: draft, p_data: {
+        ...data, root: { props: { title: "Team", __expectedPageVersion: pageId, __nextPageVersion: expect.any(String) } },
+      },
+    });
     expect(mocks.lookup).not.toHaveBeenCalled();
   });
 
   it("fails safely when another editor saved, access was revoked, or the database rejected the write", async () => {
-    mocks.save.mockResolvedValueOnce({ data: [], error: null })
-      .mockResolvedValueOnce({ data: null, error: { code: "42501" } });
+    mocks.rpc.mockResolvedValueOnce({ error: { code: "40001" } })
+      .mockResolvedValueOnce({ error: { code: "42501" } });
     await expect(saveEmptyPage(pageId, data, draft, pageId)).resolves.toMatchObject({ status: "error", conflict: true });
     await expect(saveEmptyPage(pageId, data, draft, pageId)).resolves.toMatchObject({ status: "error" });
   });
@@ -141,6 +141,6 @@ describe("saving an AI page", () => {
         { type: "Embed", props: { id: "embed", code: "<script>bad()</script>" } },
       ] } }],
     }, draft, pageId)).rejects.toThrow("embeds");
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 });

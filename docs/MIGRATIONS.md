@@ -57,6 +57,17 @@ are applied; 0054's original triggers capture unchanged values before 0056.
 has no AI limits. It maps intake actions to CTA labels while retaining the
 template CTA text if no action is supplied; it does not change the CTA link.
 
+[`0058_ai_empty_page_history.sql`](../supabase/migrations/0058_ai_empty_page_history.sql)
+adds a separate authenticated function for atomic AI empty-page saves and
+history snapshots. It does not replace existing functions, triggers or policies,
+and deployed main does not call it. Apply only after the history and editor
+concurrency migrations are confirmed present, review its SQL, and do not
+deploy the feature's empty-page save until it is applied. It has not been
+database-tested.
+[`phase2_ai_empty_page_history_review.sql`](../supabase/tests/phase2_ai_empty_page_history_review.sql)
+is a review-only rollback test for the new function. It requires the TEST
+fixtures and separate approval before execution.
+
 0054 adds plan allowances and per-account overrides. Its backfill copies
 non-default legacy values and does not change existing credit balances. Main
 continues calling its legacy reservation and summary functions and showing
