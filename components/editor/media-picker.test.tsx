@@ -23,9 +23,9 @@ async function input(element: HTMLInputElement, value: string) {
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
-async function open(onSelect = vi.fn()) {
+async function open(onSelect = vi.fn(), aiSuggestion?: { query: string; alt: string }) {
   await act(async () => root.render(<EditorSiteContext.Provider value={{ siteId: "site", query: "tools" }}>
-    <ImageUploadField value="/existing.jpg" onChange={vi.fn()} onSelect={onSelect} />
+    <ImageUploadField value="/existing.jpg" onChange={vi.fn()} onSelect={onSelect} aiSuggestion={aiSuggestion} />
   </EditorSiteContext.Provider>));
   button("Replace image").focus();
   await click("Replace image");
@@ -120,5 +120,24 @@ describe("unified media picker", () => {
     await click("Use image");
     expect(mocks.select).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, photoId: 42 }));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ url: imported }));
+  });
+  it("offers five AI suggestions at a time and imports only the selected photo", async () => {
+    mocks.search.mockResolvedValueOnce({ status: "success", hasMore: false, photos: Array.from({ length: 8 }, (_, id) => ({
+      ...photo, id: id + 1, previewUrl: `https://cdn.pixabay.com/${id}.jpg`,
+    })) });
+    const onSelect = await open(vi.fn(), { query: "plumbing tools", alt: "Tools for plumbing work" });
+    expect(mocks.search).toHaveBeenCalledWith(expect.objectContaining({ query: "plumbing tools", page: 1 }));
+    expect(document.querySelectorAll('button[aria-label="Select Tools"]')).toHaveLength(5);
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    await click("Load more");
+    expect(document.querySelectorAll('button[aria-label="Select Tools"]')).toHaveLength(3);
+    expect(mocks.search).toHaveBeenCalledTimes(1);
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Select Tools"]')!.click());
+    await click("Use image");
+    expect(mocks.select).toHaveBeenCalledWith(expect.objectContaining({
+      query: "plumbing tools", page: 1, photoId: 6, alt: "Tools for plumbing work",
+    }));
+    expect(onSelect).toHaveBeenCalledWith({ url: imported, alt: "Tools for plumbing work" });
   });
 });

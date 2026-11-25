@@ -4,10 +4,13 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaImage } from "@/lib/media";
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), select: null as null | ((image: MediaImage) => void), dispatch: vi.fn() }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), select: null as null | ((image: MediaImage) => void), dispatch: vi.fn(),
+  suggestion: undefined as { query: string; alt: string } | undefined }));
 vi.mock("@puckeditor/core", () => ({ useGetPuck: () => mocks.get }));
 vi.mock("./image-upload-field", () => ({
-  ImageUploadField: ({ onSelect }: { onSelect: (image: MediaImage) => void }) => { mocks.select = onSelect; return null; },
+  ImageUploadField: ({ onSelect, aiSuggestion }: { onSelect: (image: MediaImage) => void; aiSuggestion?: { query: string; alt: string } }) => {
+    mocks.select = onSelect; mocks.suggestion = aiSuggestion; return null;
+  },
 }));
 import { PuckImageField } from "./puck-image-field";
 let container: HTMLDivElement;
@@ -44,5 +47,16 @@ describe("Puck media dispatch", () => {
         title: "Home", socialImage: image.url, socialImageAlt: image.alt,
       } } },
     }));
+  });
+  it("uses only the suggestion for the selected nested image field", async () => {
+    mocks.get.mockReturnValue({
+      selectedItem: { type: "Gallery", props: { id: "gallery", __aiImageSuggestions: {
+        "images[0].url": { query: "interior design", alt: "Bright interior" },
+        "images[1].url": { query: "garden", alt: "Garden" },
+      } } },
+      getPermissions: () => ({ edit: true }),
+    });
+    await act(async () => root.render(<PuckImageField name="images[0].url" value="" onChange={vi.fn()} />));
+    expect(mocks.suggestion).toEqual({ query: "interior design", alt: "Bright interior" });
   });
 });

@@ -5,6 +5,10 @@ import { block } from "@/templates/shared";
 import type { SiteToolCall } from "./site-tool";
 import { fillTemplatePage, templateFillContract } from "./template-fill";
 
+function imageSuggestions(contract: ReturnType<typeof templateFillContract>) {
+  return Object.fromEntries(contract.imageSlots.map(({ key }) => [key, { query: "plumber tools", alt: "Plumbing tools" }]));
+}
+
 describe("template page fill contract", () => {
   it("collects copy from every master page without modifying any master", () => {
     for (const template of Object.values(premiumTemplates)) {
@@ -14,7 +18,7 @@ describe("template page fill contract", () => {
         expect(contract.fields.length, `${template.key}/${page.slug}`).toBeGreaterThan(0);
         const values = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
           [key, sampleReview ? "[Add a real review]" : "Replacement"]));
-        const result = contract.apply({ fields: values, hiddenSections: [] });
+        const result = contract.apply({ fields: values, hiddenSections: [], images: imageSuggestions(contract) });
         expect(page.data).toEqual(before);
         expect(result.content.map(({ type, props }) => ({ type, id: props.id, design: props.design, variant: props.variant })))
           .toEqual(before.content.map(({ type, props }) => ({ type, id: props.id, design: props.design, variant: props.variant })));
@@ -32,12 +36,13 @@ describe("template page fill contract", () => {
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
     const review = contract.fields.find((field) => field.sampleReview);
     expect(review).toBeDefined();
-    expect(() => contract.apply({ fields: { ...values, extra: "untrusted" }, hiddenSections: [] })).toThrow();
-    expect(() => contract.apply({ fields: { ...values, [review!.key]: "A real customer loved it" }, hiddenSections: [] })).toThrow();
+    const images = imageSuggestions(contract);
+    expect(() => contract.apply({ fields: { ...values, extra: "untrusted" }, hiddenSections: [], images })).toThrow();
+    expect(() => contract.apply({ fields: { ...values, [review!.key]: "A real customer loved it" }, hiddenSections: [], images })).toThrow();
     const limited = contract.fields.find((field) => field.maxLength < 1000)!;
-    expect(() => contract.apply({ fields: { ...values, [limited.key]: "x".repeat(limited.maxLength + 1) }, hiddenSections: [] })).toThrow();
+    expect(() => contract.apply({ fields: { ...values, [limited.key]: "x".repeat(limited.maxLength + 1) }, hiddenSections: [], images })).toThrow();
     const seo = contract.fields.find((field) => field.label === "seoTitle")!;
-    expect(() => contract.apply({ fields: { ...values, [seo.key]: " " }, hiddenSections: [] })).toThrow();
+    expect(() => contract.apply({ fields: { ...values, [seo.key]: " " }, hiddenSections: [], images })).toThrow();
   });
 
   it("preserves nested images and links while replacing text", () => {
@@ -45,7 +50,7 @@ describe("template page fill contract", () => {
     const contract = templateFillContract(data);
     const values = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
-    const result = contract.apply({ fields: values, hiddenSections: [] });
+    const result = contract.apply({ fields: values, hiddenSections: [], images: imageSuggestions(contract) });
     const original = data.content.find((item) => item.type === "Services")!;
     const updated = result.content.find((item) => item.type === "Services")!;
     const before = original.props.services as { title: string; image: string; actionLink: string }[];
@@ -60,7 +65,7 @@ describe("template page fill contract", () => {
     const contract = templateFillContract(data);
     const values = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
-    const result = contract.apply({ fields: values, hiddenSections: [] });
+    const result = contract.apply({ fields: values, hiddenSections: [], images: imageSuggestions(contract) });
     const before = data.content.find((item) => item.type === "ContactForm")!;
     const after = result.content.find((item) => item.type === "ContactForm")!;
     expect(after.props.formName).toEqual(before.props.formName);
@@ -73,7 +78,7 @@ describe("template page fill contract", () => {
     const fields = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
     const call = vi.fn().mockResolvedValue({ stop_reason: "tool_use", content: [{
-      type: "tool_use", name: "fill_template_page", id: "call", input: { fields, hiddenSections: [] },
+      type: "tool_use", name: "fill_template_page", id: "call", input: { fields, hiddenSections: [], images: imageSuggestions(contract) },
     }] });
     const result = await fillTemplatePage(call as SiteToolCall, page.data,
       { ...emptyBusiness, businessName: "Example", businessType: "Plumber", city: "York" },
@@ -91,10 +96,11 @@ describe("template page fill contract", () => {
       [key, requiredText ?? (sampleReview ? "[Add a real review]" : "Replacement")]));
     const legal = contract.fields.find(({ requiredText }) => requiredText)!;
     expect(legal.requiredText).toContain("[Add your reviewed privacy policy]");
-    expect(() => contract.apply({ fields: { ...fields, [legal.key]: "<p>We never share your information.</p>" }, hiddenSections: [] })).toThrow();
+    const images = imageSuggestions(contract);
+    expect(() => contract.apply({ fields: { ...fields, [legal.key]: "<p>We never share your information.</p>" }, hiddenSections: [], images })).toThrow();
     const rich = contract.fields.find(({ richText, requiredText }) => richText && !requiredText)!;
-    expect(() => contract.apply({ fields: { ...fields, [rich.key]: '<a href="https://example.com">Link</a>' }, hiddenSections: [] })).toThrow();
-    expect(contract.apply({ fields, hiddenSections: [] }).content).toHaveLength(page.data.content.length);
+    expect(() => contract.apply({ fields: { ...fields, [rich.key]: '<a href="https://example.com">Link</a>' }, hiddenSections: [], images })).toThrow();
+    expect(contract.apply({ fields, hiddenSections: [], images }).content).toHaveLength(page.data.content.length);
   });
 
   it("only hides listed optional sections, retaining their content and existing design", () => {
@@ -104,12 +110,29 @@ describe("template page fill contract", () => {
     const fields = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
       [key, sampleReview ? "[Add a real review]" : "Replacement"]));
     const section = contract.optionalSections.find(({ type }) => type === "Testimonials")!;
-    const result = contract.apply({ fields, hiddenSections: [section.key] });
+    const images = imageSuggestions(contract);
+    const result = contract.apply({ fields, hiddenSections: [section.key], images });
     expect(result.content.at(-1)?.props.design).toMatchObject({ settings: {
       fullBleed: false, hideOnDesktop: true, hideOnTablet: true, hideOnMobile: true,
     } });
     expect(data.content.at(-1)?.props.design).toEqual({ settings: { fullBleed: false } });
-    expect(() => contract.apply({ fields, hiddenSections: ["section_1"] })).toThrow();
-    expect(() => contract.apply({ fields, hiddenSections: [section.key, section.key] })).toThrow();
+    expect(() => contract.apply({ fields, hiddenSections: ["section_1"], images })).toThrow();
+    expect(() => contract.apply({ fields, hiddenSections: [section.key, section.key], images })).toThrow();
+  });
+
+  it("stores image suggestions by field path without replacing template images", () => {
+    const data = structuredClone(premiumTemplates.showcase.pages[0].data);
+    const contract = templateFillContract(data);
+    const fields = Object.fromEntries(contract.fields.map(({ key, sampleReview }) =>
+      [key, sampleReview ? "[Add a real review]" : "Replacement"]));
+    const slot = contract.imageSlots.find(({ section, name }) => section === "Services" && name === "services[0].image")!;
+    expect(slot).toBeDefined();
+    const images = imageSuggestions(contract);
+    const result = contract.apply({ fields, hiddenSections: [], images });
+    const service = result.content.find(({ type }) => type === "Services")!;
+    expect(service.props.__aiImageSuggestions).toMatchObject({ [slot.name]: images[slot.key] });
+    expect((service.props.services as { image: string }[])[0].image)
+      .toBe((data.content.find(({ type }) => type === "Services")!.props.services as { image: string }[])[0].image);
+    expect(() => contract.apply({ fields, hiddenSections: [], images: { ...images, [slot.key]: { query: "", alt: "Tools" } } })).toThrow();
   });
 });

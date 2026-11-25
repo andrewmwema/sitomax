@@ -13,13 +13,15 @@ type Tab = "stock" | "upload" | "library" | "url";
 type Candidate = MediaImage & { photoId?: number; search?: { query: string; orientation: PhotoSearch["orientation"]; page: number } };
 const control = "w-full rounded-lg border border-[#E8E7E3] bg-white px-3 py-2 text-sm focus:outline-2 focus:outline-[#4B3FE0]";
 
-export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose }: {
-  scope: MediaScope; initialQuery?: string; value: string; onSelect: (image: MediaImage) => void; onClose: () => void;
+export function MediaPicker({ scope, initialQuery = "", aiAlt, value, onSelect, onClose }: {
+  scope: MediaScope; initialQuery?: string; aiAlt?: string; value: string; onSelect: (image: MediaImage) => void; onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("stock");
   const [query, setQuery] = useState(initialQuery.slice(0, 100));
   const [orientation, setOrientation] = useState<PhotoSearch["orientation"]>("all");
   const [images, setImages] = useState<Candidate[]>([]);
+  const [stockRemainder, setStockRemainder] = useState<Candidate[]>([]);
+  const [stockHasMore, setStockHasMore] = useState(false);
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [pendingUpload, setPendingUpload] = useState<{ file: File; bucket: string; path: string; url: string } | null>(null);
   const [alt, setAlt] = useState("");
@@ -67,6 +69,12 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
   }, [scopeKey]);
 
   async function find(loadMore = false) {
+    if (loadMore && tab === "stock" && aiAlt && stockRemainder.length) {
+      const next = stockRemainder.slice(0, 5), rest = stockRemainder.slice(5);
+      setImages(next); setStockRemainder(rest); setMore(rest.length > 0 || stockHasMore);
+      setCandidate(null); setAlt(""); setError("");
+      return;
+    }
     const request = ++latest.current;
     setBusy(true); setError(""); setSearched(true);
     if (!loadMore) { setImages([]); setMore(false); setCandidate(null); }
@@ -78,8 +86,14 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
         if (latest.current !== request) return;
         if (result.status === "error") { setError(result.message); return; }
         const next = result.photos.map((photo) => ({ url: photo.previewUrl, alt: photo.alt, photoId: photo.id, search }));
-        setImages((previous) => loadMore ? [...previous, ...next.filter((photo) => !previous.some((item) => item.photoId === photo.photoId))] : next);
-        setPage(nextPage); setMore(result.hasMore);
+        if (aiAlt) {
+          setImages(next.slice(0, 5)); setStockRemainder(next.slice(5)); setStockHasMore(result.hasMore);
+          setCandidate(null); setAlt(""); setMore(next.length > 5 || result.hasMore);
+        } else {
+          setImages((previous) => loadMore ? [...previous, ...next.filter((photo) => !previous.some((item) => item.photoId === photo.photoId))] : next);
+          setMore(result.hasMore);
+        }
+        setPage(nextPage);
       } else {
         const nextOffset = loadMore ? offset + 24 : 0;
         const result = await listMedia({ scope, query, offset: nextOffset });
@@ -92,7 +106,7 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
     finally { if (latest.current === request) setBusy(false); }
   }
   function chooseTab(next: Tab) {
-    latest.current++; setTab(next); setImages([]); setCandidate(null); setPendingUpload(null); setAlt(""); setSearched(false); setMore(false); setBusy(false); setError("");
+    latest.current++; setTab(next); setImages([]); setStockRemainder([]); setStockHasMore(false); setCandidate(null); setPendingUpload(null); setAlt(""); setSearched(false); setMore(false); setBusy(false); setError("");
     if (preview.current) { URL.revokeObjectURL(preview.current); preview.current = null; }
     setQuery(next === "stock" ? initialQuery.slice(0, 100) : "");
   }
@@ -191,12 +205,13 @@ export function MediaPicker({ scope, initialQuery = "", value, onSelect, onClose
             </label> : null}
             <button type="button" disabled={busy || (tab === "stock" && !query.trim())} onClick={() => void find()} className="platform-button"><Search size={16} />Search</button>
           </div>
-          {tab === "stock" ? <p className="mb-4 text-xs text-zinc-500">Photos from <a href="https://pixabay.com/" target="_blank" rel="noopener noreferrer" className="underline">Pixabay</a></p> : null}
+          {tab === "stock" ? <p className="mb-4 text-xs text-zinc-500">Photos from <a href="https://pixabay.com/" target="_blank" rel="noopener noreferrer" className="underline">Pixabay</a>
+            {aiAlt ? " · Review the suggested alt text against the image you choose." : null}</p> : null}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-busy={busy}>
             {images.map((image) => <button key={image.url} type="button" disabled={busy} aria-label={`Select ${image.alt || image.name || "image"}`}
               aria-pressed={candidate?.url === image.url || (!candidate && value === image.url)}
               className={`group overflow-hidden rounded-xl border-2 text-left focus:outline-2 focus:outline-[#4B3FE0] ${candidate?.url === image.url || (!candidate && value === image.url) ? "border-[#4B3FE0]" : "border-transparent"}`}
-              onClick={() => { setCandidate(image); setAlt(image.alt); setError(""); }}>
+              onClick={() => { setCandidate(image); setAlt(tab === "stock" && aiAlt ? aiAlt : image.alt); setError(""); }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" className="aspect-[4/3] w-full object-cover transition-transform group-hover:scale-105" />
               <span className="block truncate bg-white p-2 text-xs">{image.name || image.alt}</span>

@@ -167,7 +167,7 @@ export function TemplateAiWizard({ templates, accounts, rootDomain, initialTempl
       <button className="platform-button" type="button" disabled={busy} onClick={() => void close()}>Close</button>
     </header>
     {result ? <div className="mt-5 space-y-4">
-      <p className="text-sm">Nothing is published. Review every page, placeholder and photo before publishing.</p>
+      <p className="text-sm">Nothing is published. Review every page and placeholder. In the editor, choose images to review AI stock-photo suggestions or upload your own before publishing.</p>
       {result.warnings.map((warning) => <p role="status" key={warning} className="text-sm text-amber-800">{warning}</p>)}
       <ul className="space-y-2">{result.pages.map((page) => <li key={page.pageId} className="flex items-center justify-between gap-3 text-sm">
         <span>{page.label}: {page.built ? "Draft built" : "Needs attention"}</span>

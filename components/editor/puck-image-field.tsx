@@ -3,6 +3,7 @@
 import { useGetPuck } from "@puckeditor/core";
 import { ImageUploadField } from "./image-upload-field";
 import { replaceImage } from "@/lib/editor/media";
+import { aiImageSuggestion } from "@/lib/editor/ai-image-suggestions";
 import type { MediaImage } from "@/lib/media";
 
 export function PuckImageField({ name, value, onChange, readOnly }: {
@@ -12,6 +13,7 @@ export function PuckImageField({ name, value, onChange, readOnly }: {
   const current = getPuck().selectedItem;
   const heading = current?.props.heading || current?.props.title;
   const query = typeof heading === "string" ? heading.replace(/<[^>]*>|\[[^\]]*\]/g, "").trim().slice(0, 100) : undefined;
+  const suggestion = aiImageSuggestion(current?.props, name);
   function select(image: MediaImage) {
     const { selectedItem, appState, dispatch } = getPuck();
     if (readOnly || getPuck().getPermissions({ item: selectedItem }).edit === false) throw new Error("This image is read-only.");
@@ -26,5 +28,6 @@ export function PuckImageField({ name, value, onChange, readOnly }: {
       } }, recordHistory: true });
     }
   }
-  return <ImageUploadField value={value} onChange={onChange} onSelect={select} readOnly={readOnly} initialQuery={query} />;
+  return <ImageUploadField value={value} onChange={onChange} onSelect={select} readOnly={readOnly}
+    initialQuery={query} aiSuggestion={suggestion} />;
 }

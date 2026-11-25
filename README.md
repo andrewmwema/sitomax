@@ -315,6 +315,10 @@ confirmation before choosing or building a design.
 Template personalization may hide unsuitable testimonial, team, partner-logo
 or pricing sections on all devices. Their content remains editable in the
 editor, where the section's visibility settings can restore it.
+For supported template image fields, the editor offers AI search suggestions
+in groups of up to five. The existing image stays in place until the user
+chooses a stock photo or uploads one; review the suggested alt text against
+the selected image.
 
 Apply `0019_internal_account.sql` in the Supabase SQL Editor after migrations
 through `0018`. Opening **New site** or **Build with AI** as a super admin

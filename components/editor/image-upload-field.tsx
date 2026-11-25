@@ -6,9 +6,10 @@ import type { MediaImage } from "@/lib/media";
 
 export const EditorSiteContext = createContext<{ siteId: string; query?: string } | null>(null);
 
-export function ImageUploadField({ value, onChange, onSelect, readOnly, agency = false, initialQuery, imageClassName }: {
+export function ImageUploadField({ value, onChange, onSelect, readOnly, agency = false, initialQuery, imageClassName, aiSuggestion }: {
   value: string; onChange: (value: string) => void; onSelect?: (image: MediaImage) => void;
   readOnly?: boolean; agency?: boolean; initialQuery?: string; imageClassName?: string;
+  aiSuggestion?: { query: string; alt: string };
 }) {
   const site = useContext(EditorSiteContext);
   const [open, setOpen] = useState(false);
@@ -32,8 +33,10 @@ export function ImageUploadField({ value, onChange, onSelect, readOnly, agency =
     </div>
     {!available ? <p role="alert" className="text-xs text-red-700">Site media is unavailable here.</p> : null}
     {error ? <p role="alert" className="text-xs text-red-700">{error}</p> : null}
+    {aiSuggestion ? <p className="text-xs text-zinc-600">AI photo suggestions are available. Your current image stays until you choose another.</p> : null}
     {open && available ? <MediaPicker scope={agency ? { agency: true } : { siteId: site!.siteId }}
-      initialQuery={[site?.query, initialQuery].filter(Boolean).join(" ").slice(0, 100) || "business"} value={value}
+      initialQuery={aiSuggestion?.query ?? ([site?.query, initialQuery].filter(Boolean).join(" ").slice(0, 100) || "business")}
+      aiAlt={aiSuggestion?.alt} value={value}
       onClose={() => setOpen(false)} onSelect={(image) => onSelect ? onSelect(image) : onChange(image.url)} /> : null}
   </div>;
 }

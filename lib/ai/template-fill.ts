@@ -5,10 +5,12 @@ import { z } from "zod";
 import { templateBusinessIntakeSchema } from "@/lib/business";
 import { puckConfig } from "@/lib/puck/config";
 import { sanitizePuckData } from "@/lib/richtext";
+import { aiImageSuggestionSchema, imageFieldPath } from "@/lib/editor/ai-image-suggestions";
 import { sectionContentMetadata } from "@/lib/sections/catalog";
 import type { TemplateData } from "@/templates/shared";
 import { fillSiteTool, type SiteToolCall } from "./site-tool";
 import { strictTool } from "./strict-tool";
+import { isImageField } from "./site-schemas";
 
 type Fields = Record<string, Field>;
 type Path = (string | number)[];
@@ -36,6 +38,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function templateFillContract(data: TemplateData, legalPage?: "privacy" | "terms") {
   const fields: CopyField[] = [];
+  const imageSlots: { key: string; section: string; path: Path; name: string; aspect: unknown }[] = [];
   const optionalSections = data.content.flatMap((item, index) =>
     ["Testimonials", "Team", "Logos", "Pricing"].includes(item.type)
       ? [{ key: `section_${index + 1}`, type: item.type, index }] : []);
@@ -45,14 +48,17 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
       required, ...(requiredText ? { requiredText } : {}) });
   };
 
-  function walk(value: unknown, definitions: Fields, section: string, path: Path, metadataPath: string,
+  function walk(value: unknown, definitions: Fields, section: string, path: Path, sectionPath: Path, metadataPath: string,
     limits: ReturnType<typeof sectionContentMetadata>["limits"]) {
     if (!isRecord(value)) return;
     for (const [key, field] of Object.entries(definitions)) {
       const current = value[key];
       const nextPath = [...path, key];
       const propertyPath = `${metadataPath}${key}`;
-      if ((field.type === "text" || field.type === "textarea" || field.type === "richtext")
+      if (isImageField(field) && typeof current === "string" && section !== "Logos") {
+        imageSlots.push({ key: `image_${imageSlots.length + 1}`, section, path: sectionPath,
+          name: imageFieldPath(nextPath.slice(sectionPath.length)), aspect: field.aiAspectRatio });
+      } else if ((field.type === "text" || field.type === "textarea" || field.type === "richtext")
         && !NON_COPY_FIELD.test(key) && typeof current === "string" && current.trim()) {
         add(section, nextPath, propertyPath, current, field.type === "richtext",
           limits[propertyPath]?.maxLength ?? (field.type === "richtext" ? 8000 : 2000),
@@ -62,9 +68,9 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
             ? `<p>[Add your reviewed ${legalPage === "privacy" ? "privacy policy" : "terms of service"}]</p>` : undefined);
       } else if (field.type === "array" && Array.isArray(current)) {
         current.forEach((item, index) => walk(item, field.arrayFields as Fields, section,
-          [...nextPath, index], `${propertyPath}[].`, limits));
+          [...nextPath, index], sectionPath, `${propertyPath}[].`, limits));
       } else if (field.type === "object") {
-        walk(current, field.objectFields as Fields, section, nextPath, `${propertyPath}.`, limits);
+        walk(current, field.objectFields as Fields, section, nextPath, sectionPath, `${propertyPath}.`, limits);
       } else if (field.type === "slot" && Array.isArray(current)) {
         current.forEach((item, index) => visit(item, [...nextPath, index]));
       }
@@ -78,7 +84,8 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
     const component = puckConfig.components[item.type as keyof typeof puckConfig.components];
     if (!component?.fields) throw new Error(`The template contains an unsupported section: ${item.type}.`);
     if (item.type === "Navigation" || item.type === "Footer") return;
-    walk(item.props, component.fields as Fields, item.type, [...path, "props"], "", sectionContentMetadata(item.type).limits);
+    const sectionPath = [...path, "props"];
+    walk(item.props, component.fields as Fields, item.type, sectionPath, sectionPath, "", sectionContentMetadata(item.type).limits);
   }
 
   data.content.forEach((item, index) => visit(item, ["content", index]));
@@ -100,6 +107,7 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
     hiddenSections: z.array(z.string()).max(optionalSections.length)
       .refine((keys) => new Set(keys).size === keys.length
         && keys.every((key) => optionalSections.some((section) => section.key === key)), "Choose only listed sections."),
+    images: z.strictObject(Object.fromEntries(imageSlots.map(({ key }) => [key, aiImageSuggestionSchema]))),
   });
   const tool = strictTool("fill_template_page", "Return replacement copy for every named field.", schema);
 
@@ -107,6 +115,7 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
     fields: fields.map(({ key, section, label, current, richText, maxLength, sampleReview, requiredText, required }) =>
       ({ key, section, label, current, richText, maxLength, sampleReview, required, ...(requiredText ? { requiredText } : {}) })),
     optionalSections: optionalSections.map(({ key, type }) => ({ key, type })),
+    imageSlots: imageSlots.map(({ key, section, name, aspect }) => ({ key, section, name, aspect })),
     schema,
     tool,
     apply(raw: unknown): TemplateData {
@@ -132,6 +141,17 @@ export function templateFillContract(data: TemplateData, legalPage?: "privacy" |
         props.design = { ...design, settings: { ...design.settings,
           hideOnDesktop: true, hideOnTablet: true, hideOnMobile: true } };
       }
+      for (const slot of imageSlots) {
+        let props: unknown = draft;
+        for (const part of slot.path) {
+          if (!isRecord(props) && !Array.isArray(props)) throw new Error("The template image slot changed unexpectedly.");
+          props = Reflect.get(props, part);
+        }
+        if (!isRecord(props)) throw new Error("The template image slot changed unexpectedly.");
+        const suggestions = props.__aiImageSuggestions;
+        if (suggestions !== undefined && !isRecord(suggestions)) throw new Error("The template has invalid image suggestions.");
+        props.__aiImageSuggestions = { ...suggestions, [slot.name]: result.images[slot.key] };
+      }
       return sanitizePuckData(draft);
     },
   };
@@ -152,7 +172,8 @@ Do not include links, scripts, styling or HTML except simple paragraphs, emphasi
 When a field includes requiredText, return that exact text.
 You may hide optional sections that would otherwise imply unprovided staff, reviews, partnerships or prices.
 Return their keys in hiddenSections; return an empty array when none should be hidden. Never hide a section merely because details are missing if placeholders are appropriate.
-${JSON.stringify({ business, page, fields: contract.fields, optionalSections: contract.optionalSections })}`);
+For each image slot, provide concise stock-photo search keywords and a short suggested alt description. Do not invent identifiable staff or endorsements.
+${JSON.stringify({ business, page, fields: contract.fields, optionalSections: contract.optionalSections, imageSlots: contract.imageSlots })}`);
   if (!result.result.success) throw new Error("The template page failed validation. Its draft was not changed.");
   return contract.apply(result.result.data);
 }
