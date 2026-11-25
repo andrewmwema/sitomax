@@ -86,6 +86,8 @@ describe("template page fill contract", () => {
     expect(result).not.toBe(page.data);
     expect(result.content.find((item) => item.type === "Hero")?.props.heading).toBe("Replacement");
     expect(result.root.props).toMatchObject({ title: "Replacement", seoTitle: "Replacement", description: "Replacement" });
+    expect(call.mock.calls[0][1][0].content).toContain("may repurpose its copy and draft title");
+    expect(call.mock.calls[0][1][0].content).toContain("page address or menu label has changed");
     expect(call).toHaveBeenCalledTimes(1);
   });
 

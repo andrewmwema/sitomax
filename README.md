@@ -315,6 +315,8 @@ confirmation before choosing or building a design.
 Template personalization may hide unsuitable testimonial, team, partner-logo
 or pricing sections on all devices. Their content remains editable in the
 editor, where the section's visibility settings can restore it.
+Interior-page copy and draft titles may be repurposed for the business.
+Addresses and menu labels remain as copied and can be changed separately.
 For supported template image fields, the editor offers AI search suggestions
 in groups of up to five. The existing image stays in place until the user
 chooses a stock photo or uploads one; review the suggested alt text against
