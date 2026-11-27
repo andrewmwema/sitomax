@@ -47,6 +47,45 @@ undoes them and checks the originals are back. It is skipped unless
 TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm test
 ```
 
+## Website grader (Phase A)
+
+The scan API is served on the platform host at `/api/grader/scan` and
+`/api/grader/report/{slug}`; the apex marketing host remains a tenant host and
+does not expose these API routes. The future marketing UI must call the platform
+origin using `NEXT_PUBLIC_APP_URL`. Scan requests require Turnstile, and reports
+expose only progress, scores, screenshot, headline and teaser issues until
+unlocked. Phase B's pages and unlock flow are not included yet.
+
+Apply `0062_grader_phase_a.sql` using the Supabase SQL Editor. Generate a
+separate random `GRADER_WORKER_SECRET` of at least 32 characters and configure
+it in `.env.local` and Vercel. Register **only its SHA-256 hex hash** in the
+database, as with the lead worker:
+
+```sql
+update public.grader_config set secret_hash = '<SHA-256 hex hash>' where singleton;
+```
+
+For example, obtain the hash locally with `printf %s "$GRADER_WORKER_SECRET" |
+sha256sum` after setting that variable in a private shell. Do not put the secret
+itself into SQL or source control. Also configure `ANALYTICS_HASH_SALT`,
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, `ANTHROPIC_API_KEY`,
+and optionally `PAGESPEED_API_KEY` and `GOOGLE_PLACES_API_KEY` in Vercel.
+Allow the marketing hostname in Cloudflare's Turnstile configuration.
+Cloudflare's dummy secret reports `example.com` and is accepted only in
+development; use a real site key and secret in production.
+The grader fails closed if its worker, IP hash salt, or Turnstile is unavailable.
+
+`grader_config` controls the global daily scan cap and Places limits, initially
+300 scans, 30 Places calls per UTC day and 900 per UTC month. The latter two
+cannot be set above those ceilings. Successful Places searches are cached for
+seven days; each outbound Places attempt is reserved and recorded in
+`grader_places_calls`, which super admins can read. Quota, billing and provider
+failures leave Places findings as "Couldn't check". Completed scans are cached
+for 24 hours when the final URL and business inputs match. AI token usage is
+recorded in `grader_ai_usage`; summaries are omitted if validation or accounting
+fails. Screenshots are stored in the public `grader-screenshots` bucket, with
+uploads restricted to the scoped worker secret.
+
 ## Premium website designs
 
 Apply migrations only to a local or staging Supabase project, then run

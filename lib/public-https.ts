@@ -9,6 +9,10 @@ for (const [prefix, bits] of [
   ["198.18.0.0", 15], ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 3],
 ] as const) blocked.addSubnet(prefix, bits);
 
+export function isPublicIpv4(address: string) {
+  return isIP(address) === 4 && !blocked.check(address);
+}
+
 export function isPublicHttpsUrl(url: URL) {
   return url.protocol === "https:" && !url.port && !url.username && !url.password && !isIP(url.hostname)
     && /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z][a-z0-9-]*$/i.test(url.hostname);
@@ -20,7 +24,7 @@ export async function requestPublicHttps(url: URL, signal: AbortSignal,
   if (!isPublicHttpsUrl(url)) throw new Error("Use a public HTTPS URL.");
   const addresses = await lookup(url.hostname, { family: 4, all: true });
   signal.throwIfAborted();
-  if (!addresses.length || addresses.some(({ address }) => blocked.check(address))) throw new Error("Use a public HTTPS host.");
+  if (!addresses.length || addresses.some(({ address }) => !isPublicIpv4(address))) throw new Error("Use a public HTTPS host.");
   const address = addresses[0].address;
   // Pin the validated address but retain hostname-based TLS verification.
   return new Promise<import("node:http").IncomingMessage>((resolve, reject) => {
