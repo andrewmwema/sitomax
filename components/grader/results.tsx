@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { brand } from "@/lib/brand";
 import { publicReportSchema, type PublicGraderReport } from "@/lib/grader/public-report";
+import { GraderUnlockForm } from "./unlock-form";
 
 const categories = [
   ["speed", "Speed"], ["mobile", "Mobile"], ["seo", "Search visibility"],
@@ -82,10 +83,18 @@ export function GraderResults({ slug }: { slug: string }) {
         <span>0{index + 1} / OPPORTUNITY</span><h3>{issue.title}</h3><p>{issue.why_it_matters}</p></article>)}</div>
         : <p>We couldn&apos;t generate issue highlights for this scan.</p>}
     </section>
-    <section className="grader-locked grader-card"><div aria-hidden="true" className="grader-lock">🔒</div>
-      <h2>Get the full picture.</h2><p>The full report includes detailed checks and a step-by-step fix plan.</p>
-      <p className="grader-note">Full report unlocking is coming soon.</p>
-    </section>
+    {report.unlocked ? <section className="grader-card grader-breakdown">
+      <h2>Full report</h2>
+      {report.ai_summary ? <><p>{report.ai_summary.summary}</p><h3>Your fix plan</h3>
+        <ol>{report.ai_summary.fix_plan.map((item, index) => <li key={index}>{item}</li>)}</ol></> : <p>AI summary couldn&apos;t be generated.</p>}
+      {report.results?.checks.map((check) => <article key={check.id}><h3>{check.id.replaceAll("_", " ")}</h3>
+        <p>{check.status === "unknown" ? "Couldn't check" : check.status} {check.value !== null ? `— ${check.value}` : ""}</p>
+        <p>{check.detail}</p><p>{check.fix}</p></article>)}
+    </section> : <section className="grader-locked grader-card"><div aria-hidden="true" className="grader-lock">🔒</div>
+      <h2>Unlock your full report + step-by-step fix plan</h2>
+      <p>Get detailed checks and a practical plan for your website.</p>
+      <GraderUnlockForm slug={slug} onUnlocked={() => setRetry((value) => value + 1)} />
+    </section>}
     <Link className="grader-text-link" href="/grader">← Grade another website</Link>
   </div>;
 }

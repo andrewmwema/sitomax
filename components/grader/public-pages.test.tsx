@@ -86,4 +86,29 @@ describe("public grader pages", () => {
     expect(container.textContent).toContain("couldn't load your report");
     expect(container.textContent).not.toContain("Your score breakdown");
   });
+
+  it("unlocks with explicit consent and refreshes the report without navigation", async () => {
+    const complete = { ...teaser, status: "complete", scores: {
+      overall: 80, grade: "B", categories: { speed: 80 },
+    }, headline: "A useful start.", top_issues: [] };
+    const full = { ...complete, unlocked: true, results: { checks: [{
+      id: "seo_title", category: "seo", status: "warn", value: null, detail: "Title needs attention.", fix: "Improve the title.",
+    }], places_enabled: false }, ai_summary: null };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json(complete))
+      .mockResolvedValueOnce(Response.json({ ok: true })).mockResolvedValueOnce(Response.json(full));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<GraderResults slug={slug} />));
+    const form = container.querySelector("form")!;
+    form.querySelector<HTMLInputElement>("[name=name]")!.value = "Example";
+    form.querySelector<HTMLInputElement>("[name=email]")!.value = "owner@example.com";
+    expect(form.querySelector<HTMLInputElement>("[name=consentMarketing]")!.checked).toBe(false);
+    await act(async () => form.querySelector<HTMLButtonElement>("button[type=button]")!.click());
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({
+      slug, name: "Example", email: "owner@example.com", consentMarketing: false, turnstileToken: "verified-token",
+    });
+    expect(container.textContent).toContain("Title needs attention.");
+    expect(container.querySelector("form")).toBeNull();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
 });

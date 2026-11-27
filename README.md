@@ -51,8 +51,7 @@ TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm tes
 
 The public grader landing page lives at `/grader` on the marketing apex.
 It calls the platform host's scan and report APIs, displays live progress and
-shows a free preview. Full-report unlocking is not available until the next
-Phase B step. The scan API is served on the platform host at `/api/grader/scan` and
+shows a free preview and an email gate for the full results. The scan API is served on the platform host at `/api/grader/scan` and
 `/api/grader/report/{slug}`; the apex marketing host remains a tenant host and
 does not expose these API routes. The marketing UI calls the platform
 origin using `NEXT_PUBLIC_APP_URL`. Scan requests require Turnstile, and reports
@@ -83,6 +82,18 @@ Allow the marketing hostname in Cloudflare's Turnstile configuration.
 Cloudflare's dummy secret reports `example.com` and is accepted only in
 development; use a real site key and secret in production.
 The grader fails closed if its worker, IP hash salt, or Turnstile is unavailable.
+
+Apply `0065_grader_unlocks.sql` in the Supabase SQL Editor. Configure
+`GRADER_LEADS_ACCOUNT_ID` and `GRADER_LEADS_SITE_ID` with the account and site
+that should receive grader leads, and `GRADER_NOTIFICATION_EMAIL` with the
+notification recipient. The site must belong to that account. The unlock API
+also requires Postmark's transactional email configuration. Unlocks create or
+deduplicate a lead by email for that site and attach report details as a note;
+existing lead status is preserved. Notifications are queued transactionally,
+retried by `/api/cron/grader` with `CRON_SECRET`, and after five failures remain
+visible to super admins in `grader_notifications` with status `failed`. Delivery
+is at-least-once if a provider accepts an email but its acknowledgement is lost.
+The visitor report email and PDF will be added in the next Phase B step.
 
 `grader_config` controls the global daily scan cap and Places limits, initially
 300 scans, 30 Places calls per UTC day and 900 per UTC month. The latter two
