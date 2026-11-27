@@ -40,6 +40,9 @@ export const postmarkProvider: EmailProvider = {
         Tag: message.tag,
         Metadata: message.metadata,
         MessageStream: message.stream ?? config.stream,
+        Attachments: message.attachments?.map((attachment) => ({
+          Name: attachment.name, Content: attachment.content, ContentType: attachment.contentType, ContentID: null,
+        })),
         TrackOpens: false,
         TrackLinks: Models.LinkTrackingOptions.None,
       });

@@ -13,7 +13,8 @@ export type EmailMessage = {
   bcc?: string;
   from?: string;
   stream?: string;
-  tag: "invite" | "domain" | "form-notification" | "password-reset" | "lead-reply" | "lead-forward" | "grader-notification";
+  attachments?: readonly { name: string; content: string; contentType: string }[];
+  tag: "invite" | "domain" | "form-notification" | "password-reset" | "lead-reply" | "lead-forward" | "grader-notification" | "grader-report";
   metadata?: Record<string, string>;
 };
 

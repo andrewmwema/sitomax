@@ -93,7 +93,12 @@ existing lead status is preserved. Notifications are queued transactionally,
 retried by `/api/cron/grader` with `CRON_SECRET`, and after five failures remain
 visible to super admins in `grader_notifications` with status `failed`. Delivery
 is at-least-once if a provider accepts an email but its acknowledgement is lost.
-The visitor report email and PDF will be added in the next Phase B step.
+Apply `0066_grader_report_mail.sql` as well. A transactional email with the PDF
+and report link is queued for every unlock, with the same retry behavior; super
+admins can inspect failures in `grader_report_mail`. PDFs are generated on the
+server and cached in the private `grader-reports` bucket. Set
+`NEXT_PUBLIC_GRADER_CTA_URL` to the desired HTTPS sales destination (for
+example `https://sitomax.com/contact`); report attribution is added to its URL.
 
 `grader_config` controls the global daily scan cap and Places limits, initially
 300 scans, 30 Places calls per UTC day and 900 per UTC month. The latter two

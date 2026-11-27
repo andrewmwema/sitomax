@@ -6,12 +6,9 @@ import Link from "next/link";
 import { brand } from "@/lib/brand";
 import { publicReportSchema, type PublicGraderReport } from "@/lib/grader/public-report";
 import { GraderUnlockForm } from "./unlock-form";
+import { GraderFullReport } from "./full-report";
+import { graderCategories } from "@/lib/grader/presentation";
 
-const categories = [
-  ["speed", "Speed"], ["mobile", "Mobile"], ["seo", "Search visibility"],
-  ["security", "Security & trust"], ["conversion", "Lead capture"],
-  ["local", "Local presence"], ["social", "Social & content"],
-] as const;
 const progress = [
   ["html", "Looking at your homepage"], ["mobile", "Testing mobile speed"],
   ["desktop", "Testing desktop speed"], ["security", "Checking security"],
@@ -72,7 +69,7 @@ export function GraderResults({ slug }: { slug: string }) {
     {report.screenshot_url ? <Image unoptimized width={1200} height={900} src={report.screenshot_url} alt={`Screenshot of ${report.domain}`} className="grader-screenshot" />
       : <div className="grader-screenshot-placeholder">Screenshot couldn&apos;t be checked.</div>}</section>
     <section className="grader-card grader-breakdown"><h2>Your score breakdown</h2>
-      {categories.map(([key, label]) => {
+      {graderCategories.filter(([key]) => key !== "accessibility").map(([key, label]) => {
         const score = report.scores?.categories[key] ?? null;
         return <div className="grader-category" key={key}><span>{label}</span>
           <div className="grader-bar"><i style={{ width: `${score ?? 0}%` }} /></div>
@@ -83,14 +80,7 @@ export function GraderResults({ slug }: { slug: string }) {
         <span>0{index + 1} / OPPORTUNITY</span><h3>{issue.title}</h3><p>{issue.why_it_matters}</p></article>)}</div>
         : <p>We couldn&apos;t generate issue highlights for this scan.</p>}
     </section>
-    {report.unlocked ? <section className="grader-card grader-breakdown">
-      <h2>Full report</h2>
-      {report.ai_summary ? <><p>{report.ai_summary.summary}</p><h3>Your fix plan</h3>
-        <ol>{report.ai_summary.fix_plan.map((item, index) => <li key={index}>{item}</li>)}</ol></> : <p>AI summary couldn&apos;t be generated.</p>}
-      {report.results?.checks.map((check) => <article key={check.id}><h3>{check.id.replaceAll("_", " ")}</h3>
-        <p>{check.status === "unknown" ? "Couldn't check" : check.status} {check.value !== null ? `— ${check.value}` : ""}</p>
-        <p>{check.detail}</p><p>{check.fix}</p></article>)}
-    </section> : <section className="grader-locked grader-card"><div aria-hidden="true" className="grader-lock">🔒</div>
+    {report.unlocked ? <GraderFullReport report={report} /> : <section className="grader-locked grader-card"><div aria-hidden="true" className="grader-lock">🔒</div>
       <h2>Unlock your full report + step-by-step fix plan</h2>
       <p>Get detailed checks and a practical plan for your website.</p>
       <GraderUnlockForm slug={slug} onUnlocked={() => setRetry((value) => value + 1)} />

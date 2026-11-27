@@ -5,6 +5,7 @@ import { graderHeaders, verifyTurnstile } from "@/lib/grader/http";
 import { graderMarketingUrl, graderNotificationConfigured, processGraderNotifications } from "@/lib/grader/notification";
 import { graderSlugSchema } from "@/lib/grader/public-report";
 import { graderRpc } from "@/lib/grader/worker";
+import { processGraderReportMail } from "@/lib/grader/report-mail";
 import { readTextBody } from "@/lib/request-body";
 
 export const runtime = "nodejs";
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
       ? "Too many attempts. Please try again later." : "This report isn't ready to unlock." },
     { status: result.error === "rate_limit" ? 429 : 404, headers });
     after(async () => {
-      try { await processGraderNotifications(); }
+      try { await Promise.all([processGraderNotifications(), processGraderReportMail()]); }
       catch { console.error("Could not process grader notifications"); }
     });
     return Response.json({ ok: true }, { headers });
