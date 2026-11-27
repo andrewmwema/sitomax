@@ -43,7 +43,7 @@ describe("host routing", () => {
   });
 
   it("serves grader pages only on the marketing apex, without exposing tenant APIs", async () => {
-    for (const path of ["/grader", "/grader/example-123"]) {
+    for (const path of ["/grader", "/grader/example-123", "/grader/example-123/pdf"]) {
       expect((await proxy(request(`https://agency.test${path}`))).headers.get("x-middleware-next")).toBe("1");
       expect((await proxy(request(`https://www.agency.test${path}`))).headers.get("location"))
         .toBe(`https://agency.test${path}`);

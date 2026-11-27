@@ -99,6 +99,9 @@ admins can inspect failures in `grader_report_mail`. PDFs are generated on the
 server and cached in the private `grader-reports` bucket. Set
 `NEXT_PUBLIC_GRADER_CTA_URL` to the desired HTTPS sales destination (for
 example `https://sitomax.com/contact`); report attribution is added to its URL.
+The report page downloads the PDF from its own marketing host and shows a retry
+message if generation fails. A failed report-email job is retried up to five
+times; jobs that have reached `failed` require administrator intervention.
 
 Apply `0067_grader_followups.sql` and set `POSTMARK_GRADER_BROADCAST_STREAM` to a
 Postmark broadcast stream, `GRADER_MAILING_ADDRESS` to the agency's physical

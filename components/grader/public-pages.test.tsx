@@ -112,6 +112,31 @@ describe("public grader pages", () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
+  it("downloads from the report host and shows a retry message on failure", async () => {
+    const full = { ...teaser, status: "complete", unlocked: true, results: { checks: [], places_enabled: false }, ai_summary: null };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json(full))
+      .mockResolvedValueOnce(Response.json({ error: "internal" }, { status: 503 }))
+      .mockResolvedValueOnce(new Response("pdf data", { headers: { "Content-Type": "application/pdf" } }));
+    vi.stubGlobal("fetch", fetch);
+    const create = vi.fn().mockReturnValue("blob:test");
+    const revoke = vi.fn();
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    try {
+      await act(async () => root.render(<GraderResults slug={slug} />));
+      const button = [...container.querySelectorAll("button")].find((item) => item.textContent === "Download PDF")!;
+      await act(async () => button.click());
+      expect(fetch.mock.calls[1][0]).toBe(`/grader/${slug}/pdf`);
+      expect(container.querySelector("[role=alert]")?.textContent).toContain("Please try again");
+      await act(async () => button.click());
+      expect(container.querySelector("[role=alert]")).toBeNull();
+      expect(create).toHaveBeenCalledOnce();
+      expect(click).toHaveBeenCalledOnce();
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      expect(revoke).toHaveBeenCalledWith("blob:test");
+    } finally { click.mockRestore(); }
+  });
+
   it("renders a non-interactive embedded form in the editor preview", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

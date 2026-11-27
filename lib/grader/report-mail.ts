@@ -22,6 +22,10 @@ export async function processGraderReportMail() {
     try {
       const pdf = await graderPdf(job.slug);
       if (!pdf) throw new Error("Grader report is not available.");
+      if (pdf.length > 7 * 1024 * 1024) {
+        console.error("Grader report attachment exceeds email size limit", { unlockId: job.unlock_id });
+        throw new Error("Grader report attachment is too large.");
+      }
       const text = `Hi ${job.name},\n\nYour ${brand.name} website report is ready. Your PDF is attached.`;
       await sendEmail({
         to: job.email, subject: `Your ${brand.name} website report`,

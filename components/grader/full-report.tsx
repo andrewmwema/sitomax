@@ -9,6 +9,8 @@ const statuses = { pass: "Pass", warn: "Warning", fail: "Needs attention", unkno
 
 export function GraderFullReport({ report }: { report: PublicGraderReport }) {
   const [shareMessage, setShareMessage] = useState("");
+  const [downloadError, setDownloadError] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const cta = graderCtaUrl(report.slug);
   const checks = report.results?.checks ?? [];
   async function share() {
@@ -17,11 +19,32 @@ export function GraderFullReport({ report }: { report: PublicGraderReport }) {
       setShareMessage("Report link copied.");
     } catch { setShareMessage("Couldn't copy the link. Copy it from your browser's address bar."); }
   }
+  async function download() {
+    setDownloading(true);
+    setDownloadError("");
+    try {
+      const response = await fetch(`/grader/${encodeURIComponent(report.slug)}/pdf`, { cache: "no-store" });
+      if (!response.ok || !response.headers.get("content-type")?.toLowerCase().startsWith("application/pdf"))
+        throw new Error("PDF unavailable");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${report.slug}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setDownloadError("Couldn't download your PDF. Please try again.");
+    } finally { setDownloading(false); }
+  }
   return <section className="grader-full" aria-label="Full report">
     <div className="grader-full-actions">
-      <a className="grader-button" href={`${brand.appUrl}/api/grader/pdf/${encodeURIComponent(report.slug)}`}>Download PDF</a>
+      <button className="grader-button" type="button" onClick={download} disabled={downloading}>{downloading ? "Preparing PDF…" : "Download PDF"}</button>
       <button className="grader-secondary-button" type="button" onClick={share}>Share report</button>
       <span role="status">{shareMessage}</span>
+      {downloadError ? <p role="alert">{downloadError}</p> : null}
     </div>
     <div className="grader-full-layout">
       <nav className="grader-section-nav" aria-label="Report sections"><strong>In this report</strong>

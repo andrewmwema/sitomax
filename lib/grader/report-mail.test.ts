@@ -29,4 +29,10 @@ describe("grader report email", () => {
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.rpc).toHaveBeenLastCalledWith("grader_finish_report_mail", expect.objectContaining({ p_success: false }));
   });
+  it("does not submit an attachment that exceeds the email size budget", async () => {
+    mocks.pdf.mockResolvedValue(new Uint8Array(7 * 1024 * 1024 + 1));
+    expect(await processGraderReportMail()).toEqual({ processed: 1, failures: 1 });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenLastCalledWith("grader_finish_report_mail", expect.objectContaining({ p_success: false }));
+  });
 });

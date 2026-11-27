@@ -1,4 +1,5 @@
 import { PDFDocument } from "pdf-lib";
+import { StorageApiError } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), download: vi.fn(), upload: vi.fn() }));
@@ -22,7 +23,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("NEXT_PUBLIC_GRADER_CTA_URL", "https://sitomax.com/contact");
   mocks.rpc.mockResolvedValue(report);
-  mocks.download.mockResolvedValue({ data: null, error: { status: 404 } });
+  mocks.download.mockResolvedValue({ data: null, error: new StorageApiError("Object not found", 400, "400", "storage", "NoSuchKey") });
   mocks.upload.mockResolvedValue({ error: null });
 });
 describe("grader PDF", () => {
@@ -42,6 +43,21 @@ describe("grader PDF", () => {
     mocks.rpc.mockResolvedValue({ ...report, unlocked: false, results: undefined, ai_summary: undefined });
     expect(await graderPdf(report.slug)).toBeNull();
     expect(mocks.download).toHaveBeenCalledOnce();
+  }, 20_000);
+  it("only generates on a missing object, not a missing bucket or permission failure", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      mocks.download.mockResolvedValue({ data: null, error: new StorageApiError("Bucket not found", 404, "404", "storage", "NoSuchBucket") });
+      await expect(graderPdf(report.slug)).rejects.toThrow("Could not read the cached grader PDF.");
+      expect(mocks.upload).not.toHaveBeenCalled();
+      expect(log).toHaveBeenCalledWith("Grader PDF failed", { stage: "read cache", type: "StorageApiError", status: 404, code: "NoSuchBucket" });
+    } finally { log.mockRestore(); }
+  });
+  it("reads the existing PDF when a concurrent generation won the upload race", async () => {
+    mocks.upload.mockResolvedValue({ error: new StorageApiError("Duplicate", 400, "400", "storage", "Duplicate") });
+    mocks.download.mockResolvedValueOnce({ data: null, error: new StorageApiError("Not found", 400, "400", "storage", "NoSuchKey") })
+      .mockResolvedValueOnce({ data: new Blob(["existing"]), error: null });
+    expect(Buffer.from((await graderPdf(report.slug))!).toString()).toBe("existing");
   }, 20_000);
   it("does not fetch an untrusted screenshot URL", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://storage.example.com");

@@ -3,6 +3,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
+import { StorageApiError } from "@supabase/supabase-js";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { brand } from "@/lib/brand";
 import { graderCategories, graderCheckName, graderCtaUrl } from "./presentation";
@@ -11,20 +12,44 @@ import { graderRpc, graderWorker } from "./worker";
 
 type Font = { font: PDFFont; characters: Set<number> };
 
+class PdfFailure extends Error {
+  constructor(readonly reason: string, readonly status?: number) {
+    super(reason);
+    this.name = "PdfFailure";
+  }
+}
+
+function diagnostic(error: unknown) {
+  if (error instanceof PdfFailure) return { type: error.name, reason: error.reason, status: error.status };
+  if (error instanceof StorageApiError) return { type: error.name, status: error.status, code: error.code };
+  if (error instanceof Error) {
+    const code = "code" in error && typeof error.code === "string" && /^[A-Z0-9_]{1,40}$/.test(error.code)
+      ? error.code : undefined;
+    return { type: error.name, code };
+  }
+  return { type: "UnknownError" };
+}
+
+function logPdfFailure(stage: string, error: unknown) {
+  console.error("Grader PDF failed", { stage, ...diagnostic(error) });
+}
+
 async function screenshot(url: string): Promise<{ bytes: Uint8Array; png: boolean }> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) throw new Error("Grader screenshot storage is not configured.");
+  if (!base) throw new PdfFailure("Grader screenshot storage is not configured.");
   const storage = new URL(base);
   const image = new URL(url);
   const prefix = `${storage.pathname.replace(/\/$/, "")}/storage/v1/object/public/grader-screenshots/`;
   const name = image.pathname.slice(prefix.length);
   if (image.origin !== storage.origin || !image.pathname.startsWith(prefix)
     || !/^[0-9a-f-]{36}\.(png|jpg)$/.test(name) || image.search || image.hash) {
-    throw new Error("Invalid grader screenshot URL.");
+    throw new PdfFailure("Invalid grader screenshot URL.");
   }
   const response = await fetch(image, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
-  if (!response.ok || Number(response.headers.get("content-length")) > 3 * 1024 * 1024 || !response.body)
-    throw new Error("Could not retrieve grader screenshot.");
+  if (!response.ok) throw new PdfFailure("Screenshot storage request failed.", response.status);
+  if (Number(response.headers.get("content-length")) > 3 * 1024 * 1024)
+    throw new PdfFailure("Grader screenshot is too large.");
+  if (!response.body) throw new PdfFailure("Screenshot response has no body.");
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
@@ -32,7 +57,7 @@ async function screenshot(url: string): Promise<{ bytes: Uint8Array; png: boolea
     const { done, value } = await reader.read();
     if (done) break;
     length += value.length;
-    if (length > 3 * 1024 * 1024) { await reader.cancel(); throw new Error("Grader screenshot is too large."); }
+    if (length > 3 * 1024 * 1024) { await reader.cancel(); throw new PdfFailure("Grader screenshot is too large."); }
     chunks.push(value);
   }
   return { bytes: Buffer.concat(chunks), png: name.endsWith(".png") };
@@ -43,13 +68,16 @@ export async function renderGraderPdf(report: PublicGraderReport): Promise<Uint8
     throw new Error("Report is not available.");
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const fontBytes = await Promise.all([
-    readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff")),
-    readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff")),
-    readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-400-normal.woff")),
-    readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-greek-400-normal.woff")),
-    readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-vietnamese-400-normal.woff")),
-  ]);
+  let fontBytes: Buffer[];
+  try {
+    fontBytes = await Promise.all([
+      readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff")),
+      readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff")),
+      readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-400-normal.woff")),
+      readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-greek-400-normal.woff")),
+      readFile(join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-vietnamese-400-normal.woff")),
+    ]);
+  } catch (error) { logPdfFailure("read fonts", error); throw error; }
   const fonts: Font[] = await Promise.all(fontBytes.map(async (bytes) => {
     const font = await pdf.embedFont(bytes);
     return { font, characters: new Set(font.getCharacterSet()) };
@@ -100,7 +128,9 @@ export async function renderGraderPdf(report: PublicGraderReport): Promise<Uint8
   line(report.domain, 15);
   line(`Score: ${report.scores?.overall ?? "Couldn't score"}${report.scores?.overall === null || !report.scores ? "" : "/100"}  Grade: ${report.scores?.grade ?? "Couldn't score"}`, 14);
   if (report.screenshot_url) {
-    const image = await screenshot(report.screenshot_url);
+    let image: Awaited<ReturnType<typeof screenshot>>;
+    try { image = await screenshot(report.screenshot_url); }
+    catch (error) { logPdfFailure("read screenshot", error); throw error; }
     const embedded = image.png ? await pdf.embedPng(image.bytes) : await pdf.embedJpg(image.bytes);
     const scale = Math.min(contentWidth / embedded.width, 290 / embedded.height, 1);
     const height = embedded.height * scale;
@@ -134,22 +164,47 @@ export async function renderGraderPdf(report: PublicGraderReport): Promise<Uint8
 }
 
 export async function graderPdf(slug: string): Promise<Uint8Array | null> {
-  const raw = await graderRpc("grader_get_report", { p_slug: slug });
+  let raw: unknown;
+  try { raw = await graderRpc("grader_get_report", { p_slug: slug }); }
+  catch (error) { logPdfFailure("read report", error); throw error; }
   if (!raw) return null;
-  const parsed = publicReportSchema.parse(raw);
+  const parsedResult = publicReportSchema.safeParse(raw);
+  if (!parsedResult.success) {
+    logPdfFailure("validate report", parsedResult.error);
+    throw new Error("Invalid grader report.");
+  }
+  const parsed = parsedResult.data;
   if (!parsed.unlocked || parsed.status !== "complete") return null;
-  const storage = graderWorker().client.storage.from("grader-reports");
+  let storage: ReturnType<ReturnType<typeof graderWorker>["client"]["storage"]["from"]>;
+  try { storage = graderWorker().client.storage.from("grader-reports"); }
+  catch (error) { logPdfFailure("configure storage", error); throw error; }
   const path = `${slug}.pdf`;
   const cached = await storage.download(path);
   if (cached.data) return new Uint8Array(await cached.data.arrayBuffer());
-  if (cached.error.status !== 404) throw new Error("Could not read the cached grader PDF.");
-  const bytes = await renderGraderPdf(parsed);
-  if (bytes.length > 8 * 1024 * 1024) throw new Error("Grader PDF is too large.");
+  if (!(cached.error instanceof StorageApiError &&
+    (cached.error.code === "NoSuchKey" || (cached.error.status === 404 && cached.error.code === undefined)))) {
+    logPdfFailure("read cache", cached.error);
+    throw new Error("Could not read the cached grader PDF.");
+  }
+  let bytes: Uint8Array;
+  try { bytes = await renderGraderPdf(parsed); }
+  catch (error) { logPdfFailure("render report", error); throw error; }
+  if (bytes.length > 8 * 1024 * 1024) {
+    console.error("Grader PDF failed", { stage: "render report", reason: "PDF exceeds storage size limit" });
+    throw new Error("Grader PDF is too large.");
+  }
   const uploaded = await storage.upload(path, bytes, { contentType: "application/pdf", upsert: false });
   if (uploaded.error) {
-    if (uploaded.error.status !== 409) throw new Error("Could not cache the grader PDF.");
+    if (!(uploaded.error instanceof StorageApiError &&
+      (uploaded.error.status === 409 || uploaded.error.code === "Duplicate" || uploaded.error.code === "ResourceAlreadyExists"))) {
+      logPdfFailure("write cache", uploaded.error);
+      throw new Error("Could not cache the grader PDF.");
+    }
     const existing = await storage.download(path);
-    if (!existing.data) throw new Error("Could not read the cached grader PDF.");
+    if (!existing.data) {
+      logPdfFailure("read concurrent cache", existing.error);
+      throw new Error("Could not read the cached grader PDF.");
+    }
     return new Uint8Array(await existing.data.arrayBuffer());
   }
   return bytes;
