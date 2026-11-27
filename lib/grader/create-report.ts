@@ -34,7 +34,10 @@ export function graderClientIp(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   const salt = process.env.ANALYTICS_HASH_SALT;
   if (!isIP(ip) || !salt || salt.length < 32) {
-    console.error("Grader rate limiting is not configured");
+    console.error("Grader rate limiting is not configured", {
+      reasons: [...(!isIP(ip) ? ["Client IP missing or invalid"] : []),
+        ...(!salt || salt.length < 32 ? ["ANALYTICS_HASH_SALT missing or shorter than 32 characters"] : [])],
+    });
     return null;
   }
   return { ip, hash: createHmac("sha256", salt).update(ip).digest("hex") };

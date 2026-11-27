@@ -1,4 +1,5 @@
 import { z } from "zod";
+import Link from "next/link";
 import { GraderAdmin } from "@/components/dashboard/grader-admin";
 import { requireSuperAdmin } from "@/lib/auth";
 
@@ -11,6 +12,7 @@ export default async function GraderPage({ searchParams }: { searchParams: Promi
       <p className="platform-eyebrow mb-1">Management</p>
       <h1 className="text-2xl font-semibold tracking-tight">Website grader</h1>
       <p className="mt-2 text-sm text-[var(--platform-muted)]">Run a website scan for a prospect and review the full report.</p>
+      <Link href="/dashboard/admin/grader/health" className="mt-2 inline-block text-sm underline">Check grader health</Link>
     </header>
     <GraderAdmin initialSlug={parsed.success ? parsed.data : null} />
   </section>;

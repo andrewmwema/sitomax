@@ -2,7 +2,8 @@ import { after } from "next/server";
 import { z } from "zod";
 import { graderClientIp } from "@/lib/grader/create-report";
 import { graderHeaders, verifyTurnstile } from "@/lib/grader/http";
-import { graderMarketingUrl, graderNotificationConfigured, processGraderNotifications } from "@/lib/grader/notification";
+import { graderUnlockConfigurationIssues } from "@/lib/grader/health";
+import { graderMarketingUrl, processGraderNotifications } from "@/lib/grader/notification";
 import { graderSlugSchema } from "@/lib/grader/public-report";
 import { graderRpc } from "@/lib/grader/worker";
 import { processGraderReportMail } from "@/lib/grader/report-mail";
@@ -39,8 +40,9 @@ export async function POST(request: Request) {
   const ip = graderClientIp(request);
   const accountId = z.uuid().safeParse(process.env.GRADER_LEADS_ACCOUNT_ID);
   const siteId = z.uuid().safeParse(process.env.GRADER_LEADS_SITE_ID);
-  if (!ip || !accountId.success || !siteId.success || !graderNotificationConfigured()) {
-    console.error("Grader unlock is not configured");
+  const issues = graderUnlockConfigurationIssues();
+  if (!ip || !accountId.success || !siteId.success || issues.length) {
+    console.error("Grader unlock is not configured", { reasons: [...(!ip ? ["Client IP or rate-limit salt unavailable"] : []), ...issues] });
     return Response.json({ error: "The grader is temporarily unavailable." }, { status: 503, headers });
   }
   if (!await verifyTurnstile(parsed.data.turnstileToken, ip.ip))

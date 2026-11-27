@@ -63,6 +63,62 @@ reports there, including progress and unavailable checks. This admin-only path
 does not require Turnstile; it uses the same SSRF protections, scan rate limits,
 Places caps and AI accounting as public scans. Reports can be reopened using the
 page's report URL. Client accounts cannot access the page or its APIs.
+The super-admin-only `/dashboard/admin/grader/health` page checks runtime
+configuration, lead destination, worker access and Phase B tables without
+displaying secrets. It does not validate provider credentials, sending streams,
+cron execution or email delivery. Public `NEXT_PUBLIC_*` settings are embedded
+at build time; redeploy after changing them.
+
+### Grader environment reference
+
+Set these in Vercel's **Production** environment. Provider credentials and
+sender/stream configuration must be obtained or created in the corresponding
+provider dashboard, not generated locally. A check for a nonempty value does not
+prove that a provider accepts it.
+
+| Variable | Purpose and example format | Secret | Source / creation |
+| --- | --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Database project URL: `https://PROJECT.supabase.co` | No | Supabase project settings |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public Supabase anon/publishable key | No | Supabase project settings |
+| `ROOT_DOMAIN` | Server routing and allowed origin: `sitomax.com` | No | Your root domain |
+| `NEXT_PUBLIC_ROOT_DOMAIN` | Marketing report links: `sitomax.com` | No | Your root domain |
+| `NEXT_PUBLIC_APP_URL` | Platform origin: `https://app.sitomax.com` | No | Your platform URL |
+| `MARKETING_SITE_SUBDOMAIN` | Marketing tenant: `sitomax` | No | Existing marketing site's subdomain |
+| `NEXT_PUBLIC_AGENCY_NAME` | Email/PDF branding: `SitoMax` | No | Your agency name |
+| `ANALYTICS_HASH_SALT` | IP rate-limit hash; at least 32 characters | Yes | `openssl rand -hex 32`; keep stable |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile public site key | No | Cloudflare Turnstile widget; authorize marketing hostname |
+| `TURNSTILE_SECRET_KEY` | Turnstile server verification key | Yes | Cloudflare Turnstile widget; use real production keys |
+| `GRADER_WORKER_SECRET` | Worker RPC/storage secret, at least 32 characters and at most 512 UTF-8 bytes | Yes | `openssl rand -hex 32`; register only its SHA-256 hash in `grader_config` |
+| `GRADER_LEADS_ACCOUNT_ID` | Lead destination account UUID | No | Supabase `sites.account_id` for the chosen site |
+| `GRADER_LEADS_SITE_ID` | Lead destination site UUID | No | Supabase `sites.id`; it must belong to that account |
+| `GRADER_NOTIFICATION_EMAIL` | Agency lead notification: `owner@example.com` | No | Your chosen notification inbox |
+| `POSTMARK_SERVER_TOKEN` | Postmark server API token | Yes | Postmark server API credentials |
+| `POSTMARK_FROM_EMAIL` | Verified sender: `SitoMax <hello@example.com>` | No | Verified Postmark sender or domain |
+| `POSTMARK_MESSAGE_STREAM` | Transactional stream ID, e.g. `outbound` | No | Postmark; defaults to `outbound` when unset |
+| `CRON_SECRET` | Authenticates scheduled grader job | Yes | `openssl rand -hex 32`; Vercel sends it to cron automatically |
+| `NEXT_PUBLIC_GRADER_CTA_URL` | HTTPS sales link: `https://sitomax.com/contact` | No | Your chosen contact or sales URL |
+| `POSTMARK_GRADER_BROADCAST_STREAM` | Follow-up broadcast stream ID: `grader-broadcast` | No | Create a broadcast stream in Postmark |
+| `GRADER_MAILING_ADDRESS` | Physical address in follow-ups: `123 Example St, Example City` | No | Your agency's actual mailing address |
+| `GRADER_UNSUBSCRIBE_SECRET` | Signs unsubscribe links; at least 32 characters | Yes | `openssl rand -hex 32`; keep stable or existing links break |
+| `PAGESPEED_API_KEY` | Optional PageSpeed API key | Yes | Google Cloud; scans attempt PageSpeed without it |
+| `GOOGLE_PLACES_API_KEY` | Optional Places API (New) key; enables Places checks | Yes | Google Cloud; enable Places API (New) and billing |
+| `ANTHROPIC_API_KEY` | AI summaries; scans can complete without it | Yes | Anthropic API console |
+
+Use the **same values** for the root domains and app origin as the actual
+deployment. The runtime has defaults for branding, root domain and app origin;
+the health page flags unset values so the intended production configuration can
+be verified. For the lead destination, inspect existing sites in the SQL Editor:
+
+```sql
+select id as site_id, account_id, name, subdomain from public.sites order by name;
+```
+
+Choose the marketing site that should receive leads; use its `site_id` and
+`account_id` for the two grader variables. Do not create a new account or site
+just to fill these settings. The unlock endpoint requires both UUIDs, a valid
+notification email, configured transactional mail, a valid client IP, and an
+`ANALYTICS_HASH_SALT` of at least 32 characters before Turnstile verification.
+Follow-up settings do not block unlocking, but are required for follow-up jobs.
 
 Apply `0062_grader_phase_a.sql` using the Supabase SQL Editor. Generate a
 separate random `GRADER_WORKER_SECRET` of at least 32 characters and configure
