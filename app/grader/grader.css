@@ -1,0 +1,107 @@
+.grader { --ink: #201c2b; --muted: #625e6b; --accent: #663dd1; --line: #e6e1ed; color: var(--ink); background: #fcfaf8; min-height: 100vh; font-family: Arial, sans-serif; }
+.grader a { color: inherit; }
+.grader-nav, .grader-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 1200px; margin: auto; padding: 1.5rem 1.5rem; font-size: .9rem; }
+.grader-logo { font-size: 1.55rem; font-weight: 800; letter-spacing: -.08em; text-decoration: none; }
+.grader-logo span { color: var(--accent); }
+.grader-wrap { width: min(1120px, calc(100% - 3rem)); margin-inline: auto; }
+.grader-hero { padding: 5rem 0 6rem; background: radial-gradient(ellipse at 86% 30%, #e8defc 0, transparent 43%), #f8f5fb; }
+.grader-hero-grid { display: grid; grid-template-columns: 1.3fr .8fr; align-items: center; gap: 4rem; }
+.grader-kicker { color: var(--accent); font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 1.15rem; }
+.grader h1, .grader h2, .grader h3 { letter-spacing: -.04em; line-height: 1.12; }
+.grader h1 { font-size: clamp(2.6rem, 5.3vw, 4.9rem); font-weight: 750; margin: 0; }
+.grader h1 em { font-style: normal; color: var(--accent); }
+.grader-lede, .grader-section-intro { color: var(--muted); line-height: 1.7; font-size: 1.1rem; margin: 1.4rem 0 2rem; }
+.grader-url-field { display: flex; gap: .4rem; background: white; border: 1px solid #dcd5e6; border-radius: 1rem; padding: .45rem; box-shadow: 0 10px 30px #2720390d; }
+.grader-url-field input { border: 0; background: transparent; padding: .8rem; min-width: 0; flex: 1; font-size: 1rem; }
+.grader-url-field button, .grader-button { display: inline-flex; gap: .8rem; justify-content: center; align-items: center; border: 0; border-radius: .7rem; background: #292137; color: white !important; font-weight: 700; padding: .9rem 1.2rem; text-decoration: none; cursor: pointer; }
+.grader-url-field button:disabled { opacity: .6; cursor: wait; }
+.grader :focus-visible { outline: 3px solid #8e6bef; outline-offset: 3px; }
+.grader-details { margin: 1rem 0; font-size: .9rem; }
+.grader-details summary { font-weight: 700; cursor: pointer; }
+.grader-details summary span { color: var(--muted); font-weight: 400; }
+.grader-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-top: 1rem; }
+.grader-fields label { display: grid; gap: .35rem; font-weight: 600; }
+.grader-fields input, .grader-fields select { width: 100%; padding: .7rem; border: 1px solid #dcd5e6; border-radius: .5rem; background: white; font-weight: 400; }
+.grader-error { color: #a02231; font-size: .9rem; margin: .6rem 0; }
+.grader-trust, .grader-note { color: var(--muted); font-size: .82rem; margin: 1.2rem 0 0; }
+.grader-trust span { color: var(--accent); padding-inline: .25rem; }
+.grader-example, .grader-card { background: white; border: 1px solid var(--line); border-radius: 1.25rem; box-shadow: 0 16px 50px #33264c0a; }
+.grader-example { padding: 1.7rem; transform: rotate(2deg); }
+.grader-example-top { display: flex; justify-content: space-between; color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .12em; }
+.grader-example > p { font-weight: 700; margin-top: 1.5rem; }
+.grader-example-score { display: flex; align-items: center; gap: 1rem; padding: 1.2rem 0; }
+.grader-example-score strong { font-size: 5rem; line-height: 1; color: var(--accent); }
+.grader-example-score span { color: var(--muted); font-size: .85rem; }
+.grader-example-score b { color: var(--ink); }
+.grader-example-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: .6rem 0; }
+.grader-example-row div, .grader-bar { background: #eeeaf4; border-radius: 99px; height: .45rem; overflow: hidden; }
+.grader-example-row div { width: 45%; }
+.grader-example-row i, .grader-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.grader-example .grader-example-note { font-size: .7rem; font-weight: 400; color: var(--muted); }
+.grader-section { padding-block: 5.5rem; }
+.grader h2 { font-size: clamp(2rem, 3.6vw, 3rem); margin: 0; }
+.grader-check-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 2rem; }
+.grader-check-grid article { background: white; border: 1px solid var(--line); border-radius: 1rem; padding: 1.5rem; }
+.grader-check-grid svg { color: var(--accent); }
+.grader-check-grid h3 { font-size: 1.1rem; margin: 1rem 0 .5rem; }
+.grader-check-grid p, .grader-faq p { color: var(--muted); font-size: .9rem; line-height: 1.6; }
+.grader-faq { max-width: 800px; }
+.grader-faq h2 { margin-bottom: 2rem; }
+.grader-faq details { border-top: 1px solid var(--line); padding: 1.2rem 0; }
+.grader-faq summary { cursor: pointer; font-weight: 700; }
+.grader-footer { border-top: 1px solid var(--line); color: var(--muted); padding-block: 2rem; }
+.grader-results-page { padding-block: 4rem 6rem; }
+.grader-results-page h1 { font-size: clamp(2.4rem, 4.5vw, 3.8rem); }
+.grader-card { padding: clamp(1.3rem, 3vw, 2.2rem); }
+.grader-message, .grader-progress { max-width: 720px; margin: 3rem auto; }
+.grader-message p, .grader-progress > p:not(.grader-kicker) { color: var(--muted); margin: 1rem 0 1.5rem; }
+.grader-progress ul { list-style: none; margin: 2rem 0 0; padding: 0; }
+.grader-progress li { display: flex; align-items: center; gap: .8rem; padding: .85rem 0; border-top: 1px solid var(--line); }
+.grader-progress li small { margin-left: auto; color: var(--muted); }
+.grader-dot { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: #eeeaf4; color: var(--accent); }
+.grader-done { background: #e5f4e9; color: #17613a; }
+.grader-preview > h1 { max-width: 800px; }
+.grader-domain { overflow-wrap: anywhere; }
+.grader-score-card { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: center; }
+@property --grader-progress { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+.grader-ring { width: 170px; aspect-ratio: 1; padding: 12px; border-radius: 50%; --grader-progress: var(--score); background: conic-gradient(var(--accent) var(--grader-progress), #eeeaf4 0); }
+.grader-ring > div { height: 100%; border-radius: 50%; background: white; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.grader-ring strong { font-size: 3rem; line-height: 1; }
+.grader-ring span { color: var(--muted); font-size: .75rem; }
+.grader-grade { color: var(--accent); font-weight: 800; margin: 1rem 0 .5rem; }
+.grader-screenshot, .grader-screenshot-placeholder { border-radius: .8rem; width: 100%; max-height: 400px; object-fit: contain; border: 1px solid var(--line); }
+.grader-screenshot-placeholder { display: grid; place-items: center; min-height: 200px; color: var(--muted); font-size: .9rem; }
+.grader-breakdown, .grader-issues, .grader-locked { margin-top: 2rem; }
+.grader-breakdown h2, .grader-issues h2, .grader-locked h2 { font-size: 1.65rem; margin-bottom: 1.3rem; }
+.grader-category { display: grid; grid-template-columns: 1fr 2fr 7rem; align-items: center; gap: 1rem; font-size: .9rem; padding: .75rem 0; }
+.grader-category strong { text-align: right; font-size: .8rem; }
+.grader-issue-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.grader-issue-grid article > span { color: var(--accent); font-size: .7rem; font-weight: 800; letter-spacing: .1em; }
+.grader-issue-grid h3 { font-size: 1.2rem; margin: .8rem 0; }
+.grader-issue-grid p, .grader-locked p { color: var(--muted); line-height: 1.6; }
+.grader-locked { text-align: center; background: linear-gradient(135deg, #f8f3ff, white); }
+.grader-lock { margin-bottom: 1rem; }
+.grader-text-link { display: inline-block; margin-top: 2rem; font-weight: 700; }
+.grader-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 800px) {
+  .grader-hero { padding: 3rem 0 4rem; }
+  .grader-hero-grid, .grader-score-card { grid-template-columns: 1fr; gap: 2rem; }
+  .grader-example { transform: none; }
+  .grader-check-grid { grid-template-columns: repeat(2, 1fr); }
+  .grader-issue-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .grader-url-field { flex-direction: column; }
+  .grader-fields { grid-template-columns: 1fr; }
+  .grader-check-grid { grid-template-columns: 1fr; }
+  .grader-category { grid-template-columns: 1fr 1fr; }
+  .grader-category .grader-bar { grid-column: 1 / -1; grid-row: 2; }
+  .grader-footer { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .grader-ring { animation: grader-score 700ms ease-out; }
+  @keyframes grader-score { from { --grader-progress: 0%; } to { --grader-progress: var(--score); } }
+  .grader-bar i { transition: width 250ms ease; }
+  .grader-screenshot { animation: grader-fade 300ms ease; }
+  @keyframes grader-fade { from { opacity: 0; } to { opacity: 1; } }
+}

@@ -62,6 +62,16 @@ export async function proxy(request: NextRequest) {
   if (pathname === "/api/email/inbound" || pathname === "/api/email/events") {
     return host === new URL(brand.appUrl).host.toLowerCase() ? NextResponse.next() : new NextResponse("Not found", { status: 404 });
   }
+  if (matchesPathPrefix(pathname, "/grader")) {
+    if (hostname(host) === `www.${rootHost}`) {
+      const url = request.nextUrl.clone();
+      url.hostname = rootHost;
+      url.port = root.match(/:(\d+)$/)?.[1] ?? "";
+      return NextResponse.redirect(url, 308);
+    }
+    if (hostname(host) === rootHost) return NextResponse.next();
+    if (isAppHost(host, rootHost)) return new NextResponse("Not found", { status: 404 });
+  }
   if (isAppHost(host, rootHost)) {
     if (pathname === "/robots.txt" || pathname === "/sitemap.xml") return NextResponse.next();
     return updateSession(request);

@@ -49,12 +49,15 @@ TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm tes
 
 ## Website grader (Phase A)
 
-The scan API is served on the platform host at `/api/grader/scan` and
+The public grader landing page lives at `/grader` on the marketing apex.
+It calls the platform host's scan and report APIs, displays live progress and
+shows a free preview. Full-report unlocking is not available until the next
+Phase B step. The scan API is served on the platform host at `/api/grader/scan` and
 `/api/grader/report/{slug}`; the apex marketing host remains a tenant host and
-does not expose these API routes. The future marketing UI must call the platform
+does not expose these API routes. The marketing UI calls the platform
 origin using `NEXT_PUBLIC_APP_URL`. Scan requests require Turnstile, and reports
 expose only progress, scores, screenshot, headline and teaser issues until
-unlocked. Phase B's pages and unlock flow are not included yet.
+unlocked.
 
 Super admins can run prospect scans at `/dashboard/admin/grader` and view full
 reports there, including progress and unavailable checks. This admin-only path

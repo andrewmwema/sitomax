@@ -42,6 +42,18 @@ describe("host routing", () => {
     expect(response.headers.get("x-middleware-rewrite")).toContain("/s/sitomax");
   });
 
+  it("serves grader pages only on the marketing apex, without exposing tenant APIs", async () => {
+    for (const path of ["/grader", "/grader/example-123"]) {
+      expect((await proxy(request(`https://agency.test${path}`))).headers.get("x-middleware-next")).toBe("1");
+      expect((await proxy(request(`https://www.agency.test${path}`))).headers.get("location"))
+        .toBe(`https://agency.test${path}`);
+      expect((await proxy(request(`https://app.agency.test${path}`))).status).toBe(404);
+      expect((await proxy(request(`https://client.test${path}`))).headers.get("x-middleware-rewrite"))
+        .toContain(`/s/client.test${path}`);
+    }
+    expect((await proxy(request("https://agency.test/api/grader/scan"))).status).toBe(404);
+  });
+
   it("redirects www to the root with a permanent redirect", async () => {
     const response = await proxy(request("https://www.agency.test/contact?from=www"));
     expect(response.status).toBe(308);
