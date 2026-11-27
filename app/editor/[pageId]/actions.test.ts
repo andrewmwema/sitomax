@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.load.mockResolvedValue({ data: { id: PAGE, title: "Test", seo: {}, draft_data: {}, published_data: {},
     site: { draft_header: null, theme: {}, draft_theme: null } }, error: null });
-  mocks.rpc.mockResolvedValue({ error: null });
+  mocks.rpc.mockResolvedValue({ data: BASE, error: null });
   mocks.update.mockReturnValue({ eq: () => ({ select: mocks.updated }) });
   mocks.updated.mockResolvedValue({ data: [{ id: PAGE }], error: null });
   mocks.version.mockResolvedValue({ data: { data: payload() }, error: null });
@@ -87,7 +87,7 @@ describe("editor persistence", () => {
     const header = defaultHeader("Example");
     const baseline = { version: 1 };
     const data = { ...payload(), root: { props: { ...payload().root.props, __editorHeader: header, __expectedHeader: baseline } } };
-    expect(await savePageDraft(PAGE, data, BASE)).toMatchObject({ status: "success" });
+    expect(await savePageDraft(PAGE, data, BASE)).toMatchObject({ status: "success", version: BASE });
     const args = mocks.rpc.mock.calls[0][1];
     expect(args).toMatchObject({ p_header: header, p_expected_header: baseline, p_publish: false });
     expect(args.p_data.root.props).not.toHaveProperty("__editorHeader");
@@ -96,6 +96,15 @@ describe("editor persistence", () => {
     mocks.rpc.mockResolvedValueOnce({ error: { code: "40001" } });
     expect(await publishPage(PAGE, data, BASE)).toMatchObject({ status: "error", conflict: true, message: expect.stringContaining("another editor") });
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("marks pool/lock/server failures retryable but not conflicts or invalid input", async () => {
+    const data = { ...payload(), root: { props: { __editorHeader: defaultHeader("Example") } } };
+    for (const code of ["PGRST002", "PGRST003", "55P03", "57014"]) {
+      mocks.rpc.mockResolvedValueOnce({ error: { code }, status: 503 });
+      expect(await savePageDraft(PAGE, data, BASE)).toMatchObject({ status: "error", retryable: true });
+    }
+    mocks.rpc.mockResolvedValueOnce({ error: { code: "40001" }, status: 409 });
+    expect(await savePageDraft(PAGE, data, BASE)).toMatchObject({ status: "error", conflict: true, retryable: false });
   });
   it("rolls back to the untouched Navigation while suppressing the global header on that page", async () => {
     mocks.version.mockResolvedValueOnce({ data: { data: { ...payload(), content: [

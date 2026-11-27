@@ -594,7 +594,10 @@ function HeaderActions() {
     <div data-editor-header-actions className="editor-header-actions">
       <span role={persistence.error ? "alert" : "status"} title={persistence.error ?? undefined} className={`editor-save-status ${persistence.error ? "text-red-600" : "text-zinc-500"}`}>
         {!persistence.error && !busy && !persistence.dirty ? <Check size={12} className="shrink-0 text-[#6B6A66]" /> : null}
-        {persistence.error ?? (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
+        {persistence.error ? persistence.reloadRequired ? persistence.error : "Couldn't save" :
+          (busy ? busy === "publish" ? "Publishing..." : busy === "restore" ? "Restoring..." : "Saving..." : persistence.dirty ? "Unsaved changes" : "Saved")}
+        {persistence.error && !persistence.reloadRequired ? <>{" — "}<button type="button" disabled={busy !== null}
+          onClick={() => void persistence.save()} className="underline">Retry</button></> : null}
       </span>
       {pendingCount > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800" aria-label={`${pendingCount} unpublished changes`}>
         Unpublished changes <span className="rounded-full bg-amber-100 px-1.5">{pendingCount}</span>

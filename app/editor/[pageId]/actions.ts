@@ -20,7 +20,7 @@ import {
   type PublishSelection,
 } from "@/lib/publishing";
 import { getSiteUrl } from "@/lib/site-url";
-import { pageVersionSchema, versionedPageData, type EditorSaveResult } from "@/lib/editor/page-version";
+import { pageVersionSchema, retryableEditorError, versionedPageData, type EditorSaveResult } from "@/lib/editor/page-version";
 
 /**
  * Editor Server Actions. All queries run with the user-scoped client, so
@@ -63,7 +63,7 @@ async function updatePage(
 
   const { supabase, user } = await requireUser();
 
-  const { data: page, error: loadError } = await supabase
+  const { data: page, error: loadError, status: loadStatus } = await supabase
     .from("pages")
     .select("id, title, seo, draft_data, published_data")
     .eq("id", parsedId.data)
@@ -71,7 +71,7 @@ async function updatePage(
 
   if (loadError) {
     console.error("Unable to load page for saving", loadError);
-    return { status: "error", message: "Could not load the page. Please try again." };
+    return { status: "error", message: "Could not load the page. Please try again.", retryable: retryableEditorError(loadError.code, loadStatus) };
   }
   if (!page) {
     return { status: "error", message: "You do not have access to this page." };
@@ -120,7 +120,7 @@ async function updatePage(
   }
 
   if (header?.success) {
-    const { error } = await supabase.rpc("save_page_with_header", {
+    const { data: savedVersion, error, status } = await supabase.rpc("save_page_with_header", {
       p_page_id: parsedId.data, p_data: cleanData, p_header: header.data,
       p_expected_header: expectedHeader,
       p_publish: publish, p_title: root.title || page.title, p_seo: seo,
@@ -131,23 +131,31 @@ async function updatePage(
       console.error("Could not save page and global header", { code: error.code });
       return { status: "error", message: error.code === "40001"
         ? "The page, site header or theme changed in another editor. Reload before saving."
-        : "Could not save the page and header. Check that the global header migration has been applied.", conflict: error.code === "40001" };
+        : "Could not save the page and header. Please retry.", conflict: error.code === "40001",
+        retryable: retryableEditorError(error.code, status) };
     }
-    return { status: "success", message: publish ? "Page and site header published." : "Draft saved.", version };
+    const parsedVersion = pageVersionSchema.safeParse(savedVersion);
+    if (!parsedVersion.success) {
+      console.error("Header save returned no valid draft version");
+      return { status: "error", message: "The editor save migration is required. Ask your agency to apply it." };
+    }
+    return { status: "success", message: publish ? "Page and site header published." : "Draft saved.", version: parsedVersion.data };
   }
 
   if (ai) {
-    const { data: saved, error } = await supabase.rpc("save_editor_ai_draft", {
+    const { data: saved, error, status } = await supabase.rpc("save_editor_ai_draft", {
       p_page_id: parsedId.data, p_data: cleanData, p_theme: ai.theme ?? null,
       p_snapshot: ai.snapshot, p_expected_theme: ai.expectedTheme ?? null,
     });
-    if (error || saved !== true) {
+    const parsedVersion = pageVersionSchema.safeParse(saved);
+    if (error || !parsedVersion.success) {
       console.error("Could not save AI draft", { code: error?.code });
       return { status: "error", message: error?.code === "40001"
         ? "The page or site theme changed in another editor. Reload before trying again."
-        : "Could not save the AI draft. Check that the editor history migration has been applied.", conflict: error?.code === "40001" };
+        : "Could not save the AI draft. Check that the editor save migration has been applied.", conflict: error?.code === "40001",
+        retryable: error ? retryableEditorError(error.code, status) : false };
     }
-    return { status: "success", message: "Draft saved.", version };
+    return { status: "success", message: "Draft saved.", version: parsedVersion.data };
   }
 
   const update: Record<string, unknown> = {
@@ -160,12 +168,13 @@ async function updatePage(
     update.published_at = new Date().toISOString();
   }
 
-  const { data: updated, error } = await supabase.from("pages").update(update).eq("id", parsedId.data).select("id");
+  const { data: updated, error, status } = await supabase.from("pages").update(update).eq("id", parsedId.data).select("id");
   if (error || !updated?.length) {
     console.error("Unable to save page", error);
     return { status: "error", message: error?.code === "40001"
       ? "This page changed in another editor. Reload before saving."
-      : "Could not save the page. Please try again.", conflict: error?.code === "40001" };
+      : "Could not save the page. Please try again.", conflict: error?.code === "40001",
+      retryable: error ? retryableEditorError(error.code, status) : false };
   }
 
   return {

@@ -40,6 +40,8 @@ beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
   vi.clearAllMocks();
+  vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
+  vi.mocked(saveAiEdit).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
   mocks.data = structuredClone(base);
   mocks.build.mockResolvedValue({ status: "success", data: generated, expectedDraft: {}, warnings: ["Review imagery."] });
   mocks.save.mockResolvedValue({ status: "success", version: NEXT_VERSION });
@@ -50,9 +52,10 @@ afterEach(async () => { await act(async () => root.unmount()); vi.useRealTimers(
 
 describe("empty-page persistence", () => {
   it("reports a saved page draft so the editor can update its unpublished indicator", async () => {
+    mocks.data = { ...base, root: { props: { ...base.root.props, title: "Edited" } } };
     vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
     await act(async () => { expect(await persistence.save()).toBe(true); });
-    expect(mocks.draftSaved).toHaveBeenCalledWith(base, "save");
+    expect(mocks.draftSaved).toHaveBeenCalledWith(mocks.data, "save");
   });
 
   it("saves pending global header edits before a body-only AI build", async () => {
@@ -153,11 +156,138 @@ describe("empty-page persistence", () => {
     const adopted = mocks.dispatch.mock.calls.find(([action]) => action.type === "setData")![0];
     expect(adopted).toMatchObject({ recordHistory: true, data: { content: applied.content, root: { props: { __editorTheme: { style: "modern" } } } } });
     mocks.data = adopted.data;
+    mocks.data = { ...mocks.data, root: { props: { ...mocks.data.root.props, title: "Edited after adoption" } } };
     vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
     await act(async () => { expect(await persistence.save()).toBe(true); });
     expect(saveAiEdit).not.toHaveBeenCalled();
     expect(savePageDraft).toHaveBeenCalledWith("page",
       expect.objectContaining({ root: { props: expect.objectContaining({ __expectedHeader: header }) } }), NEXT_VERSION);
+  });
+
+  async function edit(title: string) {
+    mocks.data = { ...mocks.data, root: { props: { ...mocks.data.root.props, title } } };
+    await act(async () => root.render(<Harness />));
+  }
+
+  describe("bounded autosave", () => {
+    it("does not save on load, identity-only renders or reordered keys", async () => {
+      await act(async () => vi.advanceTimersByTimeAsync(60_000));
+      const reordered = { root: { props: { description: "Keep local SEO.", title: "Team" } }, content: [] };
+      mocks.data = reordered;
+      await act(async () => root.render(<Harness />));
+      await act(async () => vi.advanceTimersByTimeAsync(60_000));
+      await act(async () => { expect(await persistence.save()).toBe(true); });
+      expect(savePageDraft).not.toHaveBeenCalled();
+      expect(persistence.dirty).toBe(false);
+    });
+
+    it("debounces rapid edits and keeps only the latest state behind an in-flight save", async () => {
+      let finish!: (value: Awaited<ReturnType<typeof savePageDraft>>) => void;
+      vi.mocked(savePageDraft).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+      await edit("First");
+      await act(async () => vi.advanceTimersByTimeAsync(1_000));
+      await edit("Second");
+      await act(async () => vi.advanceTimersByTimeAsync(1_799));
+      expect(savePageDraft).not.toHaveBeenCalled();
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+      expect(savePageDraft).toHaveBeenCalledOnce();
+      expect(persistence.busy).toBe("save");
+      await edit("Third");
+      await edit("Latest");
+      await act(async () => vi.advanceTimersByTimeAsync(10_000));
+      expect(savePageDraft).toHaveBeenCalledOnce();
+      await act(async () => { finish({ status: "success", message: "Saved.", version: NEXT_VERSION }); });
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+      expect(savePageDraft).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(savePageDraft).mock.calls[1][1]).toMatchObject({ root: { props: { title: "Latest" } } });
+      await act(async () => vi.advanceTimersByTimeAsync(60_000));
+      expect(savePageDraft).toHaveBeenCalledTimes(2);
+      expect(persistence.dirty).toBe(false);
+    });
+
+    it("coalesces simultaneous manual saves into one latest queued save", async () => {
+      let finish!: (value: Awaited<ReturnType<typeof savePageDraft>>) => void;
+      vi.mocked(savePageDraft).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+      await edit("First");
+      let first!: Promise<boolean>;
+      await act(async () => { first = persistence.save(); });
+      await edit("Latest");
+      let second!: Promise<boolean>;
+      let third!: Promise<boolean>;
+      await act(async () => { second = persistence.save(); third = persistence.save(); });
+      expect(savePageDraft).toHaveBeenCalledOnce();
+      await act(async () => {
+        finish({ status: "success", message: "Saved.", version: NEXT_VERSION });
+        expect(await first).toBe(true);
+        expect(await second).toBe(true);
+        expect(await third).toBe(true);
+      });
+      expect(savePageDraft).toHaveBeenCalledTimes(2);
+    });
+
+    it("backs off transient failures and stops after five attempts, even with further edits", async () => {
+      vi.mocked(savePageDraft).mockResolvedValue({ status: "error", message: "Couldn't save.", retryable: true });
+      await edit("Edited");
+      await act(async () => vi.advanceTimersByTimeAsync(1_800));
+      expect(savePageDraft).toHaveBeenCalledOnce();
+      for (const [index, delay] of [2_000, 4_000, 8_000, 16_000].entries()) {
+        await act(async () => vi.advanceTimersByTimeAsync(delay - 1));
+        expect(savePageDraft).toHaveBeenCalledTimes(index + 1);
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(savePageDraft).toHaveBeenCalledTimes(index + 2);
+      }
+      await edit("Still unsaved");
+      await act(async () => vi.advanceTimersByTimeAsync(600_000));
+      expect(savePageDraft).toHaveBeenCalledTimes(5);
+      expect(persistence.error).toBe("Couldn't save.");
+      expect(persistence.dirty).toBe(true);
+      vi.mocked(savePageDraft).mockResolvedValue({ status: "success", message: "Saved.", version: NEXT_VERSION });
+      await act(async () => { expect(await persistence.save()).toBe(true); });
+      expect(savePageDraft).toHaveBeenCalledTimes(6);
+      expect(persistence.error).toBeNull();
+    });
+
+    it("does not automatically retry validation or permission failures", async () => {
+      vi.mocked(savePageDraft).mockResolvedValue({ status: "error", message: "Invalid page data." });
+      await edit("Invalid");
+      await act(async () => vi.advanceTimersByTimeAsync(1_800));
+      await act(async () => vi.advanceTimersByTimeAsync(600_000));
+      expect(savePageDraft).toHaveBeenCalledOnce();
+    });
+
+    it("pauses after five hidden minutes and flushes once with keepalive on return", async () => {
+      vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+      await act(async () => vi.advanceTimersByTimeAsync(300_001));
+      await edit("While hidden");
+      await act(async () => vi.advanceTimersByTimeAsync(10_000));
+      expect(savePageDraft).not.toHaveBeenCalled();
+      const fetch = vi.fn().mockResolvedValue(Response.json({ status: "success", message: "Saved.", version: NEXT_VERSION }));
+      vi.stubGlobal("fetch", fetch);
+      vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+      await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(fetch).toHaveBeenCalledWith("/api/editor/draft", expect.objectContaining({ method: "POST", keepalive: true }));
+      await act(async () => window.dispatchEvent(new Event("pagehide")));
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(persistence.dirty).toBe(false);
+      vi.restoreAllMocks();
+    });
+    it("flushes a paused dirty tab on unload without duplicating the in-flight request", async () => {
+      vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+      await act(async () => vi.advanceTimersByTimeAsync(300_001));
+      await edit("Closing hidden tab");
+      let finish!: (response: Response) => void;
+      const fetch = vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finish = resolve; }));
+      vi.stubGlobal("fetch", fetch);
+      await act(async () => window.dispatchEvent(new Event("beforeunload", { cancelable: true })));
+      await act(async () => window.dispatchEvent(new Event("pagehide")));
+      expect(fetch).toHaveBeenCalledOnce();
+      await act(async () => { finish(Response.json({ status: "success", message: "Saved.", version: NEXT_VERSION })); });
+      expect(persistence.dirty).toBe(false);
+      vi.restoreAllMocks();
+    });
   });
 
   it("refuses to adopt a server-written draft over unsaved local edits", async () => {
