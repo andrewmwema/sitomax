@@ -8,11 +8,10 @@ checks pass. Confirm each operation separately before performing it.
 
 ## Production state and preflight
 
-The user reported 0053-0057 applied. Both 0052 files have observed effects,
+The user reported 0053-0061 applied. Both 0052 files have observed effects,
 but the production premium-catalog definition differs from the branch file.
-Do not reapply 0052-0057. The user reports that the key 0058-0061 functions
-are absent; their complete production state has not been independently
-verified. See the
+Do not reapply 0052-0061. Their complete production definitions and behavior
+have not been independently verified. See the
 [manual migration record](./MIGRATIONS.md).
 
 Before deciding what to apply, review the exact read-only queries in
@@ -40,14 +39,13 @@ fixture, upload or migration was performed.
 
 ## Exact migration SQL, conditional order
 
-The following links are the full committed SQL. Do not reapply 0054-0057,
-which the user reports applied. Consider later migrations only after reviewing
-their prerequisites and existing definitions:
+The following links are the full committed SQL. Do not reapply 0054-0061,
+which the user reports applied:
 
 1. [`0054_ai_plan_allowances.sql`](../supabase/migrations/0054_ai_plan_allowances.sql)
 2. [`0055_ai_template_builds.sql`](../supabase/migrations/0055_ai_template_builds.sql)
 3. [`0056_ai_allowance_template_corrections.sql`](../supabase/migrations/0056_ai_allowance_template_corrections.sql)
-4. 0057 was reported applied; **do not reapply**.
+4. [`0057_ai_draft_history_header.sql`](../supabase/migrations/0057_ai_draft_history_header.sql)
 5. [`0058_ai_empty_page_history.sql`](../supabase/migrations/0058_ai_empty_page_history.sql)
 6. [`0059_atomic_ai_template_copy.sql`](../supabase/migrations/0059_atomic_ai_template_copy.sql)
 7. [`0060_ai_template_brand_colors.sql`](../supabase/migrations/0060_ai_template_brand_colors.sql)

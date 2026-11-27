@@ -15,6 +15,10 @@ the responsible operator verifies it and explicitly approves execution.
 | `0055_ai_template_builds.sql` | Applied, as reported by the user | User reported application on 2026-11-25; table and column presence reported, full definitions not independently verified |
 | `0056_ai_allowance_template_corrections.sql` | Applied, as reported by the user | User reported application on 2026-11-25; corrected trigger conditions reported, function definitions not independently verified |
 | `0057_ai_draft_history_header.sql` | Applied, as reported by the user | User reported application on 2026-11-25; not independently verified |
+| `0058_ai_empty_page_history.sql` | Applied, as reported by the user | User confirmed successful application on 2026-11-27; not independently verified |
+| `0059_atomic_ai_template_copy.sql` | Applied, as reported by the user | User confirmed successful application on 2026-11-27; not independently verified |
+| `0060_ai_template_brand_colors.sql` | Applied, as reported by the user | User confirmed successful application on 2026-11-27; not independently verified |
+| `0061_ai_template_logo.sql` | Applied, as reported by the user | User confirmed successful application on 2026-11-27; not independently verified |
 
 The production database did not expose a
 `supabase_migrations.schema_migrations` table, so the historical application
@@ -62,10 +66,8 @@ template CTA text if no action is supplied; it does not change the CTA link.
 [`0058_ai_empty_page_history.sql`](../supabase/migrations/0058_ai_empty_page_history.sql)
 adds a separate authenticated function for atomic AI empty-page saves and
 history snapshots. It does not replace existing functions, triggers or policies,
-and deployed main does not call it. Apply only after the history and editor
-concurrency migrations are confirmed present, review its SQL, and do not
-deploy the feature's empty-page save until it is applied. It has not been
-database-tested.
+and deployed main does not call it. The user reports it applied; its behavior
+has not been independently database-tested.
 [`phase2_ai_empty_page_history_review.sql`](../supabase/tests/phase2_ai_empty_page_history_review.sql)
 is a review-only rollback test for the new function. It requires the TEST
 fixtures and separate approval before execution.
@@ -77,10 +79,8 @@ signed-in user and reservation; failed preparation rolls back the selection,
 any page surcharge and the copy. Existing
 functions, triggers and policies are unchanged, and deployed main does not
 call it. It requires the existing 0053 copy function and the 0054-0056
-allowance and checkpoint objects; verify their actual production definitions
-before considering 0059. Investigate missing objects without reapplying the
-reported migrations. It has not
-been database-tested or applied. The review-only
+allowance and checkpoint objects. The user reports it applied; its behavior
+has not been independently database-tested. The review-only
 [`phase2_atomic_template_copy_review.sql`](../supabase/tests/phase2_atomic_template_copy_review.sql)
 requires the TEST fixtures and separate approval before execution.
 
@@ -88,8 +88,8 @@ requires the TEST fixtures and separate approval before execution.
 adds a separate wrapper around 0059 to apply optional validated brand colors
 to the new site's draft theme within the same transaction. The original theme
 and master remain untouched. Existing functions, triggers and policies are
-unchanged; deployed main does not call it. Apply only after 0059 and its
-dependencies are confirmed. It has not been database-tested or applied.
+unchanged; deployed main does not call it. The user reports it applied;
+its behavior has not been independently database-tested.
 [`phase2_template_brand_colors_review.sql`](../supabase/tests/phase2_template_brand_colors_review.sql)
 is a review-only rollback test requiring the TEST fixtures and separate approval.
 
@@ -100,7 +100,8 @@ original user, owner or agency permission, build, site, asset, original logo,
 and current theme/header baselines before updating only the draft theme and
 header. It records a pre-change draft snapshot. Existing functions, triggers,
 policies and published content are unchanged; deployed main does not call it.
-It requires 0054-0057 and 0059 and has not been database-tested or applied.
+It requires 0054-0057 and 0059. The user reports it applied; its behavior
+has not been independently database-tested.
 [`phase2_template_logo_review.sql`](../supabase/tests/phase2_template_logo_review.sql)
 is a review-only rollback test; it inserts TEST storage metadata but uploads no
 file. It requires the TEST fixtures and separate approval before execution.
