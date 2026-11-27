@@ -62,7 +62,13 @@ does directly bound each lock wait.
 
 ### Rollout and verification
 
-Review the complete SQL above and apply it manually in the Supabase SQL Editor
+Follow-up [migration 0064](../supabase/migrations/0064_editor_null_header.sql)
+makes SQL NULL mean "no header change", including theme/snapshot saves.
+Non-null changed headers still require the correct expected baseline.
+The existing migration 0045 trigger strips both page version tokens and assigns
+the replacement token to `draft_version` on updates; no trigger change is needed.
+
+Review both 0063 and 0064 and apply them in order manually in the Supabase SQL Editor
 before deploying the matching client/server code. Reload open editor tabs after
 deployment. No production migration was applied by the assistant.
 

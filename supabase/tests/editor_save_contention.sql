@@ -46,6 +46,20 @@ begin
   end if;
 
   execute 'set local role authenticated';
+  -- A missing baseline is valid when the supplied header is unchanged.
+  result := public.save_page_with_header(page_id, input, header, null);
+  if result is distinct from version then raise exception 'Null baseline no-op changed the version'; end if;
+  result := public.save_page_with_header(page_id, input, null, null);
+  if result is distinct from version then raise exception 'Null header no-op changed the version'; end if;
+  result := public.save_page_with_header(page_id, input, null, header);
+  if result is distinct from version then raise exception 'Null header with baseline changed the version'; end if;
+  execute 'reset role';
+  if (select ctid from public.pages where id = page_id) is distinct from page_tuple
+    or (select ctid from public.sites where id = site_id) is distinct from site_tuple then
+    raise exception 'Null header or baseline no-op wrote a tuple';
+  end if;
+
+  execute 'set local role authenticated';
   begin
     perform public.save_page_with_header(page_id,
       jsonb_set(input, '{root,props,__expectedPageVersion}', to_jsonb(gen_random_uuid()::text)),
@@ -86,8 +100,59 @@ begin
   if (select ctid from public.sites where id = site_id) is distinct from site_tuple then
     raise exception 'Body-only edit wrote a site tuple';
   end if;
-  if (select draft_data#>'{root,props,__expectedPageVersion}' from public.pages where id = page_id) is not null then
+  if (select draft_data#>'{root,props,__expectedPageVersion}' from public.pages where id = page_id) is not null
+    or (select draft_data#>'{root,props,__nextPageVersion}' from public.pages where id = page_id) is not null
+    or (select draft_version from public.pages where id = page_id) is distinct from result then
     raise exception 'Version token persisted in draft';
+  end if;
+
+  select ctid into page_tuple from public.pages where id = page_id;
+  input := jsonb_set(input, '{root,props,__expectedPageVersion}', to_jsonb(result::text));
+  execute 'set local role authenticated';
+  result := public.save_page_with_header(page_id, input, new_header, header);
+  execute 'reset role';
+  if (select draft_header from public.sites where id = site_id) is distinct from new_header
+    or (select ctid from public.sites where id = site_id) is not distinct from site_tuple
+    or (select ctid from public.pages where id = page_id) is distinct from page_tuple then
+    raise exception 'Header-only save did not update just the site';
+  end if;
+  if not exists (select 1 from public.page_versions pv where pv.page_id = test.page_id
+    and pv.kind = 'header_edit' and pv.header = new_header) then
+    raise exception 'Header edit history missing';
+  end if;
+  header := new_header;
+  select ctid into site_tuple from public.sites where id = site_id;
+  execute 'set local role authenticated';
+  input := jsonb_set(input, '{content}', '[{"type":"Text","props":{"text":"Null header body edit"}}]');
+  input := jsonb_set(input, '{root,props,__nextPageVersion}', to_jsonb(gen_random_uuid()::text));
+  result := public.save_page_with_header(page_id, input, null, null);
+  execute 'reset role';
+  if (select draft_header from public.sites where id = site_id) is distinct from header
+    or (select ctid from public.sites where id = site_id) is distinct from site_tuple
+    or result is distinct from (input#>>'{root,props,__nextPageVersion}')::uuid then
+    raise exception 'Null header body save changed the site or lost its page version';
+  end if;
+  input := jsonb_set(input, '{root,props,__expectedPageVersion}', to_jsonb(result::text));
+  execute 'set local role authenticated';
+  result := public.save_page_with_header(page_id, input, null, null, false, null, null, true,
+    '{"style":"modern"}', theme);
+  execute 'reset role';
+  if (select draft_header from public.sites where id = site_id) is distinct from header
+    or (select draft_theme from public.sites where id = site_id) is distinct from '{"style":"modern"}'::jsonb
+    or not exists (select 1 from public.page_versions pv where pv.page_id = test.page_id
+      and pv.kind = 'ai_edit' and pv.header = test.header and pv.theme = '{"style":"modern"}'::jsonb) then
+    raise exception 'Null header theme/snapshot save lost the header';
+  end if;
+  theme := '{"style":"modern"}';
+
+  select ctid into site_tuple from public.sites where id = site_id;
+  select ctid into page_tuple from public.pages where id = page_id;
+  execute 'set local role authenticated';
+  result := public.save_page_with_header(page_id, input, header, null);
+  execute 'reset role';
+  if (select ctid from public.pages where id = page_id) is distinct from page_tuple
+    or (select ctid from public.sites where id = site_id) is distinct from site_tuple then
+    raise exception 'Repeat save after version-token write was not a no-op';
   end if;
 
   -- An intentional snapshot remains available even when the body is unchanged.
