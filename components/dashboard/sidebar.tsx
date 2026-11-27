@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CircleDollarSign, Globe2, HandHelping, Inbox, LayoutDashboard, Link2, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Users, X } from "lucide-react";
+import { BarChart3, CircleDollarSign, ClipboardCheck, Globe2, HandHelping, Inbox, LayoutDashboard, Link2, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Users, X } from "lucide-react";
 import { AgencyBrand } from "./agency-brand";
 
 const groups = [
@@ -19,6 +19,7 @@ const groups = [
     { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, color: "text-emerald-700" },
   ] },
   { label: "Management", items: [
+    { href: "/dashboard/admin/grader", label: "Website grader", icon: ClipboardCheck, color: "text-indigo-700", admin: true },
     { href: "/dashboard/ai-usage", label: "AI costs", icon: CircleDollarSign, color: "text-amber-700", admin: true },
     { href: "/dashboard/settings", label: "Settings", icon: Settings, color: "text-fuchsia-700" },
   ] },

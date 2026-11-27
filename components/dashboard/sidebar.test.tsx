@@ -51,6 +51,7 @@ describe("dashboard navigation", () => {
     expect(sidebar.querySelector('[aria-label="2 unread leads"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/clients"]')).toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/ai-usage"]')).toBeNull();
+    expect(sidebar.querySelector('a[href="/dashboard/admin/grader"]')).toBeNull();
     await act(async () => sidebar.querySelector<HTMLButtonElement>('[aria-label="Collapse sidebar"]')!.click());
     expect(sidebar.querySelector('[aria-label="Expand sidebar"]')?.getAttribute("aria-expanded")).toBe("false");
     expect(sidebar.querySelector('a[aria-label="Leads, 2 unread leads"] .platform-nav-count')).not.toBeNull();
@@ -109,6 +110,7 @@ describe("dashboard navigation", () => {
     expect(sidebar.querySelector('a[href="/dashboard/clients"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/domain-requests"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/ai-usage"]')).not.toBeNull();
+    expect(sidebar.querySelector('a[href="/dashboard/admin/grader"]')).not.toBeNull();
     expect(sidebar.querySelector('a[href="/dashboard/sites"] svg')?.classList.contains("text-sky-700")).toBe(true);
     expect(sidebar.querySelector('a[href="/dashboard/leads"] svg')?.classList.contains("text-rose-700")).toBe(true);
     expect(sidebar.querySelector('a[href="/dashboard/leads"]')?.getAttribute("aria-current")).toBe("page");

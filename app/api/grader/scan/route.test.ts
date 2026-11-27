@@ -51,4 +51,12 @@ describe("grader scan endpoint", () => {
     expect((await response.json()).error).toContain("busy");
     expect(mocks.after).not.toHaveBeenCalled();
   });
+
+  it("still requires Turnstile verification on the public endpoint", async () => {
+    mocks.verify.mockResolvedValue(false);
+    const response = await POST(request({ url: "example.com", turnstileToken: "invalid" }));
+    expect(response.status).toBe(403);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
 });

@@ -56,6 +56,12 @@ origin using `NEXT_PUBLIC_APP_URL`. Scan requests require Turnstile, and reports
 expose only progress, scores, screenshot, headline and teaser issues until
 unlocked. Phase B's pages and unlock flow are not included yet.
 
+Super admins can run prospect scans at `/dashboard/admin/grader` and view full
+reports there, including progress and unavailable checks. This admin-only path
+does not require Turnstile; it uses the same SSRF protections, scan rate limits,
+Places caps and AI accounting as public scans. Reports can be reopened using the
+page's report URL. Client accounts cannot access the page or its APIs.
+
 Apply `0062_grader_phase_a.sql` using the Supabase SQL Editor. Generate a
 separate random `GRADER_WORKER_SECRET` of at least 32 characters and configure
 it in `.env.local` and Vercel. Register **only its SHA-256 hex hash** in the
