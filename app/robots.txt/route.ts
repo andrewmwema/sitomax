@@ -2,6 +2,8 @@ import { GET as getTenantRobots } from "@/app/s/[site]/robots.txt/route";
 import { isAppHost } from "@/lib/platform-host";
 import { getRootDomain, getTenantKeyFromHost } from "@/lib/tenant";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const host = request.headers.get("host") ?? new URL(request.url).host;
   if (isAppHost(host, getRootDomain())) {

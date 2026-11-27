@@ -7,6 +7,8 @@ import "./leads.css";
 
 const siteUrl = new URL(brand.appUrl);
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const { faviconUrl } = await getAgencySettings();
   const icon = faviconUrl || "/icon.svg";

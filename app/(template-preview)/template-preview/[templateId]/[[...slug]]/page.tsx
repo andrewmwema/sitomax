@@ -8,6 +8,8 @@ import { getPremiumTemplate } from "@/lib/templates/catalog";
 
 type Props = { params: Promise<{ templateId: string; slug?: string[] }> };
 
+export const dynamic = "force-dynamic";
+
 function rewritePreviewLinks(value: unknown, templateId: string, pageSlugs: Set<string>): unknown {
   if (typeof value === "string" && value.startsWith("/")) {
     const url = new URL(value, "https://template-preview.invalid");

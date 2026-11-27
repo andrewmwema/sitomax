@@ -1,6 +1,8 @@
 import { getPublicBlogData, blogPostUrl, blogPublicPath, escapeXml } from "@/lib/blog-public";
 import { getSiteByHost, getSiteUrl } from "@/lib/tenant";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request, { params }: { params: Promise<{ site: string }> }) {
   const site = await getSiteByHost((await params).site);
   if (!site) return new Response("Not found", { status: 404 });

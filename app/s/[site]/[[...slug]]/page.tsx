@@ -45,6 +45,8 @@ import {
 
 type Props = PageProps<"/s/[site]/[[...slug]]">;
 
+export const dynamic = "force-dynamic";
+
 /**
  * Site and page RLS return a row only to the site's team or a super admin.
  */
