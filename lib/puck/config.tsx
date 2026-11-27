@@ -32,6 +32,7 @@ import { Spacer, type SpacerProps } from "@/components/blocks/spacer";
 import { Footer, type FooterProps } from "@/components/blocks/footer";
 import { BlogPosts, type BlogPostsProps } from "@/components/blocks/blog-posts";
 import { Navigation, type NavigationProps } from "@/components/blocks/navigation";
+import { WebsiteGrader, type WebsiteGraderProps } from "@/components/blocks/website-grader";
 import { SiteHeader } from "@/components/header/site-header";
 import { headerSchema, type SiteHeaderData } from "@/lib/header";
 import { emptyBusiness } from "@/lib/business";
@@ -85,6 +86,7 @@ type Components = {
   Footer: FooterProps;
   BlogPosts: BlogPostsProps;
   Navigation: NavigationProps;
+  WebsiteGrader: WebsiteGraderProps;
   // Custom layout system (Section → Row → Column → elements).
   Section: LayoutSectionProps;
   Row: RowProps;
@@ -209,7 +211,7 @@ export const puckConfig: PuckConfig = {
     },
     conversion: {
       title: "Conversion",
-      components: ["CallToAction", "ContactForm"],
+      components: ["CallToAction", "ContactForm", "WebsiteGrader"],
     },
     customLayout: {
       title: "Layout blocks",
@@ -316,6 +318,7 @@ export const puckConfig: PuckConfig = {
     Footer: withSectionShell(Footer),
     BlogPosts: withSectionShell(BlogPosts),
     Navigation: withSectionShell(Navigation),
+    WebsiteGrader: withSectionShell(WebsiteGrader),
     Section: withSectionShell(LayoutSection),
     Row: withSectionShell(Row, "row"),
     Column: withSectionShell(Column, "column"),

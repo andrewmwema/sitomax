@@ -271,7 +271,7 @@ export function DesignThumbnail({
                 config={puckConfig}
                 // Cast: a single-block preview fragment, not a full page.
                 data={data as PuckPageData}
-                metadata={{ theme, siteBlogPosts: SAMPLE_POSTS }}
+                metadata={{ theme, siteBlogPosts: SAMPLE_POSTS, sectionThumbnail: true }}
                 // Same as the public renderer: RichTextContent sanitizes.
                 fieldTransforms={{ richtext: ({ value }) => value }}
               />

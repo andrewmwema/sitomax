@@ -17,7 +17,7 @@ const clientConfig: PuckConfig = {
     ...Object.fromEntries(
       Object.entries(puckConfig.categories ?? {}).map(([key, category]) => [
         key,
-        { ...category, components: category.components?.filter((type) => type !== EMBED_TYPE) },
+        { ...category, components: category.components?.filter((type) => type !== EMBED_TYPE && type !== "WebsiteGrader") },
       ]),
     ),
     // Uncategorized components would show under "Other"; keep Embed hidden.
@@ -37,6 +37,10 @@ const clientConfig: PuckConfig = {
     },
     Embed: {
       ...Embed,
+      permissions: { edit: false, duplicate: false, insert: false },
+    },
+    WebsiteGrader: {
+      ...puckConfig.components.WebsiteGrader,
       permissions: { edit: false, duplicate: false, insert: false },
     },
   },

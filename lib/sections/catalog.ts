@@ -17,6 +17,7 @@ import type { CallToActionProps } from "@/components/blocks/call-to-action";
 import type { ContactFormProps } from "@/components/blocks/contact-form";
 import type { MapProps } from "@/components/blocks/map";
 import type { FooterProps } from "@/components/blocks/footer";
+import type { WebsiteGraderProps } from "@/components/blocks/website-grader";
 import type { AnimationType, BlockDesign } from "@/lib/sections/design";
 
 /**
@@ -115,9 +116,14 @@ type BlockPropsMap = {
   ContactForm: ContactFormProps;
   Map: MapProps;
   Footer: FooterProps;
+  WebsiteGrader: WebsiteGraderProps;
 };
 
 const BLOCK_CONTENT_METADATA: Record<keyof BlockPropsMap, SectionContentMetadata> = {
+  WebsiteGrader: {
+    editableFields: ["eyebrow", "heading", "description", "trustLine"],
+    repeatableFields: [], limits: { heading: { maxLength: 100 }, description: { maxLength: 500 } }, imageSlots: [],
+  },
   Hero: {
     editableFields: ["eyebrow", "badgeText", "heading", "subheading", "buttonText", "buttonLink", "secondaryButtonText", "secondaryButtonLink", "trustLine", "formName", "submitText", "formFields", "stats"],
     repeatableFields: ["stats", "formFields"],
@@ -2113,6 +2119,11 @@ export const sectionCatalog: SectionDesign[] = [
       navigation: [{ label: "Our story", href: "#about" }, { label: "Get in touch", href: "#contact" }],
       variant: "compact", design: shellDesign({ animation: "none" }),
     },
+  }),
+  design({
+    id: "website-grader", blockType: "WebsiteGrader", category: "Promotion", name: "Website Grader",
+    description: "Invite visitors to scan their website and receive a free grade.",
+    props: { variant: "centered", design: shellDesign() },
   }),
 ];
 

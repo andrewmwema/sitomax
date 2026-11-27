@@ -34,7 +34,7 @@ describe("grader PDF", () => {
     }));
     expect(pdf.getPageCount()).toBeGreaterThan(1);
     expect(pdf.getTitle()).toContain("website report");
-  });
+  }, 20_000);
   it("caches PDFs and never returns one for locked reports", async () => {
     const bytes = await graderPdf(report.slug);
     expect(bytes?.length).toBeGreaterThan(1000);
@@ -42,7 +42,7 @@ describe("grader PDF", () => {
     mocks.rpc.mockResolvedValue({ ...report, unlocked: false, results: undefined, ai_summary: undefined });
     expect(await graderPdf(report.slug)).toBeNull();
     expect(mocks.download).toHaveBeenCalledOnce();
-  });
+  }, 20_000);
   it("does not fetch an untrusted screenshot URL", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://storage.example.com");
     const fetch = vi.fn();

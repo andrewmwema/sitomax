@@ -11,12 +11,19 @@ export function graderCheckName(id: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export function graderCtaUrl(slug: string): string | null {
+export function graderContactUrl(): string | null {
   const configured = process.env.NEXT_PUBLIC_GRADER_CTA_URL;
   const parsed = z.url({ protocol: /^https?$/ }).safeParse(configured);
   if (!parsed.success) return null;
   const url = new URL(parsed.data);
   if (url.protocol !== "https:" && url.hostname !== "localhost") return null;
+  return url.href;
+}
+
+export function graderCtaUrl(slug: string): string | null {
+  const configured = graderContactUrl();
+  if (!configured) return null;
+  const url = new URL(configured);
   url.searchParams.set("utm_source", "website_grader");
   url.searchParams.set("utm_medium", "report");
   url.searchParams.set("ref", "grader");

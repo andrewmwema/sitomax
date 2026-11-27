@@ -12,7 +12,7 @@ import { siteLinkSchema } from "@/lib/links";
 import type { ImageAspectMetadata } from "@/lib/puck/fields";
 
 type Fields = Record<string, Field>;
-export const aiCatalog = sectionCatalog.filter((design) => design.category !== "Blank");
+export const aiCatalog = sectionCatalog.filter((design) => design.category !== "Blank" && design.blockType !== "WebsiteGrader");
 export const designIds = aiCatalog.map((design) => design.id);
 export const blockTypes = [...new Set(aiCatalog.map((design) => design.blockType))];
 

@@ -8,6 +8,7 @@ import { businessContactDetails, type SiteMenu } from "@/lib/page-navigation";
 import { Button } from "@/components/blocks/ui/button";
 import { HeaderBehavior } from "./header-behavior";
 import { Menu, Ellipsis, ChevronDown, X, Phone, ArrowUpRight } from "lucide-react";
+import { appendMarketingLinks } from "@/lib/grader/marketing-menu";
 import "./site-header.css";
 
 type Props = {
@@ -49,7 +50,8 @@ function variables(design: HeaderDesign, transparent: boolean): CSSProperties {
 }
 export function SiteHeader({ header, menu, links, path, transparent = false, editing = false }: Props) {
   const id = "site-header";
-  const items: MenuItem[] = header.menu.source === "pages" ? menu.links : header.menu.items;
+  const items: MenuItem[] = header.menu.source === "pages" ? menu.links
+    : appendMarketingLinks(header.menu.items, menu.extraLinks ?? [], links);
   const contacts = businessContactDetails(menu.contacts);
   const brand = header.logo.text || menu.contacts.businessName;
   const brandLink = <a className="sh-brand" {...headerLink(header.logo.href, links)} aria-label={brand || "Home"}>

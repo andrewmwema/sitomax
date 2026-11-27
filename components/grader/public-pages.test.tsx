@@ -10,7 +10,7 @@ vi.mock("./turnstile", () => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 
-import { GraderScanForm } from "./scan-form";
+import { GraderEmbeddedForm, GraderScanForm } from "./scan-form";
 import { GraderResults } from "./results";
 
 const slug = "example-0123456789abcdef";
@@ -110,5 +110,31 @@ describe("public grader pages", () => {
     expect(container.textContent).toContain("Title needs attention.");
     expect(container.querySelector("form")).toBeNull();
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("renders a non-interactive embedded form in the editor preview", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<GraderEmbeddedForm preview />));
+    expect(container.querySelector<HTMLInputElement>("input")!.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>("button")!.disabled).toBe(true);
+    expect(container.textContent).not.toContain("Verify");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("starts an embedded scan and navigates to the marketing report", async () => {
+    const assign = vi.fn();
+    const fakeWindow = Object.create(window);
+    Object.defineProperty(fakeWindow, "location", { value: { assign } });
+    vi.stubGlobal("window", fakeWindow);
+    const fetch = vi.fn().mockResolvedValue(Response.json({ slug }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<GraderEmbeddedForm />));
+    const form = container.querySelector("form")!;
+    form.querySelector<HTMLInputElement>("[name=url]")!.value = "example.com";
+    await act(async () => form.querySelector<HTMLButtonElement>("button[type=button]")!.click());
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ url: "example.com", turnstileToken: "verified-token" });
+    expect(assign).toHaveBeenCalledWith(`https://sitomax.com/grader/${slug}`);
   });
 });

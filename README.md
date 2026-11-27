@@ -111,6 +111,13 @@ Day 5 contains only findings and suggested fixes from the scan. The sequence
 uses the configured CTA, physical address and one-click unsubscribe headers;
 delivery failures are retried and visible in `grader_followups`.
 
+The marketing tenant's public menu and footer include a Free Website Grade link
+at render time; other tenants are unchanged and no published content is edited.
+To place the grader on the marketing homepage, open the homepage in the editor
+as a super admin, choose **Add section**, search for **Website Grader**, insert
+it, adjust the copy and layout, save, and publish the page. The embedded form
+uses the same Turnstile and scan API as `/grader`; it is inactive in the editor.
+
 `grader_config` controls the global daily scan cap and Places limits, initially
 300 scans, 30 Places calls per UTC day and 900 per UTC month. The latter two
 cannot be set above those ceilings. Successful Places searches are cached for

@@ -17,7 +17,7 @@ export function pageMenuLinks(pages: { slug: string; nav_label?: string | null }
 }
 
 export type SiteContacts = Pick<Business, "businessName" | "phone" | "email" | "address" | "openingHours" | "socialLinks">;
-export type SiteMenu = { links: ReturnType<typeof pageMenuLinks>; contacts: SiteContacts };
+export type SiteMenu = { links: ReturnType<typeof pageMenuLinks>; contacts: SiteContacts; extraLinks?: ReturnType<typeof pageMenuLinks> };
 
 export function businessContactDetails(business: SiteContacts) {
   const phone = business.phone.replace(/[^\d+]/g, "");

@@ -15,6 +15,7 @@ import { businessSchema, emptyBusiness } from "@/lib/business";
 import { pageMenuLinks, siteContacts, type SiteMenu } from "@/lib/page-navigation";
 import { defaultHeader, headerSchema } from "@/lib/header";
 import { slugify } from "@/lib/page-slugs";
+import { marketingGraderMenu } from "@/lib/grader/marketing-menu";
 import {
   blogMetadata, blogPostUrl, blogPublicPath, getPublicBlogData, getPublicBlogSettings, getPublishedBlogPosts,
   parseBlogRoute, selectBlogPosts,
@@ -195,7 +196,7 @@ async function renderBlogPage(page: LoadedBlogPage, params: Props["params"], sea
     preview !== "1" && blogPostId ? checkSiteContentAccess("sites", site.id) : null,
   ]);
   const contacts = siteContacts(businessSchema.parse({ ...emptyBusiness, ...site.business }));
-  const siteMenu: SiteMenu = { links: pageMenuLinks(menuPages, previewPrefix), contacts };
+  const siteMenu: SiteMenu = marketingGraderMenu(site.subdomain, { links: pageMenuLinks(menuPages, previewPrefix), contacts });
   const rawHeader = site.published_header;
   const siteHeader = site.headers_ready === false ? undefined :
     rawHeader ? headerSchema.parse(rawHeader) : defaultHeader(contacts.businessName || site.name || "", theme.logoUrl);
@@ -303,7 +304,7 @@ export default async function TenantSitePage({ params, searchParams }: Props) {
   ]);
   const contacts = siteContacts(businessSchema.parse({ ...emptyBusiness, ...site.business }));
   const previewPrefix = isPreview ? `/s/${encodeURIComponent((await params).site)}` : "";
-  const siteMenu: SiteMenu = { links: pageMenuLinks(menuPages, previewPrefix), contacts };
+  const siteMenu: SiteMenu = marketingGraderMenu(site.subdomain, { links: pageMenuLinks(menuPages, previewPrefix), contacts });
   const rawHeader = isPreview ? site.draft_header : site.published_header;
   const siteHeader = site.headers_ready === false ? undefined :
     rawHeader ? headerSchema.parse(rawHeader) : defaultHeader(contacts.businessName || site.name || "", theme.logoUrl);

@@ -39,6 +39,9 @@ const input = { accountId, siteId, businessName: "Local Plumbing", businessType:
   phone: "", email: "", address: "", description: "", confirmReplace: true, confirmBusinessUpdate: true, expectedBusiness: business };
 const hero = aiCatalog.find((design) => design.blockType === "Hero" && design.styles.includes("modern"))!;
 const footer = aiCatalog.find((design) => design.blockType === "Footer")!;
+it("does not offer the agency grader block for automatic client-site generation", () => {
+  expect(aiCatalog.some((design) => design.blockType === "WebsiteGrader")).toBe(false);
+});
 const seo = { title: "Local Plumbing Nairobi", description: "Plumbing repairs in Nairobi. Contact Local Plumbing to discuss your needs." };
 const plan = {
   style: "modern", colors: { primary: "#123456", secondary: "#aabbcc", background: "#ffffff", text: "#111111" },

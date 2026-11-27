@@ -106,9 +106,10 @@ function LibraryContent() {
     return () => { observer.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
 
-  const allDesigns = useMemo(() => [...sectionCatalog, ...(savedDesigns ?? [])], [savedDesigns]);
+  const allDesigns = useMemo(() => [...sectionCatalog, ...(savedDesigns ?? [])]
+    .filter((design) => isSuperAdmin || design.blockType !== "WebsiteGrader"), [savedDesigns, isSuperAdmin]);
   const source = tab === "saved"
-    ? (savedDesigns ?? []).filter((design) => design.saved?.isOwner)
+    ? (savedDesigns ?? []).filter((design) => design.saved?.isOwner && (isSuperAdmin || design.blockType !== "WebsiteGrader"))
     : allDesigns;
   const availableCategories = visibleSectionCategories(source);
   const activeCategory = availableCategories.includes(category) ? category : availableCategories[0];
