@@ -14,7 +14,8 @@ export type EmailMessage = {
   from?: string;
   stream?: string;
   attachments?: readonly { name: string; content: string; contentType: string }[];
-  tag: "invite" | "domain" | "form-notification" | "password-reset" | "lead-reply" | "lead-forward" | "grader-notification" | "grader-report";
+  headers?: readonly { name: string; value: string }[];
+  tag: "invite" | "domain" | "form-notification" | "password-reset" | "lead-reply" | "lead-forward" | "grader-notification" | "grader-report" | "grader-followup";
   metadata?: Record<string, string>;
 };
 

@@ -43,6 +43,7 @@ export const postmarkProvider: EmailProvider = {
         Attachments: message.attachments?.map((attachment) => ({
           Name: attachment.name, Content: attachment.content, ContentType: attachment.contentType, ContentID: null,
         })),
+        Headers: message.headers?.map((header) => ({ Name: header.name, Value: header.value })),
         TrackOpens: false,
         TrackLinks: Models.LinkTrackingOptions.None,
       });

@@ -100,6 +100,17 @@ server and cached in the private `grader-reports` bucket. Set
 `NEXT_PUBLIC_GRADER_CTA_URL` to the desired HTTPS sales destination (for
 example `https://sitomax.com/contact`); report attribution is added to its URL.
 
+Apply `0067_grader_followups.sql` and set `POSTMARK_GRADER_BROADCAST_STREAM` to a
+Postmark broadcast stream, `GRADER_MAILING_ADDRESS` to the agency's physical
+mailing address, and `GRADER_UNSUBSCRIBE_SECRET` to a stable, private random
+secret of at least 32 characters. The cron sends only opted-in follow-ups on days
+2, 5 and 10, after the transactional report email. It rechecks for a matching
+Supabase user, a lead leaving New, or an unsubscribe immediately before sending.
+An unsubscribe suppresses grader marketing to that email across reports.
+Day 5 contains only findings and suggested fixes from the scan. The sequence
+uses the configured CTA, physical address and one-click unsubscribe headers;
+delivery failures are retried and visible in `grader_followups`.
+
 `grader_config` controls the global daily scan cap and Places limits, initially
 300 scans, 30 Places calls per UTC day and 900 per UTC month. The latter two
 cannot be set above those ceilings. Successful Places searches are cached for

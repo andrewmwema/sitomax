@@ -32,6 +32,16 @@ describe("Postmark adapter", () => {
     });
   });
 
+  it("passes broadcast unsubscribe headers and attachments to the provider", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ MessageID: "message-id", ErrorCode: 0 }));
+    await sendEmail({ ...message, stream: "broadcast", headers: [{ name: "List-Unsubscribe", value: "<https://example.test/unsubscribe>" }],
+      attachments: [{ name: "report.pdf", content: "JVBERg==", contentType: "application/pdf" }] });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      MessageStream: "broadcast", Headers: [{ Name: "List-Unsubscribe", Value: "<https://example.test/unsubscribe>" }],
+      Attachments: [{ Name: "report.pdf", Content: "JVBERg==", ContentType: "application/pdf" }],
+    });
+  });
+
   it.each([
     [406, "inactive"],
     [401, "not verified"],
