@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { brand } from "@/lib/brand";
 import { GRADER_STATUS_LABELS, groupCategoryChecks, type PresentedCheck } from "@/lib/grader/check-presentation";
-import { graderCategories, graderCtaUrl, graderScoreLabel, graderScoreTone } from "@/lib/grader/presentation";
+import { graderCategories, graderCtaUrl, graderScoreLabel, graderScoreTone, graderShareUrl } from "@/lib/grader/presentation";
 import type { PublicGraderReport } from "@/lib/grader/public-report";
 
 function Finding({ check }: { check: PresentedCheck }) {
@@ -18,7 +19,14 @@ function Finding({ check }: { check: PresentedCheck }) {
   </article>;
 }
 
-export function GraderFullReport({ report }: { report: PublicGraderReport }) {
+export function GraderFullReport({ report, pdfHref, readOnly = false, children }: {
+  report: PublicGraderReport;
+  /** Defaults to the unlock-protected same-host route; shared pages pass a signed, expiring link. */
+  pdfHref?: string;
+  /** Shared pages are read-only views for someone other than the report owner. */
+  readOnly?: boolean;
+  children?: React.ReactNode;
+}) {
   const [shareMessage, setShareMessage] = useState("");
   const [downloadError, setDownloadError] = useState("");
   const [downloading, setDownloading] = useState(false);
@@ -26,7 +34,7 @@ export function GraderFullReport({ report }: { report: PublicGraderReport }) {
   const checks = report.results?.checks ?? [];
   async function share() {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(readOnly || report.share_disabled ? window.location.href : graderShareUrl(report.slug));
       setShareMessage("Report link copied.");
     } catch { setShareMessage("Couldn't copy the link. Copy it from your browser's address bar."); }
   }
@@ -34,7 +42,7 @@ export function GraderFullReport({ report }: { report: PublicGraderReport }) {
     setDownloading(true);
     setDownloadError("");
     try {
-      const response = await fetch(`/grader/${encodeURIComponent(report.slug)}/pdf`, { cache: "no-store" });
+      const response = await fetch(pdfHref ?? `/grader/${encodeURIComponent(report.slug)}/pdf`, { cache: "no-store" });
       if (!response.ok || !response.headers.get("content-type")?.toLowerCase().startsWith("application/pdf"))
         throw new Error("PDF unavailable");
       const blob = await response.blob();
@@ -62,6 +70,7 @@ export function GraderFullReport({ report }: { report: PublicGraderReport }) {
         <a href="#report-summary">Summary &amp; fix plan</a>
         {graderCategories.map(([key, label]) => checks.some((check) => check.category === key)
           ? <a key={key} href={`#report-${key}`}>{label}</a> : null)}
+        {children ? <a href="#report-compare">Compare with a competitor</a> : null}
       </nav>
       <div>
         <section className="grader-card grader-report-section" id="report-summary">
@@ -97,7 +106,9 @@ export function GraderFullReport({ report }: { report: PublicGraderReport }) {
           <p>Launch a faster, lead-ready site in 7 days.</p>
           {report.ai_summary?.sitomax_pitch ? <p>{report.ai_summary.sitomax_pitch}</p> : null}
           {cta ? <a href={cta} className="grader-button">Book a free consultation</a> : <p>Contact link is temporarily unavailable.</p>}
+          {readOnly ? <p><Link className="grader-text-link" href="/grader">Get your own free grade →</Link></p> : null}
         </section>
+        {children}
       </div>
     </div>
   </section>;

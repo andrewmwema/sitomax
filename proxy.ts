@@ -62,7 +62,7 @@ export async function proxy(request: NextRequest) {
   if (pathname === "/api/email/inbound" || pathname === "/api/email/events") {
     return host === new URL(brand.appUrl).host.toLowerCase() ? NextResponse.next() : new NextResponse("Not found", { status: 404 });
   }
-  if (matchesPathPrefix(pathname, "/grader")) {
+  if (matchesPathPrefix(pathname, "/grader") || matchesPathPrefix(pathname, "/grade")) {
     if (hostname(host) === `www.${rootHost}`) {
       const url = request.nextUrl.clone();
       url.hostname = rootHost;

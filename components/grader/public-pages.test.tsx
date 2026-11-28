@@ -12,6 +12,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 
 import { GraderEmbeddedForm, GraderScanForm } from "./scan-form";
 import { GraderResults } from "./results";
+import { GraderFullReport } from "./full-report";
 
 const slug = "example-0123456789abcdef";
 const teaser = {
@@ -135,6 +136,22 @@ describe("public grader pages", () => {
       await act(async () => vi.advanceTimersByTimeAsync(1000));
       expect(revoke).toHaveBeenCalledWith("blob:test");
     } finally { click.mockRestore(); }
+  });
+
+  it("shares the public grade link and uses a signed PDF link on read-only pages", async () => {
+    const full = { ...teaser, status: "complete" as const, unlocked: true, results: { checks: [], places_enabled: false }, ai_summary: null };
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const fetch = vi.fn().mockResolvedValue(Response.json({ error: "expired" }, { status: 403 }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<GraderFullReport report={full} />));
+    await act(async () => [...container.querySelectorAll("button")].find((item) => item.textContent === "Share report")!.click());
+    expect(writeText).toHaveBeenCalledWith(`https://sitomax.com/grade/${slug}`);
+    expect(container.textContent).not.toContain("Get your own free grade");
+    await act(async () => root.render(<GraderFullReport report={full} pdfHref={`/grade/${slug}/pdf?expires=1&sig=x`} readOnly />));
+    await act(async () => [...container.querySelectorAll("button")].find((item) => item.textContent === "Download PDF")!.click());
+    expect(fetch.mock.calls[0][0]).toBe(`/grade/${slug}/pdf?expires=1&sig=x`);
+    expect(container.textContent).toContain("Get your own free grade");
   });
 
   it("renders a non-interactive embedded form in the editor preview", async () => {
