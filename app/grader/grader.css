@@ -133,3 +133,11 @@
   .grader-screenshot { animation: grader-fade 300ms ease; }
   @keyframes grader-fade { from { opacity: 0; } to { opacity: 1; } }
 }
+.grader-compare-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .8rem; margin-top: 1rem; }
+.grader-compare-form label { display: flex; flex-direction: column; gap: .35rem; flex: 1 1 16rem; font-weight: 700; font-size: .9rem; }
+.grader-compare-form input { padding: .8rem; border: 1px solid #dcd5e6; border-radius: .6rem; font: inherit; font-weight: 400; }
+.grader-compare-muted { color: var(--muted); }
+.grader-compare-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .92rem; }
+.grader-compare-table th, .grader-compare-table td { text-align: left; padding: .65rem .5rem; border-bottom: 1px solid var(--line); }
+.grader-compare-table thead th { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+.grader-compare-gaps { display: grid; gap: .6rem; padding-left: 1.3rem; }

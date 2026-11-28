@@ -13,6 +13,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 import { GraderEmbeddedForm, GraderScanForm } from "./scan-form";
 import { GraderResults } from "./results";
 import { GraderFullReport } from "./full-report";
+import { GraderCompare } from "./compare";
 
 const slug = "example-0123456789abcdef";
 const teaser = {
@@ -109,7 +110,8 @@ describe("public grader pages", () => {
       slug, name: "Example", email: "owner@example.com", consentMarketing: false, turnstileToken: "verified-token",
     });
     expect(container.textContent).toContain("Title needs attention.");
-    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector(".grader-unlock-form")).toBeNull();
+    expect(container.querySelector("#report-compare form")).not.toBeNull();
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
@@ -152,6 +154,56 @@ describe("public grader pages", () => {
     await act(async () => [...container.querySelectorAll("button")].find((item) => item.textContent === "Download PDF")!.click());
     expect(fetch.mock.calls[0][0]).toBe(`/grade/${slug}/pdf?expires=1&sig=x`);
     expect(container.textContent).toContain("Get your own free grade");
+  });
+
+  it("starts a verified competitor scan and shows the side-by-side gaps", async () => {
+    const base = { slug, domain: "example.com", competitor_slug: null, scores: {
+      overall: 60, grade: "C", categories: { speed: 40, mobile: 90, seo: 70, conversion: 50 },
+    }, results: { checks: [{ id: "cta", category: "conversion" as const, status: "warn" as const, value: null, detail: "No CTA.", fix: "Add one." }] } };
+    const rival = { slug: "rival-com-0123456789abcdef", domain: "rival.com", status: "running", scores: null };
+    const done = { ...rival, status: "complete", scores: { overall: 82, grade: "B", categories: { speed: 85, mobile: 80, seo: 75, conversion: 90 } } };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json({ slug: rival.slug }, { status: 202 }))
+      .mockResolvedValueOnce(Response.json(rival)).mockResolvedValueOnce(Response.json(done));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<GraderCompare base={base} mode="public" />));
+    const form = container.querySelector("form")!;
+    form.querySelector<HTMLInputElement>("[name=url]")!.value = "rival.com";
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(fetch).not.toHaveBeenCalled();
+    await act(async () => form.querySelector<HTMLButtonElement>("button[type=button]")!.click());
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(fetch.mock.calls[0][0]).toBe("https://app.sitomax.com/api/grader/scan");
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ url: "rival.com", compareSlug: slug, turnstileToken: "verified-token" });
+    expect(container.textContent).toContain("Scanning rival.com");
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(fetch.mock.calls[2][0]).toBe(`https://app.sitomax.com/api/grader/report/${rival.slug}`);
+    const gaps = [...container.querySelectorAll("ol li")].map((item) => item.textContent);
+    expect(gaps).toHaveLength(3);
+    expect(gaps[0]).toContain("Speed");
+    expect(gaps[1]).toContain("Lead capture");
+    expect(gaps[1]).toContain("Start with: Clear call to action");
+    expect(container.textContent).toContain("They lead by 22");
+  });
+
+  it("uses admin endpoints without verification and resumes a saved comparison", async () => {
+    const base = { slug, domain: "example.com", competitor_slug: "rival-com-0123456789abcdef", scores: {
+      overall: 90, grade: "A", categories: { speed: 90 } } };
+    const done = { slug: "rival-com-0123456789abcdef", domain: "rival.com", status: "complete", scores: { overall: 70, grade: "C", categories: { speed: 70 } } };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json(done))
+      .mockResolvedValueOnce(Response.json({ slug: "other-com-0123456789abcdef" }, { status: 202 }))
+      .mockResolvedValueOnce(Response.json({ ...done, slug: "other-com-0123456789abcdef", domain: "other.com" }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<GraderCompare base={base} mode="admin" />));
+    expect(fetch.mock.calls[0][0]).toBe("/api/grader/admin/report/rival-com-0123456789abcdef");
+    expect(container.textContent).toContain("level with or ahead");
+    await act(async () => [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("different website"))!.click());
+    const form = container.querySelector("form")!;
+    expect(form.textContent).not.toContain("Verify");
+    form.querySelector<HTMLInputElement>("[name=url]")!.value = "other.com";
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(fetch.mock.calls[1][0]).toBe("/api/grader/admin/scan");
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ url: "other.com", compareSlug: slug });
+    expect(container.textContent).toContain("other.com");
   });
 
   it("renders a non-interactive embedded form in the editor preview", async () => {

@@ -44,6 +44,17 @@ describe("grader scan endpoint", () => {
     expect(mocks.after).not.toHaveBeenCalled();
   });
 
+  it("starts a linked competitor scan and reports bases that can't be compared", async () => {
+    const response = await POST(request({ url: "rival.com", turnstileToken: "x", compareSlug: "example-0123456789abcdef" }));
+    expect(response.status).toBe(202);
+    expect(mocks.rpc).toHaveBeenCalledWith("grader_create_report",
+      expect.objectContaining({ p_compare_slug: "example-0123456789abcdef", p_source: "public" }));
+    mocks.rpc.mockResolvedValue({ error: "not_found" });
+    expect((await POST(request({ url: "rival.com", turnstileToken: "x", compareSlug: "example-0123456789abcdef" }))).status).toBe(404);
+    expect((await POST(request({ url: "rival.com", turnstileToken: "x", compareSlug: "Bad Slug" }))).status).toBe(400);
+    expect(mocks.after).toHaveBeenCalledOnce();
+  });
+
   it("reports quota limits without scheduling a job", async () => {
     mocks.rpc.mockResolvedValue({ error: "busy" });
     const response = await POST(request({ url: "example.com", turnstileToken: "x" }));

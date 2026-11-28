@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { adminReportSchema, type AdminGraderReport } from "@/lib/grader/report-schema";
+import { GraderCompare } from "@/components/grader/compare";
 import { GraderReport, graderLabel } from "./grader-report";
 import { copyGraderShareLink, GraderReportsList, graderRowShareable, setGraderShareDisabled,
   type GraderListRow } from "./grader-reports-list";
@@ -155,6 +156,8 @@ export function GraderAdmin({ initialSlug }: { initialSlug: string | null }) {
     {report?.status === "complete" ? <ProspectActions report={report}
       onChanged={() => { setRetry((value) => value + 1); setListKey((value) => value + 1); }} /> : null}
     {report?.status === "complete" ? <GraderReport report={report} /> : null}
+    {report?.status === "complete" && (report.unlocked || report.source === "admin")
+      ? <GraderCompare key={report.slug} base={report} mode="admin" /> : null}
     <GraderReportsList refreshKey={listKey} onOpen={open} onRerun={rerun} />
   </div>;
 }

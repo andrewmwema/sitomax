@@ -7,6 +7,7 @@ import { brand } from "@/lib/brand";
 import { publicReportSchema, type PublicGraderReport } from "@/lib/grader/public-report";
 import { GraderUnlockForm } from "./unlock-form";
 import { GraderFullReport } from "./full-report";
+import { GraderCompare } from "./compare";
 import { GraderSummary } from "./summary";
 
 const progress = [
@@ -58,7 +59,7 @@ export function GraderResults({ slug }: { slug: string }) {
   </section>;
   return <div className="grader-preview">
     <GraderSummary report={report} />
-    {report.unlocked ? <GraderFullReport report={report} /> : <section className="grader-locked grader-card"><div aria-hidden="true" className="grader-lock">🔒</div>
+    {report.unlocked ? <GraderFullReport report={report}><GraderCompare base={report} mode="public" /></GraderFullReport> : <section className="grader-locked grader-card"><div aria-hidden="true" className="grader-lock">🔒</div>
       <h2>Unlock your full report + step-by-step fix plan</h2>
       <p>Get detailed checks and a practical plan for your website.</p>
       <GraderUnlockForm slug={slug} onUnlocked={() => setRetry((value) => value + 1)} />
