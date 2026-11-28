@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { brand } from "@/lib/brand";
 
 export const graderCategories = [
   ["speed", "Speed"], ["mobile", "Mobile"], ["seo", "Search visibility"],
@@ -38,4 +39,10 @@ export function graderCtaUrl(slug: string): string | null {
   url.searchParams.set("ref", "grader");
   url.searchParams.set("report", slug);
   return url.href;
+}
+
+/** Read-only share page for a full report, on the marketing host. */
+export function graderShareUrl(slug: string): string {
+  const protocol = brand.rootDomain.includes("localhost") ? "http" : "https";
+  return new URL(`/grade/${encodeURIComponent(slug)}`, `${protocol}://${brand.rootDomain}`).href;
 }

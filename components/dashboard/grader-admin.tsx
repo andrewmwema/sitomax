@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { adminReportSchema, type AdminGraderReport } from "@/lib/grader/report-schema";
 import { GraderReport, graderLabel } from "./grader-report";
+import { GraderReportsList, type GraderListRow } from "./grader-reports-list";
 
 const slugSchema = z.string().regex(/^[a-z0-9-]{1,60}$/);
 const startSchema = z.object({ slug: slugSchema });
@@ -14,6 +15,7 @@ export function GraderAdmin({ initialSlug }: { initialSlug: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [listKey, setListKey] = useState(0);
 
   useEffect(() => {
     if (!slug) return;
@@ -32,6 +34,7 @@ export function GraderAdmin({ initialSlug }: { initialSlug: string | null }) {
         setReport(parsed.data);
         setError(null);
         if (parsed.data.status === "queued" || parsed.data.status === "running") timer = setTimeout(poll, 1500);
+        else setListKey((value) => value + 1);
       } catch (cause) {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Couldn't load the report.");
       }
@@ -40,34 +43,53 @@ export function GraderAdmin({ initialSlug }: { initialSlug: string | null }) {
     return () => { controller.abort(); clearTimeout(timer); };
   }, [slug, retry]);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const profile = String(data.get("hasGoogleProfile") ?? "");
+  function open(next: string) {
+    setReport(null);
+    setError(null);
+    setSlug(next);
+    window.history.replaceState(null, "", `?report=${encodeURIComponent(next)}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function startScan(body: Record<string, string>) {
     setSubmitting(true);
     setError(null);
     try {
       const response = await fetch("/api/grader/admin/scan", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: String(data.get("url") ?? ""),
-          businessName: String(data.get("businessName") ?? ""),
-          city: String(data.get("city") ?? ""),
-          ...(profile ? { hasGoogleProfile: profile } : {}),
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const json: unknown = await response.json();
       if (!response.ok) {
         const message = z.object({ error: z.string() }).safeParse(json);
         throw new Error(message.success ? message.data.error : "Couldn't start the scan.");
       }
-      const result = startSchema.parse(json);
-      setReport(null);
-      setSlug(result.slug);
-      window.history.replaceState(null, "", `?report=${encodeURIComponent(result.slug)}`);
+      open(startSchema.parse(json).slug);
+      setListKey((value) => value + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn't start the scan.");
     } finally { setSubmitting(false); }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const profile = String(data.get("hasGoogleProfile") ?? "");
+    void startScan({
+      url: String(data.get("url") ?? ""),
+      businessName: String(data.get("businessName") ?? ""),
+      city: String(data.get("city") ?? ""),
+      ...(profile ? { hasGoogleProfile: profile } : {}),
+    });
+  }
+
+  function rerun(row: GraderListRow) {
+    void startScan({
+      url: row.url_input,
+      ...(row.business_name ? { businessName: row.business_name } : {}),
+      ...(row.city ? { city: row.city } : {}),
+      ...(row.has_google_profile ? { hasGoogleProfile: row.has_google_profile } : {}),
+      ...(row.google_maps_url ? { googleMapsUrl: row.google_maps_url } : {}),
+    });
   }
 
   const running = Boolean(slug && (!report || report.status === "queued" || report.status === "running"));
@@ -102,5 +124,6 @@ export function GraderAdmin({ initialSlug }: { initialSlug: string | null }) {
     </section> : null}
     {report?.status === "failed" ? <p role="alert" className="platform-panel p-5">The scan failed. Check the URL and try again.</p> : null}
     {report?.status === "complete" ? <GraderReport report={report} /> : null}
+    <GraderReportsList refreshKey={listKey} onOpen={open} onRerun={rerun} />
   </div>;
 }

@@ -16,7 +16,7 @@ export const graderInputSchema = z.strictObject({
 
 const createdSchema = z.union([
   z.object({ id: z.uuid(), slug: z.string() }),
-  z.object({ error: z.enum(["rate_limit", "busy"]) }),
+  z.object({ error: z.enum(["rate_limit", "busy", "not_found"]) }),
 ]);
 
 export function prepareGraderInput(raw: z.infer<typeof graderInputSchema>) {
@@ -43,7 +43,15 @@ export function graderClientIp(request: Request) {
   return { ip, hash: createHmac("sha256", salt).update(ip).digest("hex") };
 }
 
-export async function createGraderReport(input: ReturnType<typeof prepareGraderInput>, ipHash: string, userAgent: string) {
+export type GraderReportOptions = {
+  /** Admin scans skip the per-IP limit and show the full report without the email gate. */
+  source?: "public" | "admin";
+  /** Starts a competitor scan linked to this (fully visible) report. */
+  compareSlug?: string;
+};
+
+export async function createGraderReport(input: ReturnType<typeof prepareGraderInput>, ipHash: string, userAgent: string,
+  options: GraderReportOptions = {}) {
   const url = new URL(input.url);
   const label = (input.businessName || url.hostname).toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "site";
@@ -51,10 +59,12 @@ export async function createGraderReport(input: ReturnType<typeof prepareGraderI
   return createdSchema.parse(await graderRpc("grader_create_report", {
     p_slug: slug, p_url: input.url, p_domain: url.hostname, p_business_name: input.businessName ?? null,
     p_city: input.city ?? null, p_profile: input.hasGoogleProfile ?? null, p_maps_url: input.googleMapsUrl ?? null,
-    p_ip_hash: ipHash, p_user_agent: userAgent,
+    p_ip_hash: ipHash, p_user_agent: userAgent, p_source: options.source ?? "public",
+    p_compare_slug: options.compareSlug ?? null,
   }));
 }
 
-export function graderLimitMessage(error: "busy" | "rate_limit") {
+export function graderLimitMessage(error: "busy" | "rate_limit" | "not_found") {
+  if (error === "not_found") return "This report can't be compared yet.";
   return error === "busy" ? "We're busy, try again soon." : "Too many scans. Please try again later.";
 }

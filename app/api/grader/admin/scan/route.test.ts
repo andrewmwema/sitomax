@@ -37,7 +37,8 @@ describe("admin grader scan", () => {
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ slug: "test-1234" });
     expect(mocks.rpc).toHaveBeenCalledWith("grader_create_report",
-      expect.objectContaining({ p_url: "https://example.com/", p_business_name: "Joe", p_city: "Austin", p_profile: "yes" }));
+      expect.objectContaining({ p_url: "https://example.com/", p_business_name: "Joe", p_city: "Austin", p_profile: "yes",
+        p_source: "admin", p_compare_slug: null }));
     expect(mocks.after).toHaveBeenCalledOnce();
     await mocks.after.mock.calls[0][0]();
     expect(mocks.process).toHaveBeenCalledWith("50da05be-c0bc-4d58-a49f-44f59f44bf09",
@@ -49,6 +50,15 @@ describe("admin grader scan", () => {
     expect((await POST(request({ url: "example.com", hasGoogleProfile: "maybe" }))).status).toBe(400);
     expect((await POST(request({ url: "example.com" }, "https://attacker.example"))).status).toBe(403);
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("starts a competitor scan linked to a report and reports missing base reports", async () => {
+    expect((await POST(request({ url: "rival.example", compareSlug: "base-1234" }))).status).toBe(202);
+    expect(mocks.rpc).toHaveBeenCalledWith("grader_create_report",
+      expect.objectContaining({ p_source: "admin", p_compare_slug: "base-1234" }));
+    mocks.rpc.mockResolvedValue({ error: "not_found" });
+    expect((await POST(request({ url: "rival.example", compareSlug: "base-1234" }))).status).toBe(404);
+    expect((await POST(request({ url: "rival.example", compareSlug: "Bad Slug" }))).status).toBe(400);
   });
 
   it("honors shared scan limits without scheduling", async () => {

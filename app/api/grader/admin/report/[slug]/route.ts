@@ -15,10 +15,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   try {
     await graderRpc("grader_get_report", { p_slug: slug });
     const { data, error } = await auth.supabase.from("grader_reports")
-      .select("slug, url_input, final_url, domain, business_name, city, status, progress, results, scores, ai_summary, screenshot_url")
+      .select("id, slug, url_input, final_url, domain, business_name, city, status, progress, results, scores, ai_summary, screenshot_url, source, share_disabled")
       .eq("slug", slug).maybeSingle();
     if (error) throw error;
-    return data ? Response.json(data, { headers }) : Response.json({ error: "Not found." }, { status: 404, headers });
+    if (!data) return Response.json({ error: "Not found." }, { status: 404, headers });
+    const { data: competitor, error: competitorError } = await auth.supabase.from("grader_reports").select("slug")
+      .eq("compare_of", data.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (competitorError) throw competitorError;
+    const report: Partial<typeof data> = { ...data };
+    delete report.id;
+    return Response.json({ ...report, competitor_slug: competitor?.slug ?? null }, { headers });
   } catch {
     console.error("Could not load administrator grader report");
     return Response.json({ error: "The grader is temporarily unavailable." }, { status: 503, headers });

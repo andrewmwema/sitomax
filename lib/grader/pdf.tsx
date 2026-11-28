@@ -12,6 +12,10 @@ import { graderRpc, graderWorker } from "./worker";
 // Bump when the PDF layout changes so cached PDFs are regenerated.
 const PDF_CACHE_PREFIX = "v3";
 
+export function graderPdfPath(slug: string) {
+  return `${PDF_CACHE_PREFIX}/${slug}.pdf`;
+}
+
 class PdfFailure extends Error {
   constructor(readonly reason: string, readonly status?: number) {
     super(reason);
@@ -162,10 +166,16 @@ export async function graderPdf(slug: string): Promise<Uint8Array | null> {
   }
   const parsed = parsedResult.data;
   if (!parsed.unlocked || parsed.status !== "complete") return null;
+  return cachedGraderPdf(parsed);
+}
+
+/** Returns the cached PDF for a fully visible report, rendering and caching it on first use. */
+export async function cachedGraderPdf(parsed: PublicGraderReport): Promise<Uint8Array> {
+  const slug = parsed.slug;
   let storage: ReturnType<ReturnType<typeof graderWorker>["client"]["storage"]["from"]>;
   try { storage = graderWorker().client.storage.from("grader-reports"); }
   catch (error) { logPdfFailure("configure storage", error); throw error; }
-  const path = `${PDF_CACHE_PREFIX}/${slug}.pdf`;
+  const path = graderPdfPath(slug);
   const cached = await storage.download(path);
   if (cached.data) return new Uint8Array(await cached.data.arrayBuffer());
   if (!(cached.error instanceof StorageApiError &&

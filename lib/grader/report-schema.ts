@@ -22,5 +22,8 @@ export const adminReportSchema = z.object({
     fix_plan: z.array(z.string()), sitomax_pitch: z.string(),
   }).nullable(),
   screenshot_url: z.url().nullable(),
+  source: z.enum(["public", "admin"]).optional(),
+  share_disabled: z.boolean().optional(),
+  competitor_slug: z.string().nullable().optional(),
 });
 export type AdminGraderReport = z.infer<typeof adminReportSchema>;
