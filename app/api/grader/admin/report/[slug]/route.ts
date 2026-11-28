@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   try {
     await graderRpc("grader_get_report", { p_slug: slug });
     const { data, error } = await auth.supabase.from("grader_reports")
-      .select("id, slug, url_input, final_url, domain, business_name, city, status, progress, results, scores, ai_summary, screenshot_url, source, share_disabled")
+      .select("id, slug, url_input, final_url, domain, business_name, city, status, progress, results, scores, ai_summary, screenshot_url, source, share_disabled, unlocked")
       .eq("slug", slug).maybeSingle();
     if (error) throw error;
     if (!data) return Response.json({ error: "Not found." }, { status: 404, headers });

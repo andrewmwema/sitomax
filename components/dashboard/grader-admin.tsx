@@ -4,7 +4,36 @@ import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { adminReportSchema, type AdminGraderReport } from "@/lib/grader/report-schema";
 import { GraderReport, graderLabel } from "./grader-report";
-import { GraderReportsList, type GraderListRow } from "./grader-reports-list";
+import { copyGraderShareLink, GraderReportsList, graderRowShareable, setGraderShareDisabled,
+  type GraderListRow } from "./grader-reports-list";
+import { graderShareUrl } from "@/lib/grader/presentation";
+
+function ProspectActions({ report, onChanged }: { report: AdminGraderReport; onChanged: () => void }) {
+  const [message, setMessage] = useState("");
+  const shareable = graderRowShareable({ status: report.status, unlocked: report.unlocked ?? false, source: report.source ?? "public" });
+  async function toggle() {
+    try {
+      await setGraderShareDisabled(report.slug, !report.share_disabled);
+      setMessage(report.share_disabled ? "Share link enabled." : "Share link disabled. The link now shows “not found”.");
+      onChanged();
+    } catch { setMessage("Couldn't update the share link."); }
+  }
+  return <section className="platform-panel flex flex-col gap-3 p-5" aria-label="Share this report">
+    <div><h2 className="text-[15px] font-semibold">Send to your prospect</h2>
+      <p className="mt-1 text-xs text-[var(--platform-muted)]">{report.source === "admin"
+        ? "Admin scans show the full report without the email gate."
+        : report.unlocked ? "This report was unlocked by the visitor." : "This public report is still locked, so it can't be shared. Re-run it as an admin scan to share it."}</p></div>
+    <div className="flex flex-wrap items-center gap-2">
+      {shareable && !report.share_disabled ? <>
+        <button type="button" className="platform-button platform-button-primary" onClick={async () => setMessage(await copyGraderShareLink(report.slug))}>Copy share link</button>
+        <a className="platform-button" href={graderShareUrl(report.slug)} target="_blank" rel="noopener noreferrer">Open share page</a>
+      </> : null}
+      <a className="platform-button" href={`/api/grader/admin/pdf/${encodeURIComponent(report.slug)}`} download>Download PDF</a>
+      {shareable ? <button type="button" className="platform-button" onClick={toggle}>{report.share_disabled ? "Enable share link" : "Disable share link"}</button> : null}
+    </div>
+    <p role="status" className="text-xs text-[var(--platform-muted)]">{message}</p>
+  </section>;
+}
 
 const slugSchema = z.string().regex(/^[a-z0-9-]{1,60}$/);
 const startSchema = z.object({ slug: slugSchema });
@@ -123,6 +152,8 @@ export function GraderAdmin({ initialSlug }: { initialSlug: string | null }) {
       </ul> : null}
     </section> : null}
     {report?.status === "failed" ? <p role="alert" className="platform-panel p-5">The scan failed. Check the URL and try again.</p> : null}
+    {report?.status === "complete" ? <ProspectActions report={report}
+      onChanged={() => { setRetry((value) => value + 1); setListKey((value) => value + 1); }} /> : null}
     {report?.status === "complete" ? <GraderReport report={report} /> : null}
     <GraderReportsList refreshKey={listKey} onOpen={open} onRerun={rerun} />
   </div>;

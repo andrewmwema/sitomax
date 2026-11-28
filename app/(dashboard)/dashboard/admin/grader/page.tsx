@@ -11,7 +11,7 @@ export default async function GraderPage({ searchParams }: { searchParams: Promi
     <header>
       <p className="platform-eyebrow mb-1">Management</p>
       <h1 className="text-2xl font-semibold tracking-tight">Website grader</h1>
-      <p className="mt-2 text-sm text-[var(--platform-muted)]">Run a website scan for a prospect and review the full report.</p>
+      <p className="mt-2 text-sm text-[var(--platform-muted)]">Run a scan for a prospect: admin scans skip verification and the email gate, so you can share the full report or PDF right away.</p>
       <Link href="/dashboard/admin/grader/health" className="mt-2 inline-block text-sm underline">Check grader health</Link>
     </header>
     <GraderAdmin initialSlug={parsed.success ? parsed.data : null} />

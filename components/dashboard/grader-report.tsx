@@ -1,14 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { CATEGORIES, type Category } from "@/lib/grader/types";
+import { GRADER_STATUS_LABELS, groupCategoryChecks } from "@/lib/grader/check-presentation";
+import { CATEGORIES, type Category, type CheckStatus } from "@/lib/grader/types";
 import type { AdminGraderReport } from "@/lib/grader/report-schema";
 
 const categories: Record<Category, string> = {
   speed: "Speed", mobile: "Mobile", seo: "SEO", security: "Security & trust",
   conversion: "Lead capture", local: "Local presence", social: "Social & content", accessibility: "Accessibility",
 };
-const labels = { pass: "Pass", warn: "Warn", fail: "Fail", unknown: "Couldn't check" } as const;
+const badge: Record<CheckStatus, string> = {
+  fail: "bg-red-50 text-red-800 ring-red-200", warn: "bg-amber-50 text-amber-900 ring-amber-200",
+  pass: "bg-emerald-50 text-emerald-800 ring-emerald-200", unknown: "bg-slate-100 text-slate-700 ring-slate-200",
+};
+
+function StatusBadge({ status, label }: { status: CheckStatus; label: string }) {
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${badge[status]}`}>{label}</span>;
+}
 
 export function graderLabel(value: string) {
   return value.replace(/_/g, " ").replace(/^\w/, (letter) => letter.toUpperCase());
@@ -50,22 +58,34 @@ export function GraderReport({ report }: { report: AdminGraderReport }) {
       </div> : <p className="mt-3 text-sm">Couldn&apos;t generate an AI summary for this scan.</p>}
     </section>
     {CATEGORIES.map((category) => {
-      const items = checks.filter((check) => check.category === category);
-      return <section key={category} className="platform-panel p-5">
+      if (!checks.some((check) => check.category === category)) return <section key={category} className="platform-panel p-5">
         <h2 className="text-lg font-semibold">{categories[category]}</h2>
-        {category === "local" && !report.results?.places_enabled
-          ? <p className="mt-2 text-sm text-[var(--platform-muted)]">Google Places checks are not enabled.</p> : null}
-        {items.length ? <ul className="mt-3 divide-y divide-[var(--platform-line)]">{items.map((item) =>
-          <li key={item.id} className="py-3 text-sm">
+        <p className="mt-2 text-sm text-[var(--platform-muted)]">{category === "local" && !report.results?.places_enabled
+          ? "Google Places checks are not enabled." : "No checks available."}</p>
+      </section>;
+      const { findings, unknown, passed } = groupCategoryChecks(checks, category);
+      return <section key={category} className="platform-panel p-5">
+        <h2 className="text-lg font-semibold">{categories[category]}
+          <span className="ml-2 text-sm font-normal text-[var(--platform-muted)]">{report.scores?.categories[category] == null
+            ? "Couldn't check" : `${report.scores.categories[category]}/100`}</span></h2>
+        <ul className="mt-3 divide-y divide-[var(--platform-line)]">
+          {findings.map((item) => <li key={item.id} className="py-3 text-sm">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-semibold">{graderLabel(item.id)}</h3>
-              <span className={item.status === "fail" ? "font-semibold text-red-700" : item.status === "warn" ? "font-semibold text-amber-700"
-                : item.status === "pass" ? "font-semibold text-emerald-700" : "text-[var(--platform-muted)]"}>{labels[item.status]}</span>
+              <h3 className="font-semibold">{item.label}</h3><StatusBadge status={item.status} label={item.statusLabel} />
             </div>
-            {item.value !== null ? <p className="mt-1 break-words"><strong>Value:</strong> {item.value}</p> : null}
+            {item.found ? <p className="mt-1 break-words"><strong>What we found:</strong> {item.found}</p> : null}
             <p className="mt-1 break-words">{item.detail}</p>
-            <p className="mt-1 break-words text-[var(--platform-secondary)]"><strong>Fix:</strong> {item.fix}</p>
-          </li>)}</ul> : <p className="mt-3 text-sm">No checks available.</p>}
+            {item.fix ? <p className="mt-1 break-words"><strong>How to improve:</strong> {item.fix}</p> : null}
+          </li>)}
+          {unknown.map((group) => <li key={group.reason} className="py-3 text-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-semibold">{group.labels.join(", ")}</h3><StatusBadge status="unknown" label={GRADER_STATUS_LABELS.unknown} />
+            </div>
+            <p className="mt-1 break-words">{group.reason}</p>
+          </li>)}
+          {passed.length ? <li className="py-3 text-sm"><StatusBadge status="pass" label={GRADER_STATUS_LABELS.pass} />
+            <p className="mt-1"><strong>Passed:</strong> {passed.map((item) => item.label).join(", ")}</p></li> : null}
+        </ul>
       </section>;
     })}
   </div>;

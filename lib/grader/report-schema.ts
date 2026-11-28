@@ -24,6 +24,7 @@ export const adminReportSchema = z.object({
   screenshot_url: z.url().nullable(),
   source: z.enum(["public", "admin"]).optional(),
   share_disabled: z.boolean().optional(),
+  unlocked: z.boolean().optional(),
   competitor_slug: z.string().nullable().optional(),
 });
 export type AdminGraderReport = z.infer<typeof adminReportSchema>;
