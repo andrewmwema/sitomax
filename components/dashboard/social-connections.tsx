@@ -23,6 +23,30 @@ export function SocialConnections({ accountId, initialAccounts, syncOnMount = fa
       else if (result.accounts) { setAccounts(result.accounts); setNotice("Connection status refreshed."); }
     });
   }
+  function connect() {
+    const popup = window.open("", "_blank");
+    if (popup) popup.opener = null;
+    setError(""); setNotice(""); setConnectUrl("");
+    startTransition(async () => {
+      try {
+        const result = await connectAccounts(accountId);
+        if (result.error || !result.url) {
+          popup?.close();
+          setError(result.error || "Could not create a connection link. Please try again.");
+        } else if (popup && !popup.closed) {
+          popup.location.replace(result.url);
+          setNotice("The secure connection opened in a new tab. Return here and refresh your accounts when finished.");
+        } else {
+          setConnectUrl(result.url);
+          setNotice("Your browser blocked or closed the new tab. Open the secure connection below.");
+        }
+      } catch {
+        popup?.close();
+        console.error("Could not start the social connection.");
+        setError("Could not start the social connection. Please try again.");
+      }
+    });
+  }
   useEffect(() => {
     if (!syncOnMount || synced.current) return;
     synced.current = true;
@@ -35,19 +59,13 @@ export function SocialConnections({ accountId, initialAccounts, syncOnMount = fa
 
   return <section className="space-y-5">
     <div className="flex flex-wrap gap-3">
-      <button type="button" className="platform-button-primary min-h-11" disabled={pending} onClick={() => startTransition(async () => {
-        setError(""); setNotice(""); setConnectUrl("");
-        const result = await connectAccounts(accountId);
-        if (result.error) setError(result.error);
-        else if (result.url) {
-          setConnectUrl(result.url);
-          setNotice("Your private connection link is ready. Open it in a new tab below.");
-        }
-      })}><Link2 size={16} />{pending ? "Working..." : "Connect your accounts"}</button>
+      <button type="button" className="platform-button platform-button-primary min-h-11" disabled={pending} onClick={connect}>
+        <Link2 size={16} />{pending ? "Working..." : "Connect your accounts"}
+      </button>
       <button type="button" className="platform-button min-h-11" disabled={pending} onClick={sync}><RefreshCw size={16} />Refresh accounts</button>
     </div>
     <p className="text-sm text-[var(--platform-secondary)]">You&apos;ll connect through our secure publishing partner.</p>
-    {connectUrl ? <a href={connectUrl} target="_blank" rel="noopener noreferrer" className="platform-button-primary min-h-11">
+    {connectUrl ? <a href={connectUrl} target="_blank" rel="noopener noreferrer" className="platform-button platform-button-primary min-h-11">
       Open secure connection (new tab)
     </a> : null}
     {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p> : null}

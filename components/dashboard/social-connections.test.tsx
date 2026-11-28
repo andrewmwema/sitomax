@@ -13,40 +13,89 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.resetAllMocks();
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("social connection handoff", () => {
-  it("explains the partner handoff and offers each fresh link in an isolated new tab", async () => {
-    mocks.connect.mockResolvedValueOnce({ url: "https://app.upload-post.com/connect?token=first" })
-      .mockResolvedValueOnce({ url: "https://app.upload-post.com/connect?token=second" });
+  it("opens a new tab on click and navigates it when the fresh link arrives", async () => {
+    let resolve!: (value: { url: string }) => void;
+    mocks.connect.mockReturnValue(new Promise((done) => { resolve = done; }));
+    const popup = { opener: window, closed: false, location: { replace: vi.fn() }, close: vi.fn() };
+    const open = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
     const container = document.createElement("div");
     const root = createRoot(container);
     await act(async () => root.render(<SocialConnections accountId="account" initialAccounts={[]} />));
     expect(container.textContent).toContain("You'll connect through our secure publishing partner.");
+    await act(async () => container.querySelector("button")!.click());
+    expect(open).toHaveBeenCalledWith("", "_blank");
+    expect(popup.opener).toBeNull();
+    expect(popup.location.replace).not.toHaveBeenCalled();
+    await act(async () => resolve({ url: "https://app.upload-post.com/connect?token=first" }));
+    expect(popup.location.replace).toHaveBeenCalledWith("https://app.upload-post.com/connect?token=first");
     expect(container.querySelector("a")).toBeNull();
-    const button = container.querySelector("button")!;
-    await act(async () => button.click());
-    const link = container.querySelector("a")!;
-    expect(link.href).toBe("https://app.upload-post.com/connect?token=first");
-    expect(link.target).toBe("_blank");
-    expect(link.rel).toBe("noopener noreferrer");
-    await act(async () => button.click());
-    expect(container.querySelector("a")?.href).toBe("https://app.upload-post.com/connect?token=second");
-    expect(mocks.connect).toHaveBeenCalledTimes(2);
     await act(async () => root.unmount());
   });
 
-  it("removes a previously generated link if regeneration fails", async () => {
+  it("provides an isolated fallback link when a popup is blocked", async () => {
+    vi.spyOn(window, "open").mockReturnValue(null);
     mocks.connect.mockResolvedValueOnce({ url: "https://app.upload-post.com/connect?token=first" })
+      .mockResolvedValueOnce({ url: "https://app.upload-post.com/connect?token=second" })
       .mockResolvedValueOnce({ error: "Try again later." });
     const container = document.createElement("div");
     const root = createRoot(container);
     await act(async () => root.render(<SocialConnections accountId="account" initialAccounts={[]} />));
     await act(async () => container.querySelector("button")!.click());
-    expect(container.querySelector("a")).not.toBeNull();
+    const link = container.querySelector("a")!;
+    expect(link.href).toBe("https://app.upload-post.com/connect?token=first");
+    expect(link.target).toBe("_blank");
+    expect(link.rel).toBe("noopener noreferrer");
+    expect(container.textContent).toContain("blocked or closed");
+    await act(async () => container.querySelector("button")!.click());
+    expect(container.querySelector("a")?.href).toBe("https://app.upload-post.com/connect?token=second");
     await act(async () => container.querySelector("button")!.click());
     expect(container.querySelector("a")).toBeNull();
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("Try again later.");
+    expect(mocks.connect).toHaveBeenCalledTimes(3);
+    await act(async () => root.unmount());
+  });
+
+  it("offers a fallback if the tab is closed before the link arrives", async () => {
+    const popup = { opener: window, closed: true, location: { replace: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    mocks.connect.mockResolvedValue({ url: "https://app.upload-post.com/connect?token=first" });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(<SocialConnections accountId="account" initialAccounts={[]} />));
+    await act(async () => container.querySelector("button")!.click());
+    expect(container.querySelector("a")?.href).toBe("https://app.upload-post.com/connect?token=first");
+    expect(popup.location.replace).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("closes the blank tab and shows an error when link generation fails", async () => {
+    const popup = { opener: window, closed: false, location: { replace: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    mocks.connect.mockResolvedValue({ error: "Try again later." });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(<SocialConnections accountId="account" initialAccounts={[]} />));
+    await act(async () => container.querySelector("button")!.click());
+    expect(popup.close).toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Try again later.");
+    expect(container.querySelector("a")).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("closes the tab and shows a generic error if the action rejects", async () => {
+    const popup = { opener: window, closed: false, location: { replace: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.connect.mockRejectedValue(new Error("network error"));
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(<SocialConnections accountId="account" initialAccounts={[]} />));
+    await act(async () => container.querySelector("button")!.click());
+    expect(popup.close).toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Please try again.");
     await act(async () => root.unmount());
   });
 });
