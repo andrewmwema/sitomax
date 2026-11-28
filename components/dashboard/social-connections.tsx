@@ -11,12 +11,13 @@ export function SocialConnections({ accountId, initialAccounts, syncOnMount = fa
   const [accounts, setAccounts] = useState(initialAccounts);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [connectUrl, setConnectUrl] = useState("");
   const [pending, startTransition] = useTransition();
   const synced = useRef(false);
 
   function sync() {
     startTransition(async () => {
-      setError(""); setNotice("");
+      setError(""); setNotice(""); setConnectUrl("");
       const result = await syncAccounts(accountId);
       if (result.error) setError(result.error);
       else if (result.accounts) { setAccounts(result.accounts); setNotice("Connection status refreshed."); }
@@ -35,13 +36,20 @@ export function SocialConnections({ accountId, initialAccounts, syncOnMount = fa
   return <section className="space-y-5">
     <div className="flex flex-wrap gap-3">
       <button type="button" className="platform-button-primary min-h-11" disabled={pending} onClick={() => startTransition(async () => {
-        setError(""); setNotice("");
+        setError(""); setNotice(""); setConnectUrl("");
         const result = await connectAccounts(accountId);
         if (result.error) setError(result.error);
-        else if (result.url) window.location.assign(result.url);
+        else if (result.url) {
+          setConnectUrl(result.url);
+          setNotice("Your private connection link is ready. Open it in a new tab below.");
+        }
       })}><Link2 size={16} />{pending ? "Working..." : "Connect your accounts"}</button>
       <button type="button" className="platform-button min-h-11" disabled={pending} onClick={sync}><RefreshCw size={16} />Refresh accounts</button>
     </div>
+    <p className="text-sm text-[var(--platform-secondary)]">You&apos;ll connect through our secure publishing partner.</p>
+    {connectUrl ? <a href={connectUrl} target="_blank" rel="noopener noreferrer" className="platform-button-primary min-h-11">
+      Open secure connection (new tab)
+    </a> : null}
     {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p> : null}
     <p role="status" className="text-sm text-[var(--platform-secondary)]">{pending ? "Updating social connections..." : notice}</p>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

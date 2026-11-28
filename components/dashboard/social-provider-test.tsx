@@ -46,6 +46,7 @@ export function SocialProviderTest({ sites }: { sites: { id: string; name: strin
         <button className="platform-button" type="button" onClick={() => run({ action: "accounts" })}>List and sync accounts</button>
         <button className="platform-button" type="button" onClick={() => run({ action: "destinations" })}>List Facebook Pages / Google locations</button>
       </div>
+      <p className="text-sm text-[var(--platform-secondary)]">You&apos;ll connect through our secure publishing partner.</p>
       <section className="space-y-4 rounded-2xl border border-[var(--platform-line)] p-5">
         <h2 className="font-semibold">Publish test</h2>
         <div className="flex flex-wrap gap-4">{socialPlatforms.map((platform) => <label key={platform} className="flex min-h-11 items-center gap-2 text-sm">

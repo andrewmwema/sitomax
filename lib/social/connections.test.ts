@@ -58,7 +58,8 @@ describe("tenant social connection orchestration", () => {
     expect(saved).toMatchObject({ p_profile_id: profileId });
     expect(saved.p_ciphertext).not.toContain(username);
     expect(mocks.connect).toHaveBeenCalledWith(username, expect.objectContaining({
-      platforms: ["facebook", "instagram", "google_business", "linkedin"], title: "Connect your social accounts to Agency",
+      platforms: ["facebook", "instagram", "google_business", "linkedin"], title: "Agency",
+      description: "Connect your social accounts to Agency",
       redirectUrl: expect.stringContaining(`/social/connected?account=${accountId}`),
     }));
   });

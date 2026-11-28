@@ -70,7 +70,8 @@ export async function connectSocialAccount(accountId: string) {
   const result = await context.provider.getConnectUrl(context.username, {
     redirectUrl: redirect.href, platforms: [...socialPlatforms],
     logoUrl: new URL(agency.logoUrl ?? brandLogo.full.path, brand.appUrl).href,
-    title: `Connect your social accounts to ${agency.name}`,
+    title: agency.name,
+    description: `Connect your social accounts to ${agency.name}`,
   });
   return result;
 }

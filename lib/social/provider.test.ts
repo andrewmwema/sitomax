@@ -24,7 +24,8 @@ describe("social provider contracts", () => {
     }));
     const result = await provider().getConnectUrl("test", {
       logoUrl: "https://example.test/logo.png", redirectUrl: "https://app.example.test/social/connected",
-      title: "Connect to our agency", platforms: ["facebook", "instagram", "google_business", "linkedin"],
+      title: "SitoMax", description: "Connect your social accounts to SitoMax",
+      platforms: ["facebook", "instagram", "google_business", "linkedin"],
     });
     const [url, options] = fetchMock.mock.calls[1];
     expect(url).toBe("https://api.upload-post.com/api/uploadposts/users/generate-jwt");
@@ -34,7 +35,8 @@ describe("social provider contracts", () => {
     });
     expect(JSON.parse(String(options?.body))).toEqual({
       username: "test", logo_image: "https://example.test/logo.png",
-      redirect_url: "https://app.example.test/social/connected", connect_title: "Connect to our agency",
+      redirect_url: "https://app.example.test/social/connected", connect_title: "SitoMax",
+      connect_description: "Connect your social accounts to SitoMax",
       platforms: ["facebook", "instagram", "google_business", "linkedin"], show_calendar: false,
     });
     expect(result.data.url).toContain("token=private");

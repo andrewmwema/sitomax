@@ -106,7 +106,7 @@ export class UploadPostProvider implements SocialProvider {
     return { ...result, data: { providerProfileId: result.data.profile.username } };
   }
 
-  async getConnectUrl(profileId: string, opts: { redirectUrl: string; platforms: SocialPlatform[]; logoUrl: string; title: string }) {
+  async getConnectUrl(profileId: string, opts: { redirectUrl: string; platforms: SocialPlatform[]; logoUrl: string; title: string; description?: string }) {
     const result = await this.request("connect_url", "/api/uploadposts/users/generate-jwt",
       successSchema.extend({ access_url: z.url(), duration: z.literal("48h") }).refine((value) => {
         const url = new URL(value.access_url);
@@ -115,6 +115,7 @@ export class UploadPostProvider implements SocialProvider {
         method: "POST", json: {
           username: profileId, redirect_url: z.url().parse(opts.redirectUrl), logo_image: z.url().parse(opts.logoUrl),
           connect_title: z.string().min(1).max(300).parse(opts.title),
+          ...(opts.description === undefined ? {} : { connect_description: z.string().min(1).max(300).parse(opts.description) }),
           platforms: z.array(platformSchema).min(1).parse(opts.platforms), show_calendar: false,
         },
       });

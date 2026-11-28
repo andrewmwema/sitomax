@@ -35,7 +35,7 @@ export type ProviderLogger = (event: ProviderAudit) => Promise<void>;
 export interface SocialProvider {
   createProfile(profileId: string): Promise<ProviderResult<{ providerProfileId: string }>>;
   getConnectUrl(profileId: string, opts: {
-    redirectUrl: string; platforms: SocialPlatform[]; logoUrl: string; title: string;
+    redirectUrl: string; platforms: SocialPlatform[]; logoUrl: string; title: string; description?: string;
   }): Promise<ProviderResult<{ url: string; expiresAt: Date }>>;
   listConnectedAccounts(profileId: string): Promise<ProviderResult<ConnectedAccount[]>>;
   publish(profileId: string, input: SocialPublishInput): Promise<ProviderResult<{ reference: PublishReference }>>;
