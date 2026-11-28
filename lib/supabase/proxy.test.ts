@@ -30,6 +30,15 @@ describe("app host session routing", () => {
     expect(response.headers.get("location")).toBe("https://app.example.test/login?next=%2Fdashboard%2Fsettings");
   });
 
+  it("protects the social callback before any connection synchronization", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    const response = await updateSession(new NextRequest("https://app.example.test/social/connected?account=private"));
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+    const account = "70000000-0000-4000-8000-000000000001";
+    const valid = await updateSession(new NextRequest(`https://app.example.test/social/connected?account=${account}&token=discard`));
+    expect(new URL(valid.headers.get("location")!).searchParams.get("next")).toBe(`/social/connected?account=${account}`);
+  });
+
   it("returns signed-out notification recipients to the specific lead after login", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } });
     const id = "00000000-0000-4000-8000-000000000003";

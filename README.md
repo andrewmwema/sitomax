@@ -47,6 +47,27 @@ undoes them and checks the originals are back. It is skipped unless
 TEST_DATABASE_URL=postgresql://sitomax_test@127.0.0.1:55439/sitomax_test npm test
 ```
 
+## Social connections (Phase 1 foundation)
+
+Owners manage client-account social connections at `/dashboard/social`.
+Super admins can test the provider at `/dashboard/admin/social-provider`.
+Editors cannot manage social connections. Sites in the same account share one
+default profile; the schema permits additional profiles later.
+
+Review [migration 0070](./supabase/migrations/0070_social_connections.sql)
+before applying it yourself. Set server-only `UPLOAD_POST_API_KEY` and a stable
+`SOCIAL_PROFILE_ENCRYPTION_KEY` (32 random bytes as 64 hex characters; generate
+with `openssl rand -hex 32`). Use the same encryption key wherever the same
+database is used, back it up securely, and do not rotate it without migrating
+the encrypted mappings. Set `NEXT_PUBLIC_APP_URL` to the actual platform origin
+for OAuth returns and redeploy after changing environment variables.
+
+No background publishing, composer, billing, AI generation, or review polling
+is enabled in this foundation. Diagnostic posts and replies are real public
+writes and require an explicit confirmation. Full setup, provider contracts,
+unverified behavior, and live testing instructions are in
+[Social provider notes](./docs/SOCIAL_PROVIDER_NOTES.md).
+
 ## Website grader (Phase A)
 
 The public grader landing page lives at `/grader` on the marketing apex.

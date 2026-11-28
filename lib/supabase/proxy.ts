@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { authCookieOptions } from "@/lib/supabase/cookie-options";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/editor", "/set-password"];
+const PROTECTED_PREFIXES = ["/dashboard", "/social", "/editor", "/set-password"];
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
@@ -61,8 +61,11 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/login";
     url.search = "";
     const lead = request.nextUrl.searchParams.get("lead");
+    const socialAccount = request.nextUrl.searchParams.get("account");
     const returnTo = pathname === "/dashboard/forms" && lead && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lead)
-      ? `${pathname}?lead=${lead}` : pathname;
+      ? `${pathname}?lead=${lead}`
+      : pathname === "/social/connected" && socialAccount && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(socialAccount)
+        ? `${pathname}?account=${socialAccount}` : pathname;
     url.searchParams.set("next", returnTo);
 
     const redirectResponse = NextResponse.redirect(url);

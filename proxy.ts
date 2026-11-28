@@ -6,7 +6,7 @@ import { lookupTenantRedirect } from "@/lib/redirect-lookup";
 import { hostname, isAppHost } from "@/lib/platform-host";
 
 const PLATFORM_PREFIXES = [
-  "/dashboard", "/login", "/signup", "/auth", "/invite", "/editor", "/forgot-password", "/set-password",
+  "/dashboard", "/social", "/login", "/signup", "/auth", "/invite", "/editor", "/forgot-password", "/set-password",
 ];
 const PUBLIC_API_PREFIXES = ["/api/forms/submit", "/api/analytics", "/api/cron"];
 

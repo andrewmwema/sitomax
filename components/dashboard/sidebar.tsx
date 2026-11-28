@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CircleDollarSign, ClipboardCheck, Globe2, HandHelping, Inbox, LayoutDashboard, Link2, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Users, X } from "lucide-react";
+import { BarChart3, CircleDollarSign, ClipboardCheck, Globe2, HandHelping, Inbox, LayoutDashboard, Link2, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Share2, Users, X } from "lucide-react";
 import { AgencyBrand } from "./agency-brand";
 
 const groups = [
@@ -11,6 +11,7 @@ const groups = [
     { href: "/dashboard", label: "Overview", icon: LayoutDashboard, color: "text-indigo-700" },
     { href: "/dashboard/sites", label: "Sites", icon: Globe2, color: "text-sky-700" },
     { href: "/dashboard/domains", label: "Domains", icon: Link2, color: "text-teal-700" },
+    { href: "/dashboard/social", label: "Social", icon: Share2, color: "text-sky-700" },
     { href: "/dashboard/clients", label: "Clients", icon: Users, color: "text-violet-700", admin: true },
   ] },
   { label: "Operations", items: [

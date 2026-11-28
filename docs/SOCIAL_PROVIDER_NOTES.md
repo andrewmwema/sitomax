@@ -1,0 +1,344 @@
+# Upload-Post provider spike notes
+
+Documentation reviewed: 2026-11-28. These are **provider-documented
+contracts, not independently verified live API results**. The assistant made
+no authenticated provider calls and sent no posts or review replies.
+The live API spike remains incomplete; the application integration below is
+provided for Andrew to verify.
+
+On 2026-11-28, Andrew reported that posting worked using the Upload-Post
+dashboard, testing Facebook Page, Instagram Business and Google Business
+Profile with text and photo posts. This does not establish that each post type
+was tested on each platform; the provider documents no Instagram text-only
+support. Reviews were not tested. The report does not verify the API, hosted
+connect URL, response shapes, or status and live-URL retrieval.
+
+The offline-only prototype in `scripts/social-spike-offline.ts` exercises
+multipart upload construction and conservative handling of simulated status
+responses. Run `npx vitest run scripts/social-spike-offline.test.ts`. It has no
+network or credential access and does not establish that the provider accepts
+the examples or that anything is live.
+
+## API and profiles
+
+Base URL: `https://api.upload-post.com`. The endpoints below use
+`Authorization: Apikey <API_KEY>`; JSON endpoints also use
+`Content-Type: application/json`. Keep the key and connect URLs out of logs.
+
+| Operation | Request | Documented result |
+| --- | --- | --- |
+| Create profile | `POST /api/uploadposts/users`, JSON `{"username":"client_profile_123","display_name":"Example"}` | `201`, `{"success":true,"profile":{"username":"client_profile_123","display_name":"Example","social_accounts":{},"created_at":"..."}}`. |
+| Get profiles | `GET /api/uploadposts/users` | `{"success":true,"limit":10,"plan":"default","profiles":[{"username":"...","social_accounts":{...}}]}`. |
+| Get one profile | `GET /api/uploadposts/users/{username}` | `{"success":true,"profile":{"username":"...","social_accounts":{...}}}`. |
+| Delete profile | `DELETE /api/uploadposts/users`, JSON `{"username":"client_profile_123"}` | `{"success":true,"message":"..."}`. Also deletes associated social connections. |
+
+`username` is immutable, case-insensitively unique, and may contain letters,
+numbers, `_`, `@` and `-`. Duplicate creation returns `409`; exceeding the plan
+profile limit returns `403 PROFILE_LIMIT_REACHED`. For connected accounts,
+`social_accounts` maps platform names to account objects containing fields
+such as `username` (opaque platform ID), `handle`, `display_name`,
+`social_images`, and `reauth_required`; empty strings or null can mean not
+connected. Fields vary by platform.
+
+Source: [User Profiles API](https://docs.upload-post.com/api/user-profiles).
+
+## Hosted connection
+
+`POST /api/uploadposts/users/generate-jwt`, JSON example:
+
+```json
+{
+  "username": "client_profile_123",
+  "redirect_url": "https://app.example.com/social/connected",
+  "logo_image": "https://example.com/logo.png",
+  "connect_title": "Connect your social accounts",
+  "platforms": ["facebook", "instagram", "google_business"],
+  "show_calendar": false
+}
+```
+
+Documented response: `{"success":true,"access_url":"https://app.upload-post.com/connect?token=...","duration":"48h"}`.
+The documentation describes the URL as single-use and valid for 48 hours.
+`show_calendar` defaults to true; set it explicitly to false for the intended
+SitoMax-owned workflow. By default, omitted saved settings are cleared.
+`preserve_settings: true` avoids changing saved settings but cannot be combined
+with stored settings such as logo or title; `platforms` can be link-specific.
+
+Facebook connects a user account, not necessarily a selected Page. The text
+upload documentation says to supply `facebook_page_id`: one available Page
+can be selected automatically, multiple Pages require selection, and a pinned
+Page takes precedence. `GET /api/uploadposts/facebook/pages?profile=<username>`
+lists Pages. Google posting can target a `gbp_location_id`; if omitted and the
+account has one location, it is selected automatically, while several
+locations require selection. Therefore, the brief's assumption that each
+profile necessarily represents exactly one Facebook Page or Google location
+needs live verification before designing the account mapping.
+
+Sources: [User Profiles API](https://docs.upload-post.com/api/user-profiles),
+[White-label integration](https://docs.upload-post.com/guides/user-profile-integration),
+[Text upload](https://docs.upload-post.com/api/upload-text).
+
+## Publishing
+
+Both endpoints accept multipart form fields, including repeated `platform[]`.
+`user` is the profile username, and `title` is the default text/caption.
+Set `async_upload=true` to receive a request ID for polling. Supply a stable
+`Idempotency-Key` for retries and an `external_id` for correlation; the latter
+alone does **not** prevent duplicate posts.
+
+| Operation | Endpoint | Relevant fields |
+| --- | --- | --- |
+| Text | `POST /api/upload_text` | `user`, `platform[]`, `title`; `facebook_page_id` for the intended Page; optional `facebook_title`, `link_url` and `gbp_location_id`. Facebook and Google Business are documented; Instagram text-only is not supported. |
+| Photo | `POST /api/upload_photos` | `user`, `platform[]`, repeated `photos[]` files or public HTTPS URLs, optional `title`, `facebook_title`, `instagram_title` and `gbp_location_id`. Facebook, Instagram and Google Business are documented. |
+
+An illustrative asynchronous form, **not an executed request**:
+
+```text
+user=client_profile_123
+platform[]=facebook
+platform[]=instagram
+platform[]=google_business
+photos[]=https://example.com/photo.jpg
+title=Example update
+facebook_page_id=PAGE_ID
+gbp_location_id=locations/LOCATION_ID
+async_upload=true
+external_id=local_post_id
+```
+
+Synchronous upload examples use `{"success":true,"results":{"instagram":{"success":true,"url":"..."}}}`.
+Per-platform failures or skipped destinations can occur even when the
+top-level response is successful. Asynchronous status uses a `results` **array**,
+not the synchronous response's platform-keyed object. Exact results, image
+restrictions, per-platform overrides and live URLs must be verified with real
+accounts. Instagram uses `instagram_title` or `title` as the caption; the
+general `description` is ignored for Instagram photos.
+
+Google posts default to a standard update. By default only the first image is
+sent to Google; `gbp_multi_media=true` opts into multiple photos, up to 10,
+which Google may still refuse for some locations. The separate
+`gbp_post_type=MEDIA` creates a gallery item, not an ordinary update. Do not
+mistake it for a post.
+
+Sources: [Text upload](https://docs.upload-post.com/api/upload-text),
+[Photo upload](https://docs.upload-post.com/api/upload-photo),
+[Google Business posts](https://docs.upload-post.com/api/google-business-posts).
+
+## Status and live URLs
+
+- `GET /api/uploadposts/status?request_id=<id>` polls an async upload;
+  `?job_id=<id>` is for provider-scheduled jobs. Even an intended synchronous
+  upload can switch to async after 59 seconds. A caller-provided `request_id`
+  can help recover after a timeout.
+- Status returns `request_id` or `job_id`, `status`, `completed`, `total`
+  and a `results` array. States include `pending`, `queued`, `processing`,
+  `in_progress`, `completed` and `failed`; individual results also include
+  `retryable` and `skipped`. A skipped unconnected platform can coexist with
+  top-level `completed`, so do not equate that with every target published.
+- `GET /api/uploadposts/history?request_id=<id>` returns platform rows in
+  `history`, including `success`, `platform_post_id`, `post_url` (nullable)
+  and `error_message`. `job_id`, `external_id` and `profile_username` are
+  alternative filters. Verify availability and format of URLs per platform.
+- A Google upload success does not establish visibility: Google may report
+  `PROCESSING` or `REJECTED`. Provider post-state tracking is not generally
+  available; `GET /api/uploadposts/google-business/posts/get?user=<username>&post_id=<full-resource-name>`
+  returns Google's current state. Confirm live URLs and behavior in the spike.
+
+Sources: [Upload status](https://docs.upload-post.com/api/upload-status),
+[Upload history](https://docs.upload-post.com/api/upload-history),
+[Google Business posts](https://docs.upload-post.com/api/google-business-posts).
+
+## Google Business reviews
+
+The provider documents use of the same connected Google account; review
+operations are not yet tested.
+
+- List: `GET /api/uploadposts/google-business/reviews?user=<username>&pageSize=20`.
+  Optional `location_id` and `pageToken`; Google permits a maximum page size
+  of 50. Response includes `success`, `reviews`, `averageRating`,
+  `totalReviewCount` and possibly `nextPageToken`. Each review has a `name`
+  resource path, `starRating`, optional `comment`, timestamps and possibly
+  `reviewReply`.
+- Reply: `PUT /api/uploadposts/google-business/reviews/reply` (also accepts
+  POST), JSON `{"user":"client_profile_123","review_name":"accounts/123/locations/456/reviews/abc","comment":"Thank you!"}`.
+  Alternatively provide `review_id` plus `location_id`. Response includes
+  `success`, `review_name`, `reply` and potentially `reviewReplyState`.
+  Sending another reply replaces the existing one; only verified locations
+  can receive replies. The nonblank comment limit is **4096 UTF-8 bytes**,
+  not characters. Moderation can leave a reply pending or rejected.
+- A `504 reply_outcome_unknown` or Google `5xx` with `outcome_unknown: true`
+  requires checking the review before retrying; `502 google_unreachable`
+  means the request did not reach Google. Review pagination can skip some
+  reviews of large locations after the first page.
+
+Source: [Google Business reviews](https://docs.upload-post.com/api/google-business-reviews).
+
+## Documented limits and retry cautions
+
+- Free plan: 10 upload calls per month. Base API rate limits are 60 requests
+  per minute and 300 per 10 minutes, plus 2/minute and 10/10 minutes per
+  profile, capped at 1,000/minute and 5,000/10 minutes. Check the response
+  rate-limit headers and honor `429` and reset information.
+- Documented rolling daily caps per social account include 25 Facebook posts
+  and 50 Instagram posts. The cited limits page does not specify a Google
+  Business posting cap; do not assume one.
+- Idempotency keys are scoped to account and upload type and retained for
+  24 hours; replay returns the original job even if the body changed.
+  Concurrent requests may return `409 IDEMPOTENCY_KEY_IN_USE`. A timeout or
+  unknown Google outcome is not evidence that a post was not published.
+- Provider-recommended photo-status polling is every 5–10 seconds. SitoMax's
+  own scheduler and status synchronization remain the source of truth.
+
+Source: [Rate limits and polling](https://docs.upload-post.com/guides/rate-limits).
+
+## Phase 1 foundation implemented for live verification
+
+- `lib/social/provider.ts` is the server-only provider boundary. The adapter
+  implements profiles, fresh branded links, normalized accounts, asynchronous
+  text/single-photo publishing, status/history, Google post visibility, reviews
+  list/reply and profile deletion. Diagnostic publishing is super-admin only.
+  LinkedIn requires a company Page ID rather than falling back to a personal
+  profile. The test form intentionally accepts one public HTTPS image, not
+  uploads or a general-purpose composer.
+- `0070_social_connections.sql` creates `social_profiles`, `social_accounts`
+  and `social_provider_logs`. **Review the SQL before applying it yourself.**
+  It has not been applied to production by the assistant. Its RLS/RPC tests
+  were exercised only in a rolled-back local test transaction.
+- The tenant key is the existing `accounts.id` (`account_id`), not a new
+  `client_id`. Profiles have a default `profile_key` and can support more than
+  one mapping per account later. All sites in one account share that mapping.
+- Provider usernames are encrypted with AES-256-GCM and bound to the account
+  and profile IDs. Clients cannot select the mapping table or logs directly;
+  owners can retrieve ciphertext only through a permission-checked RPC. The
+  server checks permissions before using the provider. No new service-role
+  access is used. Editors cannot connect, sync, or read account cards.
+- `/dashboard/social` offers account connections; `/social/connected?account=...`
+  syncs after the authenticated return and displays cards. Each connect click
+  generates a new URL. Refresh explicitly syncs accounts. Missing connections
+  become disconnected, expired ones become needs-reconnect, and older sync
+  snapshots cannot overwrite newer ones. OAuth return alone is not success.
+- Profile creation reserves a stable DB ID first. A remote `409` is checked by
+  reading the same profile before persisting its encrypted mapping; retries
+  cannot silently switch destinations or create a different username.
+- Requests have a 20-second timeout, no HTTP redirect following, no automatic
+  retries, and structured errors. Completed calls log only action, HTTP status,
+  normalized error code, actor and account. Neither content nor full responses,
+  keys, connect URLs or review bodies are stored in logs. Audit-write failures
+  are surfaced because the remote request may already have completed.
+- Connection and diagnostic operations share a DB-enforced limit of 30
+  actions per minute per account (an action may make several provider calls).
+  This supplements rather than replaces provider limits.
+- No production post tables, scheduler, billing, AI, approval workflow,
+  automatic reconnection emails or customer publishing are included yet.
+
+### TODO-verify before broad rollout
+
+1. **TODO-verify:** actual single-account objects and `reauth_required` placement
+   for all four networks, particularly Google and LinkedIn. Unknown nonempty
+   connection shapes fail explicitly instead of marking them connected.
+2. **TODO-verify:** successful async upload acknowledgements include
+   `request_id`, including cross-platform requests; inspect the raw console
+   response. Both the upload request and idempotency key carry a caller-supplied
+   UUID so an uncertain response can be investigated without republishing.
+3. **TODO-verify:** actual status/history field coverage, missing/partial target
+   outcomes, post URLs and Google moderation behavior. Normalized
+   `provider_succeeded` deliberately does not claim that a Google post is LIVE.
+4. **TODO-verify:** platform-specific caption overrides, including the generic
+   documented `[platform]_title` rule for Google. The test UI uses base text;
+   verify overrides before adding a composer.
+5. **TODO-verify:** exhaustive media limits and account-specific permissions.
+   The temporary text guards are conservative (Instagram 2,200, Google 1,500,
+   LinkedIn 3,000, Facebook 63,206 characters); these are application guards,
+   not a claim that Upload-Post's cited pages guarantee every limit. Use an
+   ordinary JPEG for the first test; media processing/upload validation is not
+   implemented in this foundation.
+6. **TODO-verify:** the branded link's appearance, 48-hour/single-use behavior,
+   redirects and allowed networks under this subscription. The adapter accepts
+   only the documented `https://app.upload-post.com/connect` host/path and
+   `duration: "48h"`; a changed contract fails explicitly.
+7. **TODO-verify:** review pagination, public reply moderation, and the actual
+   account's plan limits. A `200` reply may still be pending or rejected.
+   After an uncertain reply, list reviews again to inspect the existing reply;
+   do not blindly resend it.
+8. **TODO-verify:** Google review webhook availability. No review webhook
+   integration or polling has been assumed or added.
+
+## Exactly how to test live
+
+1. Inspect [the complete migration SQL](../supabase/migrations/0070_social_connections.sql),
+   then run it yourself in your chosen Supabase project's SQL Editor. Do not
+   reapply older migrations. It adds the three tables above, RLS and four
+   restricted RPCs; it does not change existing sites or publish content.
+2. Keep `UPLOAD_POST_API_KEY` server-only. Add
+   `SOCIAL_PROFILE_ENCRYPTION_KEY` to local and Vercel environments: generate
+   it locally with `openssl rand -hex 32` and store it privately, never in chat.
+   The value is 64 hex characters. Keep it stable and backed up; losing or
+   changing it makes existing mappings unreadable. Environments sharing a
+   database must use the same key.
+3. Ensure `NEXT_PUBLIC_APP_URL` is the reachable platform origin, for example
+   `https://app.sitomax.com`; set the agency logo to a public HTTPS image in
+   agency settings (otherwise the built-in SitoMax wordmark is used).
+   Deploy/redeploy the commit yourself, or run `npm run dev` with the correct
+   local platform origin. A local-only logo URL is not publicly fetchable.
+4. Sign in as super admin and open
+   `/dashboard/admin/social-provider`. Choose an existing **test site's**
+   account. This creates a new application-managed provider profile, not a
+   mapping to the manually created dashboard profile from the earlier test.
+   Ensure your plan has a spare profile slot. If full, free a disposable slot
+   yourself or upgrade; the app never deletes an existing profile automatically.
+5. Click **Generate connect link**, then **Open private connect link**.
+   Verify agency logo/title, the four allowed networks and no calendar.
+   Connect your test accounts and verify the return to `/social/connected`.
+   Check its normalized cards and use **Refresh accounts** if needed.
+   The provider window is separate; return to the diagnostic tab afterward.
+6. Click **List and sync accounts**, then **List Facebook Pages / Google
+   locations**. Copy the intended Page/location identifiers into the test
+   form. The latter operation displays separate success/error responses for
+   Facebook and Google, so one missing connection does not hide the other.
+   Enter your LinkedIn company Page ID if testing LinkedIn. Confirm any pinned
+   provider destination is the intended one; a pin can override supplied IDs.
+7. First select Facebook and Google only, enter harmless test text, check the
+   public-write confirmation and click **Publish test now**. Then click
+   **Check status and history** at 5–10 second intervals, inspecting per-target
+   results and `post_url` values in history. Open returned URLs privately to
+   verify visibility. A skipped destination is not a successful publish.
+8. For a second, genuinely new post, click **Prepare a new post ID**, add a
+   public HTTPS JPEG URL, select the desired networks (now including
+   Instagram, and LinkedIn with its company ID if connected), reconfirm and
+   publish. Reuse an existing ID only for a retry of the same post, not after
+   changing its content. After any timeout, check the retained reference ID
+   before retrying. The provider's idempotency retention is only 24 hours.
+9. For Google, copy the full `accounts/.../locations/.../localPosts/...`
+   resource name from the response into **Google post resource name** and
+   click **Check Google visibility**. Verify `LIVE`, not merely accepted or
+   `PROCESSING`. If Google posting fails, stop and report that before expanding
+   the feature; do not silently switch providers.
+10. Click **List reviews** (using the optional Google location ID), copy the
+    review's full `name`, and only if appropriate enter a public reply and
+    confirm **Send public reply**. This replaces any existing owner reply.
+    Inspect moderation state in the raw response and list again to verify.
+    Pass `nextPageToken` in the next-page field to test pagination.
+11. As a client owner, visit `/dashboard/social` to test the same branded
+    connection/refresh flow. Verify an editor cannot manage connections, another
+    tenant cannot open this account's callback, and non-admins cannot use the
+    diagnostic console. Tenant hosts must return 404 for `/social/connected`.
+
+The console shows provider responses with credentials, JWTs and connect URLs
+redacted. It can still contain account names, reviewer names, review text and
+other personal information. Remove those before sharing results. Do not share
+the private connect link. Remove test posts using the provider/native network
+tools when finished; this foundation does not automatically delete them.
+
+Validation commands:
+
+```sh
+npx vitest run lib/social 'app/(dashboard)/dashboard/admin/social-provider/actions.test.ts'
+npx tsc --noEmit
+npm run lint
+npm run build
+```
+
+`supabase/tests/social_connections.sql` is a rollback-only RLS/RPC test for the
+isolated local database after migration 0070. It covers owner/admin/editor,
+cross-tenant and anonymous access, ciphertext-only mapping reads, immutable
+mapping writes, sync freshness, and bounded logging.
