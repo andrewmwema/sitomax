@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { brand } from "@/lib/brand";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { emailBody } from "@/lib/email/message";
+import { emailBody, withBrandLogo } from "@/lib/email/message";
 import { graderRpc } from "./worker";
 
 const jobSchema = z.object({
@@ -28,7 +28,7 @@ export async function processGraderNotifications() {
       const text = `A website grader report was unlocked.\n\nWebsite: ${job.url}\nScore: ${job.score === null ? "Couldn't score" : `${job.score}/100`}\nReport: ${graderMarketingUrl(job.slug)}`;
       await sendEmail({
         to: recipient, subject: `New website grader lead: ${job.domain}`,
-        ...emailBody(text, { label: "Open lead", url: link }), tag: "grader-notification",
+        ...withBrandLogo(emailBody(text, { label: "Open lead", url: link })), tag: "grader-notification",
         metadata: { lead_id: job.lead_id, site_id: job.site_id },
       });
       success = true;

@@ -19,6 +19,7 @@ describe("grader report email", () => {
     expect(await processGraderReportMail()).toEqual({ processed: 1, failures: 0 });
     expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({
       to: job.email, tag: "grader-report", text: expect.stringContaining("/grader/example-123"),
+      html: expect.stringMatching(/^<p><img src="https?:\/\/[^"]+\/brand\/sitomax-logo-email\.png" alt="SitoMax" width="160" height="43"/),
       attachments: [expect.objectContaining({ contentType: "application/pdf", content: "JVBERg==" })],
     }));
     expect(mocks.rpc).toHaveBeenLastCalledWith("grader_finish_report_mail", expect.objectContaining({ p_success: true }));

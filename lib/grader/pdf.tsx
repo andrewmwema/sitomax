@@ -4,13 +4,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Font, renderToBuffer } from "@react-pdf/renderer";
 import { StorageApiError } from "@supabase/supabase-js";
-import { GraderPdfDocument, type PdfScreenshot } from "./pdf-document";
+import { GraderPdfDocument, type PdfLogo, type PdfScreenshot } from "./pdf-document";
 import { graderCtaUrl } from "./presentation";
 import { publicReportSchema, type PublicGraderReport } from "./public-report";
 import { graderRpc, graderWorker } from "./worker";
 
 // Bump when the PDF layout changes so cached PDFs are regenerated.
-const PDF_CACHE_PREFIX = "v2";
+const PDF_CACHE_PREFIX = "v3";
 
 class PdfFailure extends Error {
   constructor(readonly reason: string, readonly status?: number) {
@@ -83,6 +83,19 @@ function registerFonts() {
   return fontsReady;
 }
 
+let logoReady: Promise<PdfLogo> | null = null;
+
+function loadLogo() {
+  logoReady ??= (async () => {
+    const dir = join(process.cwd(), "public/brand");
+    const [full, mark] = await Promise.all([
+      readFile(join(dir, "sitomax-logo.png")), readFile(join(dir, "sitomax-mark.png")),
+    ]);
+    return { full, mark };
+  })().catch((error: unknown) => { logoReady = null; throw error; });
+  return logoReady;
+}
+
 const SCREENSHOT_MISSING = "We couldn't capture a preview of this page.";
 
 /** Downscales the screenshot and detects blank captures or dark video areas that weren't captured. */
@@ -122,6 +135,8 @@ export async function renderGraderPdf(report: PublicGraderReport,
   if (!report.unlocked || report.status !== "complete" || report.results === undefined || report.ai_summary === undefined)
     throw new Error("Report is not available.");
   try { await registerFonts(); } catch (error) { logPdfFailure("read fonts", error); throw error; }
+  let logo: PdfLogo;
+  try { logo = await loadLogo(); } catch (error) { logPdfFailure("read logo", error); throw error; }
   let image: PdfScreenshot = { kind: "missing", reason: SCREENSHOT_MISSING };
   if (report.screenshot_url) {
     let raw: { bytes: Uint8Array; png: boolean };
@@ -130,7 +145,7 @@ export async function renderGraderPdf(report: PublicGraderReport,
     image = await prepareScreenshot(raw.bytes, raw.png);
   }
   const mailing = process.env.GRADER_MAILING_ADDRESS?.trim();
-  return new Uint8Array(await renderToBuffer(<GraderPdfDocument report={report} screenshot={image}
+  return new Uint8Array(await renderToBuffer(<GraderPdfDocument report={report} screenshot={image} logo={logo}
     ctaUrl={graderCtaUrl(report.slug)} mailingAddress={mailing && mailing.length <= 300 ? mailing : null}
     date={reportDate(report, options.now ?? new Date())} />));
 }

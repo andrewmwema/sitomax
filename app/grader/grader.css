@@ -1,8 +1,8 @@
 .grader { --ink: #201c2b; --muted: #625e6b; --accent: #663dd1; --line: #e6e1ed; color: var(--ink); background: #fcfaf8; min-height: 100vh; font-family: Arial, sans-serif; }
 .grader a { color: inherit; }
 .grader-nav, .grader-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 1200px; margin: auto; padding: 1.5rem 1.5rem; font-size: .9rem; }
-.grader-logo { font-size: 1.55rem; font-weight: 800; letter-spacing: -.08em; text-decoration: none; }
-.grader-logo span { color: var(--accent); }
+.grader-logo { display: inline-flex; line-height: 0; }
+.grader-logo img { width: 136px; height: auto; }
 .grader-wrap { width: min(1120px, calc(100% - 3rem)); margin-inline: auto; }
 .grader-hero { padding: 5rem 0 6rem; background: radial-gradient(ellipse at 86% 30%, #e8defc 0, transparent 43%), #f8f5fb; }
 .grader-hero-grid { display: grid; grid-template-columns: 1.3fr .8fr; align-items: center; gap: 4rem; }

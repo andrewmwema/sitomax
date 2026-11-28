@@ -163,7 +163,10 @@ The PDF is rendered with `@react-pdf/renderer` (`lib/grader/pdf-document.tsx`)
 using the Inter TTFs in `assets/fonts/inter`, so ligatures and word wrapping
 render correctly. Check names, status badges and ordering come from
 `lib/grader/check-presentation.ts`, shared with the web report and follow-up
-emails. PDFs are cached under `v2/{slug}.pdf`; bump that prefix when the layout
+emails. The SitoMax logo files live in `public/brand` and are listed in
+`brandLogo` (`lib/brand.ts`); the PDF, the grader page header and the grader
+emails (hosted PNG on the app origin) all use them. PDFs are cached under
+`v3/{slug}.pdf`; bump that prefix when the layout
 changes so old cached files are regenerated. Apply
 `0068_grader_report_date.sql` so reports carry their scan date and (once
 unlocked) business name. Sample output is in `docs/screenshots/grader/pdf/`.

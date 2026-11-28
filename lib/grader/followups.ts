@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { brand } from "@/lib/brand";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { emailBody } from "@/lib/email/message";
+import { emailBody, withBrandLogo } from "@/lib/email/message";
 import { graderCheckDetail, graderCheckLabel } from "./check-presentation";
 import { graderCtaUrl } from "./presentation";
 import { graderSlugSchema } from "./public-report";
@@ -58,7 +58,7 @@ export async function processGraderFollowups() {
       if (!cta) throw new Error("Grader CTA is not configured.");
       const content = followupContent(job);
       const text = `Hi ${job.name},\n\n${content.text}\n\n${brand.name}\n${address}`;
-      const body = emailBody(text, { label: "Talk to us", url: cta });
+      const body = withBrandLogo(emailBody(text, { label: "Talk to us", url: cta }));
       const unsubscribeBody = emailBody("", { label: "Unsubscribe", url: unsubscribe });
       await sendEmail({
         to: job.email, subject: content.subject, preheader: body.preheader,

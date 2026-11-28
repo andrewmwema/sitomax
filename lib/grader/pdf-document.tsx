@@ -1,5 +1,5 @@
-import { Document, Link, Page, Path, Circle, Rect, Svg, Image, StyleSheet, Text, View } from "@react-pdf/renderer";
-import { brand } from "@/lib/brand";
+import { Document, Link, Page, Path, Circle, Svg, Image, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { brand, brandLogo } from "@/lib/brand";
 import { GRADER_STATUS_LABELS, graderPriorities, groupCategoryChecks, type PresentedCheck } from "./check-presentation";
 import { graderCategories, graderGradeTone, graderScoreLabel, graderScoreTone, type GraderTone } from "./presentation";
 import type { PublicGraderReport } from "./public-report";
@@ -8,8 +8,11 @@ export type PdfScreenshot =
   | { kind: "image"; data: Buffer; format: "jpg" | "png"; note: string | null }
   | { kind: "missing"; reason: string };
 
+export type PdfLogo = { full: Buffer; mark: Buffer };
+
 export type GraderPdfProps = {
   report: PublicGraderReport;
+  logo: PdfLogo;
   screenshot: PdfScreenshot;
   ctaUrl: string | null;
   mailingAddress: string | null;
@@ -31,7 +34,7 @@ const tones: Record<GraderTone, { fg: string; bg: string; bar: string }> = {
 
 const s = StyleSheet.create({
   page: { fontFamily: "Inter", fontSize: 10.5, color: color.ink, paddingTop: 46, paddingBottom: 66, paddingHorizontal: 54 },
-  footer: { position: "absolute", bottom: 28, left: 54, right: 54, flexDirection: "row", justifyContent: "space-between",
+  footer: { position: "absolute", bottom: 28, left: 54, right: 54, flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     borderTopWidth: 0.75, borderTopColor: color.line, paddingTop: 8, fontSize: 8, color: color.muted },
   kicker: { fontSize: 8.5, fontWeight: 600, color: color.accent, letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 6 },
   title: { fontSize: 28, fontWeight: 700, lineHeight: 1.15, letterSpacing: -0.6 },
@@ -47,21 +50,23 @@ function Badge({ tone, children }: { tone: GraderTone; children: string }) {
   return <Text style={[s.badge, { color: tones[tone].fg, backgroundColor: tones[tone].bg }]}>{children}</Text>;
 }
 
-function Logo() {
-  return <View style={{ flexDirection: "row", alignItems: "center" }}>
-    <Svg width={24} height={24} viewBox="0 0 64 64">
-      <Rect x={0} y={0} width={64} height={64} rx={16} ry={16} fill="#121212" />
-      <Path d="M45 18H27a10 10 0 0 0 0 20h10a8 8 0 0 1 0 16H18" fill="none" stroke="#C9C3FF" strokeLinecap="round" strokeWidth={7} />
-    </Svg>
-    <Text style={{ marginLeft: 8, fontSize: 15, fontWeight: 700, letterSpacing: -0.5 }}>
-      {brand.name}<Text style={{ color: color.accent }}>.</Text>
-    </Text>
-  </View>;
+const LOGO_WIDTH = 132;
+const MARK_HEIGHT = 11;
+
+function Logo({ logo }: { logo: PdfLogo }) {
+  // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image is not an HTML img and has no alt prop.
+  return <Image src={{ data: logo.full, format: "png" }}
+    style={{ width: LOGO_WIDTH, height: LOGO_WIDTH * brandLogo.full.height / brandLogo.full.width }} />;
 }
 
-function Footer({ domain, date }: { domain: string; date: string }) {
+function Footer({ domain, date, logo }: { domain: string; date: string; logo: PdfLogo }) {
   return <View style={s.footer} fixed>
-    <Text>{`${brand.name} · Website report for ${domain} · ${date}`}</Text>
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image is not an HTML img and has no alt prop. */}
+      <Image src={{ data: logo.mark, format: "png" }}
+        style={{ height: MARK_HEIGHT, width: MARK_HEIGHT * brandLogo.mark.width / brandLogo.mark.height, marginRight: 6 }} />
+      <Text>{`${brand.name} · Website report for ${domain} · ${date}`}</Text>
+    </View>
     <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
   </View>;
 }
@@ -109,14 +114,14 @@ function firstSentences(text: string, count: number) {
   return text.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+/).slice(0, count).join(" ");
 }
 
-function Cover({ report, screenshot, date }: GraderPdfProps) {
+function Cover({ report, screenshot, date, logo }: GraderPdfProps) {
   const score = report.scores?.overall ?? null;
   const grade = report.scores?.grade ?? null;
   const gradeTone = graderGradeTone(grade);
   const business = report.business_name?.trim();
   return <View>
     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-      <Logo /><Text style={s.meta}>{`Scanned ${date}`}</Text>
+      <Logo logo={logo} /><Text style={s.meta}>{`Scanned ${date}`}</Text>
     </View>
     <View style={{ marginTop: 28 }}>
       <Text style={s.kicker}>Website Report</Text>
@@ -303,7 +308,7 @@ export function GraderPdfDocument(props: GraderPdfProps) {
       <DetailedResults report={report} />
       <FixPlan report={report} />
       <Closing {...props} />
-      <Footer domain={report.domain} date={date} />
+      <Footer domain={report.domain} date={date} logo={props.logo} />
     </Page>
   </Document>;
 }

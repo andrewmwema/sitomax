@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { brand } from "@/lib/brand";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { emailBody } from "@/lib/email/message";
+import { emailBody, withBrandLogo } from "@/lib/email/message";
 import { graderMarketingUrl } from "./notification";
 import { graderPdf } from "./pdf";
 import { graderSlugSchema } from "./public-report";
@@ -29,7 +29,7 @@ export async function processGraderReportMail() {
       const text = `Hi ${job.name},\n\nYour ${brand.name} website report is ready. Your PDF is attached.`;
       await sendEmail({
         to: job.email, subject: `Your ${brand.name} website report`,
-        ...emailBody(text, { label: "View your report", url: graderMarketingUrl(job.slug) }),
+        ...withBrandLogo(emailBody(text, { label: "View your report", url: graderMarketingUrl(job.slug) })),
         attachments: [{ name: "website-report.pdf", content: Buffer.from(pdf).toString("base64"), contentType: "application/pdf" }],
         tag: "grader-report", metadata: { grader_unlock_id: job.unlock_id },
       });
