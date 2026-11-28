@@ -200,6 +200,36 @@ recorded in `grader_ai_usage`; summaries are omitted if validation or accounting
 fails. Screenshots are stored in the public `grader-screenshots` bucket, with
 uploads restricted to the scoped worker secret.
 
+### Grader Phase C: reports, sharing, comparisons and retention
+
+Apply `0069_grader_phase_c.sql` in the Supabase SQL Editor before deploying the
+Phase C code (the scan RPC gains `p_source` and `p_compare_slug`).
+
+- **Reports list.** `/dashboard/admin/grader` lists every report below the scan
+  form with search, filters (unlocked, grade, source, date range), pagination
+  and CSV export (`/api/grader/admin/reports?format=csv`). Each row can open the
+  full report, download the PDF, copy or disable the share link and re-run the scan.
+- **Run for prospect.** Admin scans are stored with `source = 'admin'`, skip the
+  per-IP limit (the global daily cap still applies) and are fully visible without
+  the email gate. Scans created before 0069 are listed as public.
+- **Share links.** `https://ROOT_DOMAIN/grade/{slug}` is a read-only, `noindex`
+  full report for unlocked or admin reports, with a dynamic Open Graph image.
+  Its PDF link is signed and expires after 24 hours; the signing key is derived
+  from `GRADER_WORKER_SECRET`, so no extra variable is needed. Super admins can
+  disable a share link (`grader_reports.share_disabled`); the page then returns 404.
+- **Compare.** From an unlocked public report or an admin report, a competitor
+  URL can be scanned (`compareSlug` on the scan APIs). It goes through Turnstile
+  (public), the usual IP/daily limits and Places limits, and is linked through
+  `grader_reports.compare_of`. The comparison shows overall and category scores
+  and the top 3 gaps.
+- **Retention.** `/api/cron/grader-retention` runs daily at 04:00 UTC with
+  `CRON_SECRET`. It deletes locked public scans older than
+  `grader_config.retention_days` (default 90) together with their screenshots
+  and any cached PDF. Unlocked reports, admin scans and competitor scans attached
+  to them are kept permanently. Change the period with
+  `update public.grader_config set retention_days = 120 where singleton;`
+  (allowed range 7–3650).
+
 ## Premium website designs
 
 Apply migrations only to a local or staging Supabase project, then run
