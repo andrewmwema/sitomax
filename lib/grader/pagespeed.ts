@@ -55,14 +55,14 @@ function categoryCheck(id: string, category: Category, value: number | null | un
     value: typeof value === "number" ? Math.round(value * 100) : null,
     detail: checkStatus === "unknown" ? `Couldn't check the ${label} PageSpeed score.`
       : `${label} PageSpeed score: ${Math.round((value ?? 0) * 100)}/100.`,
-    fix: `Review the ${label} Lighthouse recommendations.`,
+    fix: `Work through Google PageSpeed's recommendations for ${label}.`,
   };
 }
 
 export function pageSpeedChecks(result: Lighthouse | null, strategy: "mobile" | "desktop"): Check[] {
   const prefix = `${strategy}_`;
   const checks = [
-    categoryCheck(`${prefix}performance`, "speed", result?.categories?.performance?.score, `${strategy} performance`),
+    categoryCheck(`${prefix}performance`, "speed", result?.categories?.performance?.score, `${strategy} speed`),
     ...common.map((spec) => auditCheck(spec, result?.audits[spec.audit], prefix)),
   ];
   if (strategy === "mobile") {

@@ -13,12 +13,15 @@ export const publicReportSchema = z.object({
   scores: adminReportSchema.shape.scores,
   screenshot_url: adminReportSchema.shape.screenshot_url,
   unlocked: z.boolean(),
+  // Optional until migration 0068 is applied everywhere.
+  scanned_at: z.string().nullable().optional(),
+  business_name: z.string().nullable().optional(),
   headline: z.string().nullable(),
   top_issues: z.array(z.object({ title: z.string(), why_it_matters: z.string() })).nullable(),
   results: adminReportSchema.shape.results.optional(),
   ai_summary: adminReportSchema.shape.ai_summary.optional(),
 }).superRefine((report, ctx) => {
-  if (!report.unlocked && (report.results !== undefined || report.ai_summary !== undefined)) {
+  if (!report.unlocked && (report.results !== undefined || report.ai_summary !== undefined || report.business_name !== undefined)) {
     ctx.addIssue({ code: "custom", message: "Locked reports must not contain full results." });
   }
   if (report.unlocked && (report.results === undefined || report.ai_summary === undefined)) {

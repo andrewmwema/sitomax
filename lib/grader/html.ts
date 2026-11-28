@@ -12,7 +12,7 @@ const definitions: Definition[] = [
   { id: "image_alt", category: "seo", fix: "Add meaningful alt text or mark decorative images with empty alt text." },
   { id: "canonical", category: "seo", fix: "Add a canonical link pointing to the preferred page URL." },
   { id: "indexable", category: "seo", fix: "Remove noindex if this page should appear in search results." },
-  { id: "open_graph", category: "seo", fix: "Add Open Graph title, description and image metadata." },
+  { id: "open_graph", category: "seo", fix: "Add social sharing tags (Open Graph title, description and image) so links to your site show a proper preview." },
   { id: "structured_data", category: "seo", fix: "Add accurate LocalBusiness or Organization JSON-LD." },
   { id: "privacy", category: "security", fix: "Link to a current privacy policy." },
   { id: "copyright", category: "security", fix: "Review and update the copyright year." },
@@ -109,7 +109,7 @@ export function htmlChecks(html: string): Check[] {
   const og = ["og:title", "og:description", "og:image"].filter((name) =>
     meta(`meta[property="${name}" i]`));
   set("open_graph", og.length === 3 ? "pass" : "warn", `${og.length}/3`,
-    `${og.length} of the Open Graph title, description and image tags were found.`);
+    `${og.length} of 3 social sharing tags (title, description and image) were found.`);
   let structured = false;
   let malformedJson = false;
   for (const script of doc.querySelectorAll('script[type="application/ld+json" i]')) {

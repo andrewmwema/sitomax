@@ -10,6 +10,27 @@ function sentences(value: string) {
   return value.trim().split(/[.!?]+(?:\s+|$)/).filter((part) => part.trim()).length;
 }
 
+function firstSentences(value: unknown, count: number) {
+  if (typeof value !== "string") return value;
+  return value.trim().split(/(?<=[.!?])\s+/).slice(0, count).join(" ");
+}
+
+// The model sometimes returns extra ranked issues or sentences. Keep the leading, grounded
+// ones so a useful report isn't discarded; the schema below still rejects anything short.
+function normalizeSummaryInput(input: unknown, issueIds: ReadonlySet<string>): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  const value = input as Record<string, unknown>;
+  const seen = new Set<string>();
+  const topIssues = Array.isArray(value.top_issues) ? value.top_issues.filter((issue: unknown) => {
+    const id = issue && typeof issue === "object" ? (issue as { check_id?: unknown }).check_id : undefined;
+    if (typeof id !== "string" || !issueIds.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  }).slice(0, 3) : value.top_issues;
+  return { ...value, top_issues: topIssues, summary: firstSentences(value.summary, 4),
+    sitomax_pitch: firstSentences(value.sitomax_pitch, 2) };
+}
+
 const summarySchema = z.strictObject({
   headline: z.string().min(1).max(300).refine((value) => sentences(value) === 1),
   summary: z.string().min(1).max(2000).refine((value) => sentences(value) >= 3 && sentences(value) <= 4),
@@ -44,10 +65,10 @@ export async function makeSummary(reportId: string, checks: Check[]) {
           type: "object",
           properties: {
             headline: { type: "string" }, summary: { type: "string" },
-            top_issues: { type: "array", items: { type: "object",
+            top_issues: { type: "array", minItems: 3, maxItems: 3, items: { type: "object",
               properties: { check_id: { type: "string" }, title: { type: "string" }, why_it_matters: { type: "string" }, fix: { type: "string" } },
               required: ["check_id", "title", "why_it_matters", "fix"], additionalProperties: false } },
-            fix_plan: { type: "array", items: { type: "string" } },
+            fix_plan: { type: "array", minItems: 5, maxItems: 8, items: { type: "string" } },
             sitomax_pitch: { type: "string" },
           },
           required: ["headline", "summary", "top_issues", "fix_plan", "sitomax_pitch"],
@@ -69,15 +90,12 @@ export async function makeSummary(reportId: string, checks: Check[]) {
     return null;
   }
   const tool = response.content.find((block) => block.type === "tool_use" && block.name === "report");
-  const parsed = summarySchema.safeParse(tool?.type === "tool_use" ? tool.input : null);
-  if (!parsed.success) {
-    console.error("Grader AI summary failed validation", { reportId });
-    return null;
-  }
-  const ids = parsed.data.top_issues.map((issue) => issue.check_id);
   const issueIds = new Set(issues.map((issue) => issue.id));
-  if (new Set(ids).size !== 3 || ids.some((id) => !issueIds.has(id))) {
-    console.error("Grader AI summary referenced unavailable findings", { reportId });
+  const parsed = summarySchema.safeParse(normalizeSummaryInput(tool?.type === "tool_use" ? tool.input : null, issueIds));
+  if (!parsed.success) {
+    const fields = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? "input")))];
+    console.error(fields.includes("top_issues") ? "Grader AI summary referenced unavailable findings" : "Grader AI summary failed validation",
+      { reportId, fields });
     return null;
   }
   return parsed.data;

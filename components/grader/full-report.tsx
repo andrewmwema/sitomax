@@ -2,10 +2,21 @@
 
 import { useState } from "react";
 import { brand } from "@/lib/brand";
-import { graderCategories, graderCheckName, graderCtaUrl } from "@/lib/grader/presentation";
+import { GRADER_STATUS_LABELS, groupCategoryChecks, type PresentedCheck } from "@/lib/grader/check-presentation";
+import { graderCategories, graderCtaUrl, graderScoreLabel, graderScoreTone } from "@/lib/grader/presentation";
 import type { PublicGraderReport } from "@/lib/grader/public-report";
 
-const statuses = { pass: "Pass", warn: "Warning", fail: "Needs attention", unknown: "Couldn't check" } as const;
+function Finding({ check }: { check: PresentedCheck }) {
+  return <article className="grader-check">
+    <span className={`grader-check-status grader-check-${check.status}`}>{check.statusLabel}</span>
+    <div>
+      <h3>{check.label}</h3>
+      {check.found ? <p><strong>What we found:</strong> {check.found}</p> : null}
+      <p>{check.detail}</p>
+      {check.fix ? <p><strong>How to improve:</strong> {check.fix}</p> : null}
+    </div>
+  </article>;
+}
 
 export function GraderFullReport({ report }: { report: PublicGraderReport }) {
   const [shareMessage, setShareMessage] = useState("");
@@ -60,22 +71,32 @@ export function GraderFullReport({ report }: { report: PublicGraderReport }) {
             : <p>AI summary and fix plan couldn&apos;t be generated for this scan.</p>}
         </section>
         {graderCategories.map(([key, label]) => {
-          const items = checks.filter((check) => check.category === key);
-          if (!items.length) return null;
+          if (!checks.some((check) => check.category === key)) return null;
+          const { findings, unknown, passed } = groupCategoryChecks(checks, key);
+          const score = report.scores?.categories[key] ?? null;
           return <details className="grader-card grader-report-section" id={`report-${key}`} key={key} open>
-            <summary><h2>{label}</h2></summary>
-            {items.map((check) => <article className="grader-check" key={check.id}>
-              <h3>{graderCheckName(check.id)}</h3>
-              <span className={`grader-check-status grader-check-${check.status}`}>{statuses[check.status]}</span>
-              {check.value !== null ? <p><strong>Found:</strong> {check.value}</p> : null}
-              <p>{check.detail}</p>{check.fix ? <p><strong>How to improve:</strong> {check.fix}</p> : null}
+            <summary>
+              <h2>{label}</h2>
+              <span className={`grader-check-status grader-check-${graderScoreTone(score)}`}>
+                {score === null ? graderScoreLabel(score) : `${score}/100 · ${graderScoreLabel(score)}`}
+              </span>
+              {key === "accessibility" ? <span className="grader-category-note">Not included in the overall score</span> : null}
+            </summary>
+            {findings.map((check) => <Finding check={check} key={check.id} />)}
+            {unknown.map((group) => <article className="grader-check" key={group.reason}>
+              <span className="grader-check-status grader-check-unknown">{GRADER_STATUS_LABELS.unknown}</span>
+              <div><h3>{group.labels.join(", ")}</h3><p>{group.reason}</p></div>
             </article>)}
+            {passed.length ? <article className="grader-check">
+              <span className="grader-check-status grader-check-pass">{GRADER_STATUS_LABELS.pass}</span>
+              <p className="grader-passed-list"><strong>Passed:</strong> {passed.map((check) => check.label).join(", ")}</p>
+            </article> : null}
           </details>;
         })}
         <section className="grader-card grader-report-section"><h2>{brand.name} can fix this for you</h2>
           <p>Launch a faster, lead-ready site in 7 days.</p>
           {report.ai_summary?.sitomax_pitch ? <p>{report.ai_summary.sitomax_pitch}</p> : null}
-          {cta ? <a href={cta} className="grader-button">Let&apos;s talk</a> : <p>Contact link is temporarily unavailable.</p>}
+          {cta ? <a href={cta} className="grader-button">Book a free consultation</a> : <p>Contact link is temporarily unavailable.</p>}
         </section>
       </div>
     </div>

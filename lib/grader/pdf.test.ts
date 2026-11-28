@@ -7,7 +7,8 @@ vi.mock("./worker", () => ({
   graderRpc: mocks.rpc,
   graderWorker: () => ({ client: { storage: { from: () => ({ download: mocks.download, upload: mocks.upload }) } } }),
 }));
-import { graderPdf, renderGraderPdf } from "./pdf";
+import sharp from "sharp";
+import { graderPdf, prepareScreenshot, renderGraderPdf } from "./pdf";
 
 const report = {
   slug: "example-123", url: "https://example.com/", domain: "example.com", status: "complete" as const,
@@ -26,6 +27,24 @@ beforeEach(() => {
   mocks.download.mockResolvedValue({ data: null, error: new StorageApiError("Object not found", 400, "400", "storage", "NoSuchKey") });
   mocks.upload.mockResolvedValue({ error: null });
 });
+async function screenshotWithBand(band: string) {
+  const noise = Buffer.from(Array.from({ length: 120 * 240 * 3 }, (_, index) => (index * 37) % 256));
+  const base = sharp(noise, { raw: { width: 120, height: 240, channels: 3 } });
+  const overlay = await sharp({ create: { width: 120, height: 60, channels: 3, background: band } }).png().toBuffer();
+  return new Uint8Array(await base.composite([{ input: overlay, top: 90, left: 0 }]).png().toBuffer());
+}
+
+describe("grader PDF screenshots", () => {
+  it("notes near-black video areas but not dark page designs", async () => {
+    expect(await prepareScreenshot(await screenshotWithBand("#000000"), true)).toMatchObject({ kind: "image", note: expect.stringContaining("video") });
+    expect(await prepareScreenshot(await screenshotWithBand("#0b2b2b"), true)).toMatchObject({ kind: "image", note: null });
+  });
+  it("uses a placeholder for a blank screenshot", async () => {
+    const blank = await sharp({ create: { width: 120, height: 240, channels: 3, background: "#000000" } }).png().toBuffer();
+    expect((await prepareScreenshot(new Uint8Array(blank), true)).kind).toBe("missing");
+  });
+});
+
 describe("grader PDF", () => {
   it("generates a real multi-page PDF for the unlocked report", async () => {
     const pdf = await PDFDocument.load(await renderGraderPdf({

@@ -6,9 +6,18 @@ export const graderCategories = [
   ["local", "Local presence"], ["social", "Social & content"], ["accessibility", "Accessibility"],
 ] as const;
 
-export function graderCheckName(id: string) {
-  const label = id.replaceAll("_", " ");
-  return label.charAt(0).toUpperCase() + label.slice(1);
+export type GraderTone = "pass" | "warn" | "fail" | "unknown";
+
+export function graderScoreTone(score: number | null | undefined): GraderTone {
+  return score === null || score === undefined ? "unknown" : score >= 80 ? "pass" : score >= 60 ? "warn" : "fail";
+}
+
+export function graderScoreLabel(score: number | null | undefined): string {
+  return { pass: "Good", warn: "Needs work", fail: "Poor", unknown: "Couldn't check" }[graderScoreTone(score)];
+}
+
+export function graderGradeTone(grade: string | null | undefined): GraderTone {
+  return !grade ? "unknown" : grade === "A" || grade === "B" ? "pass" : grade === "C" ? "warn" : "fail";
 }
 
 export function graderContactUrl(): string | null {

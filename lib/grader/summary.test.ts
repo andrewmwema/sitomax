@@ -44,3 +44,16 @@ it("does not expose summaries referencing an unverified finding", async () => {
   expect(await makeSummary("report-id", checks)).toBeNull();
   expect(mocks.rpc).toHaveBeenCalledOnce();
 });
+
+it("keeps the leading grounded issues and sentences when the model returns extra", async () => {
+  const issues = ["a", "b", "c", "d"].map((id) => ({ id, category: "seo" as const, status: "fail" as const, value: null, detail: "Found issue", fix: "Review it" }));
+  mocks.create.mockResolvedValue({ model: "claude-haiku-5-5", usage: { input_tokens: 100, output_tokens: 20 },
+    content: [{ type: "tool_use", name: "report", input: { ...summary,
+      summary: `${summary.summary} A fourth sentence. A fifth sentence.`,
+      top_issues: ["invented", "a", "a", "b", "c", "d"].map((id) => ({ check_id: id, title: id, why_it_matters: "Review this.", fix: "Improve it." })),
+      sitomax_pitch: `${summary.sitomax_pitch} A third sentence.` } }] });
+  const result = await makeSummary("report-id", issues);
+  expect(result?.top_issues.map((issue) => issue.check_id)).toEqual(["a", "b", "c"]);
+  expect(result?.summary).toBe(`${summary.summary} A fourth sentence.`);
+  expect(result?.sitomax_pitch).toBe(summary.sitomax_pitch);
+});

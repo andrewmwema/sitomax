@@ -159,6 +159,15 @@ The report page downloads the PDF from its own marketing host and shows a retry
 message if generation fails. A failed report-email job is retried up to five
 times; jobs that have reached `failed` require administrator intervention.
 
+The PDF is rendered with `@react-pdf/renderer` (`lib/grader/pdf-document.tsx`)
+using the Inter TTFs in `assets/fonts/inter`, so ligatures and word wrapping
+render correctly. Check names, status badges and ordering come from
+`lib/grader/check-presentation.ts`, shared with the web report and follow-up
+emails. PDFs are cached under `v2/{slug}.pdf`; bump that prefix when the layout
+changes so old cached files are regenerated. Apply
+`0068_grader_report_date.sql` so reports carry their scan date and (once
+unlocked) business name. Sample output is in `docs/screenshots/grader/pdf/`.
+
 Apply `0067_grader_followups.sql` and set `POSTMARK_GRADER_BROADCAST_STREAM` to a
 Postmark broadcast stream, `GRADER_MAILING_ADDRESS` to the agency's physical
 mailing address, and `GRADER_UNSUBSCRIBE_SECRET` to a stable, private random

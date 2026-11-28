@@ -95,16 +95,21 @@
 .grader-report-section h3 { font-size: 1.1rem; margin: 1rem 0 .4rem; }
 .grader-report-section ol { list-style: decimal; padding-left: 1.4rem; }
 .grader-report-section summary { cursor: pointer; }
-.grader-report-section summary h2 { display: inline; }
-.grader-check { border-top: 1px solid var(--line); margin-top: 1.2rem; }
-.grader-check p { margin: .5rem 0; overflow-wrap: anywhere; }
-.grader-check-status { font-weight: 700; font-size: .8rem; color: #514968; }
-.grader-check-pass { color: #17613a; }
-.grader-check-warn { color: #865400; }
-.grader-check-fail { color: #a02231; }
+.grader-report-section summary { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.grader-report-section summary h2 { display: inline; margin-right: auto; }
+.grader-category-note { flex-basis: 100%; color: var(--muted); font-size: .85rem; }
+.grader-check { display: grid; grid-template-columns: 7.5rem 1fr; gap: 1rem; align-items: start; border-top: 1px solid var(--line); margin-top: 1.2rem; padding-top: 1rem; }
+.grader-check h3 { margin-top: 0; }
+.grader-check p { margin: .4rem 0; overflow-wrap: break-word; }
+.grader-check p:first-child { margin-top: 0; }
+.grader-check-status { justify-self: start; border-radius: 999px; padding: .2rem .65rem; font-weight: 700; font-size: .8rem; line-height: 1.4; color: #475569; background: #f1f5f9; white-space: nowrap; }
+.grader-check-pass { color: #166534; background: #dcfce7; }
+.grader-check-warn { color: #92400e; background: #fef3c7; }
+.grader-check-fail { color: #991b1b; background: #fee2e2; }
 .grader-text-link { display: inline-block; margin-top: 2rem; font-weight: 700; }
 .grader-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 800px) {
+  .grader-check { grid-template-columns: 1fr; gap: .5rem; }
   .grader-hero { padding: 3rem 0 4rem; }
   .grader-hero-grid, .grader-score-card { grid-template-columns: 1fr; gap: 2rem; }
   .grader-example { transform: none; }

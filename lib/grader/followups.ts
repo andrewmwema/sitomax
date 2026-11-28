@@ -4,7 +4,8 @@ import { z } from "zod";
 import { brand } from "@/lib/brand";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { emailBody } from "@/lib/email/message";
-import { graderCtaUrl, graderCheckName } from "./presentation";
+import { graderCheckDetail, graderCheckLabel } from "./check-presentation";
+import { graderCtaUrl } from "./presentation";
 import { graderSlugSchema } from "./public-report";
 import { unsubscribeUrl } from "./unsubscribe";
 import { graderRpc } from "./worker";
@@ -24,12 +25,12 @@ function followupContent(job: Job) {
     const issue = issues[0];
     const check = findings[0];
     const text = issue ? `${issue.title}\n${issue.why_it_matters}\nSuggested fix: ${issue.fix}`
-      : check ? `${graderCheckName(check.id)}\n${check.detail}\nSuggested fix: ${check.fix}`
+      : check ? `${graderCheckLabel(check.id)}\n${graderCheckDetail(check)}\nSuggested fix: ${check.fix}`
         : "Review your website report for the findings from your scan.";
     return { subject: "Your website's first fix", text: `Here's a place to start:\n\n${text}` };
   }
   if (job.day === 5) {
-    const tips = findings.slice(0, 3).map((check) => `${graderCheckName(check.id)}: ${check.detail}\nSuggested action: ${check.fix}`);
+    const tips = findings.slice(0, 3).map((check) => `${graderCheckLabel(check.id)}: ${graderCheckDetail(check)}\nSuggested action: ${check.fix}`);
     return { subject: "Practical tips from your website scan",
       text: tips.length ? `Here are practical tips based on your scan:\n\n${tips.join("\n")}`
         : "Review your website report for the findings from your scan." };
